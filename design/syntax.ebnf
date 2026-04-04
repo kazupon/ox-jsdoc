@@ -43,37 +43,50 @@ NonTagAt
 (* ============================================================================ *)
 (* 2. Block Tags                                                               *)
 (* ============================================================================ *)
+(*                                                                             *)
+(* DESIGN NOTE: Tag names are open-ended — users can define custom tags        *)
+(* (e.g. @category, @slot, @internal) via plugins or third-party tools.        *)
+(* Therefore the grammar defines a single, universal TagBody production that   *)
+(* accepts any syntactically valid combination of type, name, and description. *)
+(*                                                                             *)
+(* The mapping from a specific tag name to its expected body shape             *)
+(* (e.g. @param expects type+name+desc, @readonly expects nothing) is a       *)
+(* SEMANTIC concern handled by a TagSpec registry in the parser, not by the    *)
+(* grammar itself. See section 7 for the built-in tag classification.          *)
+(*                                                                             *)
+(* For unknown / custom tags the parser uses the generic TagBody production    *)
+(* and stores the result as-is, allowing downstream consumers to interpret it. *)
+(* ============================================================================ *)
 
 BlockTag
   = "@" TagName [ whitespace TagBody ] ;
 
 TagName
   = letter { letter | digit | "-" } ;
+  (* Open-ended: any valid identifier. Not restricted to built-in tags.        *)
+
+(* --------------------------------------------------------------------------- *)
+(* Generic tag body — the parser attempts to extract type, name, and           *)
+(* description in order. Each component is optional.                           *)
+(*                                                                             *)
+(*   @param {string} name - description     → type + name + desc              *)
+(*   @returns {string} description          → type + desc                     *)
+(*   @alias MyClass.foo                     → name only                       *)
+(*   @deprecated Use bar() instead          → desc only                       *)
+(*   @readonly                              → empty                           *)
+(*   @customTag {Foo} bar Some text         → type + name + desc (generic)    *)
+(* --------------------------------------------------------------------------- *)
 
 TagBody
-  = TypedNamedBody        (* tags like @param, @property                       *)
-  | TypedBody             (* tags like @returns, @throws, @type, @enum         *)
-  | NamedBody             (* tags like @alias, @memberof, @fires              *)
-  | TextBody              (* tags like @description, @example, @author         *)
-  | EmptyBody             (* tags like @abstract, @async, @readonly            *)
+  = [ TypeExpression ] [ ParameterName ] [ Separator ] [ Description ] ;
+  (* All four components are optional. When the tag name is known, the parser  *)
+  (* uses TagSpec to validate which components are expected. For unknown tags,  *)
+  (* all present components are preserved in the AST.                          *)
+
+Separator
+  = "-"
+  | (* empty — separator is optional; present only by convention *)
   ;
-
-(* --- Tag body variants ---------------------------------------------------- *)
-
-TypedNamedBody
-  = [ TypeExpression ] [ ParameterName ] [ "-" ] [ Description ] ;
-
-TypedBody
-  = [ TypeExpression ] [ Description ] ;
-
-NamedBody
-  = NamePath [ Description ] ;
-
-TextBody
-  = Description ;
-
-EmptyBody
-  = (* empty *) ;
 
 
 (* ============================================================================ *)
@@ -81,20 +94,33 @@ EmptyBody
 (* ============================================================================ *)
 
 InlineTag
-  = "{@" InlineTagName whitespace InlineTagBody "}" ;
+  = "{@" InlineTagName [ whitespace InlineTagBody ] "}" ;
 
 InlineTagName
-  = "link" | "linkcode" | "linkplain" | "tutorial" | "type" ;
+  = letter { letter | digit | "-" } ;
+  (* Open-ended: same rule as BlockTag TagName. Built-in inline tags are       *)
+  (* link, linkcode, linkplain, tutorial, type — but custom inline tags are    *)
+  (* permitted. See section 7 for the built-in classification.                 *)
 
 InlineTagBody
-  = InlineLinkBody
-  | InlineTypeBody
-  ;
+  = { char - "}" } ;
+  (* Generic: raw text up to the closing brace. The parser interprets the      *)
+  (* content based on the tag name:                                            *)
+  (*   {@link ...}      → NamePath or URL, optional link text                 *)
+  (*   {@linkcode ...}  → same as @link                                       *)
+  (*   {@linkplain ...} → same as @link                                       *)
+  (*   {@tutorial ...}  → tutorial name                                       *)
+  (*   {@type ...}      → TypeExpression                                      *)
+  (*   {@custom ...}    → preserved as raw text                               *)
 
-InlineLinkBody
+(* --- Inline tag content interpretation (semantic, not syntactic) ----------- *)
+(* When the parser recognizes a built-in inline tag name, it further parses    *)
+(* the InlineTagBody as one of these:                                          *)
+
+InlineLinkContent
   = ( NamePath | URL ) [ whitespace LinkText ] ;
 
-InlineTypeBody
+InlineTypeContent
   = TypeExpression ;
 
 LinkText
@@ -291,11 +317,27 @@ StringLiteralName
 
 
 (* ============================================================================ *)
-(* 7. Tag Classification Reference                                             *)
+(* 7. Tag Classification Reference (Semantic Layer — TagSpec Registry)         *)
 (* ============================================================================ *)
-(* This section is informational — it maps each tag to its body variant.       *)
+(* This section is NOT enforced by the grammar. It defines the built-in tag    *)
+(* registry that the parser uses to validate and interpret the generic         *)
+(* TagBody production for known tags.                                          *)
 (*                                                                             *)
-(* TypedNamedBody  (type + name + description):                                *)
+(* For unknown / custom tags, the parser stores whatever was extracted by the  *)
+(* generic TagBody rule (optional type, optional name, optional description)   *)
+(* without validation. Downstream tools or plugins can register their own      *)
+(* TagSpec entries to enable validation for custom tags.                       *)
+(*                                                                             *)
+(* TagSpec properties per tag:                                                 *)
+(*   canHaveType        — type expression {T} is expected / allowed           *)
+(*   canHaveName        — a name or name-path is expected / allowed           *)
+(*   mustHaveValue      — tag body must not be empty                          *)
+(*   mustNotHaveValue   — tag body must be empty                              *)
+(*   allowsMultiple     — tag can appear more than once in a comment          *)
+(*   keepsWhitespace    — whitespace in body is preserved (e.g. @example)     *)
+(*   synonyms           — alternative tag names                               *)
+(*                                                                             *)
+(* canHaveType=true, canHaveName=true  (type + name + description):            *)
 (*   @param, @arg, @argument                                                   *)
 (*   @property, @prop                                                          *)
 (*   @typedef                                                                  *)
@@ -304,7 +346,7 @@ StringLiteralName
 (*   @module                                                                   *)
 (*   @external, @host                                                          *)
 (*                                                                             *)
-(* TypedBody  (type + description):                                            *)
+(* canHaveType=true, canHaveName=false  (type + description):                  *)
 (*   @returns, @return                                                         *)
 (*   @throws, @exception                                                       *)
 (*   @type                                                                     *)
@@ -316,7 +358,7 @@ StringLiteralName
 (*   @modifies                                                                 *)
 (*   @class, @constructor (optional type+name)                                 *)
 (*                                                                             *)
-(* NamedBody  (name/path + description):                                       *)
+(* canHaveType=false, canHaveName=true  (name/path + description):             *)
 (*   @alias                                                                    *)
 (*   @memberof, @memberof!                                                     *)
 (*   @name                                                                     *)
@@ -332,7 +374,7 @@ StringLiteralName
 (*   @exports                                                                  *)
 (*   @variation                                                                *)
 (*                                                                             *)
-(* TextBody  (free text):                                                      *)
+(* mustHaveValue=true, text only  (free text):                                 *)
 (*   @description, @desc                                                       *)
 (*   @classdesc                                                                *)
 (*   @summary                                                                  *)
@@ -342,13 +384,13 @@ StringLiteralName
 (*   @since                                                                    *)
 (*   @version                                                                  *)
 (*   @deprecated                                                               *)
-(*   @example  (preserves whitespace)                                          *)
+(*   @example  (keepsWhitespace=true)                                          *)
 (*   @see                                                                      *)
 (*   @todo                                                                     *)
 (*   @access  (value: private|protected|public|package)                        *)
 (*   @kind                                                                     *)
 (*                                                                             *)
-(* EmptyBody  (no value):                                                      *)
+(* mustNotHaveValue=true  (no value):                                          *)
 (*   @abstract, @virtual                                                       *)
 (*   @async                                                                    *)
 (*   @generator                                                                *)
@@ -359,19 +401,23 @@ StringLiteralName
 (*   @inner                                                                    *)
 (*   @instance                                                                 *)
 (*   @override                                                                 *)
-(*   @package  (core version, no value)                                        *)
-(*   @private  (core version, no value)                                        *)
-(*   @protected (core version, no value)                                       *)
-(*   @public   (core version, no value)                                        *)
+(*   @package  (core version)                                                  *)
+(*   @private  (core version)                                                  *)
+(*   @protected (core version)                                                 *)
+(*   @public   (core version)                                                  *)
 (*   @readonly                                                                 *)
 (*   @static                                                                   *)
 (*                                                                             *)
-(* Inline Tags:                                                                *)
+(* Built-in Inline Tags:                                                       *)
 (*   {@link url_or_namepath [text]}                                            *)
 (*   {@linkcode url_or_namepath [text]}                                        *)
 (*   {@linkplain url_or_namepath [text]}                                       *)
 (*   {@tutorial name}                                                          *)
 (*   {@type TypeExpr}                                                          *)
+(*                                                                             *)
+(* Unknown / Custom Tags:                                                      *)
+(*   No TagSpec entry — parser uses generic TagBody, stores raw components.   *)
+(*   Plugins can register custom TagSpec entries at runtime for validation.    *)
 (* ============================================================================ *)
 
 
