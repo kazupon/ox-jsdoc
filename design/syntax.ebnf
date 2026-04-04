@@ -32,12 +32,75 @@ Description
   = DescriptionText { InlineTag DescriptionText } ;
 
 DescriptionText
-  = { char - "@" | NonTagAt } ;
+  = { char - "@" | NonTagAt | InlineCode | FencedCodeBlock } ;
   (* Free-form text. A "@" at the beginning of a line starts a new BlockTag.   *)
   (* An "@" that does not start a line or is escaped is plain text.            *)
+  (* "@" inside inline code or fenced code blocks is treated as plain text.    *)
 
 NonTagAt
   = "@" (* when NOT at the start of a line after optional whitespace/asterisk *) ;
+
+
+(* ============================================================================ *)
+(* 1a. Fence Mechanism — Code Blocks and Inline Code                           *)
+(* ============================================================================ *)
+(*                                                                             *)
+(* DESIGN NOTE: JSDoc descriptions and @example tags often contain Markdown    *)
+(* code blocks, inline code, and even nested JSDoc comments as examples.       *)
+(* The parser must NOT treat "@tag" inside these regions as block tags.         *)
+(*                                                                             *)
+(* Three types of fenced regions are recognized:                               *)
+(*   1. Fenced code blocks:  ``` ... ```  or  ~~~ ... ~~~                     *)
+(*   2. Indented code blocks: 4+ spaces of indentation (Markdown convention)   *)
+(*   3. Inline code:  `...`  (backtick-delimited)                             *)
+(*                                                                             *)
+(* Inside any fenced region:                                                   *)
+(*   - "@identifier" is NOT recognized as a BlockTag start                    *)
+(*   - "{@link ...}" is NOT recognized as an InlineTag                        *)
+(*   - All text is treated as literal content                                  *)
+(*                                                                             *)
+(* The fence state is tracked by the parser as a boolean toggle (for fenced    *)
+(* code blocks) or by span matching (for inline code). This is a PARSER        *)
+(* concern, not a pure grammar concern — the rules below describe the         *)
+(* syntax of fenced regions, while the parser maintains fence state.           *)
+(* ============================================================================ *)
+
+FencedCodeBlock
+  = FenceOpen { FencedContent } FenceClose ;
+  (* Everything between fence markers is treated as literal text.              *)
+  (* No tag recognition, no inline tag parsing.                                *)
+
+FenceOpen
+  = line_terminator { whitespace_char } FenceMarker [ FenceInfo ] ;
+  (* Fence must start at the beginning of a line (after optional whitespace).  *)
+
+FenceClose
+  = line_terminator { whitespace_char } FenceMarker ;
+
+FenceMarker
+  = "```" { "`" }             (* Backtick fence: 3 or more backticks          *)
+  | "~~~" { "~" }             (* Tilde fence: 3 or more tildes                *)
+  ;
+  (* The closing fence must use the same character and at least as many        *)
+  (* repetitions as the opening fence.                                         *)
+
+FenceInfo
+  = { char - line_terminator } ;
+  (* Optional info string after opening fence (e.g. language identifier).      *)
+  (* Example: ```javascript                                                    *)
+
+FencedContent
+  = { char - FenceClose } ;
+  (* Any text that is not the closing fence marker.                            *)
+
+InlineCode
+  = "`" { char - "`" - line_terminator } "`"
+  | "``" { char - "``" } "``"
+  ;
+  (* Backtick-delimited inline code. Content is treated as literal text.       *)
+  (* Double-backtick form allows literal backticks inside: ``foo`bar``         *)
+  (* "@tag" inside inline code is NOT recognized as a tag.                     *)
+  (* Line terminators are not allowed inside single-backtick inline code.      *)
 
 
 (* ============================================================================ *)
@@ -56,6 +119,18 @@ NonTagAt
 (*                                                                             *)
 (* For unknown / custom tags the parser uses the generic TagBody production    *)
 (* and stores the result as-is, allowing downstream consumers to interpret it. *)
+(*                                                                             *)
+(* FENCE INTERACTION: A "@" at the beginning of a line is recognized as a     *)
+(* BlockTag start ONLY when the parser is NOT inside a fenced region           *)
+(* (FencedCodeBlock or InlineCode). See section 1a for fence rules.            *)
+(*                                                                             *)
+(*   @example                                                                  *)
+(*   ```javascript                                                             *)
+(*   /** @param {string} name */     ← NOT a tag (inside fenced code block)  *)
+(*   function foo(name) {}                                                     *)
+(*   ```                                                                       *)
+(*   @param {string} id              ← IS a tag (outside fence)              *)
+(*                                                                             *)
 (* ============================================================================ *)
 
 BlockTag

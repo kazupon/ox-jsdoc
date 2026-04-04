@@ -62,6 +62,12 @@ pub enum DescriptionPart<'a> {
     Text(Box<'a, Text<'a>>),
     /// Inline tag (`{@link ...}`, etc.)
     InlineTag(Box<'a, InlineTag<'a>>),
+    /// Fenced code block (``` ... ``` or ~~~ ... ~~~)
+    /// Content is preserved as literal text; no tag/inline-tag parsing inside.
+    FencedCodeBlock(Box<'a, FencedCodeBlock<'a>>),
+    /// Inline code (`code` or `` `code` ``)
+    /// Content is preserved as literal text; no tag parsing inside.
+    InlineCode(Box<'a, InlineCode<'a>>),
 }
 
 /// Plain text node
@@ -70,6 +76,39 @@ pub struct Text<'a> {
     pub span: Span,
     /// Text content (zero-copy reference to source text)
     pub value: &'a str,
+}
+
+/// Fenced code block (e.g. ``` ... ``` or ~~~ ... ~~~)
+/// All content is literal — no tag or inline tag recognition inside.
+#[repr(C)]
+pub struct FencedCodeBlock<'a> {
+    pub span: Span,
+    /// Fence marker character ('`' or '~')
+    pub fence_char: FenceChar,
+    /// Number of fence characters (3 or more)
+    pub fence_length: u32,
+    /// Info string after opening fence (e.g. "javascript"), if any
+    pub info: Option<Box<'a, Text<'a>>>,
+    /// Raw content between opening and closing fence (zero-copy)
+    pub content: &'a str,
+}
+
+/// Fence marker character
+#[repr(u8)]
+pub enum FenceChar {
+    /// Backtick (`)
+    Backtick,
+    /// Tilde (~)
+    Tilde,
+}
+
+/// Inline code (e.g. `code` or ``code with ` inside``)
+/// Content is literal — no tag recognition inside.
+#[repr(C)]
+pub struct InlineCode<'a> {
+    pub span: Span,
+    /// Raw content between backtick delimiters (zero-copy)
+    pub content: &'a str,
 }
 ```
 
@@ -496,6 +535,8 @@ pub struct ParenthesizedType<'a> {
 | `Body` | `JSDocComment.{description, tags}` | Body itself has no dedicated node |
 | `Description` | `Description` | Interleaved text + inline tags |
 | `DescriptionText` | `Text` | Plain text |
+| `FencedCodeBlock` | `FencedCodeBlock` | ``` ... ``` or ~~~ ... ~~~ |
+| `InlineCode` | `InlineCode` | \`code\` or \`\`code\`\` |
 | `BlockTag` | `BlockTag` | Generic tag structure (all components Optional) |
 | `TagName` | `TagName` | Open-ended |
 | `TagBody` | `BlockTag.{type_expression, name, description}` | TagBody itself has no dedicated node |
@@ -534,6 +575,8 @@ pub trait Visit<'a> {
     fn visit_name_path(&mut self, path: &NamePath<'a>);
     fn visit_identifier(&mut self, ident: &Identifier<'a>);
     fn visit_text(&mut self, text: &Text<'a>);
+    fn visit_fenced_code_block(&mut self, block: &FencedCodeBlock<'a>);
+    fn visit_inline_code(&mut self, code: &InlineCode<'a>);
 }
 ```
 
