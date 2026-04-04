@@ -7,3 +7,6 @@
 [submodule "refers/oxc"]
 	path = refers/oxc
 	url = git@github.com:oxc-project/oxc.git
+[submodule "refers/comment-parser"]
+	path = refers/comment-parser
+	url = git@github.com:syavorsky/comment-parser.git
