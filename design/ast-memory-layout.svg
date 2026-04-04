@@ -1,0 +1,496 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 3400" font-family="'Helvetica Neue', Arial, sans-serif" font-size="12">
+  <defs>
+    <style>
+      .title { font-size: 22px; font-weight: bold; fill: #1a1a2e; }
+      .subtitle { font-size: 13px; fill: #666; }
+      .section-label { font-size: 16px; font-weight: bold; fill: #37474f; }
+      .section-line { stroke: #cfd8dc; stroke-width: 1; stroke-dasharray: 4,4; }
+      .mono { font-family: 'Menlo', 'Consolas', monospace; }
+      .arena-bg { fill: #fafafa; stroke: #b0bec5; stroke-width: 2; rx: 10; ry: 10; }
+      .node-root { fill: #1a1a2e; rx: 5; ry: 5; }
+      .node-desc { fill: #e3f2fd; stroke: #1976D2; stroke-width: 1.2; rx: 5; ry: 5; }
+      .node-tag { fill: #fff3e0; stroke: #ff9800; stroke-width: 1.2; rx: 5; ry: 5; }
+      .node-type { fill: #f3e5f5; stroke: #9c27b0; stroke-width: 1.2; rx: 5; ry: 5; }
+      .node-name { fill: #e3f2fd; stroke: #1976D2; stroke-width: 1.2; rx: 5; ry: 5; }
+      .node-leaf { fill: #e8f5e9; stroke: #4caf50; stroke-width: 1.2; rx: 5; ry: 5; }
+      .node-inline { fill: #fce4ec; stroke: #e91e63; stroke-width: 1.2; rx: 5; ry: 5; }
+      .node-vec { fill: #fffde7; stroke: #f9a825; stroke-width: 1.2; rx: 5; ry: 5; }
+      .ptr-box { stroke: #d32f2f; stroke-width: 1.5; fill: none; }
+      .ptr-vec { stroke: #1565c0; stroke-width: 1.5; fill: none; }
+      .ptr-str { stroke: #2e7d32; stroke-width: 1.3; fill: none; stroke-dasharray: 6,3; }
+      .field-name { font-size: 10px; fill: #555; font-family: 'Menlo', 'Consolas', monospace; }
+      .field-val { font-size: 10px; fill: #333; font-family: 'Menlo', 'Consolas', monospace; }
+      .addr { font-size: 9px; fill: #999; font-family: 'Menlo', 'Consolas', monospace; }
+      .annotation { font-size: 11px; fill: #777; font-style: italic; }
+      .source-bg { fill: #f8f8f8; stroke: #bbb; stroke-width: 1.5; rx: 6; ry: 6; }
+      .note-box { fill: #fff8e1; stroke: #ffb300; stroke-width: 1.2; rx: 6; ry: 6; }
+      .note-text { font-size: 11px; fill: #555; }
+      .dealloc-box { fill: #ffebee; stroke: #ef5350; stroke-width: 1.5; rx: 6; ry: 6; }
+    </style>
+    <marker id="arr-red" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#d32f2f"/>
+    </marker>
+    <marker id="arr-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#1565c0"/>
+    </marker>
+    <marker id="arr-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#2e7d32"/>
+    </marker>
+  </defs>
+
+  <!-- ================================================================== -->
+  <!-- HEADER -->
+  <!-- ================================================================== -->
+  <text x="900" y="35" text-anchor="middle" class="title">ox-jsdoc AST — Arena Memory Layout</text>
+  <text x="900" y="55" text-anchor="middle" class="subtitle">How the parse example AST is allocated in an oxc-style bump allocator</text>
+
+  <!-- Legend -->
+  <g transform="translate(40, 72)">
+    <rect x="0" y="0" width="750" height="32" fill="#f5f5f5" stroke="#ddd" rx="5" ry="5"/>
+    <text x="15" y="14" font-size="10" font-weight="bold" fill="#555">Pointer Types:</text>
+    <line x1="115" y1="20" x2="155" y2="20" class="ptr-box" marker-end="url(#arr-red)"/>
+    <text x="160" y="23" font-size="10" fill="#444">Box&lt;'a, T&gt; (arena pointer)</text>
+    <line x1="315" y1="20" x2="355" y2="20" class="ptr-vec" marker-end="url(#arr-blue)"/>
+    <text x="360" y="23" font-size="10" fill="#444">Vec&lt;'a, T&gt; data pointer</text>
+    <line x1="520" y1="20" x2="560" y2="20" class="ptr-str" marker-end="url(#arr-green)"/>
+    <text x="565" y="23" font-size="10" fill="#444">&amp;'a str (zero-copy to source)</text>
+  </g>
+
+  <!-- ================================================================== -->
+  <!-- SOURCE TEXT -->
+  <!-- ================================================================== -->
+  <g transform="translate(40, 120)">
+    <text x="0" y="0" class="section-label">Source Text  (heap-allocated, owned by caller — separate from arena)</text>
+    <rect class="source-bg" x="0" y="10" width="1720" height="40"/>
+    <text x="15" y="28" class="addr">0x7000_0000</text>
+    <text x="15" y="42" class="mono" font-size="10" fill="#333">"/** Find a user.\n * See {@link UserService} for details.\n * @param {string|number} id - The user ID ... */"</text>
+  </g>
+
+  <!-- ================================================================== -->
+  <!-- SECTION A: ARENA ALLOCATIONS (left column) -->
+  <!-- ================================================================== -->
+  <line x1="40" y1="185" x2="1760" y2="185" class="section-line"/>
+
+  <rect class="arena-bg" x="40" y="195" width="820" height="1850"/>
+  <text x="60" y="218" font-size="14" font-weight="bold" fill="#455a64">Bump Arena</text>
+  <text x="60" y="234" class="addr">Sequential allocations — bump_ptr advances on each alloc()</text>
+
+  <!-- Alloc #1: JSDocComment -->
+  <g transform="translate(70, 260)">
+    <text x="0" y="-8" class="addr">0xA000_0000  alloc #1</text>
+    <rect class="node-root" x="0" y="0" width="520" height="60"/>
+    <text x="15" y="16" fill="#90caf9" class="mono" font-size="11">JSDocComment  (40 bytes)</text>
+    <text x="15" y="32" fill="#bbb" class="mono" font-size="10">span: { start: 0, end: 290 }</text>
+    <text x="15" y="46" fill="#ef9a9a" class="mono" font-size="10">description: Box → 0x..0100</text>
+    <text x="300" y="46" fill="#90caf9" class="mono" font-size="10">tags: Vec { ptr→0x..0030, len:6 }</text>
+  </g>
+
+  <!-- Alloc #2: Vec<BlockTag> -->
+  <g transform="translate(70, 360)">
+    <text x="0" y="-8" class="addr">0xA000_0030  alloc #2</text>
+    <rect class="node-vec" x="0" y="0" width="520" height="110"/>
+    <text x="15" y="16" fill="#666" class="mono" font-size="11">Vec&lt;BlockTag&gt; backing  (6 × ~80 bytes)</text>
+    <text x="15" y="36" class="field-val">[0] @param      type:ptr  name:ptr  desc:ptr</text>
+    <text x="15" y="52" class="field-val">[1] @param      type:ptr  name:ptr  desc:ptr</text>
+    <text x="15" y="68" class="field-val">[2] @returns    type:ptr  name:—    desc:ptr</text>
+    <text x="15" y="84" class="field-val">[3] @throws     type:ptr  name:—    desc:ptr</text>
+    <text x="15" y="100" class="field-val">[4] @since      type:—    name:—    desc:ptr</text>
+    <text x="330" y="100" class="field-val">[5] @deprecated  desc:ptr</text>
+  </g>
+  <path d="M 460,320 L 460,352" class="ptr-vec" marker-end="url(#arr-blue)"/>
+
+  <!-- Alloc #3: Description -->
+  <g transform="translate(70, 510)">
+    <text x="0" y="-8" class="addr">0xA000_0100  alloc #3</text>
+    <rect class="node-desc" x="0" y="0" width="520" height="40"/>
+    <text x="15" y="16" class="field-name" font-size="11">Description  (24 bytes)</text>
+    <text x="15" y="32" class="field-val">span: { 4, 58 }    parts: Vec { ptr→0x..0120, len: 3 }</text>
+  </g>
+  <path d="M 250,320 C 250,350 140,480 260,502" class="ptr-box" marker-end="url(#arr-red)"/>
+
+  <!-- Alloc #4: Vec<DescriptionPart> -->
+  <g transform="translate(70, 590)">
+    <text x="0" y="-8" class="addr">0xA000_0120  alloc #4</text>
+    <rect class="node-vec" x="0" y="0" width="520" height="55"/>
+    <text x="15" y="16" fill="#666" class="mono" font-size="11">Vec&lt;DescriptionPart&gt; backing  (3 × 16 bytes)</text>
+    <text x="15" y="36" class="field-val">[0] Text(Box→0x..0160)</text>
+    <text x="210" y="36" class="field-val">[1] InlineTag(Box→0x..0180)</text>
+    <text x="410" y="36" class="field-val">[2] Text(Box→0x..01C0)</text>
+  </g>
+  <path d="M 380,550 L 380,582" class="ptr-vec" marker-end="url(#arr-blue)"/>
+
+  <!-- Alloc #5: Text -->
+  <g transform="translate(70, 690)">
+    <text x="0" y="-8" class="addr">0xA000_0160  alloc #5</text>
+    <rect class="node-leaf" x="0" y="0" width="520" height="40"/>
+    <text x="15" y="16" class="field-name" font-size="11">Text  (24 bytes)</text>
+    <text x="15" y="32" class="field-val">span: { 4, 24 }    value: &amp;str → source[4..24] "Find a user.\nSee "</text>
+  </g>
+  <path d="M 120,645 L 120,682" class="ptr-box" marker-end="url(#arr-red)"/>
+  <path d="M 590,710 L 730,710 L 730,160" class="ptr-str" marker-end="url(#arr-green)"/>
+  <text x="740" y="440" class="annotation" transform="rotate(-90, 740, 440)">zero-copy &amp;'a str to source</text>
+
+  <!-- Alloc #6: InlineTag -->
+  <g transform="translate(70, 775)">
+    <text x="0" y="-8" class="addr">0xA000_0180  alloc #6</text>
+    <rect class="node-inline" x="0" y="0" width="520" height="40"/>
+    <text x="15" y="16" class="field-name" font-size="11">InlineTag  (48 bytes)</text>
+    <text x="15" y="32" class="field-val">tag_name: "link"    body: Link { target: Box → 0x..01A0 }</text>
+  </g>
+  <path d="M 320,645 L 320,767" class="ptr-box" marker-end="url(#arr-red)"/>
+
+  <!-- Alloc #7: NamePath -->
+  <g transform="translate(70, 860)">
+    <text x="0" y="-8" class="addr">0xA000_01A0  alloc #7</text>
+    <rect class="node-name" x="0" y="0" width="520" height="40"/>
+    <text x="15" y="16" class="field-name" font-size="11">NamePath  (32 bytes)</text>
+    <text x="15" y="32" class="field-val">span: { 31, 42 }    segments: [ Identifier { name: "UserService" } ]</text>
+  </g>
+  <path d="M 400,815 L 400,852" class="ptr-box" marker-end="url(#arr-red)"/>
+
+  <!-- Alloc #8: Text -->
+  <g transform="translate(70, 945)">
+    <text x="0" y="-8" class="addr">0xA000_01C0  alloc #8</text>
+    <rect class="node-leaf" x="0" y="0" width="520" height="40"/>
+    <text x="15" y="16" class="field-name" font-size="11">Text  (24 bytes)</text>
+    <text x="15" y="32" class="field-val">span: { 46, 58 }    value: &amp;str → source[46..58] " for details."</text>
+  </g>
+  <path d="M 500,645 L 500,937" class="ptr-box" marker-end="url(#arr-red)"/>
+
+  <!-- Alloc #9: TypeExpression -->
+  <g transform="translate(70, 1035)">
+    <text x="0" y="-8" class="addr">0xA000_0200  alloc #9  — tags[0] @param type</text>
+    <rect class="node-type" x="0" y="0" width="520" height="40"/>
+    <text x="15" y="16" class="field-name" font-size="11">TypeExpression  (32 bytes)</text>
+    <text x="15" y="32" class="field-val">span: { 68, 83 }    type_expr: Union(Box → 0x..0230)</text>
+  </g>
+
+  <!-- Alloc #10: UnionType -->
+  <g transform="translate(70, 1120)">
+    <text x="0" y="-8" class="addr">0xA000_0230  alloc #10</text>
+    <rect class="node-type" x="0" y="0" width="520" height="40"/>
+    <text x="15" y="16" class="field-name" font-size="11">UnionType  (24 bytes)</text>
+    <text x="15" y="32" class="field-val">span: { 69, 82 }    elements: Vec { ptr→0x..0260, len: 2 }</text>
+  </g>
+  <path d="M 350,1075 L 350,1112" class="ptr-box" marker-end="url(#arr-red)"/>
+
+  <!-- Alloc #11: Vec<TypeExpr> -->
+  <g transform="translate(70, 1205)">
+    <text x="0" y="-8" class="addr">0xA000_0260  alloc #11</text>
+    <rect class="node-vec" x="0" y="0" width="520" height="40"/>
+    <text x="15" y="16" fill="#666" class="mono" font-size="11">Vec&lt;TypeExpr&gt; backing  (2 × 16 bytes)</text>
+    <text x="15" y="32" class="field-val">[0] Name(ptr→ TypeName "string")        [1] Name(ptr→ TypeName "number")</text>
+  </g>
+  <path d="M 400,1160 L 400,1197" class="ptr-vec" marker-end="url(#arr-blue)"/>
+
+  <!-- Alloc #12: TypeName "string" -->
+  <g transform="translate(70, 1290)">
+    <text x="0" y="-8" class="addr">0xA000_0290  alloc #12</text>
+    <rect class="node-type" x="0" y="0" width="240" height="40"/>
+    <text x="15" y="16" class="field-name" font-size="11">TypeName  (32 bytes)</text>
+    <text x="15" y="32" class="field-val">parts: [Ident "string"]</text>
+  </g>
+  <path d="M 160,1245 L 160,1282" class="ptr-box" marker-end="url(#arr-red)"/>
+
+  <!-- Alloc #13: TypeName "number" -->
+  <g transform="translate(350, 1290)">
+    <text x="0" y="-8" class="addr">0xA000_02C0  alloc #13</text>
+    <rect class="node-type" x="0" y="0" width="240" height="40"/>
+    <text x="15" y="16" class="field-name" font-size="11">TypeName  (32 bytes)</text>
+    <text x="15" y="32" class="field-val">parts: [Ident "number"]</text>
+  </g>
+  <path d="M 420,1245 L 460,1282" class="ptr-box" marker-end="url(#arr-red)"/>
+
+  <!-- Alloc #14: RequiredParameterName -->
+  <g transform="translate(70, 1380)">
+    <text x="0" y="-8" class="addr">0xA000_02F0  alloc #14  — tags[0] @param name</text>
+    <rect class="node-name" x="0" y="0" width="520" height="40"/>
+    <text x="15" y="16" class="field-name" font-size="11">RequiredParameterName  (32 bytes)</text>
+    <text x="15" y="32" class="field-val">span: { 84, 86 }    name: NamePath → Identifier { name: &amp;str → "id" }</text>
+  </g>
+
+  <!-- Alloc #15: Text -->
+  <g transform="translate(70, 1465)">
+    <text x="0" y="-8" class="addr">0xA000_0320  alloc #15  — tags[0] @param description</text>
+    <rect class="node-leaf" x="0" y="0" width="520" height="40"/>
+    <text x="15" y="16" class="field-name" font-size="11">Text  (24 bytes)</text>
+    <text x="15" y="32" class="field-val">span: { 89, 100 }    value: &amp;str → source[89..100] "The user ID"</text>
+  </g>
+
+  <!-- Remaining -->
+  <g transform="translate(70, 1555)">
+    <text x="0" y="-8" class="addr">0xA000_0350  allocs #16–#32  — tags[1] through tags[5]</text>
+    <rect x="0" y="0" width="520" height="100" rx="5" ry="5" fill="#f0f0f0" stroke="#bbb" stroke-width="1" stroke-dasharray="5,3"/>
+    <text x="15" y="20" class="field-val">#16  TypeExpression  Object.&lt;string, *&gt;</text>
+    <text x="15" y="36" class="field-val">#17  TypeApplication  →  #18  TypeName "Object"</text>
+    <text x="15" y="52" class="field-val">#19  Vec&lt;TypeExpr&gt; [Name("string"), AllLiteral]</text>
+    <text x="15" y="68" class="field-val">#22  OptionalParameterName { "options", default: "{}" }</text>
+    <text x="15" y="84" class="field-val">#23–#32  Promise.&lt;User&gt;, NotFoundError, Text nodes ...</text>
+  </g>
+
+  <!-- Bump pointer -->
+  <g transform="translate(70, 1700)">
+    <rect x="0" y="0" width="520" height="28" fill="#e8eaf6" stroke="#3f51b5" stroke-width="1.5" rx="4" ry="4"/>
+    <text x="260" y="18" text-anchor="middle" fill="#283593" class="mono" font-size="11">▲ bump_ptr = 0xA000_0800  (next allocation here)</text>
+  </g>
+
+  <g transform="translate(70, 1745)">
+    <rect x="0" y="0" width="520" height="50" fill="none" stroke="#ddd" stroke-width="1" rx="4" ry="4" stroke-dasharray="5,3"/>
+    <text x="260" y="30" text-anchor="middle" fill="#bbb" class="mono" font-size="11">— unused arena capacity —</text>
+  </g>
+
+  <!-- ================================================================== -->
+  <!-- SECTION B: STRUCT LAYOUT (right column) -->
+  <!-- ================================================================== -->
+  <g transform="translate(920, 195)">
+    <text x="0" y="20" class="section-label">Struct Memory Layout Detail</text>
+
+    <rect x="0" y="35" width="820" height="380" fill="#fff" stroke="#ddd" stroke-width="1" rx="8" ry="8"/>
+
+    <!-- JSDocComment -->
+    <text x="20" y="60" class="mono field-name" font-size="12" font-weight="bold">JSDocComment&lt;'a&gt;   (40 bytes, 8-byte aligned)</text>
+    <g transform="translate(20, 75)">
+      <rect x="0" y="0" width="100" height="40" fill="#e0e0e0" stroke="#999" stroke-width="0.5" rx="3" ry="3"/>
+      <text x="50" y="16" text-anchor="middle" class="mono" font-size="9" fill="#555">span.start</text>
+      <text x="50" y="30" text-anchor="middle" class="mono" font-size="9" fill="#333">u32</text>
+      <rect x="110" y="0" width="100" height="40" fill="#e0e0e0" stroke="#999" stroke-width="0.5" rx="3" ry="3"/>
+      <text x="160" y="16" text-anchor="middle" class="mono" font-size="9" fill="#555">span.end</text>
+      <text x="160" y="30" text-anchor="middle" class="mono" font-size="9" fill="#333">u32</text>
+      <rect x="220" y="0" width="130" height="40" fill="#ffcdd2" stroke="#d32f2f" stroke-width="0.8" rx="3" ry="3"/>
+      <text x="285" y="16" text-anchor="middle" class="mono" font-size="9" fill="#555">description</text>
+      <text x="285" y="30" text-anchor="middle" class="mono" font-size="9" fill="#c62828">Option&lt;Box&gt; 8B</text>
+      <rect x="360" y="0" width="130" height="40" fill="#bbdefb" stroke="#1565c0" stroke-width="0.8" rx="3" ry="3"/>
+      <text x="425" y="16" text-anchor="middle" class="mono" font-size="9" fill="#555">tags.ptr</text>
+      <text x="425" y="30" text-anchor="middle" class="mono" font-size="9" fill="#0d47a1">*const T 8B</text>
+      <rect x="500" y="0" width="80" height="40" fill="#bbdefb" stroke="#1565c0" stroke-width="0.8" rx="3" ry="3"/>
+      <text x="540" y="16" text-anchor="middle" class="mono" font-size="9" fill="#555">tags.len</text>
+      <text x="540" y="30" text-anchor="middle" class="mono" font-size="9" fill="#333">usize 8B</text>
+      <rect x="590" y="0" width="80" height="40" fill="#bbdefb" stroke="#1565c0" stroke-width="0.8" rx="3" ry="3"/>
+      <text x="630" y="16" text-anchor="middle" class="mono" font-size="9" fill="#555">tags.cap</text>
+      <text x="630" y="30" text-anchor="middle" class="mono" font-size="9" fill="#333">usize 8B</text>
+      <text x="0" y="52" class="addr">+0</text>
+      <text x="110" y="52" class="addr">+4</text>
+      <text x="220" y="52" class="addr">+8</text>
+      <text x="360" y="52" class="addr">+16</text>
+      <text x="500" y="52" class="addr">+24</text>
+      <text x="590" y="52" class="addr">+32</text>
+      <text x="680" y="52" class="addr">= 40B</text>
+    </g>
+
+    <!-- BlockTag -->
+    <text x="20" y="155" class="mono field-name" font-size="12" font-weight="bold">BlockTag&lt;'a&gt;   (~80 bytes, 8-byte aligned)</text>
+    <g transform="translate(20, 170)">
+      <rect x="0" y="0" width="75" height="35" fill="#e0e0e0" stroke="#999" stroke-width="0.5" rx="3" ry="3"/>
+      <text x="38" y="14" text-anchor="middle" class="mono" font-size="8">span</text>
+      <text x="38" y="26" text-anchor="middle" class="mono" font-size="8" fill="#666">8B</text>
+      <rect x="85" y="0" width="115" height="35" fill="#c8e6c9" stroke="#2e7d32" stroke-width="0.8" rx="3" ry="3"/>
+      <text x="143" y="14" text-anchor="middle" class="mono" font-size="8">tag_name: &amp;str</text>
+      <text x="143" y="26" text-anchor="middle" class="mono" font-size="8" fill="#666">ptr+len = 16B</text>
+      <rect x="210" y="0" width="120" height="35" fill="#ffcdd2" stroke="#d32f2f" stroke-width="0.8" rx="3" ry="3"/>
+      <text x="270" y="14" text-anchor="middle" class="mono" font-size="8">type_expression</text>
+      <text x="270" y="26" text-anchor="middle" class="mono" font-size="8" fill="#c62828">Option&lt;Box&gt; 8B</text>
+      <rect x="340" y="0" width="120" height="35" fill="#ffcdd2" stroke="#d32f2f" stroke-width="0.8" rx="3" ry="3"/>
+      <text x="400" y="14" text-anchor="middle" class="mono" font-size="8">name</text>
+      <text x="400" y="26" text-anchor="middle" class="mono" font-size="8" fill="#c62828">Option&lt;Box&gt; 8B</text>
+      <rect x="470" y="0" width="120" height="35" fill="#ffcdd2" stroke="#d32f2f" stroke-width="0.8" rx="3" ry="3"/>
+      <text x="530" y="14" text-anchor="middle" class="mono" font-size="8">description</text>
+      <text x="530" y="26" text-anchor="middle" class="mono" font-size="8" fill="#c62828">Option&lt;Box&gt; 8B</text>
+    </g>
+
+    <!-- Text -->
+    <text x="20" y="235" class="mono field-name" font-size="12" font-weight="bold">Text&lt;'a&gt;   (24 bytes, 8-byte aligned)</text>
+    <g transform="translate(20, 248)">
+      <rect x="0" y="0" width="75" height="35" fill="#e0e0e0" stroke="#999" stroke-width="0.5" rx="3" ry="3"/>
+      <text x="38" y="14" text-anchor="middle" class="mono" font-size="8">span</text>
+      <text x="38" y="26" text-anchor="middle" class="mono" font-size="8" fill="#666">8B</text>
+      <rect x="85" y="0" width="180" height="35" fill="#c8e6c9" stroke="#2e7d32" stroke-width="0.8" rx="3" ry="3"/>
+      <text x="175" y="14" text-anchor="middle" class="mono" font-size="8">value: &amp;'a str</text>
+      <text x="175" y="26" text-anchor="middle" class="mono" font-size="8" fill="#2e7d32">ptr (8B) + len (8B) = 16B</text>
+    </g>
+    <text x="290" y="295" class="annotation">↑ ptr points into SOURCE TEXT, not into arena (zero-copy)</text>
+
+    <!-- TypeExpr enum -->
+    <text x="20" y="322" class="mono field-name" font-size="12" font-weight="bold">TypeExpr&lt;'a&gt;   (16 bytes — uniform, all variants boxed)</text>
+    <g transform="translate(20, 332)">
+      <rect x="0" y="0" width="55" height="25" fill="#e1bee7" stroke="#9c27b0" stroke-width="0.5" rx="3" ry="3"/>
+      <text x="28" y="16" text-anchor="middle" class="mono" font-size="8">disc. 1B</text>
+      <rect x="65" y="0" width="55" height="25" fill="#f5f5f5" stroke="#999" stroke-width="0.5" rx="3" ry="3"/>
+      <text x="93" y="16" text-anchor="middle" class="mono" font-size="8">pad 7B</text>
+      <rect x="130" y="0" width="130" height="25" fill="#ffcdd2" stroke="#d32f2f" stroke-width="0.8" rx="3" ry="3"/>
+      <text x="195" y="16" text-anchor="middle" class="mono" font-size="8">Box&lt;'a, T&gt; 8B</text>
+      <text x="270" y="16" class="annotation"> = 16B total</text>
+    </g>
+  </g>
+
+  <!-- ================================================================== -->
+  <!-- SECTION C: KEY DESIGN PROPERTIES -->
+  <!-- ================================================================== -->
+  <g transform="translate(920, 630)">
+    <rect class="note-box" x="0" y="0" width="820" height="280"/>
+    <text x="20" y="24" font-weight="bold" font-size="14" fill="#e65100">Key Memory Design Properties</text>
+
+    <text x="20" y="52" class="note-text" font-weight="bold">1. Sequential bump allocation</text>
+    <text x="40" y="68" class="note-text">Each alloc() advances the bump pointer. Nodes are packed contiguously.</text>
+    <text x="40" y="84" class="note-text">Total: ~2 KB for this example (32 allocations × ~64 bytes average).</text>
+
+    <text x="20" y="108" class="note-text" font-weight="bold">2. Zero-copy string references</text>
+    <text x="40" y="124" class="note-text">Text.value and TagName.value are &amp;'a str slices into the source text.</text>
+    <text x="40" y="140" class="note-text">No string data is copied into the arena.</text>
+
+    <text x="20" y="164" class="note-text" font-weight="bold">3. Box&lt;'a, T&gt; = NonNull&lt;T&gt;  (8 bytes on 64-bit)</text>
+    <text x="40" y="180" class="note-text">Raw pointers into the arena. No Drop, no reference counting.</text>
+    <text x="40" y="196" class="note-text">Option&lt;Box&gt; uses niche: None = null pointer (still 8 bytes).</text>
+
+    <text x="20" y="220" class="note-text" font-weight="bold">4. Vec&lt;'a, T&gt; backing storage in arena</text>
+    <text x="40" y="236" class="note-text">Data pointer → contiguous array within the same arena.</text>
+    <text x="40" y="252" class="note-text">Pre-allocated with estimated capacity to avoid reallocation.</text>
+
+    <text x="20" y="275" class="note-text" font-weight="bold">5. O(1) bulk deallocation — no individual destructors called</text>
+  </g>
+
+  <!-- ================================================================== -->
+  <!-- SECTION D: POINTER RELATIONSHIPS (full width, bottom) -->
+  <!-- ================================================================== -->
+  <line x1="40" y1="2080" x2="1760" y2="2080" class="section-line"/>
+
+  <g transform="translate(40, 2100)">
+    <text x="0" y="0" class="section-label">Pointer Relationships Overview</text>
+
+    <rect x="0" y="20" width="1720" height="870" fill="#fff" stroke="#ddd" stroke-width="1" rx="8" ry="8"/>
+
+    <!-- Source text bar -->
+    <rect x="40" y="50" width="1640" height="35" fill="#f8f8f8" stroke="#ccc" stroke-width="1" rx="4" ry="4"/>
+    <text x="60" y="72" class="mono" font-size="11" fill="#666">Source Text (heap)   "/** Find a user.\n * See {@link UserService} for details.\n * @param {string|number} id - The user ID ... */"</text>
+
+    <!-- Note about &str -->
+    <text x="40" y="100" class="annotation" font-size="10">Green text inside Text/TagName nodes = &amp;'a str zero-copy reference into Source Text above (no heap copy)</text>
+
+    <!-- Arena box -->
+    <rect x="40" y="120" width="1640" height="570" fill="#fafafa" stroke="#b0bec5" stroke-width="1.5" rx="6" ry="6"/>
+    <text x="60" y="145" class="mono" font-size="11" fill="#78909c">Bump Arena (single contiguous allocation)</text>
+
+    <!-- ============================================================ -->
+    <!-- Tree layout: top-down, no crossing arrows -->
+    <!-- ============================================================ -->
+
+    <!-- Level 0: Root -->
+    <rect x="760" y="165" width="160" height="35" class="node-root" rx="5" ry="5"/>
+    <text x="840" y="188" text-anchor="middle" fill="#fff" class="mono" font-size="11">JSDocComment</text>
+
+    <!-- Level 1: description + Vec<Tag> -->
+    <!-- Left branch: description -->
+    <rect x="300" y="260" width="140" height="32" class="node-desc" rx="4" ry="4"/>
+    <text x="370" y="281" text-anchor="middle" class="mono" font-size="10">Description</text>
+
+    <!-- Right branch: Vec<BlockTag> -->
+    <rect x="1060" y="260" width="140" height="32" class="node-vec" rx="4" ry="4"/>
+    <text x="1130" y="281" text-anchor="middle" class="mono" font-size="10">Vec&lt;BlockTag&gt;</text>
+
+    <!-- Root -> Description (Box, red) -->
+    <path d="M 800,200 L 800,230 L 370,230 L 370,260" class="ptr-box" marker-end="url(#arr-red)"/>
+    <text x="570" y="225" class="annotation">description (Box)</text>
+
+    <!-- Root -> Vec<Tag> (Vec, blue) -->
+    <path d="M 880,200 L 880,230 L 1130,230 L 1130,260" class="ptr-vec" marker-end="url(#arr-blue)"/>
+    <text x="1000" y="225" class="annotation">tags (Vec)</text>
+
+    <!-- Level 2a: Description children -->
+    <rect x="60" y="350" width="150" height="42" class="node-leaf" rx="4" ry="4"/>
+    <text x="135" y="366" text-anchor="middle" class="mono" font-size="10">Text</text>
+    <text x="135" y="382" text-anchor="middle" class="mono" font-size="8" fill="#2e7d32">&amp;str→"Find a user..."</text>
+
+    <rect x="270" y="350" width="110" height="42" class="node-inline" rx="4" ry="4"/>
+    <text x="325" y="366" text-anchor="middle" class="mono" font-size="10">InlineTag</text>
+    <text x="325" y="382" text-anchor="middle" class="mono" font-size="8" fill="#880e4f">@link</text>
+
+    <rect x="440" y="350" width="150" height="42" class="node-leaf" rx="4" ry="4"/>
+    <text x="515" y="366" text-anchor="middle" class="mono" font-size="10">Text</text>
+    <text x="515" y="382" text-anchor="middle" class="mono" font-size="8" fill="#2e7d32">&amp;str→" for details."</text>
+
+    <!-- Description -> parts (Vec, blue) -->
+    <path d="M 310,292 L 310,325 L 135,325 L 135,350" class="ptr-vec" marker-end="url(#arr-blue)"/>
+    <path d="M 370,292 L 370,325 L 325,325 L 325,350" class="ptr-vec" marker-end="url(#arr-blue)"/>
+    <path d="M 430,292 L 430,325 L 515,325 L 515,350" class="ptr-vec" marker-end="url(#arr-blue)"/>
+    <text x="220" y="320" class="annotation">parts (Vec)</text>
+
+    <!-- Level 3a: InlineTag -> NamePath -->
+    <rect x="270" y="440" width="110" height="32" class="node-name" rx="4" ry="4"/>
+    <text x="325" y="461" text-anchor="middle" class="mono" font-size="10">NamePath</text>
+    <text x="395" y="461" class="annotation">"UserService"</text>
+
+    <path d="M 325,392 L 325,440" class="ptr-box" marker-end="url(#arr-red)"/>
+    <text x="335" y="420" class="annotation">body.target (Box)</text>
+
+    <!-- &str references shown as labels on Text nodes (no arrows — avoids clutter) -->
+
+    <!-- Level 2b: BlockTag children (from Vec) -->
+    <rect x="830" y="355" width="120" height="32" class="node-tag" rx="4" ry="4"/>
+    <text x="890" y="376" text-anchor="middle" class="mono" font-size="10">BlockTag[0]</text>
+    <text x="960" y="376" class="annotation">@param</text>
+
+    <rect x="1080" y="355" width="120" height="32" class="node-tag" rx="4" ry="4"/>
+    <text x="1140" y="376" text-anchor="middle" class="mono" font-size="10">BlockTag[1]</text>
+
+    <rect x="1270" y="355" width="80" height="32" class="node-tag" rx="4" ry="4"/>
+    <text x="1310" y="376" text-anchor="middle" class="mono" font-size="10">[2]–[5]</text>
+
+    <!-- Vec -> BlockTags (blue) -->
+    <path d="M 1080,292 L 1080,325 L 890,325 L 890,355" class="ptr-vec" marker-end="url(#arr-blue)"/>
+    <path d="M 1130,292 L 1130,325 L 1140,325 L 1140,355" class="ptr-vec" marker-end="url(#arr-blue)"/>
+    <path d="M 1180,292 L 1180,325 L 1310,325 L 1310,355" class="ptr-vec" marker-end="url(#arr-blue)"/>
+
+    <!-- Level 3b: BlockTag[0] children -->
+    <rect x="700" y="450" width="110" height="32" class="node-type" rx="4" ry="4"/>
+    <text x="755" y="471" text-anchor="middle" class="mono" font-size="10">TypeExpr</text>
+
+    <rect x="850" y="450" width="110" height="32" class="node-name" rx="4" ry="4"/>
+    <text x="905" y="471" text-anchor="middle" class="mono" font-size="10">ParamName</text>
+    <text x="970" y="471" class="annotation">"id"</text>
+
+    <rect x="990" y="445" width="160" height="42" class="node-leaf" rx="4" ry="4"/>
+    <text x="1070" y="462" text-anchor="middle" class="mono" font-size="10">Text</text>
+    <text x="1070" y="478" text-anchor="middle" class="mono" font-size="8" fill="#2e7d32">&amp;str→"The user ID"</text>
+
+    <!-- BlockTag[0] -> children (Box, red) -->
+    <path d="M 860,387 L 860,420 L 755,420 L 755,450" class="ptr-box" marker-end="url(#arr-red)"/>
+    <text x="780" y="415" class="annotation">type (Box)</text>
+    <path d="M 890,387 L 890,420 L 905,420 L 905,450" class="ptr-box" marker-end="url(#arr-red)"/>
+    <text x="910" y="440" class="annotation">name</text>
+    <path d="M 920,387 L 920,420 L 1070,420 L 1070,445" class="ptr-box" marker-end="url(#arr-red)"/>
+    <text x="1000" y="415" class="annotation">desc (Box)</text>
+
+    <!-- &str reference shown as label on Text node -->
+
+    <!-- Level 4: TypeExpr -> UnionType -->
+    <rect x="650" y="540" width="110" height="32" class="node-type" rx="4" ry="4"/>
+    <text x="705" y="561" text-anchor="middle" class="mono" font-size="10">UnionType</text>
+
+    <path d="M 755,482 L 755,510 L 705,510 L 705,540" class="ptr-box" marker-end="url(#arr-red)"/>
+    <text x="765" y="520" class="annotation">Union (Box)</text>
+
+    <!-- Level 5: UnionType -> TypeNames -->
+    <rect x="600" y="620" width="90" height="30" class="node-type" rx="4" ry="4"/>
+    <text x="645" y="640" text-anchor="middle" class="mono" font-size="10">TypeName</text>
+    <text x="700" y="640" class="annotation">"string"</text>
+
+    <rect x="780" y="620" width="90" height="30" class="node-type" rx="4" ry="4"/>
+    <text x="825" y="640" text-anchor="middle" class="mono" font-size="10">TypeName</text>
+    <text x="880" y="640" class="annotation">"number"</text>
+
+    <path d="M 680,572 L 680,595 L 645,595 L 645,620" class="ptr-vec" marker-end="url(#arr-blue)"/>
+    <path d="M 730,572 L 730,595 L 825,595 L 825,620" class="ptr-vec" marker-end="url(#arr-blue)"/>
+    <text x="690" y="590" class="annotation">elements (Vec)</text>
+
+    <!-- ============================================================ -->
+    <!-- Annotations -->
+    <!-- ============================================================ -->
+    <text x="60" y="720" class="annotation" font-size="11">Red solid arrows: Box&lt;'a, T&gt; — pointers between arena-allocated nodes</text>
+    <text x="60" y="738" class="annotation" font-size="11">Blue solid arrows: Vec&lt;'a, T&gt; — data pointers to arena-allocated contiguous arrays</text>
+    <text x="60" y="756" class="annotation" font-size="11">Green dashed arrows: &amp;'a str — zero-copy references to the source text (the only pointers escaping the arena)</text>
+
+    <!-- Deallocation -->
+    <rect class="dealloc-box" x="40" y="780" width="1640" height="55"/>
+    <text x="860" y="805" text-anchor="middle" class="mono" font-size="13" fill="#c62828">allocator.reset()  →  ALL nodes freed in O(1)</text>
+    <text x="860" y="823" text-anchor="middle" class="mono" font-size="10" fill="#e57373">bump_ptr rewinds to start. Chunk retained for next parse (cache-warm reuse).</text>
+  </g>
+</svg>
