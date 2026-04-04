@@ -1,0 +1,6 @@
+[submodule "refers/jsdoc"]
+	path = refers/jsdoc
+	url = git@github.com:jsdoc/jsdoc.git
+[submodule "refers/eslint-plugin-jsdoc"]
+	path = refers/eslint-plugin-jsdoc
+	url = git@github.com:gajus/eslint-plugin-jsdoc.git
