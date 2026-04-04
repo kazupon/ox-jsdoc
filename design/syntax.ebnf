@@ -1,0 +1,420 @@
+(* ============================================================================ *)
+(* JSDoc Grammar in EBNF                                                      *)
+(* ============================================================================ *)
+(* This grammar describes the syntax of JSDoc comments as used by the JSDoc    *)
+(* documentation generator. It is intended as a reference for implementing a   *)
+(* parser in Rust.                                                             *)
+(*                                                                             *)
+(* Notation:                                                                   *)
+(*   =       definition                                                        *)
+(*   |       alternation                                                       *)
+(*   [ ... ] optional (0 or 1)                                                 *)
+(*   { ... } repetition (0 or more)                                            *)
+(*   ( ... ) grouping                                                          *)
+(*   "..."   terminal string                                                   *)
+(*   (* *)   comment                                                           *)
+(*   ;       end of rule                                                       *)
+(*   -       exception (set difference)                                        *)
+(* ============================================================================ *)
+
+
+(* ============================================================================ *)
+(* 1. Top-Level: JSDoc Comment                                                 *)
+(* ============================================================================ *)
+
+JSDocComment
+  = "/**" Body "*/" ;
+
+Body
+  = [ Description ] { BlockTag } ;
+
+Description
+  = DescriptionText { InlineTag DescriptionText } ;
+
+DescriptionText
+  = { char - "@" | NonTagAt } ;
+  (* Free-form text. A "@" at the beginning of a line starts a new BlockTag.   *)
+  (* An "@" that does not start a line or is escaped is plain text.            *)
+
+NonTagAt
+  = "@" (* when NOT at the start of a line after optional whitespace/asterisk *) ;
+
+
+(* ============================================================================ *)
+(* 2. Block Tags                                                               *)
+(* ============================================================================ *)
+
+BlockTag
+  = "@" TagName [ whitespace TagBody ] ;
+
+TagName
+  = letter { letter | digit | "-" } ;
+
+TagBody
+  = TypedNamedBody        (* tags like @param, @property                       *)
+  | TypedBody             (* tags like @returns, @throws, @type, @enum         *)
+  | NamedBody             (* tags like @alias, @memberof, @fires              *)
+  | TextBody              (* tags like @description, @example, @author         *)
+  | EmptyBody             (* tags like @abstract, @async, @readonly            *)
+  ;
+
+(* --- Tag body variants ---------------------------------------------------- *)
+
+TypedNamedBody
+  = [ TypeExpression ] [ ParameterName ] [ "-" ] [ Description ] ;
+
+TypedBody
+  = [ TypeExpression ] [ Description ] ;
+
+NamedBody
+  = NamePath [ Description ] ;
+
+TextBody
+  = Description ;
+
+EmptyBody
+  = (* empty *) ;
+
+
+(* ============================================================================ *)
+(* 3. Inline Tags                                                              *)
+(* ============================================================================ *)
+
+InlineTag
+  = "{@" InlineTagName whitespace InlineTagBody "}" ;
+
+InlineTagName
+  = "link" | "linkcode" | "linkplain" | "tutorial" | "type" ;
+
+InlineTagBody
+  = InlineLinkBody
+  | InlineTypeBody
+  ;
+
+InlineLinkBody
+  = ( NamePath | URL ) [ whitespace LinkText ] ;
+
+InlineTypeBody
+  = TypeExpression ;
+
+LinkText
+  = { char - "}" } ;
+
+URL
+  = letter ":" "//" { char - "}" - whitespace } ;
+
+
+(* ============================================================================ *)
+(* 4. Parameter / Property Name                                                *)
+(* ============================================================================ *)
+
+ParameterName
+  = OptionalParameter
+  | RequiredParameter
+  ;
+
+RequiredParameter
+  = NamePath ;
+
+OptionalParameter
+  = "[" whitespace NamePath [ whitespace "=" whitespace DefaultValue ] whitespace "]" ;
+
+DefaultValue
+  = { char - "]" } ;
+  (* The default value is taken as raw text up to the closing bracket.         *)
+
+
+(* ============================================================================ *)
+(* 5. Type Expressions                                                         *)
+(* ============================================================================ *)
+(* Based on the Catharsis / Closure Compiler type expression grammar.          *)
+(* Enclosed in braces { } when used in a tag.                                  *)
+
+TypeExpression
+  = "{" whitespace TypeExpr whitespace "}" ;
+
+TypeExpr
+  = UnionType
+  | "?" (* unknown type *)
+  ;
+
+UnionType
+  = TypeExprElement { whitespace "|" whitespace TypeExprElement } ;
+
+TypeExprElement
+  = Modifier TypeExprPrimary [ Suffix ]
+  | TypeExprPrimary [ Suffix ]
+  ;
+
+Modifier
+  = "?" (* nullable prefix  *)
+  | "!" (* non-nullable prefix *)
+  | "..." (* rest / variadic prefix *)
+  ;
+
+Suffix
+  = "=" (* optional suffix, Closure Compiler style *)
+  | "[]" (* array shorthand suffix *)
+  ;
+
+
+(* --- Primary type expressions --------------------------------------------- *)
+
+TypeExprPrimary
+  = ParenthesizedExpr
+  | FunctionType
+  | RecordType
+  | TypeApplication
+  | TypeName
+  | StringLiteralType
+  | NumericLiteralType
+  | AllLiteral
+  | NullLiteral
+  | UndefinedLiteral
+  ;
+
+ParenthesizedExpr
+  = "(" whitespace TypeExpr whitespace ")" ;
+
+AllLiteral
+  = "*" ;
+
+NullLiteral
+  = "null" ;
+
+UndefinedLiteral
+  = "undefined" | "void" ;
+
+
+(* --- Type names (name expressions) ---------------------------------------- *)
+
+TypeName
+  = QualifiedName ;
+
+QualifiedName
+  = ModulePrefix SimpleName { "." SimpleName }
+  | SimpleName { "." SimpleName }
+  ;
+
+ModulePrefix
+  = "module" ":" ;
+
+SimpleName
+  = IdentStart { IdentContinue } ;
+
+IdentStart
+  = letter | "_" | "$" ;
+
+IdentContinue
+  = letter | digit | "_" | "$" ;
+
+
+(* --- Literal types -------------------------------------------------------- *)
+
+StringLiteralType
+  = "'" { char - "'" } "'"
+  | '"' { char - '"' } '"'
+  ;
+
+NumericLiteralType
+  = [ "-" ] digit { digit } [ "." digit { digit } ] ;
+
+
+(* --- Generic / Template types (TypeApplication) --------------------------- *)
+
+TypeApplication
+  = TypeName "." "<" TypeArgList ">"
+  | TypeName "<" TypeArgList ">"
+  ;
+
+TypeArgList
+  = whitespace TypeExpr { whitespace "," whitespace TypeExpr } whitespace ;
+
+
+(* --- Function types ------------------------------------------------------- *)
+
+FunctionType
+  = "function" [ FunctionSignature ] ;
+
+FunctionSignature
+  = "(" [ FunctionParams ] ")" [ ":" whitespace TypeExpr ] ;
+
+FunctionParams
+  = whitespace FunctionParam { whitespace "," whitespace FunctionParam } whitespace ;
+
+FunctionParam
+  = [ "new" ":" ] TypeExpr     (* constructor context *)
+  | [ "this" ":" ] TypeExpr    (* this context *)
+  | "..." TypeExpr             (* rest param *)
+  | TypeExpr                   (* regular param *)
+  ;
+
+
+(* --- Record / Object literal types ---------------------------------------- *)
+
+RecordType
+  = "{" whitespace RecordFieldList whitespace "}" ;
+
+RecordFieldList
+  = RecordField { whitespace "," whitespace RecordField } ;
+
+RecordField
+  = FieldName [ whitespace ":" whitespace TypeExpr ] ;
+
+FieldName
+  = SimpleName | StringLiteralType | NumericLiteralType ;
+
+
+(* ============================================================================ *)
+(* 6. Name Paths (for @memberof, @fires, @see, etc.)                          *)
+(* ============================================================================ *)
+
+NamePath
+  = NamePathSegment { ScopeOperator NamePathSegment } ;
+
+NamePathSegment
+  = SimpleName
+  | StringLiteralName
+  | "event" ":" SimpleName       (* event namespace: event:name *)
+  ;
+
+ScopeOperator
+  = "."     (* static member *)
+  | "#"     (* instance member *)
+  | "~"     (* inner member *)
+  ;
+
+StringLiteralName
+  = '"' { char - '"' } '"'
+  | "'" { char - "'" } "'"
+  ;
+
+
+(* ============================================================================ *)
+(* 7. Tag Classification Reference                                             *)
+(* ============================================================================ *)
+(* This section is informational — it maps each tag to its body variant.       *)
+(*                                                                             *)
+(* TypedNamedBody  (type + name + description):                                *)
+(*   @param, @arg, @argument                                                   *)
+(*   @property, @prop                                                          *)
+(*   @typedef                                                                  *)
+(*   @member, @var                                                             *)
+(*   @constant, @const                                                         *)
+(*   @module                                                                   *)
+(*   @external, @host                                                          *)
+(*                                                                             *)
+(* TypedBody  (type + description):                                            *)
+(*   @returns, @return                                                         *)
+(*   @throws, @exception                                                       *)
+(*   @type                                                                     *)
+(*   @enum                                                                     *)
+(*   @yields, @yield                                                           *)
+(*   @augments, @extends                                                       *)
+(*   @implements                                                               *)
+(*   @this                                                                     *)
+(*   @modifies                                                                 *)
+(*   @class, @constructor (optional type+name)                                 *)
+(*                                                                             *)
+(* NamedBody  (name/path + description):                                       *)
+(*   @alias                                                                    *)
+(*   @memberof, @memberof!                                                     *)
+(*   @name                                                                     *)
+(*   @namespace (can also have type)                                           *)
+(*   @mixin                                                                    *)
+(*   @fires, @emits                                                            *)
+(*   @listens                                                                  *)
+(*   @mixes                                                                    *)
+(*   @requires                                                                 *)
+(*   @borrows  (special: "source as target")                                   *)
+(*   @lends                                                                    *)
+(*   @constructs                                                               *)
+(*   @exports                                                                  *)
+(*   @variation                                                                *)
+(*                                                                             *)
+(* TextBody  (free text):                                                      *)
+(*   @description, @desc                                                       *)
+(*   @classdesc                                                                *)
+(*   @summary                                                                  *)
+(*   @copyright                                                                *)
+(*   @license                                                                  *)
+(*   @author                                                                   *)
+(*   @since                                                                    *)
+(*   @version                                                                  *)
+(*   @deprecated                                                               *)
+(*   @example  (preserves whitespace)                                          *)
+(*   @see                                                                      *)
+(*   @todo                                                                     *)
+(*   @access  (value: private|protected|public|package)                        *)
+(*   @kind                                                                     *)
+(*                                                                             *)
+(* EmptyBody  (no value):                                                      *)
+(*   @abstract, @virtual                                                       *)
+(*   @async                                                                    *)
+(*   @generator                                                                *)
+(*   @global                                                                   *)
+(*   @hideconstructor                                                          *)
+(*   @ignore                                                                   *)
+(*   @inheritdoc                                                               *)
+(*   @inner                                                                    *)
+(*   @instance                                                                 *)
+(*   @override                                                                 *)
+(*   @package  (core version, no value)                                        *)
+(*   @private  (core version, no value)                                        *)
+(*   @protected (core version, no value)                                       *)
+(*   @public   (core version, no value)                                        *)
+(*   @readonly                                                                 *)
+(*   @static                                                                   *)
+(*                                                                             *)
+(* Inline Tags:                                                                *)
+(*   {@link url_or_namepath [text]}                                            *)
+(*   {@linkcode url_or_namepath [text]}                                        *)
+(*   {@linkplain url_or_namepath [text]}                                       *)
+(*   {@tutorial name}                                                          *)
+(*   {@type TypeExpr}                                                          *)
+(* ============================================================================ *)
+
+
+(* ============================================================================ *)
+(* 8. Tag Synonym Map                                                          *)
+(* ============================================================================ *)
+(* Canonical         Synonyms                                                  *)
+(* -----------------------------------------------------------------------     *)
+(* @abstract         @virtual                                                  *)
+(* @augments         @extends                                                  *)
+(* @class            @constructor                                              *)
+(* @constant         @const                                                    *)
+(* @default          @defaultvalue                                             *)
+(* @description      @desc                                                     *)
+(* @external         @host                                                     *)
+(* @file             @fileoverview, @overview                                  *)
+(* @fires            @emits                                                    *)
+(* @function         @func, @method                                            *)
+(* @member           @var                                                      *)
+(* @param            @arg, @argument                                           *)
+(* @property         @prop                                                     *)
+(* @returns          @return                                                   *)
+(* @throws           @exception                                                *)
+(* @typedef          (also @callback, sets type to function)                   *)
+(* @yields           @yield                                                    *)
+(* ============================================================================ *)
+
+
+(* ============================================================================ *)
+(* 9. Lexical Primitives                                                       *)
+(* ============================================================================ *)
+
+letter
+  = "A" | "B" | ... | "Z"
+  | "a" | "b" | ... | "z"
+  | (* Unicode letter categories Lu, Ll, Lt, Lm, Lo, Nl *)
+  ;
+
+digit
+  = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+
+whitespace
+  = { " " | "\t" | "\r" | "\n" | "*" (* leading asterisk in comment body *) } ;
+
+char
+  = (* any Unicode character *) ;
