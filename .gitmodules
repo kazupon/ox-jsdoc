@@ -4,3 +4,6 @@
 [submodule "refers/eslint-plugin-jsdoc"]
 	path = refers/eslint-plugin-jsdoc
 	url = git@github.com:gajus/eslint-plugin-jsdoc.git
+[submodule "refers/oxc"]
+	path = refers/oxc
+	url = git@github.com:oxc-project/oxc.git
