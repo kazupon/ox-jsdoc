@@ -1,9 +1,15 @@
 (* ============================================================================ *)
 (* JSDoc Grammar in EBNF                                                      *)
 (* ============================================================================ *)
-(* This grammar describes the syntax of JSDoc comments as used by the JSDoc    *)
-(* documentation generator. It is intended as a reference for implementing a   *)
-(* parser in Rust.                                                             *)
+(* This grammar is a design-oriented approximation of JSDoc comment syntax.    *)
+(* It is intended as a reference for implementing a parser in Rust.            *)
+(*                                                                             *)
+(* IMPORTANT: real-world JSDoc behavior is not determined by grammar alone.    *)
+(* In the original JSDoc implementation and in eslint-plugin-jsdoc, behavior   *)
+(* is jointly determined by lexical parsing, tag-specific semantics,           *)
+(* namepath resolution, and source-code context. This document therefore       *)
+(* models the syntactic substrate and defers many strict checks to a semantic  *)
+(* TagSpec layer.                                                              *)
 (*                                                                             *)
 (* Notation:                                                                   *)
 (*   =       definition                                                        *)
@@ -45,9 +51,19 @@ NonTagAt
 (* 1a. Fence Mechanism — Code Blocks and Inline Code                           *)
 (* ============================================================================ *)
 (*                                                                             *)
-(* DESIGN NOTE: JSDoc descriptions and @example tags often contain Markdown    *)
-(* code blocks, inline code, and even nested JSDoc comments as examples.       *)
-(* The parser must NOT treat "@tag" inside these regions as block tags.         *)
+(* DESIGN NOTE: There are two defensible behaviors here:                       *)
+(*                                                                             *)
+(*   1. JSDoc-compat mode: `jsdoc` itself does not have a real fence-aware     *)
+(*      lexer. Inline-tag recognition is basically regex-based and block-tag   *)
+(*      recognition is line-based. In that mode, fenced code is not special.   *)
+(*                                                                             *)
+(*   2. Extended mode: many real-world comments contain Markdown examples,     *)
+(*      and users do not want "@tag" inside code examples to start real tags.  *)
+(*      ox-jsdoc may therefore optionally suppress tag recognition inside       *)
+(*      fenced and inline code spans.                                          *)
+(*                                                                             *)
+(* The productions below describe the EXTENDED mode. A compatibility mode      *)
+(* should be allowed to disable this suppression.                              *)
 (*                                                                             *)
 (* Three types of fenced regions are recognized:                               *)
 (*   1. Fenced code blocks:  ``` ... ```  or  ~~~ ... ~~~                     *)
@@ -109,8 +125,8 @@ InlineCode
 (*                                                                             *)
 (* DESIGN NOTE: Tag names are open-ended — users can define custom tags        *)
 (* (e.g. @category, @slot, @internal) via plugins or third-party tools.        *)
-(* Therefore the grammar defines a single, universal TagBody production that   *)
-(* accepts any syntactically valid combination of type, name, and description. *)
+(* Therefore the grammar defines a small number of generic TagBody productions *)
+(* that preserve the loose extraction behavior seen in real-world tooling.     *)
 (*                                                                             *)
 (* The mapping from a specific tag name to its expected body shape             *)
 (* (e.g. @param expects type+name+desc, @readonly expects nothing) is a       *)
@@ -120,9 +136,9 @@ InlineCode
 (* For unknown / custom tags the parser uses the generic TagBody production    *)
 (* and stores the result as-is, allowing downstream consumers to interpret it. *)
 (*                                                                             *)
-(* FENCE INTERACTION: A "@" at the beginning of a line is recognized as a     *)
-(* BlockTag start ONLY when the parser is NOT inside a fenced region           *)
-(* (FencedCodeBlock or InlineCode). See section 1a for fence rules.            *)
+(* FENCE INTERACTION (extended mode): A "@" at the beginning of a line is      *)
+(* recognized as a BlockTag start ONLY when the parser is NOT inside a fenced  *)
+(* region (FencedCodeBlock or InlineCode). See section 1a for fence rules.     *)
 (*                                                                             *)
 (*   @example                                                                  *)
 (*   ```javascript                                                             *)
@@ -141,22 +157,51 @@ TagName
   (* Open-ended: any valid identifier. Not restricted to built-in tags.        *)
 
 (* --------------------------------------------------------------------------- *)
-(* Generic tag body — the parser attempts to extract type, name, and           *)
-(* description in order. Each component is optional.                           *)
+(* Generic tag body — the parser attempts to extract type, a first value       *)
+(* token, and description in order. The first token is later interpreted as    *)
+(* a name, namepath, tutorial ID, URL, or free text depending on TagSpec.      *)
 (*                                                                             *)
-(*   @param {string} name - description     → type + name + desc              *)
+(*   @param {string} name - description     → type + token + desc             *)
 (*   @returns {string} description          → type + desc                     *)
-(*   @alias MyClass.foo                     → name only                       *)
+(*   @alias MyClass.foo                     → token only                      *)
 (*   @deprecated Use bar() instead          → desc only                       *)
 (*   @readonly                              → empty                           *)
-(*   @customTag {Foo} bar Some text         → type + name + desc (generic)    *)
+(*   @param ... Two or more elements.      → token ("...") + desc             *)
+(*   @borrows foo as #bar                  → special-case body                *)
+(*   @customTag {Foo} bar Some text         → type + token + desc             *)
 (* --------------------------------------------------------------------------- *)
 
 TagBody
-  = [ TypeExpression ] [ ParameterName ] [ Separator ] [ Description ] ;
-  (* All four components are optional. When the tag name is known, the parser  *)
-  (* uses TagSpec to validate which components are expected. For unknown tags,  *)
-  (* all present components are preserved in the AST.                          *)
+  = BorrowsTagBody
+  | GenericTagBody
+  ;
+
+GenericTagBody
+  = [ TypeExpression ] [ TagValueToken ] [ Separator ] [ Description ] ;
+  (* The generic extraction order matches real-world JSDoc parsers more        *)
+  (* closely than a strict grammar would: optional type, optional first token, *)
+  (* optional separator, trailing description. TagSpec later decides whether   *)
+  (* the token is interpreted as a namepath, name, URL, tutorial ID, or text.  *)
+
+BorrowsTagBody
+  = NamePathLike whitespace "as" whitespace NamePathLike ;
+  (* @borrows uses a dedicated syntax instead of the generic body shape.       *)
+
+TagValueToken
+  = OptionalParameterName
+  | ParameterPath
+  | NamePathLike
+  | DashName
+  | RawToken
+  ;
+
+DashName
+  = "..."
+  | "-"
+  ;
+
+RawToken
+  = NonWhitespaceChar { NonWhitespaceChar } ;
 
 Separator
   = "-"
@@ -193,7 +238,7 @@ InlineTagBody
 (* the InlineTagBody as one of these:                                          *)
 
 InlineLinkContent
-  = ( NamePath | URL ) [ whitespace LinkText ] ;
+  = ( NamePathLike | URL ) [ whitespace LinkText ] ;
 
 InlineTypeContent
   = TypeExpression ;
@@ -209,16 +254,41 @@ URL
 (* 4. Parameter / Property Name                                                *)
 (* ============================================================================ *)
 
-ParameterName
-  = OptionalParameter
-  | RequiredParameter
+(* Parameter / property paths are not quite the same as general NamePath.      *)
+(* Real-world inputs from eslint-plugin-jsdoc include:                         *)
+(*   employees[].name                                                          *)
+(*   cfg.opts.extra                                                            *)
+(*   cfg."0"                                                                   *)
+(*   [cfg.foo="value"]                                                         *)
+(*                                                                             *)
+(* This grammar intentionally models the common structured subset used in tags  *)
+(* like @param and @property. It does not attempt to encode every parser-side  *)
+(* recovery rule used by comment-parser.                                       *)
+
+ParameterPath
+  = ParameterRoot { ParameterContinuation } ;
+
+ParameterRoot
+  = Identifier
+  | StringLiteralName
   ;
 
-RequiredParameter
-  = NamePath ;
+ParameterContinuation
+  = ArrayElementSegment
+  | "." ParameterProperty
+  ;
 
-OptionalParameter
-  = "[" whitespace NamePath [ whitespace "=" whitespace DefaultValue ] whitespace "]" ;
+ParameterProperty
+  = Identifier [ ArrayElementSegment ]
+  | StringLiteralName [ ArrayElementSegment ]
+  ;
+
+ArrayElementSegment
+  = "[]" ;
+
+OptionalParameterName
+  = "[" whitespace ParameterPath [ whitespace "=" whitespace DefaultValue ] whitespace "]" ;
+  (* Examples: [name], [name=default], [cfg.foo="value"], [items[].name=1]    *)
 
 DefaultValue
   = { char - "]" } ;
@@ -228,7 +298,20 @@ DefaultValue
 (* ============================================================================ *)
 (* 5. Type Expressions                                                         *)
 (* ============================================================================ *)
-(* Based on the Catharsis / Closure Compiler type expression grammar.          *)
+(* This section models the common substrate shared across Catharsis-backed     *)
+(* JSDoc parsing and jsdoc-type-pratt-parser-based tooling.                    *)
+(*                                                                             *)
+(* It is intentionally not a full formalization of every mode-specific         *)
+(* construct accepted by Catharsis, Closure mode, or TypeScript mode.          *)
+(* The parser should retain the raw type text and apply mode-specific          *)
+(* validation later.                                                           *)
+(*                                                                             *)
+(* High-value real-world extensions reflected here:                            *)
+(*   - Closure optional suffix: string=                                        *)
+(*   - Indexed access: Parameters<Foo>[0], obj["key"]                          *)
+(*   - Type query: typeof obj["level1"]                                        *)
+(*   - Record index signatures: {[key: string]: string}                        *)
+(*                                                                             *)
 (* Enclosed in braces { } when used in a tag.                                  *)
 
 TypeExpression
@@ -243,8 +326,8 @@ UnionType
   = TypeExprElement { whitespace "|" whitespace TypeExprElement } ;
 
 TypeExprElement
-  = Modifier TypeExprPrimary [ Suffix ]
-  | TypeExprPrimary [ Suffix ]
+  = Modifier TypeExprPrimary { TypeSuffix }
+  | TypeExprPrimary { TypeSuffix }
   ;
 
 Modifier
@@ -253,9 +336,10 @@ Modifier
   | "..." (* rest / variadic prefix *)
   ;
 
-Suffix
+TypeSuffix
   = "=" (* optional suffix, Closure Compiler style *)
   | "[]" (* array shorthand suffix *)
+  | IndexedAccessSuffix
   ;
 
 
@@ -266,12 +350,23 @@ TypeExprPrimary
   | FunctionType
   | RecordType
   | TypeApplication
+  | TypeQuery
   | TypeName
   | StringLiteralType
   | NumericLiteralType
   | AllLiteral
   | NullLiteral
   | UndefinedLiteral
+  ;
+
+IndexedAccessSuffix
+  = "[" whitespace IndexedAccessKey whitespace "]" ;
+
+IndexedAccessKey
+  = TypeExpr
+  | StringLiteralType
+  | NumericLiteralType
+  | Identifier
   ;
 
 ParenthesizedExpr
@@ -292,22 +387,20 @@ UndefinedLiteral
 TypeName
   = QualifiedName ;
 
+TypeQuery
+  = "typeof" whitespace QualifiedName { IndexedAccessSuffix } ;
+
 QualifiedName
-  = ModulePrefix SimpleName { "." SimpleName }
-  | SimpleName { "." SimpleName }
-  ;
+  = Identifier { "." Identifier } ;
 
-ModulePrefix
-  = "module" ":" ;
-
-SimpleName
+Identifier
   = IdentStart { IdentContinue } ;
 
 IdentStart
-  = letter | "_" | "$" ;
+  = letter | "_" | "$" | "@" ;
 
 IdentContinue
-  = letter | digit | "_" | "$" ;
+  = letter | digit | "_" | "$" | "-" ;
 
 
 (* --- Literal types -------------------------------------------------------- *)
@@ -360,30 +453,62 @@ RecordFieldList
   = RecordField { whitespace "," whitespace RecordField } ;
 
 RecordField
-  = FieldName [ whitespace ":" whitespace TypeExpr ] ;
+  = IndexSignatureField
+  | FieldName [ whitespace ":" whitespace TypeExpr ] ;
+
+IndexSignatureField
+  = "[" Identifier whitespace ":" whitespace TypeExpr "]"
+    whitespace ":" whitespace TypeExpr ;
 
 FieldName
-  = SimpleName | StringLiteralType | NumericLiteralType ;
+  = Identifier | StringLiteralType | NumericLiteralType ;
 
 
 (* ============================================================================ *)
 (* 6. Name Paths (for @memberof, @fires, @see, etc.)                          *)
 (* ============================================================================ *)
 
-NamePath
-  = NamePathSegment { ScopeOperator NamePathSegment } ;
+NamePathLike
+  = [ NamespacePrefix ] NamePathCore [ Variation ] [ TrailingConnector ] ;
 
-NamePathSegment
-  = SimpleName
-  | StringLiteralName
-  | "event" ":" SimpleName       (* event namespace: event:name *)
-  ;
+NamespacePrefix
+  = Identifier ":" ;
 
-ScopeOperator
+NamePathCore
+  = NamePathSegment { NamePathSeparator NamePathSegment } ;
+
+NamePathSeparator
   = "."     (* static member *)
   | "#"     (* instance member *)
   | "~"     (* inner member *)
+  | "/"     (* module path separator *)
   ;
+
+TrailingConnector
+  = "."
+  | "#"
+  | "~"
+  ;
+  (* Incomplete namepaths such as Foo., Foo#, Foo~ are accepted for tags like *)
+  (* @memberof and @memberof! because real-world tooling accepts them.         *)
+
+Variation
+  = "(" { char - ")" } ")" ;
+
+NamePathSegment
+  = Identifier
+  | StringLiteralName
+  | BracketStringSegment
+  | EventSegment
+  ;
+
+EventSegment
+  = "event" ":" Identifier ;
+  (* event namespace: event:name *)
+
+BracketStringSegment
+  = "[" StringLiteralName "]" ;
+  (* e.g. foo["bar"], normalized later by the semantic layer / AST builder    *)
 
 StringLiteralName
   = '"' { char - '"' } '"'
@@ -404,50 +529,32 @@ StringLiteralName
 (* TagSpec entries to enable validation for custom tags.                       *)
 (*                                                                             *)
 (* TagSpec properties per tag:                                                 *)
-(*   canHaveType        — type expression {T} is expected / allowed           *)
-(*   canHaveName        — a name or name-path is expected / allowed           *)
+(*   namepathRole       — namepath-defining | namepath-referencing |          *)
+(*                        namepath-or-url-referencing | text | false          *)
+(*   typeAllowed        — type expression {T} is allowed                      *)
+(*   nameRequired       — a value token/namepath is required                  *)
+(*   typeRequired       — a type expression is required                       *)
+(*   typeOrNameRequired — either a type or name-style token is required       *)
 (*   mustHaveValue      — tag body must not be empty                          *)
 (*   mustNotHaveValue   — tag body must be empty                              *)
-(*   allowsMultiple     — tag can appear more than once in a comment          *)
 (*   keepsWhitespace    — whitespace in body is preserved (e.g. @example)     *)
 (*   synonyms           — alternative tag names                               *)
 (*                                                                             *)
-(* canHaveType=true, canHaveName=true  (type + name + description):            *)
-(*   @param, @arg, @argument                                                   *)
-(*   @property, @prop                                                          *)
-(*   @typedef                                                                  *)
-(*   @member, @var                                                             *)
-(*   @constant, @const                                                         *)
-(*   @module                                                                   *)
-(*   @external, @host                                                          *)
+(* namepath-defining (defines a symbol-ish value token/namepath):              *)
+(*   @alias, @callback, @event, @external, @function, @member, @module,       *)
+(*   @name, @namespace, @param, @property, @typedef                           *)
 (*                                                                             *)
-(* canHaveType=true, canHaveName=false  (type + description):                  *)
-(*   @returns, @return                                                         *)
-(*   @throws, @exception                                                       *)
-(*   @type                                                                     *)
-(*   @enum                                                                     *)
-(*   @yields, @yield                                                           *)
-(*   @augments, @extends                                                       *)
-(*   @implements                                                               *)
-(*   @this                                                                     *)
-(*   @modifies                                                                 *)
-(*   @class, @constructor (optional type+name)                                 *)
+(* namepath-referencing (references an existing symbol-ish namepath):          *)
+(*   @augments, @extends, @emits, @fires, @lends, @listens, @memberof,        *)
+(*   @memberof!, @mixes, @requires                                            *)
 (*                                                                             *)
-(* canHaveType=false, canHaveName=true  (name/path + description):             *)
-(*   @alias                                                                    *)
-(*   @memberof, @memberof!                                                     *)
-(*   @name                                                                     *)
-(*   @namespace (can also have type)                                           *)
-(*   @mixin                                                                    *)
-(*   @fires, @emits                                                            *)
-(*   @listens                                                                  *)
-(*   @mixes                                                                    *)
-(*   @requires                                                                 *)
-(*   @borrows  (special: "source as target")                                   *)
-(*   @lends                                                                    *)
-(*   @constructs                                                               *)
-(*   @exports                                                                  *)
-(*   @variation                                                                *)
+(* namepath-or-url-referencing:                                                *)
+(*   {@link ...}, {@linkcode ...}, {@linkplain ...}                            *)
+(*                                                                             *)
+(* special syntax / tag-specific protocol:                                     *)
+(*   @borrows     source as target                                             *)
+(*   @variation   text value, later normalized to variation                    *)
+(*   @tutorial    tutorial ID                                                  *)
 (*                                                                             *)
 (* mustHaveValue=true, text only  (free text):                                 *)
 (*   @description, @desc                                                       *)
@@ -464,6 +571,7 @@ StringLiteralName
 (*   @todo                                                                     *)
 (*   @access  (value: private|protected|public|package)                        *)
 (*   @kind                                                                     *)
+(*   @variation                                                                *)
 (*                                                                             *)
 (* mustNotHaveValue=true  (no value):                                          *)
 (*   @abstract, @virtual                                                       *)
@@ -484,15 +592,17 @@ StringLiteralName
 (*   @static                                                                   *)
 (*                                                                             *)
 (* Built-in Inline Tags:                                                       *)
-(*   {@link url_or_namepath [text]}                                            *)
-(*   {@linkcode url_or_namepath [text]}                                        *)
-(*   {@linkplain url_or_namepath [text]}                                       *)
-(*   {@tutorial name}                                                          *)
-(*   {@type TypeExpr}                                                          *)
+(*   {@link url_or_namepath [text]}        (content required)                  *)
+(*   {@linkcode url_or_namepath [text]}    (content required)                  *)
+(*   {@linkplain url_or_namepath [text]}   (content required)                  *)
+(*   {@tutorial name}                     (content required)                   *)
+(*   {@type TypeExpr}                     (type required)                      *)
 (*                                                                             *)
 (* Unknown / Custom Tags:                                                      *)
-(*   No TagSpec entry — parser uses generic TagBody, stores raw components.   *)
-(*   Plugins can register custom TagSpec entries at runtime for validation.    *)
+(*   No TagSpec entry — parser uses GenericTagBody and stores raw components.  *)
+(*   Plugins can register custom TagSpec entries at runtime for validation,    *)
+(*   including tag-specific constraints such as whether a value token is text, *)
+(*   a defining namepath, or a referencing namepath.                           *)
 (* ============================================================================ *)
 
 

@@ -16,6 +16,9 @@ Follows oxc's arena allocation design (`Box<'a, T>`, `Vec<'a, T>`, `Span`).
 3. **Span on every node** — Track source positions for diagnostics and linter integration
 4. **oxc style** — Arena allocation, `#[repr(C)]`, uniform-size enums, visitor pattern support
 5. **Custom tag support** — Unknown tags are represented generically in the AST
+6. **Lossless-enough syntax layer** — Preserve raw syntactic structure where tag-specific semantics cannot be decided during parsing
+7. **Semantic distinctions are explicit** — Keep syntax-sharing nodes separate when they play different semantic roles
+8. **Keep the core AST lean** — Semantic attachment metadata lives outside the JSDoc AST unless parsing/traversal needs it
 
 ---
 
@@ -117,21 +120,19 @@ pub struct InlineCode<'a> {
 ## 3. Block Tag: BlockTag
 
 EBNF: `BlockTag = "@" TagName [ whitespace TagBody ] ;`
-EBNF: `TagBody = [ TypeExpression ] [ ParameterName ] [ Separator ] [ Description ] ;`
+EBNF: `TagBody = GenericTagBody | BorrowsTagBody ;`
 
 ```rust
-/// A block tag (e.g. `@param {string} name - description`)
+/// A block tag (e.g. `@param {string} name - description`, `@borrows foo as bar`)
 #[repr(C)]
 pub struct BlockTag<'a> {
     pub span: Span,
     /// Tag name (without `@`. e.g. `"param"`, `"returns"`, `"customTag"`)
     pub tag_name: TagName<'a>,
-    /// Type expression (the `{string}` part)
-    pub type_expression: Option<Box<'a, TypeExpression<'a>>>,
-    /// Parameter name or name path (the `name` or `[name=default]` part)
-    pub name: Option<Box<'a, TagParameterName<'a>>>,
-    /// Description text (the `- description` part)
-    pub description: Option<Box<'a, Description<'a>>>,
+    /// Parsed body structure. A generic body is always available even for tag-specific semantics.
+    pub body: Option<Box<'a, BlockTagBody<'a>>>,
+    /// Raw body text after tag name, preserved for tag-specific validation / recovery.
+    pub raw_body: Option<Box<'a, Text<'a>>>,
 }
 
 /// Tag name
@@ -140,6 +141,61 @@ pub struct TagName<'a> {
     pub span: Span,
     /// Tag name string (e.g. `"param"`, `"returns"`, `"customTag"`)
     pub value: &'a str,
+}
+
+/// Parsed block-tag body variants.
+#[repr(C, u8)]
+pub enum BlockTagBody<'a> {
+    /// Generic extraction shape used by most tags.
+    Generic(Box<'a, GenericTagBody<'a>>),
+    /// Special-case syntax used by `@borrows`.
+    Borrows(Box<'a, BorrowsTagBody<'a>>),
+}
+
+/// `BlockTagBody` gets dedicated variants only for lexically distinct forms
+/// that cannot be modeled as `type? + value? + description?`.
+///
+/// Current boundary:
+/// - Dedicated variant: `@borrows source as target`
+/// - Generic body + semantic interpretation: `@variation`, `@since`, `@requires`,
+///   `@memberof!`, `@see`, and other dictionary-driven tags
+///
+/// This keeps the parse tree explicit without proliferating tag-specific nodes
+/// for semantics that are better handled by TagSpec validation.
+
+/// Generic tag body:
+/// optional type, optional first token later interpreted by TagSpec,
+/// optional separator, optional trailing description.
+#[repr(C)]
+pub struct GenericTagBody<'a> {
+    pub span: Span,
+    pub type_expression: Option<Box<'a, TypeExpression<'a>>>,
+    pub value: Option<Box<'a, TagValueToken<'a>>>,
+    pub separator: Option<Separator>,
+    pub description: Option<Box<'a, Description<'a>>>,
+}
+
+/// Special-case body for `@borrows source as target`.
+#[repr(C)]
+pub struct BorrowsTagBody<'a> {
+    pub span: Span,
+    pub source: NamePathLike<'a>,
+    pub target: NamePathLike<'a>,
+}
+
+/// Generic first token extracted from a tag body before semantic interpretation.
+#[repr(C, u8)]
+pub enum TagValueToken<'a> {
+    ParameterName(Box<'a, TagParameterName<'a>>),
+    NamePathLike(Box<'a, NamePathLike<'a>>),
+    Identifier(Box<'a, Identifier<'a>>),
+    RawToken(Box<'a, Text<'a>>),
+}
+
+/// Optional `-` separator between name/value and description.
+#[repr(u8)]
+pub enum Separator {
+    Dash,
 }
 ```
 
@@ -185,7 +241,7 @@ pub struct InlineLinkBody<'a> {
 #[repr(C, u8)]
 pub enum LinkTarget<'a> {
     /// Name path (e.g. `MyClass#method`)
-    NamePath(Box<'a, NamePath<'a>>),
+    NamePath(Box<'a, NamePathLike<'a>>),
     /// URL (e.g. `https://example.com`)
     URL(Box<'a, Text<'a>>),
 }
@@ -195,7 +251,7 @@ pub enum LinkTarget<'a> {
 
 ## 5. Parameter Name: TagParameterName
 
-EBNF: `ParameterName = OptionalParameter | RequiredParameter ;`
+EBNF: `ParameterName = OptionalParameterName | ParameterPath ;`
 
 ```rust
 /// Tag parameter name (required or optional)
@@ -211,55 +267,104 @@ pub enum TagParameterName<'a> {
 #[repr(C)]
 pub struct RequiredParameterName<'a> {
     pub span: Span,
-    /// Name path
-    pub name: NamePath<'a>,
+    /// Parameter path (`foo`, `foo.bar`, `employees[].name`)
+    pub name: ParameterPath<'a>,
 }
 
 /// Optional parameter name (`[name=default]`)
 #[repr(C)]
 pub struct OptionalParameterName<'a> {
     pub span: Span,
-    /// Name path
-    pub name: NamePath<'a>,
+    /// Parameter path
+    pub name: ParameterPath<'a>,
     /// Default value (raw text after `=`)
     pub default_value: Option<Box<'a, Text<'a>>>,
+}
+
+/// Parameter path used by `@param` / `@property`.
+#[repr(C)]
+pub struct ParameterPath<'a> {
+    pub span: Span,
+    pub root: ParameterRoot<'a>,
+    pub continuations: Vec<'a, ParameterContinuation<'a>>,
+}
+
+#[repr(C, u8)]
+pub enum ParameterRoot<'a> {
+    Identifier(Box<'a, Identifier<'a>>),
+    StringLiteral(Box<'a, Text<'a>>),
+}
+
+#[repr(C, u8)]
+pub enum ParameterContinuation<'a> {
+    ArrayElement(Box<'a, ArrayElementSegment>),
+    Property(Box<'a, ParameterProperty<'a>>),
+}
+
+#[repr(C)]
+pub struct ArrayElementSegment {
+    pub span: Span,
+}
+
+#[repr(C)]
+pub struct ParameterProperty<'a> {
+    pub span: Span,
+    pub property: ParameterPropertyName<'a>,
+    pub is_array_element: bool,
+}
+
+#[repr(C, u8)]
+pub enum ParameterPropertyName<'a> {
+    Identifier(Box<'a, Identifier<'a>>),
+    StringLiteral(Box<'a, Text<'a>>),
 }
 ```
 
 ---
 
-## 6. Name Path: NamePath
+## 6. Name Path: NamePathLike
 
-EBNF: `NamePath = NamePathSegment { ScopeOperator NamePathSegment } ;`
+EBNF: `NamePathLike = [ NamespacePrefix ] NamePathCore [ Variation ] [ TrailingConnector ] ;`
 
 ```rust
-/// A name path (e.g. `MyClass`, `MyClass#method`, `module:foo.Bar~inner`)
+/// A name path-like reference (e.g. `MyClass`, `module:foo/bar.Baz`, `Foo.`, `anim.fadein(1)`).
 #[repr(C)]
-pub struct NamePath<'a> {
+pub struct NamePathLike<'a> {
     pub span: Span,
-    /// Path components
+    pub namespace: Option<NamePathNamespace<'a>>,
     pub segments: Vec<'a, NamePathComponent<'a>>,
+    pub variation: Option<Box<'a, Variation<'a>>>,
+    pub trailing_connector: Option<NamePathSeparator>,
 }
 
 /// A single component of a name path (scope operator + segment)
 #[repr(C)]
 pub struct NamePathComponent<'a> {
     pub span: Span,
-    /// Scope operator (None for the first segment)
-    pub operator: Option<ScopeOperator>,
+    /// Separator (None for the first segment)
+    pub separator: Option<NamePathSeparator>,
     /// Segment
     pub segment: NamePathSegment<'a>,
 }
 
-/// Scope operator
+/// Optional namespace prefix (`module:`, `event:`, etc.)
+#[repr(C)]
+pub struct NamePathNamespace<'a> {
+    pub span: Span,
+    pub name: Identifier<'a>,
+}
+
+/// Name-path separator
 #[repr(u8)]
-pub enum ScopeOperator {
+pub enum NamePathSeparator {
     /// `.` — static member
     Dot,
     /// `#` — instance member
     Hash,
     /// `~` — inner member
     Tilde,
+    /// `/` — module/path separator
+    Slash,
 }
 
 /// Name path segment
@@ -269,10 +374,23 @@ pub enum NamePathSegment<'a> {
     Name(Box<'a, Identifier<'a>>),
     /// String literal name (e.g. `"special-name"`)
     StringLiteral(Box<'a, Text<'a>>),
-    /// Event namespace (e.g. `event:click`)
-    Event(Box<'a, Identifier<'a>>),
-    /// Module prefix (e.g. `module:foo`)
-    Module(Box<'a, Identifier<'a>>),
+    /// Bracketed string segment (e.g. `["foo"]`)
+    BracketString(Box<'a, Text<'a>>),
+    /// Event-prefixed segment (e.g. `event:click`)
+    Event(Box<'a, EventSegment<'a>>),
+}
+
+#[repr(C)]
+pub struct EventSegment<'a> {
+    pub span: Span,
+    pub name: Identifier<'a>,
+}
+
+#[repr(C)]
+pub struct Variation<'a> {
+    pub span: Span,
+    /// Raw variation contents inside `( ... )`
+    pub value: &'a str,
 }
 
 /// Identifier
@@ -317,7 +435,7 @@ pub enum TypeExpr<'a> {
     NumericLiteral(Box<'a, NumericLiteralType<'a>>),
 
     // --- Name ---
-    /// Type name (e.g. `string`, `MyClass`, `module:foo.Bar`)
+    /// Type name (e.g. `string`, `MyClass`, `module:foo/bar.Baz`)
     Name(Box<'a, TypeName<'a>>),
 
     // --- Composite types ---
@@ -329,6 +447,10 @@ pub enum TypeExpr<'a> {
     Function(Box<'a, FunctionType<'a>>),
     /// Record type (e.g. `{key: string, value: number}`)
     Record(Box<'a, RecordType<'a>>),
+    /// `typeof Foo.bar`
+    TypeQuery(Box<'a, TypeQuery<'a>>),
+    /// Indexed access type (e.g. `Parameters<Foo>[0]`, `T["x"]`)
+    IndexedAccess(Box<'a, IndexedAccessType<'a>>),
 
     // --- Modified types ---
     /// Nullable type (e.g. `?string`)
@@ -395,14 +517,16 @@ pub struct NumericLiteralType<'a> {
 ### 7.2 Type Name
 
 ```rust
-/// Type name (e.g. `string`, `module:foo.Bar`)
+/// Type name (e.g. `string`, `module:foo/bar.Baz`)
+///
+/// `TypeName` intentionally wraps `NamePathLike` instead of aliasing it.
+/// The syntax substrate is shared, but type-position names remain a dedicated
+/// semantic node, following oxc's preference for explicit roles over ambiguous
+/// reused node shapes.
 #[repr(C)]
 pub struct TypeName<'a> {
     pub span: Span,
-    /// Qualified name parts (`.`-separated)
-    pub parts: Vec<'a, Identifier<'a>>,
-    /// Whether the `module:` prefix is present
-    pub is_module: bool,
+    pub path: NamePathLike<'a>,
 }
 ```
 
@@ -422,7 +546,7 @@ pub struct UnionType<'a> {
 pub struct TypeApplication<'a> {
     pub span: Span,
     /// Base type name (e.g. `Array`, `Map`)
-    pub name: TypeName<'a>,
+    pub callee: TypeExpr<'a>,
     /// Type argument list
     pub type_arguments: Vec<'a, TypeExpr<'a>>,
     /// Whether dot notation is used (`Array.<T>` vs `Array<T>`)
@@ -464,18 +588,47 @@ pub struct RecordType<'a> {
 #[repr(C)]
 pub struct RecordField<'a> {
     pub span: Span,
-    /// Field name
-    pub name: RecordFieldName<'a>,
-    /// Field type (after `:`. Optional)
+    pub key: RecordFieldKey<'a>,
+    /// Field type (after `:`. Optional for shorthand-like field syntax)
     pub value: Option<Box<'a, TypeExpr<'a>>>,
 }
 
 /// Record field name
 #[repr(C, u8)]
-pub enum RecordFieldName<'a> {
+pub enum RecordFieldKey<'a> {
     Identifier(Box<'a, Identifier<'a>>),
     StringLiteral(Box<'a, StringLiteralType<'a>>),
     NumericLiteral(Box<'a, NumericLiteralType<'a>>),
+    IndexSignature(Box<'a, IndexSignatureField<'a>>),
+}
+
+#[repr(C)]
+pub struct IndexSignatureField<'a> {
+    pub span: Span,
+    pub key_name: Identifier<'a>,
+    pub key_type: Box<'a, TypeExpr<'a>>,
+    pub value_type: Box<'a, TypeExpr<'a>>,
+}
+
+#[repr(C)]
+pub struct TypeQuery<'a> {
+    pub span: Span,
+    pub argument: NamePathLike<'a>,
+}
+
+#[repr(C)]
+pub struct IndexedAccessType<'a> {
+    pub span: Span,
+    pub object_type: Box<'a, TypeExpr<'a>>,
+    pub index: Box<'a, IndexedAccessKey<'a>>,
+}
+
+#[repr(C, u8)]
+pub enum IndexedAccessKey<'a> {
+    TypeExpr(Box<'a, TypeExpr<'a>>),
+    StringLiteral(Box<'a, StringLiteralType<'a>>),
+    NumericLiteral(Box<'a, NumericLiteralType<'a>>),
+    Identifier(Box<'a, Identifier<'a>>),
 }
 ```
 
@@ -537,21 +690,22 @@ pub struct ParenthesizedType<'a> {
 | `DescriptionText` | `Text` | Plain text |
 | `FencedCodeBlock` | `FencedCodeBlock` | ``` ... ``` or ~~~ ... ~~~ |
 | `InlineCode` | `InlineCode` | \`code\` or \`\`code\`\` |
-| `BlockTag` | `BlockTag` | Generic tag structure (all components Optional) |
+| `BlockTag` | `BlockTag` | Holds parsed body plus raw body for tag-specific semantics |
 | `TagName` | `TagName` | Open-ended |
-| `TagBody` | `BlockTag.{type_expression, name, description}` | TagBody itself has no dedicated node |
+| `TagBody` | `BlockTagBody` | `GenericTagBody` or tag-specific body like `BorrowsTagBody` |
 | `InlineTag` | `InlineTag` | `{@link ...}` etc. |
 | `InlineTagBody` | `InlineTagBody` | 3 variants: Link / Type / Unknown |
 | `ParameterName` | `TagParameterName` | 2 variants: Required / Optional |
+| `ParameterPath` | `ParameterPath` | Dedicated `@param` / `@property` path syntax |
 | `OptionalParameter` | `OptionalParameterName` | `[name=default]` |
 | `TypeExpression` | `TypeExpression` | Wrapper including braces |
-| `TypeExpr` | `TypeExpr` | Recursive enum tree (17 variants) |
+| `TypeExpr` | `TypeExpr` | Recursive enum tree including `typeof` and indexed access |
 | `UnionType` | `UnionType` | Two or more elements |
 | `TypeApplication` | `TypeApplication` | `Array.<T>` |
 | `FunctionType` | `FunctionType` | `function(T): U` |
 | `RecordType` | `RecordType` | `{k: T}` |
-| `TypeName` | `TypeName` | `.`-separated qualified name |
-| `NamePath` | `NamePath` | `.` / `#` / `~` separated path |
+| `TypeName` | `TypeName` | Built from `NamePathLike` |
+| `NamePathLike` | `NamePathLike` | Namespace, `/`, variation, trailing connector support |
 
 ---
 
@@ -564,15 +718,17 @@ pub trait Visit<'a> {
     fn visit_jsdoc_comment(&mut self, comment: &JSDocComment<'a>);
     fn visit_description(&mut self, desc: &Description<'a>);
     fn visit_block_tag(&mut self, tag: &BlockTag<'a>);
+    fn visit_block_tag_body(&mut self, body: &BlockTagBody<'a>);
     fn visit_inline_tag(&mut self, tag: &InlineTag<'a>);
     fn visit_tag_parameter_name(&mut self, name: &TagParameterName<'a>);
+    fn visit_parameter_path(&mut self, path: &ParameterPath<'a>);
     fn visit_type_expression(&mut self, expr: &TypeExpression<'a>);
     fn visit_type_expr(&mut self, expr: &TypeExpr<'a>);
     fn visit_union_type(&mut self, union_type: &UnionType<'a>);
     fn visit_type_application(&mut self, app: &TypeApplication<'a>);
     fn visit_function_type(&mut self, func: &FunctionType<'a>);
     fn visit_record_type(&mut self, record: &RecordType<'a>);
-    fn visit_name_path(&mut self, path: &NamePath<'a>);
+    fn visit_name_path_like(&mut self, path: &NamePathLike<'a>);
     fn visit_identifier(&mut self, ident: &Identifier<'a>);
     fn visit_text(&mut self, text: &Text<'a>);
     fn visit_fenced_code_block(&mut self, block: &FencedCodeBlock<'a>);
@@ -606,39 +762,84 @@ pub trait Visit<'a> {
 JSDocComment
 ├── description: Description
 │   ├── Text("Find a user.\nSee ")
-│   ├── InlineTag { tag_name: "link", body: Link { target: NamePath("UserService") } }
+│   ├── InlineTag { tag_name: "link", body: Link { target: NamePathLike("UserService") } }
 │   └── Text(" for details.")
 ├── tags[0]: BlockTag
 │   ├── tag_name: "param"
-│   ├── type_expression: TypeExpression
-│   │   └── Union [Name("string"), Name("number")]
-│   ├── name: Required(NamePath("id"))
-│   └── description: Text("The user ID")
+│   ├── body: Generic
+│   │   ├── type_expression: TypeExpression
+│   │   │   └── Union [Name("string"), Name("number")]
+│   │   ├── value: ParameterName(Required(ParameterPath("id")))
+│   │   └── description: Text("The user ID")
 ├── tags[1]: BlockTag
 │   ├── tag_name: "param"
-│   ├── type_expression: TypeExpression
-│   │   └── TypeApplication { name: "Object", args: [Name("string"), AllLiteral] }
-│   ├── name: Optional { name: NamePath("options"), default: Text("{}") }
-│   └── description: Text("Options")
+│   ├── body: Generic
+│   │   ├── type_expression: TypeExpression
+│   │   │   └── TypeApplication { callee: Name("Object"), args: [Name("string"), AllLiteral] }
+│   │   ├── value: ParameterName(Optional { name: ParameterPath("options"), default: Text("{}") })
+│   │   └── description: Text("Options")
 ├── tags[2]: BlockTag
 │   ├── tag_name: "returns"
-│   ├── type_expression: TypeExpression
-│   │   └── TypeApplication { name: "Promise", args: [Name("User")] }
-│   └── description: Text("The found user")
+│   ├── body: Generic
+│   │   ├── type_expression: TypeExpression
+│   │   │   └── TypeApplication { callee: Name("Promise"), args: [Name("User")] }
+│   │   └── description: Text("The found user")
 ├── tags[3]: BlockTag
 │   ├── tag_name: "throws"
-│   ├── type_expression: TypeExpression
-│   │   └── Name("NotFoundError")
-│   └── description: Text("If the user is not found")
+│   ├── body: Generic
+│   │   ├── type_expression: TypeExpression
+│   │   │   └── Name("NotFoundError")
+│   │   └── description: Text("If the user is not found")
 ├── tags[4]: BlockTag
 │   ├── tag_name: "since"
-│   └── description: Text("2.0.0")
+│   ├── body: Generic
+│   │   ├── value: RawToken("2.0.0")
 └── tags[5]: BlockTag
     ├── tag_name: "deprecated"
-    └── description: Description
-        ├── Text("Will be removed in 3.0.0. Use ")
-        ├── InlineTag { tag_name: "link", body: Link { target: NamePath("findUserById") } }
-        └── Text(" instead.")
+    ├── body: Generic
+    │   └── description: Description
+    │       ├── Text("Will be removed in 3.0.0. Use ")
+    │       ├── InlineTag { tag_name: "link", body: Link { target: NamePathLike("findUserById") } }
+    │       └── Text(" instead.")
 ```
 
 ![ast-example.svg](./ast-example.svg)
+
+---
+
+## 11. Design Decisions
+
+### 11.1 `BlockTagBody` variant boundary
+
+- Dedicated `BlockTagBody` variants are reserved for lexically special forms.
+- In v1, only `Borrows` qualifies.
+- Tags such as `@variation`, `@requires`, `@memberof!`, `@since`, and `@see`
+  remain `GenericTagBody` and are interpreted later by TagSpec/semantic validation.
+
+Rationale:
+
+- This matches oxc's bias toward a cheap, regular parse step and heavier meaning in later layers.
+- It avoids one-off AST nodes for dictionary-driven tag behavior.
+
+### 11.2 `NamePathLike` vs `TypeName`
+
+- `NamePathLike` is the shared syntax substrate.
+- `TypeName` remains a dedicated wrapper node in type position.
+- We do not collapse them into a single AST node type.
+
+Rationale:
+
+- This matches oxc's explicit-role style such as distinct identifier node kinds.
+- It leaves room for future type-only metadata without widening every namepath consumer.
+
+### 11.3 `node_id` in the JSDoc AST
+
+- `node_id` is not part of the core JSDoc AST in v1.
+- If `ox-jsdoc` is later integrated into an oxc semantic graph, identity should be owned by the graph
+  or an adapter layer rather than stored on every JSDoc node.
+
+Rationale:
+
+- The JSDoc AST is not the primary backbone for scope/symbol analysis.
+- Omitting `node_id` keeps the tree smaller and more transfer-friendly.
+- This keeps parsing concerns separate from semantic attachment concerns.
