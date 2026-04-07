@@ -62,6 +62,85 @@ Desired properties:
 
 Even before raw transfer exists, the serializer is part of the performance story.
 
+### Direction 6. Use borrowed slices for parser strings by default
+
+The parser should follow a **borrowed slice first, normalized string later** policy.
+
+In the parser hot path, these values should normally stay as source-backed
+`Span` + `&'a str` data instead of owned strings:
+
+- description text
+- block tag `raw_body`
+- inline tag body
+- raw type text
+- parameter and name tokens
+
+Normalized strings should be produced only when a later phase needs them, for example:
+
+- escape interpretation
+- whitespace-normalized descriptions
+- joined description strings
+- default value quote handling
+- rendered link labels
+- serializer-owned JS output strings
+
+This keeps the parser cheap while preserving enough information for validator,
+analyzer, formatter, and serializer layers.
+
+Descriptions should not be flattened into one string at parse time.
+They should preserve inline-tag boundaries:
+
+```text
+Description.parts = [
+  Text(slice),
+  InlineTag(slice),
+  Text(slice)
+]
+```
+
+This is important for real-world API documentation where `{@link}` and
+`{@linkcode}` occur frequently, and where later consumers need accurate spans
+for lint diagnostics, formatting, and rendering.
+
+Fenced code blocks should also be tracked as scanner state.
+Inside a fence, `@foo` and `{@link ...}`-looking text should not be eagerly
+treated as normal block or inline tags.
+
+The scanner can be byte-oriented in v1, but it should keep shallow state rather
+than relying on naive whitespace splitting.
+Important markers and states include:
+
+- ASCII markers: `@`, `{`, `}`, `[`, `]`, `(`, `)`, `<`, `>`, `|`, `=`, `-`, quotes, backticks, and line breaks
+- `brace_depth`
+- `bracket_depth`
+- `paren_depth`
+- quote state
+- inline-tag state
+- fence state
+- line-start / after-star-prefix state
+
+This prevents common real-world forms from being split at the wrong boundary,
+including:
+
+- `[opts.maxLength=Infinity]`
+- `[subject="world"]`
+- `{import('typedoc').TypeDocOptions & { docsRoot?: string }}`
+- `{@linkcode Command | entry command}`
+- fenced `@example` blocks
+
+The v1 rule should be:
+
+1. do not allocate in the parser hot path when a source slice is enough
+2. always preserve `raw_body`
+3. preserve inline-tag and fenced-code boundaries
+4. delay description joining and whitespace normalization
+5. move tag-specific string normalization to validator or later phases
+6. keep long or TypeScript-like type text as a raw range until a type parser is required
+
+Tag names and other frequently compared small tokens can start as borrowed strings.
+If measurement later shows lookup or comparison cost is significant, an
+`Ident`-like pre-hashed representation can be considered.
+
 ## Near-Term Recommended Architecture
 
 The most natural implementation split is:
@@ -141,17 +220,21 @@ The benchmark corpus should include at least these buckets:
   - `@deprecated`
 - **Description-heavy comments**
   - multiple inline tags
+  - `{@linkcode Foo | label}`-style inline tags
   - long text segments
   - fenced code blocks
+  - long `@remarks`
 - **Type-heavy comments**
   - nested generics
   - indexed access
   - record-like structures
   - mode-sensitive type syntax
+  - TypeScript-like `import(...) & { ... }` shapes
 - **Special-tag comments**
   - `@variation`
   - `@memberof!`
   - `@borrows`
+  - `@typeParam`
   - custom tags
 - **Malformed comments**
   - unclosed type braces
@@ -226,6 +309,47 @@ If performance drops, the project needs to know whether the regression came from
 The internal baseline should therefore be the primary tool for day-to-day optimization work,
 while external baselines should serve as contextual reference points.
 
+### Fixture strategy
+
+Parser fixtures should not come from only one source.
+`ox-jsdoc` needs fixtures that balance:
+
+- compatibility with canonical JSDoc behavior
+- robustness against raw parsing edge cases
+- realism inside linting-oriented toolchains
+
+#### Recommended source roles
+
+1. **`refers/jsdoc`**
+   - canonical compatibility source
+   - use it for representative built-in tag behavior and JSDoc-oriented parsing cases
+   - especially useful for tags such as `@param`, `@returns`, `@throws`, `@variation`, `@memberof!`, and `@borrows`
+
+2. **`refers/comment-parser`**
+   - raw parsing edge-case source
+   - use it for multiline type parsing, optional/default names, malformed-but-recoverable input, and inline / fence boundary behavior
+
+3. **`refers/eslint-plugin-jsdoc`**
+   - real-world and toolchain-oriented source
+   - use it for parameter-path shapes, mode-sensitive type syntax, escaping behavior, and practical lint-driven comment patterns
+
+`refers/jsdoc` alone is important, but it is not sufficient.
+The fixture set should reflect both parser correctness and ecosystem realism.
+
+#### Recommended adoption order
+
+1. Start with `refers/jsdoc` fixtures/specs as the primary parser-compatibility source.
+2. Add `refers/comment-parser` cases to harden raw parsing behavior and recovery.
+3. Add `refers/eslint-plugin-jsdoc` cases once parser and validator behavior are stable enough to test realistic toolchain inputs.
+
+Fixture planning should mirror benchmark planning.
+The suite should intentionally cover:
+
+- common cases
+- special-tag cases
+- malformed cases
+- toolchain-oriented real-world cases
+
 #### Recommended adoption order for external comparison
 
 External comparisons do not all need to exist from day one.
@@ -297,6 +421,7 @@ Adopt now:
 - node design that respects compact layout
 - preservation of enough raw syntax for later validation
 - generated code or mechanical checks where invariants matter
+- borrowed-slice-first string handling in the parser hot path
 
 Defer:
 
@@ -304,6 +429,7 @@ Defer:
 - fixed transport ABI
 - deep lexer micro-optimization
 - heavy semantic graph IDs inside the core AST
+- pre-hashed or interned tag/name tokens until benchmarks justify them
 
 Avoid:
 

@@ -362,7 +362,135 @@ The current design aims for:
 
 That split keeps the parse hot path short for common JSDoc comments.
 
-### 4. Use Generated Code for Structural Repetition
+### 4. Borrowed Slice First, Normalized String Later
+
+`ox-jsdoc` should treat source text as the primary storage for parsed strings.
+The parser should preserve spans and borrowed slices whenever possible, and
+create normalized strings only when a later phase actually needs them.
+
+This follows the same broad performance direction as `oxc`: avoid copying text
+on the common path, and allocate only for cases that require normalization.
+
+The parser hot path should avoid creating owned strings for:
+
+- description text
+- block tag `raw_body`
+- inline tag bodies
+- raw type text
+- parameter and name tokens
+
+Those values should initially remain tied to the original source text through
+`Span` and borrowed string slices.
+
+Normalization should be delayed to validator, analyzer, formatter, or serializer
+layers when the consumer needs one of these forms:
+
+- unescaped text
+- whitespace-normalized descriptions
+- joined description strings
+- default values with quote handling
+- rendered link labels
+- JS-facing owned strings for serialization
+
+#### Why descriptions must remain structured
+
+Real-world projects contain many inline tags in descriptions.
+For example, API-documentation-heavy sources commonly use forms such as:
+
+```js
+/**
+ * Create a command from {@linkcode Command | entry command}.
+ */
+```
+
+Useful representation:
+
+```text
+Description.parts = [
+  Text("Create a command from "),
+  InlineTag({@linkcode Command | entry command}),
+  Text(".")
+]
+```
+
+Flattening this into one string would make later phases rediscover the inline tag
+boundary. Keeping the boundary during parsing is both more accurate and cheaper
+for consumers such as linters, formatters, and renderers.
+
+This matters in real-world corpora:
+
+- `../gunshi` contains many `{@link}` and `{@linkcode}` references
+- `../../oss/intlify/vue-i18n` contains many `{@link}` references and long `@remarks`
+- `refers/eslint-plugin-jsdoc` contains lint-oriented inline-tag edge cases
+
+The exact counts are benchmark inputs, not part of the AST contract.
+The design consequence is stable: inline-tag boundaries should be preserved
+instead of rebuilt from flattened strings.
+
+#### Fence-aware scanning
+
+Fenced code blocks should be tracked as scanner state.
+Inside a fenced block, text that looks like a tag should usually remain text:
+
+````js
+/**
+ * @example
+ * ```ts
+ * // This is code, not a JSDoc block tag:
+ * @decorator()
+ * ```
+ */
+````
+
+The scanner therefore needs a cheap `fence` state for description and example
+parsing. This is not a request for a full Markdown parser. It is a small state
+machine that prevents expensive or incorrect rediscovery later.
+
+#### Scanner state should be shallow
+
+The scanner should be byte-oriented, but it should not be a naive
+`split_whitespace` parser.
+
+Important ASCII markers include:
+
+```text
+@ { } [ ] ( ) < > | = - " ' ` \n \r whitespace
+```
+
+Useful shallow state includes:
+
+- `brace_depth`
+- `bracket_depth`
+- `paren_depth`
+- quote state
+- inline-tag state
+- fence state
+- line-start / after-star-prefix state
+
+This is necessary because real comments contain forms such as:
+
+- `[opts.maxLength=Infinity]`
+- `[subject="world"]`
+- `{import('typedoc').TypeDocOptions & { docsRoot?: string }}`
+- `{@linkcode Command | entry command}`
+- fenced `@example` blocks
+
+The principle is not to fully parse every nested language immediately.
+The principle is to avoid splitting strings at obviously wrong boundaries.
+
+#### Allocation rule
+
+The default rule should be:
+
+1. keep the source slice if it can be represented as a slice
+2. keep `raw_body` for unresolved or tag-specific interpretations
+3. allocate into the arena only when a normalized string is required
+
+For v1, tag names and frequently compared small tokens can remain borrowed
+strings. If measurement shows tag lookup or name comparison is hot, an
+`Ident`-like interned or pre-hashed representation can be considered later.
+
+### 5. Use Generated Code for Structural Repetition
 
 `oxc` does not maintain layout assertions, visitors, and transfer helpers entirely by hand.
 `ox-jsdoc` should also generate code when the repetition is structural.
@@ -480,7 +608,7 @@ A practical order is:
 
 This captures the useful part of the `oxc` approach without importing unnecessary complexity too early.
 
-### 5. Separate Fast Paths from Cold Paths
+### 6. Separate Fast Paths from Cold Paths
 
 `oxc` consistently keeps common cases short and pushes rare cases to the back.
 `ox-jsdoc` should do the same.
