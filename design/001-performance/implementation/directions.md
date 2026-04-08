@@ -138,4 +138,3 @@ The v1 rule should be:
 Tag names and other frequently compared small tokens can start as borrowed strings.
 If measurement later shows lookup or comparison cost is significant, an
 `Ident`-like pre-hashed representation can be considered.
-

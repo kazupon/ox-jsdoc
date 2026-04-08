@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Core parser crate for ox-jsdoc.
 
 pub mod analyzer;

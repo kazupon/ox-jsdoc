@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 use oxc_allocator::{Allocator, Box as ArenaBox, Vec as ArenaVec};
 use oxc_diagnostics::OxcDiagnostic;
 use oxc_span::Span;

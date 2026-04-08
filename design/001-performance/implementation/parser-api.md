@@ -164,16 +164,16 @@ JSDoc rule in the parser.
 
 Recommended initial diagnostic kinds:
 
-| Kind | Severity | Outcome | Primary span | Notes |
-|---|---|---|---|---|
-| `not_a_jsdoc_block` | Error | Fatal | full input or first token | `parse_comment` received input that is not a `/** ... */` block |
-| `unclosed_block_comment` | Error | Fatal or recoverable | opening `/**` | Fatal if no usable body can be bounded; recoverable if the code that calls `parse_comment` supplied a bounded comment slice |
-| `span_overflow` | Error | Fatal | full input | `base_offset + source_text.len()` does not fit in `u32` |
-| `unclosed_inline_tag` | Error | Recoverable | opening `{@` | Fallback should usually preserve the attempted inline tag as `Text` |
-| `unclosed_type_expression` | Error | Recoverable | opening `{` of the type | Preserve `raw_body`; avoid committing a partial `TypeExpression` unless the parser can do so safely |
-| `unclosed_fence` | Error | Recoverable | opening fence | Treat the remaining content as fenced content or text, depending on the accepted description shape |
-| `invalid_tag_start` | Error | Recoverable | suspicious `@` | Use when a line looks like a tag start but cannot produce a valid tag name |
-| `invalid_inline_tag_start` | Error | Recoverable | suspicious `{@` | Use when inline-tag scanning starts but the name/body boundary is invalid |
+| Kind                       | Severity | Outcome              | Primary span              | Notes                                                                                                                       |
+| -------------------------- | -------- | -------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `not_a_jsdoc_block`        | Error    | Fatal                | full input or first token | `parse_comment` received input that is not a `/** ... */` block                                                             |
+| `unclosed_block_comment`   | Error    | Fatal or recoverable | opening `/**`             | Fatal if no usable body can be bounded; recoverable if the code that calls `parse_comment` supplied a bounded comment slice |
+| `span_overflow`            | Error    | Fatal                | full input                | `base_offset + source_text.len()` does not fit in `u32`                                                                     |
+| `unclosed_inline_tag`      | Error    | Recoverable          | opening `{@`              | Fallback should usually preserve the attempted inline tag as `Text`                                                         |
+| `unclosed_type_expression` | Error    | Recoverable          | opening `{` of the type   | Preserve `raw_body`; avoid committing a partial `TypeExpression` unless the parser can do so safely                         |
+| `unclosed_fence`           | Error    | Recoverable          | opening fence             | Treat the remaining content as fenced content or text, depending on the accepted description shape                          |
+| `invalid_tag_start`        | Error    | Recoverable          | suspicious `@`            | Use when a line looks like a tag start but cannot produce a valid tag name                                                  |
+| `invalid_inline_tag_start` | Error    | Recoverable          | suspicious `{@`           | Use when inline-tag scanning starts but the name/body boundary is invalid                                                   |
 
 This list is intentionally parser-focused.
 Do not include validator-level diagnostics such as:
@@ -246,4 +246,3 @@ Not part of the core AST contract:
 If later measurement shows that a separate event stream improves recovery or
 benchmark behavior, it can be introduced internally. It should not be exposed as
 the first public API.
-

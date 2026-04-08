@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 use oxc_diagnostics::OxcDiagnostic;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

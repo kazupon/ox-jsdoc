@@ -125,4 +125,3 @@ The first measurements should compare:
 
 Only after these exist should the implementation consider specialized byte
 search, pre-hashed tag names, or more aggressive layout tuning.
-

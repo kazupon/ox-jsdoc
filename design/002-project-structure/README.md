@@ -207,8 +207,8 @@ Root `pnpm-workspace.yaml` should include JavaScript-facing package directories:
 
 ```yaml
 packages:
-  - "napi/*"
-  - "packages/*"
+  - 'napi/*'
+  - 'packages/*'
 ```
 
 `packages/*` is included from the beginning so a future pure JS wrapper can be

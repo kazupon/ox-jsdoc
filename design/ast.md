@@ -47,7 +47,7 @@ EBNF: `Description = DescriptionText { InlineTag DescriptionText } ;`
 
 Description text is represented as an interleaved sequence of plain text and inline tags.
 
-```rust
+````rust
 /// Description text. An interleaved sequence of plain text and inline tags.
 /// Example: `"This is a {@link Foo} description"`
 ///   → [Text("This is a "), InlineTag({@link Foo}), Text(" description")]
@@ -113,7 +113,7 @@ pub struct InlineCode<'a> {
     /// Raw content between backtick delimiters (zero-copy)
     pub content: &'a str,
 }
-```
+````
 
 ---
 
@@ -682,30 +682,30 @@ pub struct ParenthesizedType<'a> {
 
 ## 8. AST Node List and EBNF Mapping
 
-| EBNF Production | AST Node | Notes |
-|---|---|---|
-| `JSDocComment` | `JSDocComment` | Root node |
-| `Body` | `JSDocComment.{description, tags}` | Body itself has no dedicated node |
-| `Description` | `Description` | Interleaved text + inline tags |
-| `DescriptionText` | `Text` | Plain text |
-| `FencedCodeBlock` | `FencedCodeBlock` | ``` ... ``` or ~~~ ... ~~~ |
-| `InlineCode` | `InlineCode` | \`code\` or \`\`code\`\` |
-| `BlockTag` | `BlockTag` | Holds parsed body plus raw body for tag-specific semantics |
-| `TagName` | `TagName` | Open-ended |
-| `TagBody` | `BlockTagBody` | `GenericTagBody` or tag-specific body like `BorrowsTagBody` |
-| `InlineTag` | `InlineTag` | `{@link ...}` etc. |
-| `InlineTagBody` | `InlineTagBody` | 3 variants: Link / Type / Unknown |
-| `ParameterName` | `TagParameterName` | 2 variants: Required / Optional |
-| `ParameterPath` | `ParameterPath` | Dedicated `@param` / `@property` path syntax |
-| `OptionalParameter` | `OptionalParameterName` | `[name=default]` |
-| `TypeExpression` | `TypeExpression` | Wrapper including braces |
-| `TypeExpr` | `TypeExpr` | Recursive enum tree including `typeof` and indexed access |
-| `UnionType` | `UnionType` | Two or more elements |
-| `TypeApplication` | `TypeApplication` | `Array.<T>` |
-| `FunctionType` | `FunctionType` | `function(T): U` |
-| `RecordType` | `RecordType` | `{k: T}` |
-| `TypeName` | `TypeName` | Built from `NamePathLike` |
-| `NamePathLike` | `NamePathLike` | Namespace, `/`, variation, trailing connector support |
+| EBNF Production     | AST Node                           | Notes                                                       |
+| ------------------- | ---------------------------------- | ----------------------------------------------------------- |
+| `JSDocComment`      | `JSDocComment`                     | Root node                                                   |
+| `Body`              | `JSDocComment.{description, tags}` | Body itself has no dedicated node                           |
+| `Description`       | `Description`                      | Interleaved text + inline tags                              |
+| `DescriptionText`   | `Text`                             | Plain text                                                  |
+| `FencedCodeBlock`   | `FencedCodeBlock`                  | `...` or ~~~ ... ~~~                                        |
+| `InlineCode`        | `InlineCode`                       | \`code\` or \`\`code\`\`                                    |
+| `BlockTag`          | `BlockTag`                         | Holds parsed body plus raw body for tag-specific semantics  |
+| `TagName`           | `TagName`                          | Open-ended                                                  |
+| `TagBody`           | `BlockTagBody`                     | `GenericTagBody` or tag-specific body like `BorrowsTagBody` |
+| `InlineTag`         | `InlineTag`                        | `{@link ...}` etc.                                          |
+| `InlineTagBody`     | `InlineTagBody`                    | 3 variants: Link / Type / Unknown                           |
+| `ParameterName`     | `TagParameterName`                 | 2 variants: Required / Optional                             |
+| `ParameterPath`     | `ParameterPath`                    | Dedicated `@param` / `@property` path syntax                |
+| `OptionalParameter` | `OptionalParameterName`            | `[name=default]`                                            |
+| `TypeExpression`    | `TypeExpression`                   | Wrapper including braces                                    |
+| `TypeExpr`          | `TypeExpr`                         | Recursive enum tree including `typeof` and indexed access   |
+| `UnionType`         | `UnionType`                        | Two or more elements                                        |
+| `TypeApplication`   | `TypeApplication`                  | `Array.<T>`                                                 |
+| `FunctionType`      | `FunctionType`                     | `function(T): U`                                            |
+| `RecordType`        | `RecordType`                       | `{k: T}`                                                    |
+| `TypeName`          | `TypeName`                         | Built from `NamePathLike`                                   |
+| `NamePathLike`      | `NamePathLike`                     | Namespace, `/`, variation, trailing connector support       |
 
 ---
 

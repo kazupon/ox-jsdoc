@@ -379,4 +379,3 @@ aggressive AST packing, the project should be able to show:
 - what tradeoff is being accepted
 
 That rule is the part of the `oxc` performance mindset most worth copying here.
-

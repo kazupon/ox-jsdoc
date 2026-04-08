@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuoteKind {
     Single,

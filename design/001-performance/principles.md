@@ -63,11 +63,11 @@ These should be pushed to later semantic validation and analysis phases.
 
 `ox-jsdoc` should think in at least three layers:
 
-| Layer | Primary role | What it does | What it does not do |
-|---|---|---|---|
-| **parser** | Build syntax trees | comment structure recognition, AST construction, spans, raw syntax retention, limited recovery | final tag meaning, final mode decisions, strict validation |
-| **validator** | Apply validity rules and light normalization | built-in/custom tag rules, type/namepath/parameter-path checks, mode-sensitive rules, diagnostics | consumer-facing high-level derived data |
-| **analyzer** | Produce consumer-oriented facts | data for linters, formatters, renderers, and other consumers | rebuilding the parse tree, defining validation rules themselves |
+| Layer         | Primary role                                 | What it does                                                                                      | What it does not do                                             |
+| ------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **parser**    | Build syntax trees                           | comment structure recognition, AST construction, spans, raw syntax retention, limited recovery    | final tag meaning, final mode decisions, strict validation      |
+| **validator** | Apply validity rules and light normalization | built-in/custom tag rules, type/namepath/parameter-path checks, mode-sensitive rules, diagnostics | consumer-facing high-level derived data                         |
+| **analyzer**  | Produce consumer-oriented facts              | data for linters, formatters, renderers, and other consumers                                      | rebuilding the parse tree, defining validation rules themselves |
 
 #### Concrete examples by layer
 
@@ -618,8 +618,8 @@ Definitions:
 - **fast path**: the short, simple path used for common input
 - **cold path**: the heavier path used for rare input or error-heavy situations
 
-The important point is not only *what* can be parsed, but *in what order* and
-at *what cost* cases are parsed.
+The important point is not only _what_ can be parsed, but _in what order_ and
+at _what cost_ cases are parsed.
 
 Two parsers may accept the same final input set:
 

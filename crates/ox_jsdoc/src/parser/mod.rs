@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 mod checkpoint;
 mod context;
 mod diagnostics;

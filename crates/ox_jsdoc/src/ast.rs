@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 use oxc_allocator::{Box as ArenaBox, Vec as ArenaVec};
 use oxc_span::Span;
 

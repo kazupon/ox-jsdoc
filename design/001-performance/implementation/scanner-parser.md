@@ -202,4 +202,3 @@ The parser can own the cursor and expose scanner-like helpers internally.
 The implementation should stay free to introduce an internal token or event
 stream later, but only if measurement shows that it improves recovery,
 diagnostics, or throughput on representative inputs.
-
