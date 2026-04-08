@@ -1,4 +1,12 @@
 packages:
-  - "napi/*"
-  - "packages/*"
+  - 'napi/*'
+  - 'packages/*'
 
+catalog:
+  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'

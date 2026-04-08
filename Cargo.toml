@@ -2,12 +2,11 @@
 resolver = "3"
 members = [
   "crates/*",
-  # Add "napi/*" and "tasks/*" once those Cargo crates exist.
+  "tasks/*"
+  # Add "napi/*" once those Cargo crates exist.
   # Cargo treats unmatched workspace member globs as manifest errors.
 ]
-exclude = [
-  "refers/*",
-]
+exclude = ["refers/*"]
 
 [workspace.package]
 edition = "2024"
