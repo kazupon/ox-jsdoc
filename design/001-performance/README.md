@@ -30,7 +30,11 @@ Related documents:
    - Transport complexity inside parser core
 
 3. [Implementation guidance](./implementation.md)
-   - Concrete implementation directions for `ox-jsdoc`
-   - Near-term recommended architecture
-   - Adoption summary
-   - Conclusion
+   - Entry point for the implementation guidance documents
+   - Links to the split implementation design pages:
+     - [Concrete directions](./implementation/directions.md)
+     - [Architecture and next steps](./implementation/architecture.md)
+     - [Parser API and allocation contract](./implementation/parser-api.md)
+     - [Scanner / parser boundary](./implementation/scanner-parser.md)
+     - [Performance measurement strategy](./implementation/measurement.md)
+     - [Adoption summary and conclusion](./implementation/adoption.md)
