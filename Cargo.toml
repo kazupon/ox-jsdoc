@@ -11,10 +11,10 @@ exclude = [
 
 [workspace.package]
 edition = "2024"
-rust-version = "1.91"
+rust-version = "1.92.0"
 license = "MIT"
 
 [workspace.dependencies]
-oxc_allocator = "=0.115.0"
-oxc_diagnostics = "=0.115.0"
-oxc_span = "=0.115.0"
+oxc_allocator = "=0.123.0"
+oxc_diagnostics = "=0.123.0"
+oxc_span = "=0.123.0"
