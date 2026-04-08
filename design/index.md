@@ -17,6 +17,10 @@ It collects documents related to syntax, AST design, and performance design.
 - [What not to bring in yet](./001-performance/non-goals.md)
 - [Implementation guidance](./001-performance/implementation.md)
 
+### Project Structure
+
+- [Repository and workspace layout](./002-project-structure/README.md)
+
 ### Diagrams
 
 - [AST overview diagram](./ast-example.svg)
