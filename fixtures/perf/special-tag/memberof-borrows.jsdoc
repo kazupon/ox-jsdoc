@@ -1,0 +1,5 @@
+/**
+ * @memberof! module:services/UserService.
+ * @variation 2
+ * @borrows module:services/source as module:services/target
+ */

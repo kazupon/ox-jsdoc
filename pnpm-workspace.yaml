@@ -1,6 +1,7 @@
 packages:
   - 'napi/*'
   - 'packages/*'
+  - 'tasks/*'
 
 catalog:
   vite-plus: latest

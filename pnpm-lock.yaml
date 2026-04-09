@@ -31,6 +31,15 @@ importers:
         specifier: 'catalog:'
         version: 0.1.16(@voidzero-dev/vite-plus-core@0.1.16)
 
+  tasks/benchmark:
+    dependencies:
+      comment-parser:
+        specifier: ^1.4.1
+        version: 1.4.1
+      mitata:
+        specifier: ^1.0.34
+        version: 1.0.34
+
 packages:
 
   '@es-joy/jsdoccomment@0.78.0':
@@ -842,6 +851,9 @@ packages:
   minimatch@3.1.5:
     resolution: {integrity: sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==}
 
+  mitata@1.0.34:
+    resolution: {integrity: sha512-Mc3zrtNBKIMeHSCQ0XqRLo1vbdIx1wvFV9c8NJAiyho6AjNfMY8bVhbS12bwciUdd1t4rj8099CH3N3NFahaUA==}
+
   mrmime@2.0.1:
     resolution: {integrity: sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ==}
     engines: {node: '>=10'}
@@ -1581,6 +1593,8 @@ snapshots:
   minimatch@3.1.5:
     dependencies:
       brace-expansion: 1.1.13
+
+  mitata@1.0.34: {}
 
   mrmime@2.0.1: {}
 

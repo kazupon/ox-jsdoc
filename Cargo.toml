@@ -2,9 +2,9 @@
 resolver = "3"
 members = [
   "crates/*",
-  "tasks/*"
+  "tasks/benchmark",
+  "tasks/xtask",
   # Add "napi/*" once those Cargo crates exist.
-  # Cargo treats unmatched workspace member globs as manifest errors.
 ]
 exclude = ["refers/*"]
 

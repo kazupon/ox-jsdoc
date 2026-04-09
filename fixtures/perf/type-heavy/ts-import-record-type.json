@@ -1,0 +1,11 @@
+{
+  "description": "Type-heavy comment with import type, record shape, and indexed access style.",
+  "source": "../gunshi",
+  "sourcePath": "../gunshi",
+  "category": "type-heavy",
+  "features": ["type", "import-type", "record", "indexed-access"],
+  "expect": {
+    "parse": "ok",
+    "diagnostics": []
+  }
+}

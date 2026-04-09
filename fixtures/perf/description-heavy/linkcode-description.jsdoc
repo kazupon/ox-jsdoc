@@ -1,0 +1,10 @@
+/**
+ * Builds a command from multiple sources. See {@link UserService} for the
+ * main service contract and {@linkcode Command | command entry point} for the
+ * implementation detail.
+ *
+ * @remarks
+ * This comment is intentionally description-heavy and includes multiple inline
+ * tags so that the parser keeps `Description.parts` instead of flattening the
+ * entire text into a single string.
+ */

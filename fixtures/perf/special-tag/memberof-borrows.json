@@ -1,0 +1,11 @@
+{
+  "description": "Special-tag fixture for memberof, variation, and borrows.",
+  "source": "refers/jsdoc",
+  "sourcePath": "refers/jsdoc/packages/jsdoc/test/specs/tags/borrowstag.js",
+  "category": "special-tag",
+  "features": ["memberof", "variation", "borrows"],
+  "expect": {
+    "parse": "ok",
+    "diagnostics": []
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "description": "Basic param and returns comment for common parser throughput.",
+  "source": "refers/jsdoc",
+  "sourcePath": "refers/jsdoc/packages/jsdoc/test/fixtures/paramtag.js",
+  "category": "common",
+  "features": ["param", "returns"],
+  "expect": {
+    "parse": "ok",
+    "diagnostics": []
+  }
+}

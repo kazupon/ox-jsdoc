@@ -1,0 +1,12 @@
+{
+  "name": "@ox-jsdoc/benchmark",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "benchmark:comment-parser": "node --expose-gc ./scripts/comment-parser-fixtures.mjs"
+  },
+  "dependencies": {
+    "comment-parser": "^1.4.1",
+    "mitata": "^1.0.34"
+  }
+}

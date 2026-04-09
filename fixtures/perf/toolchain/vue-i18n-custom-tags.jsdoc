@@ -1,0 +1,11 @@
+/**
+ * Composer options for locale messages.
+ *
+ * @remarks
+ * This fixture models a toolchain-oriented API comment with custom tags.
+ *
+ * @VueI18nSee Intlify Documentation
+ * @defaultValue "en"
+ * @param {string} locale - The active locale.
+ * @returns {Composer} The configured composer instance.
+ */

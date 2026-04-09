@@ -3,3 +3,5 @@
 //
 
 pub mod json;
+
+pub use json::serialize_comment_json;
