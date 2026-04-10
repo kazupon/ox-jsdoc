@@ -26,4 +26,7 @@ harness = false
 [dependencies]
 criterion2 = { version = "3.0.2", default-features = false }
 oxc_allocator.workspace = true
+oxc_ast.workspace = true
+oxc_parser.workspace = true
+oxc_span.workspace = true
 ox_jsdoc = { path = "../../crates/ox_jsdoc" }

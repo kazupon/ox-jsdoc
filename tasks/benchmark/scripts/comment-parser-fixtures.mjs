@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 import { bench, run } from 'mitata'
 import { parse } from 'comment-parser'
+import { parseSync } from 'oxc-parser'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../../..')
@@ -15,6 +16,7 @@ const buckets = [
   'type-heavy',
   'special-tag',
   'malformed',
+  'source',
   'toolchain'
 ]
 
@@ -22,7 +24,9 @@ const fixtures = await loadFixtures()
 
 for (const fixture of fixtures) {
   bench(`${fixture.bucket}/${fixture.name}`, () => {
-    parse(fixture.sourceText)
+    for (const commentText of fixture.commentTexts) {
+      parse(commentText)
+    }
   })
 }
 
@@ -61,20 +65,42 @@ async function loadFixtures() {
     const bucketDir = path.join(fixturesRoot, bucket)
     const entries = await readdir(bucketDir, { withFileTypes: true })
     for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith('.jsdoc')) {
+      if (!entry.isFile() || !isSupportedFixture(entry.name)) {
         continue
       }
       const filePath = path.join(bucketDir, entry.name)
       const sourceText = await readFile(filePath, 'utf8')
+      const commentTexts = entry.name.endsWith('.jsdoc')
+        ? [sourceText]
+        : extractJsdocBlocksWithOxcParser(filePath, sourceText)
+      if (commentTexts.length === 0) {
+        continue
+      }
       allFixtures.push({
         bucket,
-        name: entry.name.replace(/\.jsdoc$/, ''),
-        sourceText
+        name: entry.name.replace(/\.(?:jsdoc|[cm]?[jt]sx?)$/, ''),
+        sourceText,
+        commentTexts
       })
     }
   }
 
   return allFixtures
+}
+
+function isSupportedFixture(name) {
+  return /\.(?:jsdoc|[cm]?[jt]sx?)$/.test(name)
+}
+
+function extractJsdocBlocksWithOxcParser(filePath, sourceText) {
+  const result = parseSync(filePath, sourceText)
+  return result.comments
+    .filter(isJsdocComment)
+    .map(comment => sourceText.slice(comment.start, comment.end))
+}
+
+function isJsdocComment(comment) {
+  return comment.type === 'Block' && comment.value.startsWith('*')
 }
 
 function formatNs(value) {

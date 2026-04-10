@@ -12,19 +12,25 @@ fn bench_parser(criterion: &mut Criterion) {
 
     for fixture in fixtures {
         let id = BenchmarkId::new(&fixture.bucket, &fixture.name);
-        let source_text = &fixture.source_text;
+        let comment_texts = &fixture.comment_texts;
 
         group.bench_function(id, |b| {
             let mut allocator = Allocator::default();
 
             b.iter(|| {
-                let parsed = parse_comment(
-                    &allocator,
-                    black_box(source_text),
-                    0,
-                    ParseOptions::default(),
-                );
-                black_box(&parsed);
+                let mut parsed_count = 0usize;
+                let mut diagnostic_count = 0usize;
+                for source_text in comment_texts {
+                    let parsed = parse_comment(
+                        &allocator,
+                        black_box(source_text),
+                        0,
+                        ParseOptions::default(),
+                    );
+                    parsed_count += usize::from(parsed.comment.is_some());
+                    diagnostic_count += parsed.diagnostics.len();
+                }
+                black_box((parsed_count, diagnostic_count));
                 allocator.reset();
             });
         });
