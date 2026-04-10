@@ -125,11 +125,7 @@ impl<'a> From<&'a JsdocBlock<'a>> for SerBlock<'a> {
                 .map(SerDescriptionLine::from)
                 .collect(),
             tags: block.tags.iter().map(SerTag::from).collect(),
-            inline_tags: block
-                .inline_tags
-                .iter()
-                .map(SerInlineTag::from)
-                .collect(),
+            inline_tags: block.inline_tags.iter().map(SerInlineTag::from).collect(),
         }
     }
 }
@@ -212,11 +208,7 @@ impl<'a> From<&'a JsdocTag<'a>> for SerTag<'a> {
                 .iter()
                 .map(SerDescriptionLine::from)
                 .collect(),
-            inline_tags: tag
-                .inline_tags
-                .iter()
-                .map(SerInlineTag::from)
-                .collect(),
+            inline_tags: tag.inline_tags.iter().map(SerInlineTag::from).collect(),
             body: tag.body.as_ref().map(|b| SerTagBody::from(b.as_ref())),
         }
     }

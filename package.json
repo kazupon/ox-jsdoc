@@ -3,9 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "cargo test",
-    "check": "cargo run -p xtask -- headers:check && cargo check",
-    "fmt": "vp fmt && cargo fmt",
+    "build": "pnpm -r build",
+    "test": "cargo test && vp test",
+    "check": "cargo run -p xtask -- headers:check && cargo check && vp check",
+    "fmt": "cargo fmt && vp fmt",
     "bench:ox-jsdoc": "cargo bench -p ox_jsdoc_benchmark",
     "bench:ox-jsdoc:parser": "cargo bench -p ox_jsdoc_benchmark --bench parser",
     "bench:ox-jsdoc:validator": "cargo bench -p ox_jsdoc_benchmark --bench validator",

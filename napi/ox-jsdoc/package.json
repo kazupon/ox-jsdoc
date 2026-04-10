@@ -1,0 +1,27 @@
+{
+  "name": "ox-jsdoc",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src-js/index.js",
+  "types": "src-js/index.d.ts",
+  "scripts": {
+    "build": "napi build --esm --platform --js bindings.js --dts bindings.d.ts --output-dir src-js",
+    "build:release": "pnpm run build --release",
+    "test": "vp test run"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.6.1",
+    "vite-plus": "catalog:"
+  },
+  "napi": {
+    "binaryName": "ox_jsdoc",
+    "packageName": "@ox-jsdoc/binding",
+    "targets": [
+      "aarch64-apple-darwin",
+      "x86_64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "x86_64-pc-windows-msvc"
+    ]
+  }
+}

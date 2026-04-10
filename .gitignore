@@ -2,4 +2,7 @@ target/
 node_modules/
 dist/
 *.log
+napi/ox-jsdoc/src-js/bindings.d.ts
+napi/ox-jsdoc/src-js/bindings.js
+napi/ox-jsdoc/src-js/ox_jsdoc.*.node
 .notes/
