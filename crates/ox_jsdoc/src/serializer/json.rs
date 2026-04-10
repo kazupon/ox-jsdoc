@@ -3,6 +3,12 @@
 //
 
 //! JSON serializer for the ESTree-like JS-facing shape.
+//!
+//! Uses `serde::Serialize` + `serde_json::to_string` for efficient JSON
+//! generation. The intermediate `Ser*` structs map the arena-allocated AST
+//! into a serializable form without copying source text.
+
+use serde::Serialize;
 
 use crate::analyzer::AnalysisOutput;
 use crate::ast::{
@@ -20,402 +26,348 @@ pub fn serialize_comment_json(
     validation: Option<&ValidationOutput>,
     analysis: Option<&AnalysisOutput<'_>>,
 ) -> String {
-    let mut json = String::new();
-    push_block(&mut json, comment);
-
     if validation.is_none() && analysis.is_none() {
-        return json;
+        let block = SerBlock::from(comment);
+        return serde_json::to_string(&block).unwrap_or_default();
     }
 
-    // Wrap only when derived outputs are requested, keeping parser-only output
-    // close to the AST root shape.
-    let mut wrapped = String::new();
-    wrapped.push('{');
-    push_key(&mut wrapped, "comment");
-    wrapped.push_str(&json);
-
-    if let Some(validation) = validation {
-        wrapped.push(',');
-        push_key(&mut wrapped, "validation");
-        wrapped.push('{');
-        push_key(&mut wrapped, "diagnosticCount");
-        push_usize(&mut wrapped, validation.diagnostics.len());
-        wrapped.push('}');
-    }
-
-    if let Some(analysis) = analysis {
-        wrapped.push(',');
-        push_key(&mut wrapped, "analysis");
-        wrapped.push('{');
-        push_key(&mut wrapped, "tagCount");
-        push_usize(&mut wrapped, analysis.tag_count);
-        wrapped.push(',');
-        push_key(&mut wrapped, "hasInlineTags");
-        wrapped.push_str(if analysis.has_inline_tags {
-            "true"
-        } else {
-            "false"
-        });
-        wrapped.push(',');
-        push_key(&mut wrapped, "tagNames");
-        push_string_array(&mut wrapped, &analysis.tag_names);
-        wrapped.push(',');
-        push_key(&mut wrapped, "parameterNames");
-        push_string_array(&mut wrapped, &analysis.parameter_names);
-        wrapped.push(',');
-        push_key(&mut wrapped, "customTagNames");
-        push_string_array(&mut wrapped, &analysis.custom_tag_names);
-        wrapped.push('}');
-    }
-
-    wrapped.push('}');
-    wrapped
+    let wrapped = SerWrapped {
+        comment: SerBlock::from(comment),
+        validation: validation.map(SerValidation::from),
+        analysis: analysis.map(SerAnalysis::from),
+    };
+    serde_json::to_string(&wrapped).unwrap_or_default()
 }
 
-fn push_block(json: &mut String, block: &JsdocBlock<'_>) {
-    json.push('{');
-    push_node_header(json, "JsdocBlock", block.span.start, block.span.end);
-    json.push(',');
-    push_key(json, "description");
-    push_string(json, block.description.unwrap_or_default());
-    json.push(',');
-    push_key(json, "descriptionLines");
-    push_description_lines(json, &block.description_lines);
-    json.push(',');
-    push_key(json, "tags");
-    json.push('[');
-    for (index, tag) in block.tags.iter().enumerate() {
-        if index > 0 {
-            json.push(',');
-        }
-        push_tag(json, tag);
-    }
-    json.push(']');
-    json.push(',');
-    push_key(json, "inlineTags");
-    push_inline_tags(json, &block.inline_tags);
-    json.push('}');
+// ---------------------------------------------------------------------------
+// Wrapped output (when validation/analysis are requested)
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+struct SerWrapped<'a> {
+    comment: SerBlock<'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    validation: Option<SerValidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    analysis: Option<SerAnalysis<'a>>,
 }
 
-fn push_description_lines(json: &mut String, lines: &[JsdocDescriptionLine<'_>]) {
-    json.push('[');
-    for (index, line) in lines.iter().enumerate() {
-        if index > 0 {
-            json.push(',');
-        }
-        push_description_line(json, line);
-    }
-    json.push(']');
+#[derive(Serialize)]
+struct SerValidation {
+    #[serde(rename = "diagnosticCount")]
+    diagnostic_count: usize,
 }
 
-fn push_description_line(json: &mut String, line: &JsdocDescriptionLine<'_>) {
-    json.push('{');
-    push_node_header(json, "JsdocDescriptionLine", line.span.start, line.span.end);
-    json.push(',');
-    push_key(json, "delimiter");
-    push_string(json, line.delimiter);
-    json.push(',');
-    push_key(json, "postDelimiter");
-    push_string(json, line.post_delimiter);
-    json.push(',');
-    push_key(json, "initial");
-    push_string(json, line.initial);
-    json.push(',');
-    push_key(json, "description");
-    push_string(json, line.description);
-    json.push('}');
-}
-
-fn push_tag(json: &mut String, tag: &JsdocTag<'_>) {
-    json.push('{');
-    push_node_header(json, "JsdocTag", tag.span.start, tag.span.end);
-    json.push(',');
-    push_key(json, "tag");
-    push_string(json, tag.tag.value);
-    json.push(',');
-    push_key(json, "rawType");
-    match tag.raw_type {
-        Some(raw_type) => push_string(json, raw_type.raw),
-        None => json.push_str("null"),
-    }
-    json.push(',');
-    push_key(json, "parsedType");
-    json.push_str("null");
-    json.push(',');
-    push_key(json, "name");
-    match tag.name {
-        Some(name) => push_string(json, name.raw),
-        None => json.push_str("null"),
-    }
-    json.push(',');
-    push_key(json, "optional");
-    json.push_str(if tag.optional { "true" } else { "false" });
-    json.push(',');
-    push_key(json, "defaultValue");
-    match tag.default_value {
-        Some(value) => push_string(json, value),
-        None => json.push_str("null"),
-    }
-    json.push(',');
-    push_key(json, "description");
-    push_string(json, tag.description.unwrap_or_default());
-    json.push(',');
-    push_key(json, "rawBody");
-    match tag.raw_body {
-        Some(raw_body) => push_string(json, raw_body),
-        None => json.push_str("null"),
-    }
-    json.push(',');
-    push_key(json, "typeLines");
-    push_type_lines(json, &tag.type_lines);
-    json.push(',');
-    push_key(json, "descriptionLines");
-    push_description_lines(json, &tag.description_lines);
-    json.push(',');
-    push_key(json, "inlineTags");
-    push_inline_tags(json, &tag.inline_tags);
-    json.push(',');
-    push_key(json, "body");
-    match tag.body.as_ref() {
-        Some(body) => push_tag_body(json, body.as_ref()),
-        None => json.push_str("null"),
-    }
-    json.push('}');
-}
-
-fn push_type_lines(json: &mut String, lines: &[JsdocTypeLine<'_>]) {
-    json.push('[');
-    for (index, line) in lines.iter().enumerate() {
-        if index > 0 {
-            json.push(',');
-        }
-        json.push('{');
-        push_node_header(json, "JsdocTypeLine", line.span.start, line.span.end);
-        json.push(',');
-        push_key(json, "delimiter");
-        push_string(json, line.delimiter);
-        json.push(',');
-        push_key(json, "postDelimiter");
-        push_string(json, line.post_delimiter);
-        json.push(',');
-        push_key(json, "initial");
-        push_string(json, line.initial);
-        json.push(',');
-        push_key(json, "rawType");
-        push_string(json, line.raw_type);
-        json.push('}');
-    }
-    json.push(']');
-}
-
-fn push_inline_tags(json: &mut String, tags: &[JsdocInlineTag<'_>]) {
-    json.push('[');
-    for (index, tag) in tags.iter().enumerate() {
-        if index > 0 {
-            json.push(',');
-        }
-        push_inline_tag(json, tag);
-    }
-    json.push(']');
-}
-
-fn push_inline_tag(json: &mut String, tag: &JsdocInlineTag<'_>) {
-    json.push('{');
-    push_node_header(json, "JsdocInlineTag", tag.span.start, tag.span.end);
-    json.push(',');
-    push_key(json, "tag");
-    push_string(json, tag.tag.value);
-    json.push(',');
-    push_key(json, "namepathOrURL");
-    match tag.namepath_or_url {
-        Some(value) => push_string(json, value),
-        None => json.push_str("null"),
-    }
-    json.push(',');
-    push_key(json, "text");
-    match tag.text {
-        Some(value) => push_string(json, value),
-        None => json.push_str("null"),
-    }
-    json.push(',');
-    push_key(json, "format");
-    push_string(json, inline_tag_format(tag.format));
-    json.push(',');
-    push_key(json, "rawBody");
-    match tag.raw_body {
-        Some(value) => push_string(json, value),
-        None => json.push_str("null"),
-    }
-    json.push('}');
-}
-
-fn push_tag_body(json: &mut String, body: &JsdocTagBody<'_>) {
-    match body {
-        JsdocTagBody::Generic(body) => push_generic_tag_body(json, body),
-        JsdocTagBody::Borrows(body) => {
-            json.push('{');
-            push_key(json, "kind");
-            push_string(json, "borrows");
-            json.push(',');
-            push_key(json, "source");
-            push_tag_value(json, &body.source);
-            json.push(',');
-            push_key(json, "target");
-            push_tag_value(json, &body.target);
-            json.push('}');
-        }
-        JsdocTagBody::Raw(body) => {
-            json.push('{');
-            push_key(json, "kind");
-            push_string(json, "raw");
-            json.push(',');
-            push_key(json, "raw");
-            push_string(json, body.raw);
-            json.push('}');
+impl From<&ValidationOutput> for SerValidation {
+    fn from(v: &ValidationOutput) -> Self {
+        Self {
+            diagnostic_count: v.diagnostics.len(),
         }
     }
 }
 
-fn push_generic_tag_body(json: &mut String, body: &JsdocGenericTagBody<'_>) {
-    json.push('{');
-    push_key(json, "kind");
-    push_string(json, "generic");
-    json.push(',');
-    push_key(json, "typeSource");
-    match body.type_source {
-        Some(type_source) => push_string(json, type_source.raw),
-        None => json.push_str("null"),
-    }
-    json.push(',');
-    push_key(json, "value");
-    match body.value.as_ref() {
-        Some(value) => push_tag_value(json, value),
-        None => json.push_str("null"),
-    }
-    json.push(',');
-    push_key(json, "separator");
-    match body.separator {
-        Some(_) => push_string(json, "-"),
-        None => json.push_str("null"),
-    }
-    json.push(',');
-    push_key(json, "description");
-    match body.description {
-        Some(description) => push_string(json, description),
-        None => json.push_str("null"),
-    }
-    json.push('}');
+#[derive(Serialize)]
+struct SerAnalysis<'a> {
+    #[serde(rename = "tagCount")]
+    tag_count: usize,
+    #[serde(rename = "hasInlineTags")]
+    has_inline_tags: bool,
+    #[serde(rename = "tagNames")]
+    tag_names: &'a [&'a str],
+    #[serde(rename = "parameterNames")]
+    parameter_names: &'a [&'a str],
+    #[serde(rename = "customTagNames")]
+    custom_tag_names: &'a [&'a str],
 }
 
-fn push_tag_value(json: &mut String, value: &JsdocTagValue<'_>) {
-    json.push('{');
-    match value {
-        JsdocTagValue::Parameter(parameter) => {
-            push_key(json, "kind");
-            push_string(json, "parameter");
-            json.push(',');
-            push_key(json, "path");
-            push_string(json, parameter.path);
-            json.push(',');
-            push_key(json, "optional");
-            json.push_str(if parameter.optional { "true" } else { "false" });
-            json.push(',');
-            push_key(json, "defaultValue");
-            match parameter.default_value {
-                Some(value) => push_string(json, value),
-                None => json.push_str("null"),
-            }
-        }
-        JsdocTagValue::Namepath(namepath) => {
-            push_key(json, "kind");
-            push_string(json, "namepath");
-            json.push(',');
-            push_key(json, "raw");
-            push_string(json, namepath.raw);
-        }
-        JsdocTagValue::Identifier(identifier) => {
-            push_key(json, "kind");
-            push_string(json, "identifier");
-            json.push(',');
-            push_key(json, "name");
-            push_string(json, identifier.name);
-        }
-        JsdocTagValue::Raw(text) => {
-            push_key(json, "kind");
-            push_string(json, "raw");
-            json.push(',');
-            push_key(json, "value");
-            push_string(json, text.value);
+impl<'a> From<&'a AnalysisOutput<'a>> for SerAnalysis<'a> {
+    fn from(a: &'a AnalysisOutput<'a>) -> Self {
+        Self {
+            tag_count: a.tag_count,
+            has_inline_tags: a.has_inline_tags,
+            tag_names: &a.tag_names,
+            parameter_names: &a.parameter_names,
+            custom_tag_names: &a.custom_tag_names,
         }
     }
-    json.push('}');
 }
 
-fn push_node_header(json: &mut String, node_type: &str, start: u32, end: u32) {
-    push_key(json, "type");
-    push_string(json, node_type);
-    json.push(',');
-    push_key(json, "start");
-    push_u32(json, start);
-    json.push(',');
-    push_key(json, "end");
-    push_u32(json, end);
-    json.push(',');
-    push_key(json, "range");
-    json.push('[');
-    push_u32(json, start);
-    json.push(',');
-    push_u32(json, end);
-    json.push(']');
+// ---------------------------------------------------------------------------
+// AST node serialization structs
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+struct SerBlock<'a> {
+    #[serde(rename = "type")]
+    node_type: &'static str,
+    start: u32,
+    end: u32,
+    range: [u32; 2],
+    description: &'a str,
+    #[serde(rename = "descriptionLines")]
+    description_lines: Vec<SerDescriptionLine<'a>>,
+    tags: Vec<SerTag<'a>>,
+    #[serde(rename = "inlineTags")]
+    inline_tags: Vec<SerInlineTag<'a>>,
 }
 
-fn inline_tag_format(format: JsdocInlineTagFormat) -> &'static str {
-    match format {
-        JsdocInlineTagFormat::Plain => "plain",
-        JsdocInlineTagFormat::Pipe => "pipe",
-        JsdocInlineTagFormat::Space => "space",
-        JsdocInlineTagFormat::Prefix => "prefix",
-        JsdocInlineTagFormat::Unknown => "unknown",
-    }
-}
-
-fn push_key(json: &mut String, key: &str) {
-    push_string(json, key);
-    json.push(':');
-}
-
-fn push_u32(json: &mut String, value: u32) {
-    json.push_str(&value.to_string());
-}
-
-fn push_usize(json: &mut String, value: usize) {
-    json.push_str(&value.to_string());
-}
-
-fn push_string_array(json: &mut String, values: &[&str]) {
-    json.push('[');
-    for (index, value) in values.iter().enumerate() {
-        if index > 0 {
-            json.push(',');
-        }
-        push_string(json, value);
-    }
-    json.push(']');
-}
-
-fn push_string(json: &mut String, value: &str) {
-    json.push('"');
-    for ch in value.chars() {
-        match ch {
-            '"' => json.push_str("\\\""),
-            '\\' => json.push_str("\\\\"),
-            '\n' => json.push_str("\\n"),
-            '\r' => json.push_str("\\r"),
-            '\t' => json.push_str("\\t"),
-            _ => json.push(ch),
+impl<'a> From<&'a JsdocBlock<'a>> for SerBlock<'a> {
+    fn from(block: &'a JsdocBlock<'a>) -> Self {
+        Self {
+            node_type: "JsdocBlock",
+            start: block.span.start,
+            end: block.span.end,
+            range: [block.span.start, block.span.end],
+            description: block.description.unwrap_or_default(),
+            description_lines: block
+                .description_lines
+                .iter()
+                .map(SerDescriptionLine::from)
+                .collect(),
+            tags: block.tags.iter().map(SerTag::from).collect(),
+            inline_tags: block
+                .inline_tags
+                .iter()
+                .map(SerInlineTag::from)
+                .collect(),
         }
     }
-    json.push('"');
+}
+
+#[derive(Serialize)]
+struct SerDescriptionLine<'a> {
+    #[serde(rename = "type")]
+    node_type: &'static str,
+    start: u32,
+    end: u32,
+    range: [u32; 2],
+    delimiter: &'a str,
+    #[serde(rename = "postDelimiter")]
+    post_delimiter: &'a str,
+    initial: &'a str,
+    description: &'a str,
+}
+
+impl<'a> From<&'a JsdocDescriptionLine<'a>> for SerDescriptionLine<'a> {
+    fn from(line: &'a JsdocDescriptionLine<'a>) -> Self {
+        Self {
+            node_type: "JsdocDescriptionLine",
+            start: line.span.start,
+            end: line.span.end,
+            range: [line.span.start, line.span.end],
+            delimiter: line.delimiter,
+            post_delimiter: line.post_delimiter,
+            initial: line.initial,
+            description: line.description,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct SerTag<'a> {
+    #[serde(rename = "type")]
+    node_type: &'static str,
+    start: u32,
+    end: u32,
+    range: [u32; 2],
+    tag: &'a str,
+    #[serde(rename = "rawType")]
+    raw_type: Option<&'a str>,
+    #[serde(rename = "parsedType")]
+    parsed_type: Option<()>,
+    name: Option<&'a str>,
+    optional: bool,
+    #[serde(rename = "defaultValue")]
+    default_value: Option<&'a str>,
+    description: &'a str,
+    #[serde(rename = "rawBody")]
+    raw_body: Option<&'a str>,
+    #[serde(rename = "typeLines")]
+    type_lines: Vec<SerTypeLine<'a>>,
+    #[serde(rename = "descriptionLines")]
+    description_lines: Vec<SerDescriptionLine<'a>>,
+    #[serde(rename = "inlineTags")]
+    inline_tags: Vec<SerInlineTag<'a>>,
+    body: Option<SerTagBody<'a>>,
+}
+
+impl<'a> From<&'a JsdocTag<'a>> for SerTag<'a> {
+    fn from(tag: &'a JsdocTag<'a>) -> Self {
+        Self {
+            node_type: "JsdocTag",
+            start: tag.span.start,
+            end: tag.span.end,
+            range: [tag.span.start, tag.span.end],
+            tag: tag.tag.value,
+            raw_type: tag.raw_type.map(|rt| rt.raw),
+            parsed_type: None,
+            name: tag.name.map(|n| n.raw),
+            optional: tag.optional,
+            default_value: tag.default_value,
+            description: tag.description.unwrap_or_default(),
+            raw_body: tag.raw_body,
+            type_lines: tag.type_lines.iter().map(SerTypeLine::from).collect(),
+            description_lines: tag
+                .description_lines
+                .iter()
+                .map(SerDescriptionLine::from)
+                .collect(),
+            inline_tags: tag
+                .inline_tags
+                .iter()
+                .map(SerInlineTag::from)
+                .collect(),
+            body: tag.body.as_ref().map(|b| SerTagBody::from(b.as_ref())),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct SerTypeLine<'a> {
+    #[serde(rename = "type")]
+    node_type: &'static str,
+    start: u32,
+    end: u32,
+    range: [u32; 2],
+    delimiter: &'a str,
+    #[serde(rename = "postDelimiter")]
+    post_delimiter: &'a str,
+    initial: &'a str,
+    #[serde(rename = "rawType")]
+    raw_type: &'a str,
+}
+
+impl<'a> From<&'a JsdocTypeLine<'a>> for SerTypeLine<'a> {
+    fn from(line: &'a JsdocTypeLine<'a>) -> Self {
+        Self {
+            node_type: "JsdocTypeLine",
+            start: line.span.start,
+            end: line.span.end,
+            range: [line.span.start, line.span.end],
+            delimiter: line.delimiter,
+            post_delimiter: line.post_delimiter,
+            initial: line.initial,
+            raw_type: line.raw_type,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct SerInlineTag<'a> {
+    #[serde(rename = "type")]
+    node_type: &'static str,
+    start: u32,
+    end: u32,
+    range: [u32; 2],
+    tag: &'a str,
+    #[serde(rename = "namepathOrURL")]
+    namepath_or_url: Option<&'a str>,
+    text: Option<&'a str>,
+    format: &'static str,
+    #[serde(rename = "rawBody")]
+    raw_body: Option<&'a str>,
+}
+
+impl<'a> From<&'a JsdocInlineTag<'a>> for SerInlineTag<'a> {
+    fn from(tag: &'a JsdocInlineTag<'a>) -> Self {
+        Self {
+            node_type: "JsdocInlineTag",
+            start: tag.span.start,
+            end: tag.span.end,
+            range: [tag.span.start, tag.span.end],
+            tag: tag.tag.value,
+            namepath_or_url: tag.namepath_or_url,
+            text: tag.text,
+            format: match tag.format {
+                JsdocInlineTagFormat::Plain => "plain",
+                JsdocInlineTagFormat::Pipe => "pipe",
+                JsdocInlineTagFormat::Space => "space",
+                JsdocInlineTagFormat::Prefix => "prefix",
+                JsdocInlineTagFormat::Unknown => "unknown",
+            },
+            raw_body: tag.raw_body,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind")]
+enum SerTagBody<'a> {
+    #[serde(rename = "generic")]
+    Generic(SerGenericTagBody<'a>),
+    #[serde(rename = "borrows")]
+    Borrows {
+        source: SerTagValue<'a>,
+        target: SerTagValue<'a>,
+    },
+    #[serde(rename = "raw")]
+    Raw { raw: &'a str },
+}
+
+impl<'a> From<&'a JsdocTagBody<'a>> for SerTagBody<'a> {
+    fn from(body: &'a JsdocTagBody<'a>) -> Self {
+        match body {
+            JsdocTagBody::Generic(g) => SerTagBody::Generic(SerGenericTagBody::from(g.as_ref())),
+            JsdocTagBody::Borrows(b) => SerTagBody::Borrows {
+                source: SerTagValue::from(&b.source),
+                target: SerTagValue::from(&b.target),
+            },
+            JsdocTagBody::Raw(r) => SerTagBody::Raw { raw: r.raw },
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct SerGenericTagBody<'a> {
+    #[serde(rename = "typeSource")]
+    type_source: Option<&'a str>,
+    value: Option<SerTagValue<'a>>,
+    separator: Option<&'static str>,
+    description: Option<&'a str>,
+}
+
+impl<'a> From<&'a JsdocGenericTagBody<'a>> for SerGenericTagBody<'a> {
+    fn from(body: &'a JsdocGenericTagBody<'a>) -> Self {
+        Self {
+            type_source: body.type_source.map(|ts| ts.raw),
+            value: body.value.as_ref().map(SerTagValue::from),
+            separator: body.separator.map(|_| "-"),
+            description: body.description,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind")]
+enum SerTagValue<'a> {
+    #[serde(rename = "parameter")]
+    Parameter {
+        path: &'a str,
+        optional: bool,
+        #[serde(rename = "defaultValue")]
+        default_value: Option<&'a str>,
+    },
+    #[serde(rename = "namepath")]
+    Namepath { raw: &'a str },
+    #[serde(rename = "identifier")]
+    Identifier { name: &'a str },
+    #[serde(rename = "raw")]
+    Raw { value: &'a str },
+}
+
+impl<'a> From<&'a JsdocTagValue<'a>> for SerTagValue<'a> {
+    fn from(value: &'a JsdocTagValue<'a>) -> Self {
+        match value {
+            JsdocTagValue::Parameter(p) => SerTagValue::Parameter {
+                path: p.path,
+                optional: p.optional,
+                default_value: p.default_value,
+            },
+            JsdocTagValue::Namepath(n) => SerTagValue::Namepath { raw: n.raw },
+            JsdocTagValue::Identifier(i) => SerTagValue::Identifier { name: i.name },
+            JsdocTagValue::Raw(t) => SerTagValue::Raw { value: t.value },
+        }
+    }
 }
 
 #[cfg(test)]
@@ -450,5 +402,24 @@ mod tests {
         assert!(json.contains("\"diagnosticCount\":0"));
         assert!(json.contains("\"parameterNames\":[\"id\"]"));
         assert!(json.contains("\"start\":10"));
+    }
+
+    #[test]
+    fn serializes_comment_without_derived_outputs() {
+        let allocator = Allocator::default();
+        let parsed = parse_comment(
+            &allocator,
+            "/** @param {string} id */",
+            0,
+            ParseOptions::default(),
+        );
+        let comment = parsed.comment.expect("expected comment");
+
+        let json = serialize_comment_json(&comment, None, None);
+
+        assert!(json.contains("\"type\":\"JsdocBlock\""));
+        assert!(json.contains("\"tag\":\"param\""));
+        // Should NOT be wrapped
+        assert!(!json.contains("\"comment\":{"));
     }
 }

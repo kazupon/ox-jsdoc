@@ -69,7 +69,9 @@ fn load_bucket_fixtures(bucket_dir: &Path, bucket: &str) -> Vec<PerfFixture> {
             continue;
         };
         let comment_texts = if extension == "jsdoc" {
-            vec![source_text.clone()]
+            // .jsdoc files may have a trailing newline; trim it so the parser
+            // sees a block that `ends_with("*/")`.
+            vec![source_text.trim_end().to_string()]
         } else {
             extract_jsdoc_blocks_from_oxc_parser(&path, &source_text)
         };
