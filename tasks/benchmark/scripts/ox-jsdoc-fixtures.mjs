@@ -1,10 +1,18 @@
+/**
+ * ox-jsdoc JS binding benchmark using mitata.
+ *
+ * Measures the JS-facing `parse()` against the same fixture corpus used by
+ * the Rust criterion benchmarks and the comment-parser baseline, providing
+ * an end-to-end comparison that includes NAPI overhead and JSON.parse.
+ */
+
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { bench, run } from "mitata";
-import { parse } from "comment-parser";
 import { parseSync } from "oxc-parser";
+import { parse } from "ox-jsdoc";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
@@ -38,13 +46,13 @@ const result = await run({
 });
 
 const rows = result.benchmarks.flatMap((benchmark) =>
-  benchmark.runs.map((run) => ({
-    fixture: run.name,
-    avgNs: run.stats.avg,
-    minNs: run.stats.min,
-    p75Ns: run.stats.p75,
-    p99Ns: run.stats.p99,
-    maxNs: run.stats.max,
+  benchmark.runs.map((r) => ({
+    fixture: r.name,
+    avgNs: r.stats.avg,
+    minNs: r.stats.min,
+    p75Ns: r.stats.p75,
+    p99Ns: r.stats.p99,
+    maxNs: r.stats.max,
   })),
 );
 
@@ -63,7 +71,12 @@ async function loadFixtures() {
 
   for (const bucket of buckets) {
     const bucketDir = path.join(fixturesRoot, bucket);
-    const entries = await readdir(bucketDir, { withFileTypes: true });
+    let entries;
+    try {
+      entries = await readdir(bucketDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
     for (const entry of entries) {
       if (!entry.isFile() || !isSupportedFixture(entry.name)) {
         continue;
@@ -71,7 +84,7 @@ async function loadFixtures() {
       const filePath = path.join(bucketDir, entry.name);
       const sourceText = await readFile(filePath, "utf8");
       const commentTexts = entry.name.endsWith(".jsdoc")
-        ? [sourceText]
+        ? [sourceText.trimEnd()]
         : extractJsdocBlocksWithOxcParser(filePath, sourceText);
       if (commentTexts.length === 0) {
         continue;

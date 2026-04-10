@@ -48,6 +48,9 @@ importers:
       mitata:
         specifier: ^1.0.34
         version: 1.0.34
+      ox-jsdoc:
+        specifier: workspace:*
+        version: link:../../napi/ox-jsdoc
       oxc-parser:
         specifier: ^0.124.0
         version: 0.124.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)

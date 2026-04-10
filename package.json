@@ -11,6 +11,7 @@
     "bench:ox-jsdoc:parser": "cargo bench -p ox_jsdoc_benchmark --bench parser",
     "bench:ox-jsdoc:validator": "cargo bench -p ox_jsdoc_benchmark --bench validator",
     "bench:ox-jsdoc:serializer": "cargo bench -p ox_jsdoc_benchmark --bench serializer",
+    "bench:ox-jsdoc:binding": "pnpm --filter @ox-jsdoc/benchmark benchmark:ox-jsdoc",
     "bench:comment-parser": "pnpm --filter @ox-jsdoc/benchmark benchmark:comment-parser"
   },
   "devDependencies": {

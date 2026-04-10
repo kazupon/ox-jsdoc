@@ -3,11 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "benchmark:comment-parser": "node --expose-gc ./scripts/comment-parser-fixtures.mjs"
+    "benchmark:comment-parser": "node --expose-gc ./scripts/comment-parser-fixtures.mjs",
+    "benchmark:ox-jsdoc": "node --expose-gc ./scripts/ox-jsdoc-fixtures.mjs"
   },
   "dependencies": {
     "comment-parser": "^1.4.1",
     "mitata": "^1.0.34",
+    "ox-jsdoc": "workspace:*",
     "oxc-parser": "^0.124.0"
   }
 }
