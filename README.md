@@ -5,7 +5,7 @@ High-performance JSDoc parser inspired by the `oxc` project.
 ## Status
 
 > [!WARNING]
-> This project is sitll WIP, so don't use in production.
+> This project is still WIP, so don't use in production.
 
 ## Development
 

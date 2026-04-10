@@ -256,9 +256,9 @@ The default visitor keys should match rule-author expectations:
 
 ```ts
 const jsdocVisitorKeys = {
-  JsdocBlock: ["descriptionLines", "tags", "inlineTags"],
+  JsdocBlock: ['descriptionLines', 'tags', 'inlineTags'],
   JsdocDescriptionLine: [],
-  JsdocTag: ["parsedType", "typeLines", "descriptionLines", "inlineTags"],
+  JsdocTag: ['parsedType', 'typeLines', 'descriptionLines', 'inlineTags'],
   JsdocTypeLine: [],
   JsdocInlineTag: [],
   JsdocText: []
@@ -563,7 +563,7 @@ Example:
 
 ```ts
 interface JsdocBlock {
-  type: "JsdocBlock"
+  type: 'JsdocBlock'
   range: [number, number]
   description: string
   descriptionLines: JsdocDescriptionLine[]
@@ -574,7 +574,7 @@ interface JsdocBlock {
 
 ```ts
 interface JsdocTag {
-  type: "JsdocTag"
+  type: 'JsdocTag'
   range: [number, number]
   tag: string
   rawType: string | null
@@ -592,7 +592,7 @@ interface JsdocTag {
 
 ```ts
 interface JsdocDescriptionLine {
-  type: "JsdocDescriptionLine"
+  type: 'JsdocDescriptionLine'
   range: [number, number]
   delimiter: string
   postDelimiter: string
@@ -603,7 +603,7 @@ interface JsdocDescriptionLine {
 
 ```ts
 interface JsdocTypeLine {
-  type: "JsdocTypeLine"
+  type: 'JsdocTypeLine'
   range: [number, number]
   delimiter: string
   postDelimiter: string
@@ -614,12 +614,12 @@ interface JsdocTypeLine {
 
 ```ts
 interface JsdocInlineTag {
-  type: "JsdocInlineTag"
+  type: 'JsdocInlineTag'
   range: [number, number]
   tag: string
   namepathOrURL: string | null
   text: string | null
-  format: "plain" | "pipe" | "space" | "prefix" | "unknown"
+  format: 'plain' | 'pipe' | 'space' | 'prefix' | 'unknown'
   rawBody: string | null
 }
 ```
