@@ -19,9 +19,9 @@ instead of eagerly normalizing everything.
 Examples:
 
 - `raw_body`
-- `TagValueToken`
-- broad `NamePathLike`
-- broad `ParameterPath`
+- `JsdocTagValue`
+- raw `JsdocNamepathSource`
+- raw-first `JsdocParameterName`
 
 ## Direction 3. Split nodes when their semantic roles differ
 
@@ -30,9 +30,9 @@ just because their surface syntax looks similar.
 
 Examples:
 
-- `NamePathLike` vs `ParameterPath`
-- `TypeName` as a wrapper around `NamePathLike`
-- a dedicated `BorrowsTagBody`
+- `JsdocNamepathSource` vs `JsdocParameterName`
+- `JsdocTypeSource` as raw type syntax before a future `JsdocType`
+- a dedicated `JsdocBorrowsTagBody`
 
 This is close in spirit to how `oxc` distinguishes identifier roles.
 
@@ -86,14 +86,11 @@ This keeps the parser cheap while preserving enough information for validator,
 analyzer, formatter, and serializer layers.
 
 Descriptions should not be flattened into one string at parse time.
-They should preserve inline-tag boundaries:
+They should preserve line-level syntax and inline-tag boundaries:
 
 ```text
-Description.parts = [
-  Text(slice),
-  InlineTag(slice),
-  Text(slice)
-]
+JsdocBlock.description_lines = [JsdocDescriptionLine(slice)]
+JsdocBlock.inline_tags = [JsdocInlineTag(slice)]
 ```
 
 This is important for real-world API documentation where `{@link}` and

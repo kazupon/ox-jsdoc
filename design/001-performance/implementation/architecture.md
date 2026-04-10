@@ -4,7 +4,7 @@ The most natural implementation split is:
 
 1. **Scanner / parser**
    Input: comment text
-   Output: `JSDocComment<'a>`
+   Output: `JsdocBlock<'a>`
 
 2. **Validator**
    Input: AST + mode / tag dictionary
@@ -38,7 +38,7 @@ Implement the first parser crate / module skeleton around:
 - parser diagnostics helpers
 
 This step should implement the public parser entrypoint and enough internal
-state to parse a complete JSDoc block into `JSDocComment<'a>`.
+state to parse a complete JSDoc block into `JsdocBlock<'a>`.
 It should not expose a public token / event stream.
 
 ### Step 2. Minimal parser behavior
@@ -47,8 +47,8 @@ Implement the smallest parser behavior that exercises the performance contract:
 
 - block comment boundary recognition
 - line-prefix stripping
-- top-level `Description`
-- block tags with `GenericTagBody`
+- top-level `description` plus `JsdocDescriptionLine` entries
+- block tags with `JsdocTagBody::Generic`
 - inline tags in descriptions
 - `raw_body` preservation
 - borrowed-slice-first string fields
