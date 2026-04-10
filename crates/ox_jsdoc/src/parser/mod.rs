@@ -10,7 +10,7 @@ mod scanner;
 use oxc_allocator::{Allocator, Box as ArenaBox};
 use oxc_diagnostics::OxcDiagnostic;
 
-use crate::ast::JSDocComment;
+use crate::ast::JsdocBlock;
 
 pub use checkpoint::{Checkpoint, FenceState, QuoteKind};
 pub use context::ParserContext;
@@ -39,7 +39,7 @@ impl Default for ParseOptions {
 #[derive(Debug)]
 pub struct ParseOutput<'a> {
     /// Parsed AST, absent when the input is not a complete JSDoc block.
-    pub comment: Option<ArenaBox<'a, JSDocComment<'a>>>,
+    pub comment: Option<ArenaBox<'a, JsdocBlock<'a>>>,
     /// Parser diagnostics collected during structural parsing and recovery.
     pub diagnostics: Vec<OxcDiagnostic>,
 }
@@ -62,7 +62,7 @@ mod tests {
     use oxc_allocator::Allocator;
     use oxc_diagnostics::OxcDiagnostic;
 
-    use crate::ast::{BlockTagBody, DescriptionPart, TagValueToken};
+    use crate::ast::{JsdocTagBody, JsdocTagValue};
 
     use super::{ParseOptions, parse_comment};
 
@@ -86,18 +86,11 @@ mod tests {
         assert_eq!(comment.span.end, 19);
         assert_eq!(comment.tags.len(), 0);
 
-        let description = comment.description.as_ref().expect("expected description");
-        assert_eq!(description.span.start, 14);
-        assert_eq!(description.span.end, 17);
-        assert_eq!(description.parts.len(), 1);
-        match &description.parts[0] {
-            DescriptionPart::Text(text) => {
-                assert_eq!(text.span.start, 14);
-                assert_eq!(text.span.end, 16);
-                assert_eq!(text.value, "ok");
-            }
-            _ => panic!("expected text description"),
-        }
+        assert_eq!(comment.description, Some("ok"));
+        assert_eq!(comment.description_lines.len(), 1);
+        assert_eq!(comment.description_lines[0].span.start, 14);
+        assert_eq!(comment.description_lines[0].span.end, 17);
+        assert_eq!(comment.description_lines[0].description, "ok");
     }
 
     #[test]
@@ -130,12 +123,9 @@ mod tests {
 
         assert!(output.diagnostics.is_empty());
         let comment = output.comment.expect("expected a comment AST");
-        let description = comment.description.as_ref().expect("expected description");
-        assert_eq!(description.parts.len(), 1);
-        match &description.parts[0] {
-            DescriptionPart::Text(text) => assert_eq!(text.value, "Find a user."),
-            _ => panic!("expected text part"),
-        }
+        assert_eq!(comment.description, Some("Find a user."));
+        assert_eq!(comment.description_lines.len(), 1);
+        assert_eq!(comment.description_lines[0].description, "Find a user.");
     }
 
     #[test]
@@ -150,18 +140,13 @@ mod tests {
 
         assert!(output.diagnostics.is_empty());
         let comment = output.comment.expect("expected a comment AST");
-        let description = comment.description.as_ref().expect("expected description");
-        assert_eq!(description.parts.len(), 3);
-        match &description.parts[1] {
-            DescriptionPart::InlineTag(tag) => {
-                assert_eq!(tag.tag_name.value, "link");
-                assert_eq!(
-                    tag.body.as_ref().expect("expected inline tag body").raw,
-                    "UserService"
-                );
-            }
-            _ => panic!("expected inline tag part"),
-        }
+        assert_eq!(
+            comment.description,
+            Some("See {@link UserService} for details.")
+        );
+        assert_eq!(comment.inline_tags.len(), 1);
+        assert_eq!(comment.inline_tags[0].tag.value, "link");
+        assert_eq!(comment.inline_tags[0].namepath_or_url, Some("UserService"));
     }
 
     #[test]
@@ -178,30 +163,26 @@ mod tests {
         let comment = output.comment.expect("expected a comment AST");
         assert_eq!(comment.tags.len(), 1);
         let tag = &comment.tags[0];
-        assert_eq!(tag.tag_name.value, "param");
+        assert_eq!(tag.tag.value, "param");
         assert_eq!(
-            tag.raw_body.as_ref().expect("expected raw body").value,
+            tag.raw_body.expect("expected raw body"),
             "{string} id - The user ID"
         );
+        assert_eq!(tag.raw_type.expect("expected raw type").raw, "string");
+        assert_eq!(tag.name.expect("expected name").raw, "id");
+        assert_eq!(tag.description, Some("The user ID"));
 
         match tag.body.as_ref().expect("expected block tag body").as_ref() {
-            BlockTagBody::Generic(body) => {
-                assert_eq!(
-                    body.type_expression.as_ref().expect("expected type").raw,
-                    "string"
-                );
-                match body.value.as_ref().expect("expected value").as_ref() {
-                    TagValueToken::Parameter(parameter) => {
-                        assert_eq!(parameter.path.raw, "id");
+            JsdocTagBody::Generic(body) => {
+                assert_eq!(body.type_source.expect("expected type").raw, "string");
+                match body.value.as_ref().expect("expected value") {
+                    JsdocTagValue::Parameter(parameter) => {
+                        assert_eq!(parameter.path, "id");
                         assert!(!parameter.optional);
                     }
                     _ => panic!("expected parameter value"),
                 }
-                let description = body.description.as_ref().expect("expected description");
-                match &description.parts[0] {
-                    DescriptionPart::Text(text) => assert_eq!(text.value, "The user ID"),
-                    _ => panic!("expected text description"),
-                }
+                assert_eq!(body.description, Some("The user ID"));
             }
             _ => panic!("expected generic body"),
         }
@@ -220,8 +201,8 @@ mod tests {
         assert!(output.diagnostics.is_empty());
         let comment = output.comment.expect("expected a comment AST");
         assert_eq!(comment.tags.len(), 2);
-        assert_eq!(comment.tags[0].tag_name.value, "param");
-        assert_eq!(comment.tags[1].tag_name.value, "returns");
+        assert_eq!(comment.tags[0].tag.value, "param");
+        assert_eq!(comment.tags[1].tag.value, "returns");
     }
 
     #[test]
@@ -236,18 +217,11 @@ mod tests {
 
         assert_single_diagnostic_contains(&output.diagnostics, "inline tag is not closed");
         let comment = output.comment.expect("expected a comment AST");
-        let description = comment.description.as_ref().expect("expected description");
-        assert_eq!(description.parts.len(), 2);
-        match &description.parts[0] {
-            DescriptionPart::Text(text) => assert_eq!(text.value, "See "),
-            _ => panic!("expected leading text"),
-        }
-        match &description.parts[1] {
-            DescriptionPart::Text(text) => {
-                assert_eq!(text.value, "{@link UserService for details.")
-            }
-            _ => panic!("expected text fallback"),
-        }
+        assert_eq!(
+            comment.description,
+            Some("See {@link UserService for details.")
+        );
+        assert!(comment.inline_tags.is_empty());
     }
 
     #[test]
@@ -265,21 +239,16 @@ mod tests {
         assert!(comment.description.is_none());
         assert_eq!(comment.tags.len(), 1);
         let tag = &comment.tags[0];
-        assert_eq!(tag.tag_name.value, "param");
+        assert_eq!(tag.tag.value, "param");
         assert_eq!(
-            tag.raw_body.as_ref().expect("expected raw body").value,
+            tag.raw_body.expect("expected raw body"),
             "{Object.<string, number> options"
         );
         match tag.body.as_ref().expect("expected body").as_ref() {
-            BlockTagBody::Generic(body) => {
-                assert!(body.type_expression.is_none());
-                match body
-                    .value
-                    .as_ref()
-                    .expect("expected recovered value")
-                    .as_ref()
-                {
-                    TagValueToken::NamePath(name_path) => {
+            JsdocTagBody::Generic(body) => {
+                assert!(body.type_source.is_none());
+                match body.value.as_ref().expect("expected recovered value") {
+                    JsdocTagValue::Namepath(name_path) => {
                         assert_eq!(name_path.raw, "{Object.<string,");
                     }
                     _ => panic!("expected name path recovered value"),
@@ -302,7 +271,7 @@ mod tests {
         assert!(output.diagnostics.is_empty());
         let comment = output.comment.expect("expected a comment AST");
         assert_eq!(comment.tags.len(), 2);
-        assert_eq!(comment.tags[0].tag_name.value, "example");
-        assert_eq!(comment.tags[1].tag_name.value, "returns");
+        assert_eq!(comment.tags[0].tag.value, "example");
+        assert_eq!(comment.tags[1].tag.value, "returns");
     }
 }

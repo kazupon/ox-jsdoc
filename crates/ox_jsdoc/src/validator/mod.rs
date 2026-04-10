@@ -9,7 +9,7 @@
 
 use oxc_diagnostics::OxcDiagnostic;
 
-use crate::ast::{BlockTag, BlockTagBody, JSDocComment};
+use crate::ast::{JsdocBlock, JsdocTag, JsdocTagBody};
 
 /// Validation rule set.
 ///
@@ -58,10 +58,7 @@ pub enum ValidatorDiagnosticKind {
 }
 
 /// Validate tag-level requirements for a parsed comment.
-pub fn validate_comment(
-    comment: &JSDocComment<'_>,
-    options: ValidationOptions,
-) -> ValidationOutput {
+pub fn validate_comment(comment: &JsdocBlock<'_>, options: ValidationOptions) -> ValidationOutput {
     let mut diagnostics = Vec::new();
 
     for tag in &comment.tags {
@@ -72,17 +69,17 @@ pub fn validate_comment(
 }
 
 fn validate_tag(
-    tag: &BlockTag<'_>,
+    tag: &JsdocTag<'_>,
     options: ValidationOptions,
     diagnostics: &mut Vec<OxcDiagnostic>,
 ) {
-    let Some(spec) = lookup_tag_spec(tag.tag_name.value, options.mode) else {
+    let Some(spec) = lookup_tag_spec(tag.tag.value, options.mode) else {
         // Unknown tags are common in framework ecosystems, so this is
         // configurable instead of hard-coded as an error.
         if !options.allow_unknown_tags {
             diagnostics.push(diagnostic(
                 ValidatorDiagnosticKind::UnknownTag,
-                tag.tag_name.value,
+                tag.tag.value,
             ));
         }
         return;
@@ -94,50 +91,45 @@ fn validate_tag(
         if spec.type_required {
             diagnostics.push(diagnostic(
                 ValidatorDiagnosticKind::MissingTypeExpression,
-                tag.tag_name.value,
+                tag.tag.value,
             ));
         }
         if spec.value_required {
             diagnostics.push(diagnostic(
                 ValidatorDiagnosticKind::MissingTagValue,
-                tag.tag_name.value,
+                tag.tag.value,
             ));
         }
         return;
     };
 
     match body.as_ref() {
-        BlockTagBody::Generic(body) => {
+        JsdocTagBody::Generic(body) => {
             // Generic bodies are intentionally simple. Specialized validation
             // can still use `raw_body` for source-shape checks such as borrows.
-            if spec.type_required && body.type_expression.is_none() {
+            if spec.type_required && body.type_source.is_none() {
                 diagnostics.push(diagnostic(
                     ValidatorDiagnosticKind::MissingTypeExpression,
-                    tag.tag_name.value,
+                    tag.tag.value,
                 ));
             }
             if spec.value_required && body.value.is_none() {
                 diagnostics.push(diagnostic(
                     ValidatorDiagnosticKind::MissingTagValue,
-                    tag.tag_name.value,
+                    tag.tag.value,
                 ));
             }
             if spec.requires_borrows_shape {
-                let raw_body = tag
-                    .raw_body
-                    .as_ref()
-                    .map(|raw| raw.value)
-                    .unwrap_or_default()
-                    .trim();
+                let raw_body = tag.raw_body.unwrap_or_default().trim();
                 if !raw_body.contains(" as ") {
                     diagnostics.push(diagnostic(
                         ValidatorDiagnosticKind::InvalidBorrowsShape,
-                        tag.tag_name.value,
+                        tag.tag.value,
                     ));
                 }
             }
         }
-        BlockTagBody::Borrows(_) => {}
+        JsdocTagBody::Borrows(_) | JsdocTagBody::Raw(_) => {}
     }
 }
 

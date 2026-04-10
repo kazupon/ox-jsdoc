@@ -7,9 +7,10 @@ use oxc_diagnostics::OxcDiagnostic;
 use oxc_span::Span;
 
 use crate::ast::{
-    BlockTag, BlockTagBody, Description, DescriptionPart, GenericTagBody, InlineTag, InlineTagBody,
-    JSDocComment, NamePathLike, ParameterPath, TagName, TagParameterName, TagValueToken, Text,
-    TypeExpression,
+    JsdocBlock, JsdocDescriptionLine, JsdocGenericTagBody, JsdocIdentifier, JsdocInlineTag,
+    JsdocInlineTagFormat, JsdocNamepathSource, JsdocParameterName, JsdocSeparator, JsdocTag,
+    JsdocTagBody, JsdocTagName, JsdocTagNameValue, JsdocTagValue, JsdocText, JsdocTypeLine,
+    JsdocTypeSource,
 };
 
 use super::{
@@ -150,10 +151,16 @@ impl<'a> ParserContext<'a> {
         let tags = self.parse_tag_sections(&tag_sections);
 
         let comment = ArenaBox::new_in(
-            JSDocComment {
+            JsdocBlock {
                 span: Span::new(self.base_offset, end),
-                description,
+                delimiter: "/**",
+                post_delimiter: "",
+                terminal: "*/",
+                line_end: "",
+                description: description.text,
+                description_lines: description.lines,
                 tags,
+                inline_tags: description.inline_tags,
             },
             self.allocator,
         );
@@ -236,48 +243,88 @@ impl<'a> ParserContext<'a> {
         (description_lines, tag_sections)
     }
 
-    fn parse_tag_sections(&mut self, sections: &[TagSection<'a>]) -> ArenaVec<'a, BlockTag<'a>> {
+    fn parse_tag_sections(&mut self, sections: &[TagSection<'a>]) -> ArenaVec<'a, JsdocTag<'a>> {
         let mut tags = ArenaVec::new_in(self.allocator);
         for section in sections {
-            tags.push(self.parse_block_tag(section));
+            tags.push(self.parse_jsdoc_tag(section));
         }
         tags
     }
 
-    fn parse_block_tag(&mut self, section: &TagSection<'a>) -> BlockTag<'a> {
+    fn parse_jsdoc_tag(&mut self, section: &TagSection<'a>) -> JsdocTag<'a> {
         // Preserve raw body separately from the structured parse so validators
         // and downstream tools can inspect the exact post-tag text.
-        let raw_body = self.normalize_lines(&section.body_lines).map(|normalized| {
-            ArenaBox::new_in(
-                Text {
-                    span: normalized.span,
-                    value: normalized.text,
-                },
-                self.allocator,
+        let normalized = self.normalize_lines(&section.body_lines);
+        let parsed_body = normalized.map(|normalized| self.parse_generic_tag_body(normalized));
+
+        let (
+            raw_type,
+            name,
+            optional,
+            default_value,
+            description,
+            type_lines,
+            description_lines,
+            inline_tags,
+            body,
+            raw_body,
+        ) = if let Some(parsed_body) = parsed_body {
+            (
+                parsed_body.raw_type,
+                parsed_body.name,
+                parsed_body.optional,
+                parsed_body.default_value,
+                parsed_body.description.text,
+                parsed_body.type_lines,
+                parsed_body.description.lines,
+                parsed_body.description.inline_tags,
+                Some(ArenaBox::new_in(
+                    JsdocTagBody::Generic(ArenaBox::new_in(parsed_body.body, self.allocator)),
+                    self.allocator,
+                )),
+                Some(parsed_body.raw_body),
             )
-        });
+        } else {
+            (
+                None,
+                None,
+                false,
+                None,
+                None,
+                ArenaVec::new_in(self.allocator),
+                ArenaVec::new_in(self.allocator),
+                ArenaVec::new_in(self.allocator),
+                None,
+                None,
+            )
+        };
 
-        let body = self
-            .normalize_lines(&section.body_lines)
-            .map(|normalized| self.parse_generic_tag_body(normalized));
-
-        BlockTag {
+        JsdocTag {
             span: Span::new(section.tag_name_start, section.end),
-            tag_name: TagName {
+            tag: JsdocTagName {
                 span: Span::new(section.tag_name_start, section.tag_name_end),
                 value: section.tag_name,
             },
-            body: body.map(|body| {
-                ArenaBox::new_in(
-                    BlockTagBody::Generic(ArenaBox::new_in(body, self.allocator)),
-                    self.allocator,
-                )
-            }),
+            raw_type,
+            parsed_type: None,
+            name,
+            optional,
+            default_value,
+            description,
             raw_body,
+            delimiter: "*",
+            post_delimiter: " ",
+            post_tag: " ",
+            post_type: " ",
+            post_name: " ",
+            type_lines,
+            description_lines,
+            inline_tags,
+            body,
         }
     }
 
-    fn parse_generic_tag_body(&mut self, normalized: NormalizedText<'a>) -> GenericTagBody<'a> {
+    fn parse_generic_tag_body(&mut self, normalized: NormalizedText<'a>) -> ParsedTagBody<'a> {
         let mut cursor = 0usize;
         let bytes = normalized.text.as_bytes();
 
@@ -287,16 +334,13 @@ impl<'a> ParserContext<'a> {
 
         // `{...}` is optional and may contain nested braces. If it is malformed,
         // report the diagnostic and continue parsing the rest as value/text.
-        let type_expression = if bytes.get(cursor) == Some(&b'{') {
+        let type_source = if bytes.get(cursor) == Some(&b'{') {
             match find_matching_type_end(normalized.text, cursor) {
                 Some(end) => {
                     let raw = &normalized.text[cursor + 1..end];
                     let span = relative_span(normalized.span, cursor as u32, (end + 1) as u32);
                     cursor = end + 1;
-                    Some(ArenaBox::new_in(
-                        TypeExpression { span, raw },
-                        self.allocator,
-                    ))
+                    Some(JsdocTypeSource { span, raw })
                 }
                 None => {
                     self.diagnostics
@@ -307,6 +351,17 @@ impl<'a> ParserContext<'a> {
         } else {
             None
         };
+
+        let mut type_lines = ArenaVec::new_in(self.allocator);
+        if let Some(type_source) = type_source {
+            type_lines.push(JsdocTypeLine {
+                span: type_source.span,
+                delimiter: "*",
+                post_delimiter: " ",
+                initial: "",
+                raw_type: type_source.raw,
+            });
+        }
 
         while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
             cursor += 1;
@@ -319,79 +374,110 @@ impl<'a> ParserContext<'a> {
             let token = &normalized.text[cursor..token_end];
             let span = relative_span(normalized.span, cursor as u32, token_end as u32);
             cursor = token_end;
-            Some(ArenaBox::new_in(
-                parse_tag_value_token(token, span),
-                self.allocator,
-            ))
+            Some(parse_tag_value_token(token, span))
         } else {
             None
         };
+        let (name, optional, default_value) = tag_value_name(value.as_ref());
 
         // JSDoc descriptions commonly use `-` as a separator after the value.
-        let mut remainder = normalized.text[cursor..].trim_start();
+        let mut separator = None;
+        let mut remainder_start = cursor + leading_whitespace_len(&normalized.text[cursor..]);
+        let mut remainder = &normalized.text[remainder_start..];
         if let Some(rest) = remainder.strip_prefix("- ") {
+            separator = Some(JsdocSeparator::Dash);
+            remainder_start += 2;
             remainder = rest;
         } else if remainder == "-" {
+            separator = Some(JsdocSeparator::Dash);
+            remainder_start = normalized.text.len();
             remainder = "";
         }
 
-        let description = self.parse_description_text(remainder, normalized.span);
+        let description_span = relative_span(
+            normalized.span,
+            remainder_start as u32,
+            normalized.text.len() as u32,
+        );
+        let description = self.parse_description_text(remainder, description_span);
+        let description_text = description.text;
 
-        GenericTagBody {
-            span: normalized.span,
-            type_expression,
-            value,
+        ParsedTagBody {
+            raw_body: normalized.text,
+            raw_type: type_source,
+            name,
+            optional,
+            default_value,
+            type_lines,
             description,
+            body: JsdocGenericTagBody {
+                span: normalized.span,
+                type_source,
+                value,
+                separator,
+                description: description_text,
+            },
         }
     }
 
     fn parse_description_lines(
         &mut self,
         lines: &[scanner::LogicalLine<'a>],
-    ) -> Option<ArenaBox<'a, Description<'a>>> {
-        let normalized = self.normalize_lines(lines)?;
-        self.parse_description_text(normalized.text, normalized.span)
-    }
-
-    fn parse_description_text(
-        &mut self,
-        text: &'a str,
-        span: Span,
-    ) -> Option<ArenaBox<'a, Description<'a>>> {
-        if text.trim().is_empty() {
-            return None;
+    ) -> ParsedDescription<'a> {
+        let mut description_lines = ArenaVec::new_in(self.allocator);
+        for line in lines {
+            if line.content.trim().is_empty() {
+                continue;
+            }
+            description_lines.push(JsdocDescriptionLine {
+                span: Span::new(line.content_start, line.content_end),
+                delimiter: "*",
+                post_delimiter: " ",
+                initial: "",
+                description: line.content.trim_end(),
+            });
         }
 
-        let mut parts = ArenaVec::new_in(self.allocator);
+        let Some(normalized) = self.normalize_lines(lines) else {
+            return ParsedDescription {
+                text: None,
+                lines: description_lines,
+                inline_tags: ArenaVec::new_in(self.allocator),
+            };
+        };
+        let mut description = self.parse_description_text(normalized.text, normalized.span);
+        description.lines = description_lines;
+        description
+    }
+
+    fn parse_description_text(&mut self, text: &'a str, span: Span) -> ParsedDescription<'a> {
+        let mut lines = ArenaVec::new_in(self.allocator);
+        let mut inline_tags = ArenaVec::new_in(self.allocator);
+
+        if text.trim().is_empty() {
+            return ParsedDescription {
+                text: None,
+                lines,
+                inline_tags,
+            };
+        }
+
+        lines.push(JsdocDescriptionLine {
+            span,
+            delimiter: "*",
+            post_delimiter: " ",
+            initial: "",
+            description: text,
+        });
         let mut cursor = 0usize;
 
         while let Some(relative_start) = text[cursor..].find("{@") {
             let inline_start = cursor + relative_start;
-            if inline_start > cursor {
-                let value = self.allocator.alloc_str(&text[cursor..inline_start]);
-                parts.push(DescriptionPart::Text(ArenaBox::new_in(
-                    Text {
-                        span: relative_span(span, cursor as u32, inline_start as u32),
-                        value,
-                    },
-                    self.allocator,
-                )));
-            }
-
             let Some(relative_end) = text[inline_start + 2..].find('}') else {
                 // Recovery strategy: keep the unterminated inline tag as text
                 // so consumers do not lose source content.
                 self.diagnostics
                     .push(diagnostic(ParserDiagnosticKind::UnclosedInlineTag));
-                let value = self.allocator.alloc_str(&text[inline_start..]);
-                parts.push(DescriptionPart::Text(ArenaBox::new_in(
-                    Text {
-                        span: relative_span(span, inline_start as u32, text.len() as u32),
-                        value,
-                    },
-                    self.allocator,
-                )));
-                cursor = text.len();
                 break;
             };
 
@@ -402,14 +488,6 @@ impl<'a> ParserContext<'a> {
                 // then parsing resumes after `{@`.
                 self.diagnostics
                     .push(diagnostic(ParserDiagnosticKind::InvalidInlineTagStart));
-                let value = self.allocator.alloc_str("{@");
-                parts.push(DescriptionPart::Text(ArenaBox::new_in(
-                    Text {
-                        span: relative_span(span, inline_start as u32, (inline_start + 2) as u32),
-                        value,
-                    },
-                    self.allocator,
-                )));
                 cursor = inline_start + 2;
                 continue;
             };
@@ -417,53 +495,31 @@ impl<'a> ParserContext<'a> {
             let inline_span = relative_span(span, inline_start as u32, (inline_end + 1) as u32);
             let tag_name_start = inline_start + 2;
             let tag_name_end = tag_name_start + tag_name.len();
-            let body_node = if body.is_empty() {
-                None
-            } else {
-                let body_start = inline_end + 1 - body.len();
-                Some(ArenaBox::new_in(
-                    InlineTagBody {
-                        span: relative_span(span, body_start as u32, inline_end as u32),
-                        raw: self.allocator.alloc_str(body),
-                    },
-                    self.allocator,
-                ))
-            };
-
-            parts.push(DescriptionPart::InlineTag(ArenaBox::new_in(
-                InlineTag {
-                    span: inline_span,
-                    tag_name: TagName {
-                        span: relative_span(span, tag_name_start as u32, tag_name_end as u32),
-                        value: self.allocator.alloc_str(tag_name),
-                    },
-                    body: body_node,
+            let (namepath_or_url, link_text, format) = parse_inline_tag_body(body);
+            inline_tags.push(JsdocInlineTag {
+                span: inline_span,
+                tag: JsdocTagName {
+                    span: relative_span(span, tag_name_start as u32, tag_name_end as u32),
+                    value: self.allocator.alloc_str(tag_name),
                 },
-                self.allocator,
-            )));
+                namepath_or_url,
+                text: link_text,
+                format,
+                raw_body: if body.is_empty() {
+                    None
+                } else {
+                    Some(self.allocator.alloc_str(body))
+                },
+            });
 
             cursor = inline_end + 1;
         }
 
-        if cursor < text.len() {
-            let value = self.allocator.alloc_str(&text[cursor..]);
-            parts.push(DescriptionPart::Text(ArenaBox::new_in(
-                Text {
-                    span: relative_span(span, cursor as u32, text.len() as u32),
-                    value,
-                },
-                self.allocator,
-            )));
+        ParsedDescription {
+            text: Some(text),
+            lines,
+            inline_tags,
         }
-
-        if parts.is_empty() {
-            return None;
-        }
-
-        Some(ArenaBox::new_in(
-            Description { span, parts },
-            self.allocator,
-        ))
     }
 
     fn normalize_lines(&self, lines: &[scanner::LogicalLine<'a>]) -> Option<NormalizedText<'a>> {
@@ -500,6 +556,25 @@ impl<'a> ParserContext<'a> {
             span,
         })
     }
+}
+
+#[derive(Debug)]
+struct ParsedDescription<'a> {
+    text: Option<&'a str>,
+    lines: ArenaVec<'a, JsdocDescriptionLine<'a>>,
+    inline_tags: ArenaVec<'a, JsdocInlineTag<'a>>,
+}
+
+#[derive(Debug)]
+struct ParsedTagBody<'a> {
+    raw_body: &'a str,
+    raw_type: Option<JsdocTypeSource<'a>>,
+    name: Option<JsdocTagNameValue<'a>>,
+    optional: bool,
+    default_value: Option<&'a str>,
+    type_lines: ArenaVec<'a, JsdocTypeLine<'a>>,
+    description: ParsedDescription<'a>,
+    body: JsdocGenericTagBody<'a>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -551,6 +626,43 @@ fn parse_inline_tag_header(inside: &str) -> Option<(&str, &str)> {
     Some((tag_name, body))
 }
 
+fn parse_inline_tag_body(body: &str) -> (Option<&str>, Option<&str>, JsdocInlineTagFormat) {
+    if body.is_empty() {
+        return (None, None, JsdocInlineTagFormat::Plain);
+    }
+
+    if let Some((target, text)) = body.split_once('|') {
+        return (
+            non_empty_trimmed(target),
+            non_empty_trimmed(text),
+            JsdocInlineTagFormat::Pipe,
+        );
+    }
+
+    if let Some((target, text)) = body.split_once(char::is_whitespace) {
+        return (
+            non_empty_trimmed(target),
+            non_empty_trimmed(text),
+            JsdocInlineTagFormat::Space,
+        );
+    }
+
+    (Some(body), None, JsdocInlineTagFormat::Plain)
+}
+
+fn non_empty_trimmed(value: &str) -> Option<&str> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+fn leading_whitespace_len(value: &str) -> usize {
+    value.len() - value.trim_start().len()
+}
+
 /// Find the closing `}` for a type expression, accounting for nested braces.
 fn find_matching_type_end(text: &str, start: usize) -> Option<usize> {
     let mut depth = 0usize;
@@ -599,15 +711,15 @@ fn find_value_end(text: &str, start: usize) -> usize {
 }
 
 /// Classify a tag value into the most useful AST token.
-fn parse_tag_value_token<'a>(token: &'a str, span: Span) -> TagValueToken<'a> {
+fn parse_tag_value_token<'a>(token: &'a str, span: Span) -> JsdocTagValue<'a> {
     if token.starts_with('[') && token.ends_with(']') {
         let inner = &token[1..token.len() - 1];
         let (path, default_value) = inner
             .split_once('=')
             .map_or((inner, None), |(path, value)| (path, Some(value)));
-        return TagValueToken::Parameter(TagParameterName {
+        return JsdocTagValue::Parameter(JsdocParameterName {
             span,
-            path: ParameterPath { span, raw: path },
+            path,
             optional: true,
             default_value,
         });
@@ -617,19 +729,66 @@ fn parse_tag_value_token<'a>(token: &'a str, span: Span) -> TagValueToken<'a> {
         .chars()
         .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$' | '.' | '[' | ']'))
     {
-        return TagValueToken::Parameter(TagParameterName {
+        return JsdocTagValue::Parameter(JsdocParameterName {
             span,
-            path: ParameterPath { span, raw: token },
+            path: token,
             optional: false,
             default_value: None,
         });
     }
 
     if token.contains(['.', '#', '~', '/', ':', '"', '\'', '(']) {
-        return TagValueToken::NamePath(NamePathLike { span, raw: token });
+        return JsdocTagValue::Namepath(JsdocNamepathSource { span, raw: token });
     }
 
-    TagValueToken::Raw(Text { span, value: token })
+    if token
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$'))
+    {
+        return JsdocTagValue::Identifier(JsdocIdentifier { span, name: token });
+    }
+
+    JsdocTagValue::Raw(JsdocText { span, value: token })
+}
+
+fn tag_value_name<'a>(
+    value: Option<&JsdocTagValue<'a>>,
+) -> (Option<JsdocTagNameValue<'a>>, bool, Option<&'a str>) {
+    match value {
+        Some(JsdocTagValue::Parameter(parameter)) => (
+            Some(JsdocTagNameValue {
+                span: parameter.span,
+                raw: parameter.path,
+            }),
+            parameter.optional,
+            parameter.default_value,
+        ),
+        Some(JsdocTagValue::Namepath(namepath)) => (
+            Some(JsdocTagNameValue {
+                span: namepath.span,
+                raw: namepath.raw,
+            }),
+            false,
+            None,
+        ),
+        Some(JsdocTagValue::Identifier(identifier)) => (
+            Some(JsdocTagNameValue {
+                span: identifier.span,
+                raw: identifier.name,
+            }),
+            false,
+            None,
+        ),
+        Some(JsdocTagValue::Raw(text)) => (
+            Some(JsdocTagNameValue {
+                span: text.span,
+                raw: text.value,
+            }),
+            false,
+            None,
+        ),
+        None => (None, false, None),
+    }
 }
 
 /// Convert offsets inside a normalized text span back to absolute spans.
@@ -647,7 +806,7 @@ mod tests {
     use oxc_allocator::Allocator;
     use oxc_span::Span;
 
-    use crate::ast::TagValueToken;
+    use crate::ast::JsdocTagValue;
     use crate::parser::diagnostic;
 
     use super::{
@@ -766,8 +925,8 @@ mod tests {
         let span = Span::new(10, 20);
 
         match parse_tag_value_token("[name=default]", span) {
-            TagValueToken::Parameter(parameter) => {
-                assert_eq!(parameter.path.raw, "name");
+            JsdocTagValue::Parameter(parameter) => {
+                assert_eq!(parameter.path, "name");
                 assert!(parameter.optional);
                 assert_eq!(parameter.default_value, Some("default"));
             }
@@ -775,14 +934,14 @@ mod tests {
         }
 
         match parse_tag_value_token("module:foo/bar", span) {
-            TagValueToken::NamePath(name_path) => {
+            JsdocTagValue::Namepath(name_path) => {
                 assert_eq!(name_path.raw, "module:foo/bar");
             }
             _ => panic!("expected name path"),
         }
 
         match parse_tag_value_token("name-with-dash", span) {
-            TagValueToken::Raw(text) => {
+            JsdocTagValue::Raw(text) => {
                 assert_eq!(text.value, "name-with-dash");
             }
             _ => panic!("expected raw token"),

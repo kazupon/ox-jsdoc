@@ -2,216 +2,320 @@
 // @license MIT
 //
 
-//! JSON serializer for the initial JS-facing shape.
+//! JSON serializer for the ESTree-like JS-facing shape.
 
 use crate::analyzer::AnalysisOutput;
 use crate::ast::{
-    BlockTag, BlockTagBody, Description, DescriptionPart, InlineTag, JSDocComment, TagValueToken,
-    Text,
+    JsdocBlock, JsdocDescriptionLine, JsdocGenericTagBody, JsdocInlineTag, JsdocInlineTagFormat,
+    JsdocTag, JsdocTagBody, JsdocTagValue, JsdocTypeLine,
 };
 use crate::validator::ValidationOutput;
 
 /// Serialize a parsed comment and optional derived outputs to JSON.
 ///
-/// This writes directly into a `String` instead of building a `serde_json`
-/// tree. The serializer is part of the hot path for JS-facing consumers, so it
-/// keeps allocation and object construction explicit.
+/// The Rust AST uses concrete node types and `Span`. The JS-facing shape emits
+/// ESTree-like `type`, `start`, `end`, and `range` fields.
 pub fn serialize_comment_json(
-    comment: &JSDocComment<'_>,
+    comment: &JsdocBlock<'_>,
     validation: Option<&ValidationOutput>,
     analysis: Option<&AnalysisOutput<'_>>,
 ) -> String {
     let mut json = String::new();
-    json.push('{');
-    push_key(&mut json, "span");
-    push_span(&mut json, comment.span.start, comment.span.end);
-    json.push(',');
-    push_key(&mut json, "description");
-    match comment.description.as_ref() {
-        Some(description) => push_description(&mut json, description),
-        None => json.push_str("null"),
-    }
-    json.push(',');
-    push_key(&mut json, "tags");
-    json.push('[');
-    for (index, tag) in comment.tags.iter().enumerate() {
-        if index > 0 {
-            json.push(',');
-        }
-        push_block_tag(&mut json, tag);
-    }
-    json.push(']');
+    push_block(&mut json, comment);
 
-    // Validation and analysis are optional envelopes so callers can decide how
-    // much post-parse work to expose.
+    if validation.is_none() && analysis.is_none() {
+        return json;
+    }
+
+    // Wrap only when derived outputs are requested, keeping parser-only output
+    // close to the AST root shape.
+    let mut wrapped = String::new();
+    wrapped.push('{');
+    push_key(&mut wrapped, "comment");
+    wrapped.push_str(&json);
+
     if let Some(validation) = validation {
-        json.push(',');
-        push_key(&mut json, "validation");
-        json.push('{');
-        push_key(&mut json, "diagnosticCount");
-        json.push_str(&validation.diagnostics.len().to_string());
-        json.push('}');
+        wrapped.push(',');
+        push_key(&mut wrapped, "validation");
+        wrapped.push('{');
+        push_key(&mut wrapped, "diagnosticCount");
+        push_usize(&mut wrapped, validation.diagnostics.len());
+        wrapped.push('}');
     }
 
     if let Some(analysis) = analysis {
-        json.push(',');
-        push_key(&mut json, "analysis");
-        json.push('{');
-        push_key(&mut json, "tagCount");
-        json.push_str(&analysis.tag_count.to_string());
-        json.push(',');
-        push_key(&mut json, "hasInlineTags");
-        json.push_str(if analysis.has_inline_tags {
+        wrapped.push(',');
+        push_key(&mut wrapped, "analysis");
+        wrapped.push('{');
+        push_key(&mut wrapped, "tagCount");
+        push_usize(&mut wrapped, analysis.tag_count);
+        wrapped.push(',');
+        push_key(&mut wrapped, "hasInlineTags");
+        wrapped.push_str(if analysis.has_inline_tags {
             "true"
         } else {
             "false"
         });
-        json.push(',');
-        push_key(&mut json, "tagNames");
-        push_string_array(&mut json, &analysis.tag_names);
-        json.push(',');
-        push_key(&mut json, "parameterNames");
-        push_string_array(&mut json, &analysis.parameter_names);
-        json.push(',');
-        push_key(&mut json, "customTagNames");
-        push_string_array(&mut json, &analysis.custom_tag_names);
-        json.push('}');
+        wrapped.push(',');
+        push_key(&mut wrapped, "tagNames");
+        push_string_array(&mut wrapped, &analysis.tag_names);
+        wrapped.push(',');
+        push_key(&mut wrapped, "parameterNames");
+        push_string_array(&mut wrapped, &analysis.parameter_names);
+        wrapped.push(',');
+        push_key(&mut wrapped, "customTagNames");
+        push_string_array(&mut wrapped, &analysis.custom_tag_names);
+        wrapped.push('}');
     }
 
-    json.push('}');
-    json
+    wrapped.push('}');
+    wrapped
 }
 
-fn push_description(json: &mut String, description: &Description<'_>) {
+fn push_block(json: &mut String, block: &JsdocBlock<'_>) {
     json.push('{');
-    push_key(json, "span");
-    push_span(json, description.span.start, description.span.end);
+    push_node_header(json, "JsdocBlock", block.span.start, block.span.end);
     json.push(',');
-    push_key(json, "parts");
+    push_key(json, "description");
+    push_string(json, block.description.unwrap_or_default());
+    json.push(',');
+    push_key(json, "descriptionLines");
+    push_description_lines(json, &block.description_lines);
+    json.push(',');
+    push_key(json, "tags");
     json.push('[');
-    for (index, part) in description.parts.iter().enumerate() {
+    for (index, tag) in block.tags.iter().enumerate() {
         if index > 0 {
             json.push(',');
         }
-        match part {
-            DescriptionPart::Text(text) => push_text_part(json, text),
-            DescriptionPart::InlineTag(tag) => push_inline_tag_part(json, tag),
-        }
+        push_tag(json, tag);
     }
     json.push(']');
+    json.push(',');
+    push_key(json, "inlineTags");
+    push_inline_tags(json, &block.inline_tags);
     json.push('}');
 }
 
-/// Serialize a plain text description fragment.
-fn push_text_part(json: &mut String, text: &Text<'_>) {
+fn push_description_lines(json: &mut String, lines: &[JsdocDescriptionLine<'_>]) {
+    json.push('[');
+    for (index, line) in lines.iter().enumerate() {
+        if index > 0 {
+            json.push(',');
+        }
+        push_description_line(json, line);
+    }
+    json.push(']');
+}
+
+fn push_description_line(json: &mut String, line: &JsdocDescriptionLine<'_>) {
     json.push('{');
-    push_key(json, "kind");
-    push_string(json, "text");
+    push_node_header(json, "JsdocDescriptionLine", line.span.start, line.span.end);
     json.push(',');
-    push_key(json, "value");
-    push_string(json, text.value);
+    push_key(json, "delimiter");
+    push_string(json, line.delimiter);
     json.push(',');
-    push_key(json, "span");
-    push_span(json, text.span.start, text.span.end);
+    push_key(json, "postDelimiter");
+    push_string(json, line.post_delimiter);
+    json.push(',');
+    push_key(json, "initial");
+    push_string(json, line.initial);
+    json.push(',');
+    push_key(json, "description");
+    push_string(json, line.description);
     json.push('}');
 }
 
-/// Serialize an inline tag description fragment.
-fn push_inline_tag_part(json: &mut String, tag: &InlineTag<'_>) {
+fn push_tag(json: &mut String, tag: &JsdocTag<'_>) {
     json.push('{');
-    push_key(json, "kind");
-    push_string(json, "inlineTag");
+    push_node_header(json, "JsdocTag", tag.span.start, tag.span.end);
     json.push(',');
-    push_key(json, "tagName");
-    push_string(json, tag.tag_name.value);
+    push_key(json, "tag");
+    push_string(json, tag.tag.value);
     json.push(',');
-    push_key(json, "span");
-    push_span(json, tag.span.start, tag.span.end);
-    json.push(',');
-    push_key(json, "body");
-    match tag.body.as_ref() {
-        Some(body) => push_string(json, body.raw),
+    push_key(json, "rawType");
+    match tag.raw_type {
+        Some(raw_type) => push_string(json, raw_type.raw),
         None => json.push_str("null"),
     }
-    json.push('}');
-}
-
-/// Serialize a block tag with both raw and structured body forms.
-fn push_block_tag(json: &mut String, tag: &BlockTag<'_>) {
-    json.push('{');
-    push_key(json, "tagName");
-    push_string(json, tag.tag_name.value);
     json.push(',');
-    push_key(json, "span");
-    push_span(json, tag.span.start, tag.span.end);
+    push_key(json, "parsedType");
+    json.push_str("null");
+    json.push(',');
+    push_key(json, "name");
+    match tag.name {
+        Some(name) => push_string(json, name.raw),
+        None => json.push_str("null"),
+    }
+    json.push(',');
+    push_key(json, "optional");
+    json.push_str(if tag.optional { "true" } else { "false" });
+    json.push(',');
+    push_key(json, "defaultValue");
+    match tag.default_value {
+        Some(value) => push_string(json, value),
+        None => json.push_str("null"),
+    }
+    json.push(',');
+    push_key(json, "description");
+    push_string(json, tag.description.unwrap_or_default());
     json.push(',');
     push_key(json, "rawBody");
-    match tag.raw_body.as_ref() {
-        Some(raw) => push_string(json, raw.value),
+    match tag.raw_body {
+        Some(raw_body) => push_string(json, raw_body),
         None => json.push_str("null"),
     }
     json.push(',');
+    push_key(json, "typeLines");
+    push_type_lines(json, &tag.type_lines);
+    json.push(',');
+    push_key(json, "descriptionLines");
+    push_description_lines(json, &tag.description_lines);
+    json.push(',');
+    push_key(json, "inlineTags");
+    push_inline_tags(json, &tag.inline_tags);
+    json.push(',');
     push_key(json, "body");
     match tag.body.as_ref() {
-        Some(body) => match body.as_ref() {
-            BlockTagBody::Generic(body) => {
-                json.push('{');
-                push_key(json, "kind");
-                push_string(json, "generic");
-                json.push(',');
-                push_key(json, "typeExpression");
-                match body.type_expression.as_ref() {
-                    Some(type_expression) => push_string(json, type_expression.raw),
-                    None => json.push_str("null"),
-                }
-                json.push(',');
-                push_key(json, "value");
-                match body.value.as_ref() {
-                    Some(value) => push_tag_value(json, value.as_ref()),
-                    None => json.push_str("null"),
-                }
-                json.push(',');
-                push_key(json, "description");
-                match body.description.as_ref() {
-                    Some(description) => push_description(json, description),
-                    None => json.push_str("null"),
-                }
-                json.push('}');
-            }
-            BlockTagBody::Borrows(body) => {
-                json.push('{');
-                push_key(json, "kind");
-                push_string(json, "borrows");
-                json.push(',');
-                push_key(json, "source");
-                push_tag_value(json, &body.source);
-                json.push(',');
-                push_key(json, "target");
-                push_tag_value(json, &body.target);
-                json.push('}');
-            }
-        },
+        Some(body) => push_tag_body(json, body.as_ref()),
         None => json.push_str("null"),
     }
     json.push('}');
 }
 
-fn push_tag_value(json: &mut String, value: &TagValueToken<'_>) {
+fn push_type_lines(json: &mut String, lines: &[JsdocTypeLine<'_>]) {
+    json.push('[');
+    for (index, line) in lines.iter().enumerate() {
+        if index > 0 {
+            json.push(',');
+        }
+        json.push('{');
+        push_node_header(json, "JsdocTypeLine", line.span.start, line.span.end);
+        json.push(',');
+        push_key(json, "delimiter");
+        push_string(json, line.delimiter);
+        json.push(',');
+        push_key(json, "postDelimiter");
+        push_string(json, line.post_delimiter);
+        json.push(',');
+        push_key(json, "initial");
+        push_string(json, line.initial);
+        json.push(',');
+        push_key(json, "rawType");
+        push_string(json, line.raw_type);
+        json.push('}');
+    }
+    json.push(']');
+}
+
+fn push_inline_tags(json: &mut String, tags: &[JsdocInlineTag<'_>]) {
+    json.push('[');
+    for (index, tag) in tags.iter().enumerate() {
+        if index > 0 {
+            json.push(',');
+        }
+        push_inline_tag(json, tag);
+    }
+    json.push(']');
+}
+
+fn push_inline_tag(json: &mut String, tag: &JsdocInlineTag<'_>) {
     json.push('{');
-    match value {
-        TagValueToken::Raw(text) => {
+    push_node_header(json, "JsdocInlineTag", tag.span.start, tag.span.end);
+    json.push(',');
+    push_key(json, "tag");
+    push_string(json, tag.tag.value);
+    json.push(',');
+    push_key(json, "namepathOrURL");
+    match tag.namepath_or_url {
+        Some(value) => push_string(json, value),
+        None => json.push_str("null"),
+    }
+    json.push(',');
+    push_key(json, "text");
+    match tag.text {
+        Some(value) => push_string(json, value),
+        None => json.push_str("null"),
+    }
+    json.push(',');
+    push_key(json, "format");
+    push_string(json, inline_tag_format(tag.format));
+    json.push(',');
+    push_key(json, "rawBody");
+    match tag.raw_body {
+        Some(value) => push_string(json, value),
+        None => json.push_str("null"),
+    }
+    json.push('}');
+}
+
+fn push_tag_body(json: &mut String, body: &JsdocTagBody<'_>) {
+    match body {
+        JsdocTagBody::Generic(body) => push_generic_tag_body(json, body),
+        JsdocTagBody::Borrows(body) => {
+            json.push('{');
+            push_key(json, "kind");
+            push_string(json, "borrows");
+            json.push(',');
+            push_key(json, "source");
+            push_tag_value(json, &body.source);
+            json.push(',');
+            push_key(json, "target");
+            push_tag_value(json, &body.target);
+            json.push('}');
+        }
+        JsdocTagBody::Raw(body) => {
+            json.push('{');
             push_key(json, "kind");
             push_string(json, "raw");
             json.push(',');
-            push_key(json, "value");
-            push_string(json, text.value);
+            push_key(json, "raw");
+            push_string(json, body.raw);
+            json.push('}');
         }
-        TagValueToken::Parameter(parameter) => {
+    }
+}
+
+fn push_generic_tag_body(json: &mut String, body: &JsdocGenericTagBody<'_>) {
+    json.push('{');
+    push_key(json, "kind");
+    push_string(json, "generic");
+    json.push(',');
+    push_key(json, "typeSource");
+    match body.type_source {
+        Some(type_source) => push_string(json, type_source.raw),
+        None => json.push_str("null"),
+    }
+    json.push(',');
+    push_key(json, "value");
+    match body.value.as_ref() {
+        Some(value) => push_tag_value(json, value),
+        None => json.push_str("null"),
+    }
+    json.push(',');
+    push_key(json, "separator");
+    match body.separator {
+        Some(_) => push_string(json, "-"),
+        None => json.push_str("null"),
+    }
+    json.push(',');
+    push_key(json, "description");
+    match body.description {
+        Some(description) => push_string(json, description),
+        None => json.push_str("null"),
+    }
+    json.push('}');
+}
+
+fn push_tag_value(json: &mut String, value: &JsdocTagValue<'_>) {
+    json.push('{');
+    match value {
+        JsdocTagValue::Parameter(parameter) => {
             push_key(json, "kind");
             push_string(json, "parameter");
             json.push(',');
             push_key(json, "path");
-            push_string(json, parameter.path.raw);
+            push_string(json, parameter.path);
             json.push(',');
             push_key(json, "optional");
             json.push_str(if parameter.optional { "true" } else { "false" });
@@ -222,35 +326,72 @@ fn push_tag_value(json: &mut String, value: &TagValueToken<'_>) {
                 None => json.push_str("null"),
             }
         }
-        TagValueToken::NamePath(namepath) => {
+        JsdocTagValue::Namepath(namepath) => {
             push_key(json, "kind");
-            push_string(json, "namePath");
+            push_string(json, "namepath");
+            json.push(',');
+            push_key(json, "raw");
+            push_string(json, namepath.raw);
+        }
+        JsdocTagValue::Identifier(identifier) => {
+            push_key(json, "kind");
+            push_string(json, "identifier");
+            json.push(',');
+            push_key(json, "name");
+            push_string(json, identifier.name);
+        }
+        JsdocTagValue::Raw(text) => {
+            push_key(json, "kind");
+            push_string(json, "raw");
             json.push(',');
             push_key(json, "value");
-            push_string(json, namepath.raw);
+            push_string(json, text.value);
         }
     }
     json.push('}');
 }
 
-/// Push an object key, including quotes and the trailing colon.
+fn push_node_header(json: &mut String, node_type: &str, start: u32, end: u32) {
+    push_key(json, "type");
+    push_string(json, node_type);
+    json.push(',');
+    push_key(json, "start");
+    push_u32(json, start);
+    json.push(',');
+    push_key(json, "end");
+    push_u32(json, end);
+    json.push(',');
+    push_key(json, "range");
+    json.push('[');
+    push_u32(json, start);
+    json.push(',');
+    push_u32(json, end);
+    json.push(']');
+}
+
+fn inline_tag_format(format: JsdocInlineTagFormat) -> &'static str {
+    match format {
+        JsdocInlineTagFormat::Plain => "plain",
+        JsdocInlineTagFormat::Pipe => "pipe",
+        JsdocInlineTagFormat::Space => "space",
+        JsdocInlineTagFormat::Prefix => "prefix",
+        JsdocInlineTagFormat::Unknown => "unknown",
+    }
+}
+
 fn push_key(json: &mut String, key: &str) {
     push_string(json, key);
     json.push(':');
 }
 
-/// Push a byte span as `{ "start": ..., "end": ... }` without whitespace.
-fn push_span(json: &mut String, start: u32, end: u32) {
-    json.push('{');
-    push_key(json, "start");
-    json.push_str(&start.to_string());
-    json.push(',');
-    push_key(json, "end");
-    json.push_str(&end.to_string());
-    json.push('}');
+fn push_u32(json: &mut String, value: u32) {
+    json.push_str(&value.to_string());
 }
 
-/// Push a compact string array.
+fn push_usize(json: &mut String, value: usize) {
+    json.push_str(&value.to_string());
+}
+
 fn push_string_array(json: &mut String, values: &[&str]) {
     json.push('[');
     for (index, value) in values.iter().enumerate() {
@@ -262,7 +403,6 @@ fn push_string_array(json: &mut String, values: &[&str]) {
     json.push(']');
 }
 
-/// Push a JSON string with the escapes currently needed by parser output.
 fn push_string(json: &mut String, value: &str) {
     json.push('"');
     for ch in value.chars() {
@@ -304,8 +444,9 @@ mod tests {
 
         let json = serialize_comment_json(&comment, Some(&validation), Some(&analysis));
 
-        assert!(json.contains("\"tagName\":\"param\""));
-        assert!(json.contains("\"kind\":\"inlineTag\""));
+        assert!(json.contains("\"type\":\"JsdocBlock\""));
+        assert!(json.contains("\"tag\":\"param\""));
+        assert!(json.contains("\"type\":\"JsdocInlineTag\""));
         assert!(json.contains("\"diagnosticCount\":0"));
         assert!(json.contains("\"parameterNames\":[\"id\"]"));
         assert!(json.contains("\"start\":10"));

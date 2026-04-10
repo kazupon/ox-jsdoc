@@ -4,7 +4,7 @@
 
 //! Analyzer phase for consumer-oriented facts.
 
-use crate::ast::{BlockTagBody, DescriptionPart, JSDocComment, TagValueToken};
+use crate::ast::{JsdocBlock, JsdocTagBody, JsdocTagValue};
 
 /// Small derived summary intended for editor/tooling consumers.
 ///
@@ -25,20 +25,15 @@ pub struct AnalysisOutput<'a> {
 }
 
 /// Collect consumer-facing facts from a parsed comment.
-pub fn analyze_comment<'a>(comment: &'a JSDocComment<'a>) -> AnalysisOutput<'a> {
+pub fn analyze_comment<'a>(comment: &'a JsdocBlock<'a>) -> AnalysisOutput<'a> {
     let mut tag_names = Vec::new();
     let mut parameter_names = Vec::new();
     let mut custom_tag_names = Vec::new();
 
-    let has_inline_tags = comment.description.as_ref().is_some_and(|description| {
-        description
-            .parts
-            .iter()
-            .any(|part| matches!(part, DescriptionPart::InlineTag(_)))
-    });
+    let has_inline_tags = !comment.inline_tags.is_empty();
 
     for tag in &comment.tags {
-        let tag_name = tag.tag_name.value;
+        let tag_name = tag.tag.value;
         tag_names.push(tag_name);
         // Unknown/custom tags are useful for integrations such as framework
         // plugins, so keep them as data instead of emitting diagnostics here.
@@ -51,21 +46,23 @@ pub fn analyze_comment<'a>(comment: &'a JSDocComment<'a>) -> AnalysisOutput<'a> 
         };
 
         match body.as_ref() {
-            BlockTagBody::Generic(body) => {
+            JsdocTagBody::Generic(body) => {
                 // Only parameter-like tags expose their first value as a
                 // parameter name. Other tag values remain tag-specific.
                 if is_parameter_like_tag(tag_name)
                     && let Some(value) = body.value.as_ref()
                 {
-                    match value.as_ref() {
-                        TagValueToken::Parameter(parameter) => {
-                            parameter_names.push(parameter.path.raw);
+                    match value {
+                        JsdocTagValue::Parameter(parameter) => {
+                            parameter_names.push(parameter.path);
                         }
-                        TagValueToken::Raw(_) | TagValueToken::NamePath(_) => {}
+                        JsdocTagValue::Raw(_)
+                        | JsdocTagValue::Namepath(_)
+                        | JsdocTagValue::Identifier(_) => {}
                     }
                 }
             }
-            BlockTagBody::Borrows(_) => {}
+            JsdocTagBody::Borrows(_) | JsdocTagBody::Raw(_) => {}
         }
     }
 
