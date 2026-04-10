@@ -6,15 +6,25 @@
 
 use crate::ast::{BlockTagBody, DescriptionPart, JSDocComment, TagValueToken};
 
+/// Small derived summary intended for editor/tooling consumers.
+///
+/// The analyzer does not validate tag semantics. It extracts facts that are
+/// cheap to compute from an already parsed AST.
 #[derive(Debug)]
 pub struct AnalysisOutput<'a> {
+    /// Number of block tags in the comment.
     pub tag_count: usize,
+    /// All block tag names in source order.
     pub tag_names: Vec<&'a str>,
+    /// Parameter names collected from parameter-like tags.
     pub parameter_names: Vec<&'a str>,
+    /// Tag names not recognized by the built-in tag list.
     pub custom_tag_names: Vec<&'a str>,
+    /// Whether the top-level description contains at least one inline tag.
     pub has_inline_tags: bool,
 }
 
+/// Collect consumer-facing facts from a parsed comment.
 pub fn analyze_comment<'a>(comment: &'a JSDocComment<'a>) -> AnalysisOutput<'a> {
     let mut tag_names = Vec::new();
     let mut parameter_names = Vec::new();
@@ -30,6 +40,8 @@ pub fn analyze_comment<'a>(comment: &'a JSDocComment<'a>) -> AnalysisOutput<'a> 
     for tag in &comment.tags {
         let tag_name = tag.tag_name.value;
         tag_names.push(tag_name);
+        // Unknown/custom tags are useful for integrations such as framework
+        // plugins, so keep them as data instead of emitting diagnostics here.
         if !is_known_builtin_tag(tag_name) {
             custom_tag_names.push(tag_name);
         }
@@ -40,6 +52,8 @@ pub fn analyze_comment<'a>(comment: &'a JSDocComment<'a>) -> AnalysisOutput<'a> 
 
         match body.as_ref() {
             BlockTagBody::Generic(body) => {
+                // Only parameter-like tags expose their first value as a
+                // parameter name. Other tag values remain tag-specific.
                 if is_parameter_like_tag(tag_name)
                     && let Some(value) = body.value.as_ref()
                 {

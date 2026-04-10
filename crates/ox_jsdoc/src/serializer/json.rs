@@ -11,6 +11,11 @@ use crate::ast::{
 };
 use crate::validator::ValidationOutput;
 
+/// Serialize a parsed comment and optional derived outputs to JSON.
+///
+/// This writes directly into a `String` instead of building a `serde_json`
+/// tree. The serializer is part of the hot path for JS-facing consumers, so it
+/// keeps allocation and object construction explicit.
 pub fn serialize_comment_json(
     comment: &JSDocComment<'_>,
     validation: Option<&ValidationOutput>,
@@ -37,6 +42,8 @@ pub fn serialize_comment_json(
     }
     json.push(']');
 
+    // Validation and analysis are optional envelopes so callers can decide how
+    // much post-parse work to expose.
     if let Some(validation) = validation {
         json.push(',');
         push_key(&mut json, "validation");
@@ -95,6 +102,7 @@ fn push_description(json: &mut String, description: &Description<'_>) {
     json.push('}');
 }
 
+/// Serialize a plain text description fragment.
 fn push_text_part(json: &mut String, text: &Text<'_>) {
     json.push('{');
     push_key(json, "kind");
@@ -108,6 +116,7 @@ fn push_text_part(json: &mut String, text: &Text<'_>) {
     json.push('}');
 }
 
+/// Serialize an inline tag description fragment.
 fn push_inline_tag_part(json: &mut String, tag: &InlineTag<'_>) {
     json.push('{');
     push_key(json, "kind");
@@ -127,6 +136,7 @@ fn push_inline_tag_part(json: &mut String, tag: &InlineTag<'_>) {
     json.push('}');
 }
 
+/// Serialize a block tag with both raw and structured body forms.
 fn push_block_tag(json: &mut String, tag: &BlockTag<'_>) {
     json.push('{');
     push_key(json, "tagName");
@@ -223,11 +233,13 @@ fn push_tag_value(json: &mut String, value: &TagValueToken<'_>) {
     json.push('}');
 }
 
+/// Push an object key, including quotes and the trailing colon.
 fn push_key(json: &mut String, key: &str) {
     push_string(json, key);
     json.push(':');
 }
 
+/// Push a byte span as `{ "start": ..., "end": ... }` without whitespace.
 fn push_span(json: &mut String, start: u32, end: u32) {
     json.push('{');
     push_key(json, "start");
@@ -238,6 +250,7 @@ fn push_span(json: &mut String, start: u32, end: u32) {
     json.push('}');
 }
 
+/// Push a compact string array.
 fn push_string_array(json: &mut String, values: &[&str]) {
     json.push('[');
     for (index, value) in values.iter().enumerate() {
@@ -249,6 +262,7 @@ fn push_string_array(json: &mut String, values: &[&str]) {
     json.push(']');
 }
 
+/// Push a JSON string with the escapes currently needed by parser output.
 fn push_string(json: &mut String, value: &str) {
     json.push('"');
     for ch in value.chars() {

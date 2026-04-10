@@ -11,6 +11,10 @@ use oxc_diagnostics::OxcDiagnostic;
 
 use crate::ast::{BlockTag, BlockTagBody, JSDocComment};
 
+/// Validation rule set.
+///
+/// Modes are intentionally coarse for now. They let callers choose broad tag
+/// semantics without changing parser behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ValidationMode {
     JSDoc,
@@ -19,9 +23,12 @@ pub enum ValidationMode {
     Permissive,
 }
 
+/// Validator configuration.
 #[derive(Debug, Clone, Copy)]
 pub struct ValidationOptions {
+    /// Rule set used when interpreting known tags.
     pub mode: ValidationMode,
+    /// When true, unknown tags are treated as extension points.
     pub allow_unknown_tags: bool,
 }
 
@@ -34,11 +41,14 @@ impl Default for ValidationOptions {
     }
 }
 
+/// Validation diagnostics for a parsed comment.
 #[derive(Debug)]
 pub struct ValidationOutput {
+    /// Diagnostics emitted by tag-level semantic validation.
     pub diagnostics: Vec<OxcDiagnostic>,
 }
 
+/// Semantic validation failures after syntax parsing succeeds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ValidatorDiagnosticKind {
     UnknownTag,
@@ -47,6 +57,7 @@ pub enum ValidatorDiagnosticKind {
     InvalidBorrowsShape,
 }
 
+/// Validate tag-level requirements for a parsed comment.
 pub fn validate_comment(
     comment: &JSDocComment<'_>,
     options: ValidationOptions,
@@ -66,6 +77,8 @@ fn validate_tag(
     diagnostics: &mut Vec<OxcDiagnostic>,
 ) {
     let Some(spec) = lookup_tag_spec(tag.tag_name.value, options.mode) else {
+        // Unknown tags are common in framework ecosystems, so this is
+        // configurable instead of hard-coded as an error.
         if !options.allow_unknown_tags {
             diagnostics.push(diagnostic(
                 ValidatorDiagnosticKind::UnknownTag,
@@ -76,6 +89,8 @@ fn validate_tag(
     };
 
     let Some(body) = tag.body.as_ref() else {
+        // Missing bodies can imply both missing type and missing value,
+        // depending on the tag's declared shape.
         if spec.type_required {
             diagnostics.push(diagnostic(
                 ValidatorDiagnosticKind::MissingTypeExpression,
@@ -93,6 +108,8 @@ fn validate_tag(
 
     match body.as_ref() {
         BlockTagBody::Generic(body) => {
+            // Generic bodies are intentionally simple. Specialized validation
+            // can still use `raw_body` for source-shape checks such as borrows.
             if spec.type_required && body.type_expression.is_none() {
                 diagnostics.push(diagnostic(
                     ValidatorDiagnosticKind::MissingTypeExpression,
@@ -126,11 +143,15 @@ fn validate_tag(
 
 #[derive(Debug, Clone, Copy)]
 struct TagSpec {
+    /// Whether the tag requires a `{...}` type expression.
     type_required: bool,
+    /// Whether the tag requires a value token after the type expression.
     value_required: bool,
+    /// Whether the raw body must follow `source as target`.
     requires_borrows_shape: bool,
 }
 
+/// Look up the base requirements for a tag in the requested validation mode.
 fn lookup_tag_spec(tag_name: &str, mode: ValidationMode) -> Option<TagSpec> {
     let base = match tag_name {
         "param" | "arg" | "argument" | "property" | "prop" => TagSpec {
@@ -160,6 +181,7 @@ fn lookup_tag_spec(tag_name: &str, mode: ValidationMode) -> Option<TagSpec> {
     Some(adjust_spec_for_mode(base, mode, tag_name))
 }
 
+/// Apply mode-specific refinements to the shared tag table.
 fn adjust_spec_for_mode(spec: TagSpec, mode: ValidationMode, tag_name: &str) -> TagSpec {
     match (mode, tag_name) {
         (ValidationMode::TypeScript, "type") | (ValidationMode::Closure, "type") => TagSpec {
