@@ -1,0 +1,11 @@
+{
+  "description": "Description-heavy comment with inline tags and remarks.",
+  "source": "../gunshi",
+  "sourcePath": "../gunshi",
+  "category": "description-heavy",
+  "features": ["inline-tag", "remarks", "long-description"],
+  "expect": {
+    "parse": "ok",
+    "diagnostics": []
+  }
+}

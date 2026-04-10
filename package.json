@@ -5,7 +5,12 @@
   "scripts": {
     "test": "cargo test",
     "check": "cargo run -p xtask -- headers:check && cargo check",
-    "fmt": "vp fmt && cargo fmt"
+    "fmt": "vp fmt && cargo fmt",
+    "bench:ox-jsdoc": "cargo bench -p ox_jsdoc_benchmark",
+    "bench:ox-jsdoc:parser": "cargo bench -p ox_jsdoc_benchmark --bench parser",
+    "bench:ox-jsdoc:validator": "cargo bench -p ox_jsdoc_benchmark --bench validator",
+    "bench:ox-jsdoc:serializer": "cargo bench -p ox_jsdoc_benchmark --bench serializer",
+    "bench:comment-parser": "pnpm --filter @ox-jsdoc/benchmark benchmark:comment-parser"
   },
   "devDependencies": {
     "@kazupon/eslint-plugin": "^0.7.1",

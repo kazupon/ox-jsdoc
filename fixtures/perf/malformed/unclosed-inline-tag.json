@@ -1,0 +1,11 @@
+{
+  "description": "Malformed fixture with unclosed inline tag and unclosed type expression.",
+  "source": "refers/comment-parser",
+  "sourcePath": "refers/comment-parser",
+  "category": "malformed",
+  "features": ["inline-tag", "type-expression", "recovery"],
+  "expect": {
+    "parse": "recoverable",
+    "diagnostics": ["unclosed_inline_tag", "unclosed_type_expression"]
+  }
+}

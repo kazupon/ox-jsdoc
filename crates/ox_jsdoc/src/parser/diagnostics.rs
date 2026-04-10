@@ -4,6 +4,10 @@
 
 use oxc_diagnostics::OxcDiagnostic;
 
+/// Parser-level recovery and structural errors.
+///
+/// These diagnostics describe malformed comment syntax. Tag-policy validation
+/// lives in `validator`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParserDiagnosticKind {
     NotAJSDocBlock,
@@ -16,6 +20,7 @@ pub enum ParserDiagnosticKind {
     InvalidInlineTagStart,
 }
 
+/// Build an `oxc_diagnostics` error for parser diagnostics.
 pub fn diagnostic(kind: ParserDiagnosticKind) -> OxcDiagnostic {
     let message = match kind {
         ParserDiagnosticKind::NotAJSDocBlock => "input is not a JSDoc block comment",

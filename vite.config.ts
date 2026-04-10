@@ -10,11 +10,11 @@ export default defineConfig({
     '*': 'vp check --fix'
   },
   fmt: defineFmtConfig({
-    ignorePatterns: ['crates/**', 'tasks/**', 'refers/**']
+    ignorePatterns: ['crates/**', 'tasks/**', 'refers/**', 'fixtures/**']
   }),
   // @ts-expect-error -- FIXME: The type of `lint` is not correctly inferred. It should be `LintConfig` instead of `LintConfig[]`.
   lint: defineLintConfig({
-    ignorePatterns: ['crates/**', 'tasks/**', 'refers/**'],
+    ignorePatterns: ['crates/**', 'tasks/**', 'refers/**', 'fixtures/**'],
     comments: {
       enForceHeaderComment: {
         ignoreFiles: [...defaultIgnoreFilesOfEnforceHeaderCommentRule]

@@ -1,0 +1,32 @@
+[package]
+name = "ox_jsdoc_benchmark"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+test = false
+bench = false
+doctest = false
+
+[[bench]]
+name = "parser"
+harness = false
+
+[[bench]]
+name = "validator"
+harness = false
+
+[[bench]]
+name = "serializer"
+harness = false
+
+[dependencies]
+criterion2 = { version = "3.0.2", default-features = false }
+oxc_allocator.workspace = true
+oxc_ast.workspace = true
+oxc_parser.workspace = true
+oxc_span.workspace = true
+ox_jsdoc = { path = "../../crates/ox_jsdoc" }

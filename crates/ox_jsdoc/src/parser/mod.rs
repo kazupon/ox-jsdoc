@@ -10,15 +10,19 @@ mod scanner;
 use oxc_allocator::{Allocator, Box as ArenaBox};
 use oxc_diagnostics::OxcDiagnostic;
 
-use crate::ast::JSDocComment;
+use crate::ast::JsdocBlock;
 
 pub use checkpoint::{Checkpoint, FenceState, QuoteKind};
 pub use context::ParserContext;
 pub use diagnostics::{ParserDiagnosticKind, diagnostic};
 
+/// Parser feature switches.
 #[derive(Debug, Clone, Copy)]
 pub struct ParseOptions {
+    /// Treat fenced code blocks as literal text so `@tags` inside examples do
+    /// not start new block tag sections.
     pub fence_aware: bool,
+    /// Reserved for future inline-code handling.
     pub inline_code_aware: bool,
 }
 
@@ -31,12 +35,19 @@ impl Default for ParseOptions {
     }
 }
 
+/// Parser result containing either an AST or structural diagnostics.
 #[derive(Debug)]
 pub struct ParseOutput<'a> {
-    pub comment: Option<ArenaBox<'a, JSDocComment<'a>>>,
+    /// Parsed AST, absent when the input is not a complete JSDoc block.
+    pub comment: Option<ArenaBox<'a, JsdocBlock<'a>>>,
+    /// Parser diagnostics collected during structural parsing and recovery.
     pub diagnostics: Vec<OxcDiagnostic>,
 }
 
+/// Parse a complete `/** ... */` JSDoc block.
+///
+/// `base_offset` lets callers parse a slice while preserving byte spans in the
+/// original source file.
 pub fn parse_comment<'a>(
     allocator: &'a Allocator,
     source_text: &'a str,
@@ -49,8 +60,20 @@ pub fn parse_comment<'a>(
 #[cfg(test)]
 mod tests {
     use oxc_allocator::Allocator;
+    use oxc_diagnostics::OxcDiagnostic;
+
+    use crate::ast::{JsdocTagBody, JsdocTagValue};
 
     use super::{ParseOptions, parse_comment};
+
+    fn assert_single_diagnostic_contains(diagnostics: &[OxcDiagnostic], expected: &str) {
+        assert_eq!(diagnostics.len(), 1);
+        assert!(
+            diagnostics[0].to_string().contains(expected),
+            "expected diagnostic to contain `{expected}`, got `{}`",
+            diagnostics[0]
+        );
+    }
 
     #[test]
     fn parses_a_bounded_jsdoc_block() {
@@ -61,6 +84,13 @@ mod tests {
         let comment = output.comment.expect("expected a comment AST");
         assert_eq!(comment.span.start, 10);
         assert_eq!(comment.span.end, 19);
+        assert_eq!(comment.tags.len(), 0);
+
+        assert_eq!(comment.description, Some("ok"));
+        assert_eq!(comment.description_lines.len(), 1);
+        assert_eq!(comment.description_lines[0].span.start, 14);
+        assert_eq!(comment.description_lines[0].span.end, 17);
+        assert_eq!(comment.description_lines[0].description, "ok");
     }
 
     #[test]
@@ -69,7 +99,7 @@ mod tests {
         let output = parse_comment(&allocator, "/* plain */", 0, ParseOptions::default());
 
         assert!(output.comment.is_none());
-        assert_eq!(output.diagnostics.len(), 1);
+        assert_single_diagnostic_contains(&output.diagnostics, "input is not a JSDoc block");
     }
 
     #[test]
@@ -78,6 +108,170 @@ mod tests {
         let output = parse_comment(&allocator, "/** unclosed", 0, ParseOptions::default());
 
         assert!(output.comment.is_none());
-        assert_eq!(output.diagnostics.len(), 1);
+        assert_single_diagnostic_contains(&output.diagnostics, "JSDoc block comment is not closed");
+    }
+
+    #[test]
+    fn parses_top_level_description() {
+        let allocator = Allocator::default();
+        let output = parse_comment(
+            &allocator,
+            "/**\n * Find a user.\n */",
+            0,
+            ParseOptions::default(),
+        );
+
+        assert!(output.diagnostics.is_empty());
+        let comment = output.comment.expect("expected a comment AST");
+        assert_eq!(comment.description, Some("Find a user."));
+        assert_eq!(comment.description_lines.len(), 1);
+        assert_eq!(comment.description_lines[0].description, "Find a user.");
+    }
+
+    #[test]
+    fn parses_inline_tag_inside_description() {
+        let allocator = Allocator::default();
+        let output = parse_comment(
+            &allocator,
+            "/** See {@link UserService} for details. */",
+            0,
+            ParseOptions::default(),
+        );
+
+        assert!(output.diagnostics.is_empty());
+        let comment = output.comment.expect("expected a comment AST");
+        assert_eq!(
+            comment.description,
+            Some("See {@link UserService} for details.")
+        );
+        assert_eq!(comment.inline_tags.len(), 1);
+        assert_eq!(comment.inline_tags[0].tag.value, "link");
+        assert_eq!(comment.inline_tags[0].namepath_or_url, Some("UserService"));
+    }
+
+    #[test]
+    fn parses_param_tag_with_type_value_and_description() {
+        let allocator = Allocator::default();
+        let output = parse_comment(
+            &allocator,
+            "/**\n * @param {string} id - The user ID\n */",
+            0,
+            ParseOptions::default(),
+        );
+
+        assert!(output.diagnostics.is_empty());
+        let comment = output.comment.expect("expected a comment AST");
+        assert_eq!(comment.tags.len(), 1);
+        let tag = &comment.tags[0];
+        assert_eq!(tag.tag.value, "param");
+        assert_eq!(
+            tag.raw_body.expect("expected raw body"),
+            "{string} id - The user ID"
+        );
+        assert_eq!(tag.raw_type.expect("expected raw type").raw, "string");
+        assert_eq!(tag.name.expect("expected name").raw, "id");
+        assert_eq!(tag.description, Some("The user ID"));
+
+        match tag.body.as_ref().expect("expected block tag body").as_ref() {
+            JsdocTagBody::Generic(body) => {
+                assert_eq!(body.type_source.expect("expected type").raw, "string");
+                match body.value.as_ref().expect("expected value") {
+                    JsdocTagValue::Parameter(parameter) => {
+                        assert_eq!(parameter.path, "id");
+                        assert!(!parameter.optional);
+                    }
+                    _ => panic!("expected parameter value"),
+                }
+                assert_eq!(body.description, Some("The user ID"));
+            }
+            _ => panic!("expected generic body"),
+        }
+    }
+
+    #[test]
+    fn parses_multiple_tags() {
+        let allocator = Allocator::default();
+        let output = parse_comment(
+            &allocator,
+            "/**\n * @param {string} id\n * @returns {User}\n */",
+            0,
+            ParseOptions::default(),
+        );
+
+        assert!(output.diagnostics.is_empty());
+        let comment = output.comment.expect("expected a comment AST");
+        assert_eq!(comment.tags.len(), 2);
+        assert_eq!(comment.tags[0].tag.value, "param");
+        assert_eq!(comment.tags[1].tag.value, "returns");
+    }
+
+    #[test]
+    fn recovers_unclosed_inline_tag_as_text() {
+        let allocator = Allocator::default();
+        let output = parse_comment(
+            &allocator,
+            "/** See {@link UserService for details. */",
+            0,
+            ParseOptions::default(),
+        );
+
+        assert_single_diagnostic_contains(&output.diagnostics, "inline tag is not closed");
+        let comment = output.comment.expect("expected a comment AST");
+        assert_eq!(
+            comment.description,
+            Some("See {@link UserService for details.")
+        );
+        assert!(comment.inline_tags.is_empty());
+    }
+
+    #[test]
+    fn recovers_unclosed_type_expression() {
+        let allocator = Allocator::default();
+        let output = parse_comment(
+            &allocator,
+            "/** @param {Object.<string, number> options */",
+            0,
+            ParseOptions::default(),
+        );
+
+        assert_single_diagnostic_contains(&output.diagnostics, "type expression is not closed");
+        let comment = output.comment.expect("expected a comment AST");
+        assert!(comment.description.is_none());
+        assert_eq!(comment.tags.len(), 1);
+        let tag = &comment.tags[0];
+        assert_eq!(tag.tag.value, "param");
+        assert_eq!(
+            tag.raw_body.expect("expected raw body"),
+            "{Object.<string, number> options"
+        );
+        match tag.body.as_ref().expect("expected body").as_ref() {
+            JsdocTagBody::Generic(body) => {
+                assert!(body.type_source.is_none());
+                match body.value.as_ref().expect("expected recovered value") {
+                    JsdocTagValue::Namepath(name_path) => {
+                        assert_eq!(name_path.raw, "{Object.<string,");
+                    }
+                    _ => panic!("expected name path recovered value"),
+                }
+            }
+            _ => panic!("expected generic body"),
+        }
+    }
+
+    #[test]
+    fn suppresses_block_tags_inside_fenced_code() {
+        let allocator = Allocator::default();
+        let output = parse_comment(
+            &allocator,
+            "/**\n * @example\n * ```ts\n * @decorator()\n * ```\n * @returns {void}\n */",
+            0,
+            ParseOptions::default(),
+        );
+
+        assert!(output.diagnostics.is_empty());
+        let comment = output.comment.expect("expected a comment AST");
+        assert_eq!(comment.tags.len(), 2);
+        assert_eq!(comment.tags[0].tag.value, "example");
+        assert_eq!(comment.tags[1].tag.value, "returns");
     }
 }

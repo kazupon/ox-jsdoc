@@ -1,845 +1,747 @@
-# ox-jsdoc AST Definition
+# ox-jsdoc AST Design
 
-AST definition for JSDoc comments based on the EBNF grammar (`design/syntax.ebnf`).
-Follows oxc's arena allocation design (`Box<'a, T>`, `Vec<'a, T>`, `Span`).
+This document defines the intended AST direction for `ox-jsdoc`.
 
-> The definitions below serve as a design document for the Rust implementation
-> and may differ in notation from the actual code.
-> `'a` represents the arena allocator lifetime.
+The AST should support two primary consumers:
 
----
+1. `oxlint`, where JSDoc comments are parsed from comments collected by `oxc_parser`.
+2. ESLint-compatible tooling, where rule authors expect an ESTree-like shape.
 
-## Design Principles
+The design must also preserve the performance principles in
+`design/001-performance`:
 
-1. **Preserve tree structure** — Represent comment structure as a tree, not a flat Doclet like jsdoc
-2. **Preserve type expression AST** — Retain the type expression tree instead of discarding it after parsing like Catharsis
-3. **Span on every node** — Track source positions for diagnostics and linter integration
-4. **oxc style** — Arena allocation, `#[repr(C)]`, uniform-size enums, visitor pattern support
-5. **Custom tag support** — Unknown tags are represented generically in the AST
-6. **Lossless-enough syntax layer** — Preserve raw syntactic structure where tag-specific semantics cannot be decided during parsing
-7. **Semantic distinctions are explicit** — Keep syntax-sharing nodes separate when they play different semantic roles
-8. **Keep the core AST lean** — Semantic attachment metadata lives outside the JSDoc AST unless parsing/traversal needs it
+- keep the parser hot path small
+- use arena allocation and borrowed source slices
+- preserve enough syntax for later validation, formatting, and analysis
+- avoid doing final tag semantics during parsing
+- keep parser, validator, analyzer, and serializer concerns separate
 
----
+The core direction is:
 
-## 1. Top Level: JSDocComment
+```text
+JSDoc source text
+  -> parser
+  -> ESTree-like, source-preserving JSDoc AST
+  -> validator / analyzer / type parser
+  -> lint rules, formatter rules, JSON / JS binding
+```
 
-EBNF: `JSDocComment = "/**" Body "*/" ;`
+## Goals
 
-```rust
-/// Root node representing an entire JSDoc comment.
-/// The result of parsing a BlockComment (`/** ... */`) detected by oxc-parser.
-#[repr(C)]
-pub struct JSDocComment<'a> {
-    pub span: Span,
-    /// Description text at the beginning of the comment body (before any tags)
-    pub description: Option<Box<'a, Description<'a>>>,
-    /// List of block tags (`@param`, `@returns`, etc.)
-    pub tags: Vec<'a, BlockTag<'a>>,
+### 1. ESTree-like public shape
+
+The public AST should look familiar to ESLint rule authors.
+
+Every visitable node should have:
+
+- a node kind equivalent to ESTree's `type`
+- a `span` in Rust
+- optional `range` / `loc` only in JS-facing serialization
+- child fields that can be described by visitor keys
+
+For Rust implementation, node structs should not use a field named `type`.
+The node kind is represented by the Rust struct or enum variant.
+When serialized to JS or JSON, the node kind should be emitted as `"type"`.
+
+Example JS-facing shape:
+
+```ts
+{
+  type: "JsdocBlock",
+  range: [0, 42],
+  description: "Find a user.",
+  descriptionLines: [...],
+  tags: [...],
+  inlineTags: [...]
 }
 ```
 
----
+### 2. Source-preserving syntax layer
 
-## 2. Description Text: Description
+Lint rules need more than semantic data.
+They often inspect whitespace, delimiter lines, raw type text, tag order,
+description lines, and exact spans for fixes.
 
-EBNF: `Description = DescriptionText { InlineTag DescriptionText } ;`
+The AST should preserve:
 
-Description text is represented as an interleaved sequence of plain text and inline tags.
+- complete comment span
+- block tag spans
+- description line spans
+- tag name spans
+- raw type spans
+- raw body spans
+- delimiter and post-delimiter text
+- inline tag spans and raw syntax
+- enough line-level structure to write formatter/linter rules
 
-````rust
-/// Description text. An interleaved sequence of plain text and inline tags.
-/// Example: `"This is a {@link Foo} description"`
-///   → [Text("This is a "), InlineTag({@link Foo}), Text(" description")]
-#[repr(C)]
-pub struct Description<'a> {
-    pub span: Span,
-    /// Interleaved sequence of text and inline tags
-    pub parts: Vec<'a, DescriptionPart<'a>>,
-}
+This is intentionally stronger than a doclet-style semantic model.
 
-/// A component of description text
-#[repr(C, u8)]
-pub enum DescriptionPart<'a> {
-    /// Plain text portion
-    Text(Box<'a, Text<'a>>),
-    /// Inline tag (`{@link ...}`, etc.)
-    InlineTag(Box<'a, InlineTag<'a>>),
-    /// Fenced code block (``` ... ``` or ~~~ ... ~~~)
-    /// Content is preserved as literal text; no tag/inline-tag parsing inside.
-    FencedCodeBlock(Box<'a, FencedCodeBlock<'a>>),
-    /// Inline code (`code` or `` `code` ``)
-    /// Content is preserved as literal text; no tag parsing inside.
-    InlineCode(Box<'a, InlineCode<'a>>),
-}
+### 3. Parser does not finalize semantics
 
-/// Plain text node
-#[repr(C)]
-pub struct Text<'a> {
-    pub span: Span,
-    /// Text content (zero-copy reference to source text)
-    pub value: &'a str,
-}
+The parser should extract syntax and recover from malformed input.
+It should not decide every tag's final meaning.
 
-/// Fenced code block (e.g. ``` ... ``` or ~~~ ... ~~~)
-/// All content is literal — no tag or inline tag recognition inside.
-#[repr(C)]
-pub struct FencedCodeBlock<'a> {
-    pub span: Span,
-    /// Fence marker character ('`' or '~')
-    pub fence_char: FenceChar,
-    /// Number of fence characters (3 or more)
-    pub fence_length: u32,
-    /// Info string after opening fence (e.g. "javascript"), if any
-    pub info: Option<Box<'a, Text<'a>>>,
-    /// Raw content between opening and closing fence (zero-copy)
-    pub content: &'a str,
-}
+The following belong to later phases:
 
-/// Fence marker character
-#[repr(u8)]
-pub enum FenceChar {
-    /// Backtick (`)
-    Backtick,
-    /// Tilde (~)
-    Tilde,
-}
+- built-in vs custom tag policy
+- JSDoc / Closure / TypeScript mode differences
+- complete type-expression parsing
+- complete namepath validation
+- complete parameter-path validation
+- rule-specific diagnostics
 
-/// Inline code (e.g. `code` or ``code with ` inside``)
-/// Content is literal — no tag recognition inside.
-#[repr(C)]
-pub struct InlineCode<'a> {
-    pub span: Span,
-    /// Raw content between backtick delimiters (zero-copy)
-    pub content: &'a str,
-}
-````
+The parser may classify obvious common syntax, but it must preserve raw forms so
+later phases can reinterpret them.
 
----
+### 4. Future extension without AST churn
 
-## 3. Block Tag: BlockTag
+The AST should allow adding richer structures later without breaking the basic
+rule-facing shape.
 
-EBNF: `BlockTag = "@" TagName [ whitespace TagBody ] ;`
-EBNF: `TagBody = GenericTagBody | BorrowsTagBody ;`
+Planned extension points:
 
-```rust
-/// A block tag (e.g. `@param {string} name - description`, `@borrows foo as bar`)
-#[repr(C)]
-pub struct BlockTag<'a> {
-    pub span: Span,
-    /// Tag name (without `@`. e.g. `"param"`, `"returns"`, `"customTag"`)
-    pub tag_name: TagName<'a>,
-    /// Parsed body structure. A generic body is always available even for tag-specific semantics.
-    pub body: Option<Box<'a, BlockTagBody<'a>>>,
-    /// Raw body text after tag name, preserved for tag-specific validation / recovery.
-    pub raw_body: Option<Box<'a, Text<'a>>>,
-}
+- `parsedType` for JSDoc type AST
+- richer `namepath` AST
+- richer parameter path AST
+- markdown/fenced-code nodes
+- inline code nodes
+- tag dictionaries and mode-specific validation facts
+- comment attachment metadata for `oxlint` / ESLint integrations
 
-/// Tag name
-#[repr(C)]
-pub struct TagName<'a> {
-    pub span: Span,
-    /// Tag name string (e.g. `"param"`, `"returns"`, `"customTag"`)
-    pub value: &'a str,
-}
+The first version should not eagerly implement every extension, but it should
+reserve stable locations for them.
 
-/// Parsed block-tag body variants.
-#[repr(C, u8)]
-pub enum BlockTagBody<'a> {
-    /// Generic extraction shape used by most tags.
-    Generic(Box<'a, GenericTagBody<'a>>),
-    /// Special-case syntax used by `@borrows`.
-    Borrows(Box<'a, BorrowsTagBody<'a>>),
-}
+## Relationship to Existing Ecosystem
 
-/// `BlockTagBody` gets dedicated variants only for lexically distinct forms
-/// that cannot be modeled as `type? + value? + description?`.
-///
-/// Current boundary:
-/// - Dedicated variant: `@borrows source as target`
-/// - Generic body + semantic interpretation: `@variation`, `@since`, `@requires`,
-///   `@memberof!`, `@see`, and other dictionary-driven tags
-///
-/// This keeps the parse tree explicit without proliferating tag-specific nodes
-/// for semantics that are better handled by TagSpec validation.
+`comment-parser` is a low-level JSDoc block parser.
 
-/// Generic tag body:
-/// optional type, optional first token later interpreted by TagSpec,
-/// optional separator, optional trailing description.
-#[repr(C)]
-pub struct GenericTagBody<'a> {
-    pub span: Span,
-    pub type_expression: Option<Box<'a, TypeExpression<'a>>>,
-    pub value: Option<Box<'a, TagValueToken<'a>>>,
-    pub separator: Option<Separator>,
-    pub description: Option<Box<'a, Description<'a>>>,
-}
+`@es-joy/jsdoccomment` builds a JSDoc-specific ESTree-like layer on top of it:
 
-/// Special-case body for `@borrows source as target`.
-#[repr(C)]
-pub struct BorrowsTagBody<'a> {
-    pub span: Span,
-    pub source: NamePathLike<'a>,
-    pub target: NamePathLike<'a>,
-}
+- `JsdocBlock`
+- `JsdocTag`
+- `JsdocDescriptionLine`
+- `JsdocTypeLine`
+- `JsdocInlineTag`
+- visitor keys
+- optional `jsdoc-type-pratt-parser` type AST
+- utilities for locating comments attached to ESLint AST nodes
 
-/// Generic first token extracted from a tag body before semantic interpretation.
-#[repr(C, u8)]
-pub enum TagValueToken<'a> {
-    ParameterName(Box<'a, TagParameterName<'a>>),
-    NamePathLike(Box<'a, NamePathLike<'a>>),
-    Identifier(Box<'a, Identifier<'a>>),
-    RawToken(Box<'a, Text<'a>>),
-}
+`ox-jsdoc` should be closer to the `@es-joy/jsdoccomment` AST shape than to
+`comment-parser`'s raw result shape.
 
-/// Optional `-` separator between name/value and description.
-#[repr(u8)]
-pub enum Separator {
-    Dash,
+The goal is not byte-for-byte compatibility.
+The goal is to provide a rule-friendly AST with stable node kinds and visitor
+keys, while keeping Rust-side performance and arena allocation.
+
+## Layered Architecture
+
+### Parser Layer
+
+Input:
+
+- one complete `/** ... */` block
+- `base_offset` from the original source
+- parser options
+
+Output:
+
+- `JsdocBlock<'a>`
+- parser diagnostics
+
+Responsibilities:
+
+- recognize the JSDoc block
+- strip line prefixes while preserving line syntax
+- split block description from block tags
+- parse block tag names
+- extract raw tag body
+- extract common type/name/description slots when unambiguous
+- parse inline tags in descriptions
+- preserve raw text and spans
+- recover when possible
+
+Non-responsibilities:
+
+- final tag validity
+- rule-level lint diagnostics
+- full type compatibility
+- complete namepath validation
+
+### Validator Layer
+
+Input:
+
+- `JsdocBlock<'a>`
+- validation mode
+- tag dictionary
+
+Output:
+
+- diagnostics
+- optional semantic facts
+
+Responsibilities:
+
+- unknown tag policy
+- required type/name checks
+- mode-sensitive tag checks
+- parameter/namepath/type validity checks
+- validation diagnostics with precise spans
+
+### Analyzer Layer
+
+Input:
+
+- `JsdocBlock<'a>`
+- optional validator output
+
+Output:
+
+- consumer-oriented facts
+
+Examples:
+
+- tag names
+- parameter names
+- custom tags
+- documented return presence
+- inline tag usage
+- relationships such as `@borrows`
+
+### Serializer / Binding Layer
+
+Input:
+
+- AST
+- diagnostics
+- optional validator/analyzer/type-parser output
+
+Output:
+
+- JSON or JS object shape
+
+Responsibilities:
+
+- emit ESTree-like `"type"` fields
+- emit `range` and optionally `loc`
+- convert borrowed Rust slices to JS strings
+- optionally include parser-only, validator, analyzer, and type information
+
+## Core Node Set
+
+The initial public AST should be built from these node kinds:
+
+```text
+JsdocBlock
+JsdocDescriptionLine
+JsdocTag
+JsdocTypeLine
+JsdocInlineTag
+JsdocText
+```
+
+Future node kinds may include:
+
+```text
+JsdocType*
+JsdocNamepath*
+JsdocParameterPath*
+JsdocFencedCodeBlock
+JsdocInlineCode
+```
+
+## Visitor Keys
+
+The default visitor keys should match rule-author expectations:
+
+```ts
+const jsdocVisitorKeys = {
+  JsdocBlock: ["descriptionLines", "tags", "inlineTags"],
+  JsdocDescriptionLine: [],
+  JsdocTag: ["parsedType", "typeLines", "descriptionLines", "inlineTags"],
+  JsdocTypeLine: [],
+  JsdocInlineTag: [],
+  JsdocText: []
 }
 ```
 
----
+If `parsedType` is absent or `null`, traversal skips it.
+When type parsing is added, `JsdocType*` visitor keys should be merged in the
+same way `@es-joy/jsdoccomment` merges `jsdoc-type-pratt-parser` visitor keys.
 
-## 4. Inline Tag: InlineTag
+## Rust AST Shape
 
-EBNF: `InlineTag = "{@" InlineTagName [ whitespace InlineTagBody ] "}" ;`
+The Rust AST should keep arena allocation and borrowed strings.
+
+Recommended v1 shape:
 
 ```rust
-/// An inline tag (e.g. `{@link Foo}`, `{@type string}`)
-#[repr(C)]
-pub struct InlineTag<'a> {
+pub struct JsdocBlock<'a> {
     pub span: Span,
-    /// Tag name (e.g. `"link"`, `"linkcode"`, `"type"`)
-    pub tag_name: TagName<'a>,
-    /// Interpreted body content
-    pub body: InlineTagBody<'a>,
-}
-
-/// Inline tag body variants
-#[repr(C, u8)]
-pub enum InlineTagBody<'a> {
-    /// `{@link namepath_or_url [text]}`
-    Link(Box<'a, InlineLinkBody<'a>>),
-    /// `{@type TypeExpr}`
-    Type(Box<'a, TypeExpression<'a>>),
-    /// Unknown inline tag — preserved as raw text
-    Unknown(Box<'a, Text<'a>>),
-}
-
-/// Body of a link inline tag
-#[repr(C)]
-pub struct InlineLinkBody<'a> {
-    pub span: Span,
-    /// Link target (name path or URL)
-    pub target: LinkTarget<'a>,
-    /// Link text (optional)
-    pub text: Option<Box<'a, Text<'a>>>,
-}
-
-/// Link target kind
-#[repr(C, u8)]
-pub enum LinkTarget<'a> {
-    /// Name path (e.g. `MyClass#method`)
-    NamePath(Box<'a, NamePathLike<'a>>),
-    /// URL (e.g. `https://example.com`)
-    URL(Box<'a, Text<'a>>),
+    pub delimiter: &'a str,
+    pub post_delimiter: &'a str,
+    pub terminal: &'a str,
+    pub line_end: &'a str,
+    pub description: Option<&'a str>,
+    pub description_lines: Vec<'a, JsdocDescriptionLine<'a>>,
+    pub tags: Vec<'a, JsdocTag<'a>>,
+    pub inline_tags: Vec<'a, JsdocInlineTag<'a>>,
 }
 ```
 
----
-
-## 5. Parameter Name: TagParameterName
-
-EBNF: `ParameterName = OptionalParameterName | ParameterPath ;`
+`description` is a convenience string slice or arena-normalized string for the
+top-level description.
+`description_lines` is the source-preserving representation used by formatter
+and lint rules.
 
 ```rust
-/// Tag parameter name (required or optional)
-#[repr(C, u8)]
-pub enum TagParameterName<'a> {
-    /// Required parameter (e.g. `name`)
-    Required(Box<'a, RequiredParameterName<'a>>),
-    /// Optional parameter (e.g. `[name]`, `[name=default]`)
-    Optional(Box<'a, OptionalParameterName<'a>>),
-}
-
-/// Required parameter name
-#[repr(C)]
-pub struct RequiredParameterName<'a> {
+pub struct JsdocDescriptionLine<'a> {
     pub span: Span,
-    /// Parameter path (`foo`, `foo.bar`, `employees[].name`)
-    pub name: ParameterPath<'a>,
-}
-
-/// Optional parameter name (`[name=default]`)
-#[repr(C)]
-pub struct OptionalParameterName<'a> {
-    pub span: Span,
-    /// Parameter path
-    pub name: ParameterPath<'a>,
-    /// Default value (raw text after `=`)
-    pub default_value: Option<Box<'a, Text<'a>>>,
-}
-
-/// Parameter path used by `@param` / `@property`.
-#[repr(C)]
-pub struct ParameterPath<'a> {
-    pub span: Span,
-    pub root: ParameterRoot<'a>,
-    pub continuations: Vec<'a, ParameterContinuation<'a>>,
-}
-
-#[repr(C, u8)]
-pub enum ParameterRoot<'a> {
-    Identifier(Box<'a, Identifier<'a>>),
-    StringLiteral(Box<'a, Text<'a>>),
-}
-
-#[repr(C, u8)]
-pub enum ParameterContinuation<'a> {
-    ArrayElement(Box<'a, ArrayElementSegment>),
-    Property(Box<'a, ParameterProperty<'a>>),
-}
-
-#[repr(C)]
-pub struct ArrayElementSegment {
-    pub span: Span,
-}
-
-#[repr(C)]
-pub struct ParameterProperty<'a> {
-    pub span: Span,
-    pub property: ParameterPropertyName<'a>,
-    pub is_array_element: bool,
-}
-
-#[repr(C, u8)]
-pub enum ParameterPropertyName<'a> {
-    Identifier(Box<'a, Identifier<'a>>),
-    StringLiteral(Box<'a, Text<'a>>),
+    pub delimiter: &'a str,
+    pub post_delimiter: &'a str,
+    pub initial: &'a str,
+    pub description: &'a str,
 }
 ```
 
----
-
-## 6. Name Path: NamePathLike
-
-EBNF: `NamePathLike = [ NamespacePrefix ] NamePathCore [ Variation ] [ TrailingConnector ] ;`
-
 ```rust
-/// A name path-like reference (e.g. `MyClass`, `module:foo/bar.Baz`, `Foo.`, `anim.fadein(1)`).
-#[repr(C)]
-pub struct NamePathLike<'a> {
+pub struct JsdocTag<'a> {
     pub span: Span,
-    pub namespace: Option<NamePathNamespace<'a>>,
-    pub segments: Vec<'a, NamePathComponent<'a>>,
-    pub variation: Option<Box<'a, Variation<'a>>>,
-    pub trailing_connector: Option<NamePathSeparator>,
-}
-
-/// A single component of a name path (scope operator + segment)
-#[repr(C)]
-pub struct NamePathComponent<'a> {
-    pub span: Span,
-    /// Separator (None for the first segment)
-    pub separator: Option<NamePathSeparator>,
-    /// Segment
-    pub segment: NamePathSegment<'a>,
-}
-
-/// Optional namespace prefix (`module:`, `event:`, etc.)
-#[repr(C)]
-pub struct NamePathNamespace<'a> {
-    pub span: Span,
-    pub name: Identifier<'a>,
-}
-
-/// Name-path separator
-#[repr(u8)]
-pub enum NamePathSeparator {
-    /// `.` — static member
-    Dot,
-    /// `#` — instance member
-    Hash,
-    /// `~` — inner member
-    Tilde,
-    /// `/` — module/path separator
-    Slash,
-}
-
-/// Name path segment
-#[repr(C, u8)]
-pub enum NamePathSegment<'a> {
-    /// Simple name (e.g. `MyClass`)
-    Name(Box<'a, Identifier<'a>>),
-    /// String literal name (e.g. `"special-name"`)
-    StringLiteral(Box<'a, Text<'a>>),
-    /// Bracketed string segment (e.g. `["foo"]`)
-    BracketString(Box<'a, Text<'a>>),
-    /// Event-prefixed segment (e.g. `event:click`)
-    Event(Box<'a, EventSegment<'a>>),
-}
-
-#[repr(C)]
-pub struct EventSegment<'a> {
-    pub span: Span,
-    pub name: Identifier<'a>,
-}
-
-#[repr(C)]
-pub struct Variation<'a> {
-    pub span: Span,
-    /// Raw variation contents inside `( ... )`
-    pub value: &'a str,
-}
-
-/// Identifier
-#[repr(C)]
-pub struct Identifier<'a> {
-    pub span: Span,
-    pub name: &'a str,
+    pub tag: JsdocTagName<'a>,
+    pub raw_type: Option<JsdocTypeSource<'a>>,
+    pub parsed_type: Option<Box<'a, JsdocType<'a>>>,
+    pub name: Option<JsdocTagNameValue<'a>>,
+    pub optional: bool,
+    pub default_value: Option<&'a str>,
+    pub description: Option<&'a str>,
+    pub raw_body: Option<&'a str>,
+    pub delimiter: &'a str,
+    pub post_delimiter: &'a str,
+    pub post_tag: &'a str,
+    pub post_type: &'a str,
+    pub post_name: &'a str,
+    pub type_lines: Vec<'a, JsdocTypeLine<'a>>,
+    pub description_lines: Vec<'a, JsdocDescriptionLine<'a>>,
+    pub inline_tags: Vec<'a, JsdocInlineTag<'a>>,
+    pub body: Option<Box<'a, JsdocTagBody<'a>>>,
 }
 ```
 
----
+`JsdocTag` intentionally has both ESTree-like convenience fields and an optional
+structured `body`.
 
-## 7. Type Expression: TypeExpression
+The convenience fields are for lint rules:
 
-EBNF: Corresponds to the entirety of section 5.
-**Key difference from jsdoc — the tree structure is preserved.**
+- `tag`
+- `raw_type`
+- `name`
+- `description`
+- `optional`
+- `default_value`
 
-```rust
-/// Complete type expression (including braces `{string|number}`)
-#[repr(C)]
-pub struct TypeExpression<'a> {
-    pub span: Span,
-    /// Type expression inside the braces
-    pub type_expr: TypeExpr<'a>,
-}
-
-/// Type expression node (recursive tree structure)
-#[repr(C, u8)]
-pub enum TypeExpr<'a> {
-    // --- Primitive literals ---
-    /// `*` — any type
-    AllLiteral(Box<'a, AllLiteral>),
-    /// `null`
-    NullLiteral(Box<'a, NullLiteral>),
-    /// `undefined` or `void`
-    UndefinedLiteral(Box<'a, UndefinedLiteral>),
-    /// `?` — unknown type
-    UnknownLiteral(Box<'a, UnknownLiteral>),
-    /// String literal type (e.g. `'click'`)
-    StringLiteral(Box<'a, StringLiteralType<'a>>),
-    /// Numeric literal type (e.g. `42`)
-    NumericLiteral(Box<'a, NumericLiteralType<'a>>),
-
-    // --- Name ---
-    /// Type name (e.g. `string`, `MyClass`, `module:foo/bar.Baz`)
-    Name(Box<'a, TypeName<'a>>),
-
-    // --- Composite types ---
-    /// Union type (e.g. `string|number`)
-    Union(Box<'a, UnionType<'a>>),
-    /// Generic type (e.g. `Array.<string>`, `Map<string, number>`)
-    TypeApplication(Box<'a, TypeApplication<'a>>),
-    /// Function type (e.g. `function(string): boolean`)
-    Function(Box<'a, FunctionType<'a>>),
-    /// Record type (e.g. `{key: string, value: number}`)
-    Record(Box<'a, RecordType<'a>>),
-    /// `typeof Foo.bar`
-    TypeQuery(Box<'a, TypeQuery<'a>>),
-    /// Indexed access type (e.g. `Parameters<Foo>[0]`, `T["x"]`)
-    IndexedAccess(Box<'a, IndexedAccessType<'a>>),
-
-    // --- Modified types ---
-    /// Nullable type (e.g. `?string`)
-    Nullable(Box<'a, NullableType<'a>>),
-    /// Non-nullable type (e.g. `!string`)
-    NonNullable(Box<'a, NonNullableType<'a>>),
-    /// Optional type (e.g. `string=`, Closure Compiler style)
-    Optional(Box<'a, OptionalType<'a>>),
-    /// Rest/variadic type (e.g. `...string`)
-    Variadic(Box<'a, VariadicType<'a>>),
-    /// Array shorthand (e.g. `string[]`)
-    ArrayShorthand(Box<'a, ArrayShorthandType<'a>>),
-
-    // --- Grouping ---
-    /// Parenthesized type (e.g. `(string|number)`)
-    Parenthesized(Box<'a, ParenthesizedType<'a>>),
-}
-```
-
-### 7.1 Primitive Literal Types
+The structured `body` is for future richer analysis without forcing every rule
+to understand low-level variants.
 
 ```rust
-#[repr(C)]
-pub struct AllLiteral {
-    pub span: Span,
-}
-
-#[repr(C)]
-pub struct NullLiteral {
-    pub span: Span,
-}
-
-#[repr(C)]
-pub struct UndefinedLiteral {
-    pub span: Span,
-    /// Distinguishes between `undefined` and `void`
-    pub keyword: UndefinedKeyword,
-}
-
-#[repr(u8)]
-pub enum UndefinedKeyword {
-    Undefined,
-    Void,
-}
-
-#[repr(C)]
-pub struct UnknownLiteral {
-    pub span: Span,
-}
-
-#[repr(C)]
-pub struct StringLiteralType<'a> {
+pub struct JsdocTagName<'a> {
     pub span: Span,
     pub value: &'a str,
 }
 
-#[repr(C)]
-pub struct NumericLiteralType<'a> {
+pub struct JsdocTagNameValue<'a> {
+    pub span: Span,
+    pub raw: &'a str,
+}
+
+pub struct JsdocTypeSource<'a> {
+    pub span: Span,
+    pub raw: &'a str,
+}
+
+pub struct JsdocTypeLine<'a> {
+    pub span: Span,
+    pub delimiter: &'a str,
+    pub post_delimiter: &'a str,
+    pub initial: &'a str,
+    pub raw_type: &'a str,
+}
+```
+
+```rust
+pub struct JsdocInlineTag<'a> {
+    pub span: Span,
+    pub tag: JsdocTagName<'a>,
+    pub namepath_or_url: Option<&'a str>,
+    pub text: Option<&'a str>,
+    pub format: JsdocInlineTagFormat,
+    pub raw_body: Option<&'a str>,
+}
+
+pub enum JsdocInlineTagFormat {
+    Plain,
+    Pipe,
+    Space,
+    Prefix,
+    Unknown,
+}
+```
+
+The inline tag shape follows the practical rule-facing model used by
+`@es-joy/jsdoccomment` while keeping raw body text for custom inline tags and
+future re-parsing.
+
+## Structured Tag Body
+
+`JsdocTag.body` should remain optional and extensible.
+
+Recommended initial variants:
+
+```rust
+pub enum JsdocTagBody<'a> {
+    Generic(Box<'a, JsdocGenericTagBody<'a>>),
+    Borrows(Box<'a, JsdocBorrowsTagBody<'a>>),
+    Raw(Box<'a, JsdocRawTagBody<'a>>),
+}
+```
+
+```rust
+pub struct JsdocGenericTagBody<'a> {
+    pub span: Span,
+    pub type_source: Option<JsdocTypeSource<'a>>,
+    pub value: Option<JsdocTagValue<'a>>,
+    pub separator: Option<JsdocSeparator>,
+    pub description: Option<&'a str>,
+}
+
+pub struct JsdocBorrowsTagBody<'a> {
+    pub span: Span,
+    pub source: JsdocTagValue<'a>,
+    pub target: JsdocTagValue<'a>,
+}
+
+pub struct JsdocRawTagBody<'a> {
     pub span: Span,
     pub raw: &'a str,
 }
 ```
 
-### 7.2 Type Name
+```rust
+pub enum JsdocTagValue<'a> {
+    Parameter(JsdocParameterName<'a>),
+    Namepath(JsdocNamepathSource<'a>),
+    Identifier(JsdocIdentifier<'a>),
+    Raw(JsdocText<'a>),
+}
+
+pub enum JsdocSeparator {
+    Dash,
+}
+```
+
+This keeps the parser flexible:
+
+- common tags get useful shape
+- `@borrows source as target` can be represented explicitly
+- unknown or ambiguous bodies can remain raw
+- future tag-specific variants can be added without changing `JsdocTag`
+
+## Type Expressions
+
+Type expressions should be split into two layers:
+
+1. `JsdocTypeSource`
+2. `JsdocType`
+
+`JsdocTypeSource` is parser-owned and cheap:
 
 ```rust
-/// Type name (e.g. `string`, `module:foo/bar.Baz`)
-///
-/// `TypeName` intentionally wraps `NamePathLike` instead of aliasing it.
-/// The syntax substrate is shared, but type-position names remain a dedicated
-/// semantic node, following oxc's preference for explicit roles over ambiguous
-/// reused node shapes.
-#[repr(C)]
-pub struct TypeName<'a> {
+pub struct JsdocTypeSource<'a> {
     pub span: Span,
-    pub path: NamePathLike<'a>,
+    pub raw: &'a str,
 }
 ```
 
-### 7.3 Composite Types
+`JsdocType` is a future typed AST:
 
 ```rust
-/// Union type (e.g. `string|number|boolean`)
-#[repr(C)]
-pub struct UnionType<'a> {
-    pub span: Span,
-    /// Union elements (two or more)
-    pub elements: Vec<'a, TypeExpr<'a>>,
-}
-
-/// Generic/template type (e.g. `Array.<string>`, `Map<K, V>`)
-#[repr(C)]
-pub struct TypeApplication<'a> {
-    pub span: Span,
-    /// Base type name (e.g. `Array`, `Map`)
-    pub callee: TypeExpr<'a>,
-    /// Type argument list
-    pub type_arguments: Vec<'a, TypeExpr<'a>>,
-    /// Whether dot notation is used (`Array.<T>` vs `Array<T>`)
-    pub has_dot: bool,
-}
-
-/// Function type (e.g. `function(string, number): boolean`)
-#[repr(C)]
-pub struct FunctionType<'a> {
-    pub span: Span,
-    /// Parameter list (None if no signature is present)
-    pub params: Option<Vec<'a, FunctionParam<'a>>>,
-    /// Return type
-    pub return_type: Option<Box<'a, TypeExpr<'a>>>,
-    /// `this` context type
-    pub this_type: Option<Box<'a, TypeExpr<'a>>>,
-    /// `new` constructor type
-    pub constructor_type: Option<Box<'a, TypeExpr<'a>>>,
-}
-
-/// Function type parameter
-#[repr(C, u8)]
-pub enum FunctionParam<'a> {
-    /// Regular parameter
-    Type(Box<'a, TypeExpr<'a>>),
-    /// Rest parameter (`...T`)
-    Rest(Box<'a, TypeExpr<'a>>),
-}
-
-/// Record type (e.g. `{key: string, value: number}`)
-#[repr(C)]
-pub struct RecordType<'a> {
-    pub span: Span,
-    /// Field list
-    pub fields: Vec<'a, RecordField<'a>>,
-}
-
-/// Record type field
-#[repr(C)]
-pub struct RecordField<'a> {
-    pub span: Span,
-    pub key: RecordFieldKey<'a>,
-    /// Field type (after `:`. Optional for shorthand-like field syntax)
-    pub value: Option<Box<'a, TypeExpr<'a>>>,
-}
-
-/// Record field name
-#[repr(C, u8)]
-pub enum RecordFieldKey<'a> {
-    Identifier(Box<'a, Identifier<'a>>),
-    StringLiteral(Box<'a, StringLiteralType<'a>>),
-    NumericLiteral(Box<'a, NumericLiteralType<'a>>),
-    IndexSignature(Box<'a, IndexSignatureField<'a>>),
-}
-
-#[repr(C)]
-pub struct IndexSignatureField<'a> {
-    pub span: Span,
-    pub key_name: Identifier<'a>,
-    pub key_type: Box<'a, TypeExpr<'a>>,
-    pub value_type: Box<'a, TypeExpr<'a>>,
-}
-
-#[repr(C)]
-pub struct TypeQuery<'a> {
-    pub span: Span,
-    pub argument: NamePathLike<'a>,
-}
-
-#[repr(C)]
-pub struct IndexedAccessType<'a> {
-    pub span: Span,
-    pub object_type: Box<'a, TypeExpr<'a>>,
-    pub index: Box<'a, IndexedAccessKey<'a>>,
-}
-
-#[repr(C, u8)]
-pub enum IndexedAccessKey<'a> {
-    TypeExpr(Box<'a, TypeExpr<'a>>),
-    StringLiteral(Box<'a, StringLiteralType<'a>>),
-    NumericLiteral(Box<'a, NumericLiteralType<'a>>),
-    Identifier(Box<'a, Identifier<'a>>),
+pub enum JsdocType<'a> {
+    Name(Box<'a, JsdocTypeName<'a>>),
+    Union(Box<'a, JsdocTypeUnion<'a>>),
+    Function(Box<'a, JsdocTypeFunction<'a>>),
+    Record(Box<'a, JsdocTypeRecord<'a>>),
+    TypeApplication(Box<'a, JsdocTypeApplication<'a>>),
+    Nullable(Box<'a, JsdocTypeNullable<'a>>),
+    NonNullable(Box<'a, JsdocTypeNonNullable<'a>>),
+    Optional(Box<'a, JsdocTypeOptional<'a>>),
+    Variadic(Box<'a, JsdocTypeVariadic<'a>>),
+    Unknown(Box<'a, JsdocTypeUnknown<'a>>),
 }
 ```
 
-### 7.4 Modified Types
+The v1 parser should not be blocked on implementing `JsdocType`.
+It should fill `raw_type` / `type_source` and leave `parsed_type = None`.
+
+Later, a type parser can run as:
+
+```text
+JsdocTypeSource.raw
+  -> JSDoc type parser
+  -> JsdocType
+  -> validator / analyzer / lint rules
+```
+
+This preserves future extensibility without making the parse hot path pay for
+type parsing.
+
+## Namepaths and Parameter Paths
+
+Namepaths and parameter paths follow the same staged approach as types.
+
+The parser should initially preserve raw source:
 
 ```rust
-/// Nullable type (`?string`)
-#[repr(C)]
-pub struct NullableType<'a> {
+pub struct JsdocNamepathSource<'a> {
     pub span: Span,
-    pub type_expr: TypeExpr<'a>,
+    pub raw: &'a str,
 }
 
-/// Non-nullable type (`!string`)
-#[repr(C)]
-pub struct NonNullableType<'a> {
+pub struct JsdocParameterName<'a> {
     pub span: Span,
-    pub type_expr: TypeExpr<'a>,
-}
-
-/// Optional type (`string=`, Closure Compiler style)
-#[repr(C)]
-pub struct OptionalType<'a> {
-    pub span: Span,
-    pub type_expr: TypeExpr<'a>,
-}
-
-/// Variadic/rest type (`...string`)
-#[repr(C)]
-pub struct VariadicType<'a> {
-    pub span: Span,
-    pub type_expr: TypeExpr<'a>,
-}
-
-/// Array shorthand type (`string[]`)
-#[repr(C)]
-pub struct ArrayShorthandType<'a> {
-    pub span: Span,
-    pub element_type: TypeExpr<'a>,
-}
-
-/// Parenthesized type (`(string|number)`)
-#[repr(C)]
-pub struct ParenthesizedType<'a> {
-    pub span: Span,
-    pub type_expr: TypeExpr<'a>,
+    pub path: &'a str,
+    pub optional: bool,
+    pub default_value: Option<&'a str>,
 }
 ```
 
----
-
-## 8. AST Node List and EBNF Mapping
-
-| EBNF Production     | AST Node                           | Notes                                                       |
-| ------------------- | ---------------------------------- | ----------------------------------------------------------- |
-| `JSDocComment`      | `JSDocComment`                     | Root node                                                   |
-| `Body`              | `JSDocComment.{description, tags}` | Body itself has no dedicated node                           |
-| `Description`       | `Description`                      | Interleaved text + inline tags                              |
-| `DescriptionText`   | `Text`                             | Plain text                                                  |
-| `FencedCodeBlock`   | `FencedCodeBlock`                  | `...` or ~~~ ... ~~~                                        |
-| `InlineCode`        | `InlineCode`                       | \`code\` or \`\`code\`\`                                    |
-| `BlockTag`          | `BlockTag`                         | Holds parsed body plus raw body for tag-specific semantics  |
-| `TagName`           | `TagName`                          | Open-ended                                                  |
-| `TagBody`           | `BlockTagBody`                     | `GenericTagBody` or tag-specific body like `BorrowsTagBody` |
-| `InlineTag`         | `InlineTag`                        | `{@link ...}` etc.                                          |
-| `InlineTagBody`     | `InlineTagBody`                    | 3 variants: Link / Type / Unknown                           |
-| `ParameterName`     | `TagParameterName`                 | 2 variants: Required / Optional                             |
-| `ParameterPath`     | `ParameterPath`                    | Dedicated `@param` / `@property` path syntax                |
-| `OptionalParameter` | `OptionalParameterName`            | `[name=default]`                                            |
-| `TypeExpression`    | `TypeExpression`                   | Wrapper including braces                                    |
-| `TypeExpr`          | `TypeExpr`                         | Recursive enum tree including `typeof` and indexed access   |
-| `UnionType`         | `UnionType`                        | Two or more elements                                        |
-| `TypeApplication`   | `TypeApplication`                  | `Array.<T>`                                                 |
-| `FunctionType`      | `FunctionType`                     | `function(T): U`                                            |
-| `RecordType`        | `RecordType`                       | `{k: T}`                                                    |
-| `TypeName`          | `TypeName`                         | Built from `NamePathLike`                                   |
-| `NamePathLike`      | `NamePathLike`                     | Namespace, `/`, variation, trailing connector support       |
-
----
-
-## 9. Visitor Pattern
-
-Following oxc's `Visit`/`VisitMut`, visitor methods are defined for each AST node.
+Future richer ASTs can be attached later:
 
 ```rust
-pub trait Visit<'a> {
-    fn visit_jsdoc_comment(&mut self, comment: &JSDocComment<'a>);
-    fn visit_description(&mut self, desc: &Description<'a>);
-    fn visit_block_tag(&mut self, tag: &BlockTag<'a>);
-    fn visit_block_tag_body(&mut self, body: &BlockTagBody<'a>);
-    fn visit_inline_tag(&mut self, tag: &InlineTag<'a>);
-    fn visit_tag_parameter_name(&mut self, name: &TagParameterName<'a>);
-    fn visit_parameter_path(&mut self, path: &ParameterPath<'a>);
-    fn visit_type_expression(&mut self, expr: &TypeExpression<'a>);
-    fn visit_type_expr(&mut self, expr: &TypeExpr<'a>);
-    fn visit_union_type(&mut self, union_type: &UnionType<'a>);
-    fn visit_type_application(&mut self, app: &TypeApplication<'a>);
-    fn visit_function_type(&mut self, func: &FunctionType<'a>);
-    fn visit_record_type(&mut self, record: &RecordType<'a>);
-    fn visit_name_path_like(&mut self, path: &NamePathLike<'a>);
-    fn visit_identifier(&mut self, ident: &Identifier<'a>);
-    fn visit_text(&mut self, text: &Text<'a>);
-    fn visit_fenced_code_block(&mut self, block: &FencedCodeBlock<'a>);
-    fn visit_inline_code(&mut self, code: &InlineCode<'a>);
+pub struct JsdocParameterName<'a> {
+    pub span: Span,
+    pub path: &'a str,
+    pub optional: bool,
+    pub default_value: Option<&'a str>,
+    pub parsed_path: Option<Box<'a, JsdocParameterPath<'a>>>,
 }
 ```
 
----
+This lets v1 support common lint rules quickly while still leaving room for
+strict path validation and precise fixes.
 
-## 10. Parse Example
+## Comment Attachment
 
-### Input
+Comment attachment should not live inside `JsdocBlock`.
 
-```javascript
-/**
- * Find a user.
- * See {@link UserService} for details.
- *
- * @param {string|number} id - The user ID
- * @param {Object.<string, *>} [options={}] - Options
- * @returns {Promise.<User>} The found user
- * @throws {NotFoundError} If the user is not found
- * @since 2.0.0
- * @deprecated Will be removed in 3.0.0. Use {@link findUserById} instead.
- */
+For `oxlint`, attachment belongs to the integration layer that has access to
+the JavaScript / TypeScript AST and the comment list from `oxc_parser`.
+
+Recommended shape:
+
+```rust
+pub struct JsdocAttachment<'a> {
+    pub comment: Box<'a, JsdocBlock<'a>>,
+    pub target_span: Span,
+    pub target_kind: JsdocAttachmentTargetKind,
+}
 ```
 
-### AST Output (Overview)
+This keeps the core parser reusable:
 
+- standalone comment parsing
+- source comment benchmarks
+- oxlint integration
+- ESLint-compatible binding
+
+The parser should not know whether a comment documents a function, class,
+variable declaration, overload, or export declaration.
+
+## JS / JSON Shape
+
+The JS-facing AST should use ESTree-style field names.
+
+Example:
+
+```ts
+interface JsdocBlock {
+  type: "JsdocBlock"
+  range: [number, number]
+  description: string
+  descriptionLines: JsdocDescriptionLine[]
+  tags: JsdocTag[]
+  inlineTags: JsdocInlineTag[]
+}
 ```
+
+```ts
+interface JsdocTag {
+  type: "JsdocTag"
+  range: [number, number]
+  tag: string
+  rawType: string | null
+  parsedType: JsdocType | null
+  name: string | null
+  optional: boolean
+  defaultValue: string | null
+  description: string
+  rawBody: string | null
+  typeLines: JsdocTypeLine[]
+  descriptionLines: JsdocDescriptionLine[]
+  inlineTags: JsdocInlineTag[]
+}
+```
+
+```ts
+interface JsdocDescriptionLine {
+  type: "JsdocDescriptionLine"
+  range: [number, number]
+  delimiter: string
+  postDelimiter: string
+  initial: string
+  description: string
+}
+```
+
+```ts
+interface JsdocTypeLine {
+  type: "JsdocTypeLine"
+  range: [number, number]
+  delimiter: string
+  postDelimiter: string
+  initial: string
+  rawType: string
+}
+```
+
+```ts
+interface JsdocInlineTag {
+  type: "JsdocInlineTag"
+  range: [number, number]
+  tag: string
+  namepathOrURL: string | null
+  text: string | null
+  format: "plain" | "pipe" | "space" | "prefix" | "unknown"
+  rawBody: string | null
+}
+```
+
+The JS shape can include `loc` as an option, but Rust AST nodes should keep only
+byte spans.
+
+## Migration From Current AST
+
+Current implementation names:
+
+```text
 JSDocComment
-├── description: Description
-│   ├── Text("Find a user.\nSee ")
-│   ├── InlineTag { tag_name: "link", body: Link { target: NamePathLike("UserService") } }
-│   └── Text(" for details.")
-├── tags[0]: BlockTag
-│   ├── tag_name: "param"
-│   ├── body: Generic
-│   │   ├── type_expression: TypeExpression
-│   │   │   └── Union [Name("string"), Name("number")]
-│   │   ├── value: ParameterName(Required(ParameterPath("id")))
-│   │   └── description: Text("The user ID")
-├── tags[1]: BlockTag
-│   ├── tag_name: "param"
-│   ├── body: Generic
-│   │   ├── type_expression: TypeExpression
-│   │   │   └── TypeApplication { callee: Name("Object"), args: [Name("string"), AllLiteral] }
-│   │   ├── value: ParameterName(Optional { name: ParameterPath("options"), default: Text("{}") })
-│   │   └── description: Text("Options")
-├── tags[2]: BlockTag
-│   ├── tag_name: "returns"
-│   ├── body: Generic
-│   │   ├── type_expression: TypeExpression
-│   │   │   └── TypeApplication { callee: Name("Promise"), args: [Name("User")] }
-│   │   └── description: Text("The found user")
-├── tags[3]: BlockTag
-│   ├── tag_name: "throws"
-│   ├── body: Generic
-│   │   ├── type_expression: TypeExpression
-│   │   │   └── Name("NotFoundError")
-│   │   └── description: Text("If the user is not found")
-├── tags[4]: BlockTag
-│   ├── tag_name: "since"
-│   ├── body: Generic
-│   │   ├── value: RawToken("2.0.0")
-└── tags[5]: BlockTag
-    ├── tag_name: "deprecated"
-    ├── body: Generic
-    │   └── description: Description
-    │       ├── Text("Will be removed in 3.0.0. Use ")
-    │       ├── InlineTag { tag_name: "link", body: Link { target: NamePathLike("findUserById") } }
-    │       └── Text(" instead.")
+Description
+DescriptionPart
+BlockTag
+BlockTagBody
+GenericTagBody
+TypeExpression
+TagValueToken
 ```
 
-![ast-example.svg](./ast-example.svg)
+Recommended direction:
 
----
+```text
+JSDocComment     -> JsdocBlock
+BlockTag         -> JsdocTag
+Description      -> description + descriptionLines + inlineTags
+DescriptionPart  -> JsdocDescriptionLine / JsdocInlineTag / future text nodes
+TypeExpression   -> JsdocTypeSource first, JsdocType later
+TagValueToken    -> JsdocTagValue
+```
 
-## 11. Design Decisions
+The biggest structural change is moving from an interleaved description tree to
+an ESTree-like line-oriented shape.
 
-### 11.1 `BlockTagBody` variant boundary
+However, the design should not lose the ability to represent text and inline
+tags structurally.
+The recommended compromise is:
 
-- Dedicated `BlockTagBody` variants are reserved for lexically special forms.
-- In v1, only `Borrows` qualifies.
-- Tags such as `@variation`, `@requires`, `@memberof!`, `@since`, and `@see`
-  remain `GenericTagBody` and are interpreted later by TagSpec/semantic validation.
+- `descriptionLines` preserves formatter/linter line structure
+- `inlineTags` exposes all inline tags as direct visitable children
+- future `JsdocText` / `JsdocInlineCode` / `JsdocFencedCodeBlock` nodes can be
+  added if rules need deeper description traversal
 
-Rationale:
+## Compatibility Policy
 
-- This matches oxc's bias toward a cheap, regular parse step and heavier meaning in later layers.
-- It avoids one-off AST nodes for dictionary-driven tag behavior.
+The AST should optimize for stable rule-facing fields:
 
-### 11.2 `NamePathLike` vs `TypeName`
+- `type`
+- `range`
+- `tag`
+- `rawType`
+- `name`
+- `description`
+- `tags`
+- `descriptionLines`
+- `typeLines`
+- `inlineTags`
 
-- `NamePathLike` is the shared syntax substrate.
-- `TypeName` remains a dedicated wrapper node in type position.
-- We do not collapse them into a single AST node type.
+Internal Rust representation may evolve as long as the JS-facing shape remains
+compatible.
 
-Rationale:
+Fields likely to remain stable:
 
-- This matches oxc's explicit-role style such as distinct identifier node kinds.
-- It leaves room for future type-only metadata without widening every namepath consumer.
+- node kinds
+- visitor keys
+- raw text fields
+- spans/ranges
+- direct tag/name/type/description convenience fields
 
-### 11.3 `node_id` in the JSDoc AST
+Fields allowed to evolve:
 
-- `node_id` is not part of the core JSDoc AST in v1.
-- If `ox-jsdoc` is later integrated into an oxc semantic graph, identity should be owned by the graph
-  or an adapter layer rather than stored on every JSDoc node.
+- `body`
+- `parsedType`
+- parsed namepath structure
+- parsed parameter-path structure
+- analyzer output
+- validation metadata
 
-Rationale:
+## Open Questions
 
-- The JSDoc AST is not the primary backbone for scope/symbol analysis.
-- Omitting `node_id` keeps the tree smaller and more transfer-friendly.
-- This keeps parsing concerns separate from semantic attachment concerns.
+1. Should `JsdocBlock.description` be `""` or `null` when no description exists?
+
+   Recommendation: JS-facing shape should use `""`; Rust can use
+   `Option<&str>` internally.
+
+2. Should malformed type expressions produce `rawType`?
+
+   Recommendation: yes. `parsedType` can be `null`, and parser diagnostics can
+   describe the malformed range.
+
+3. Should unknown inline tags be parsed into `JsdocInlineTag`?
+
+   Recommendation: yes. Use `format: "unknown"` when link-style parsing cannot
+   classify the body.
+
+4. Should comment attachment be part of the AST?
+
+   Recommendation: no. Keep it in the oxlint / ESLint integration layer.
+
+5. Should type parsing run by default?
+
+   Recommendation: no for the parser hot path. Make it an option or a later
+   phase.
+
+## Summary
+
+`ox-jsdoc` should expose an ESTree-like JSDoc AST for lint tooling while keeping
+the Rust parser fast and source-preserving.
+
+The public shape should be close to `@es-joy/jsdoccomment` because that model is
+already proven in ESLint JSDoc rules.
+
+The internal design should still follow the performance documents:
+
+- arena allocation
+- borrowed strings
+- absolute spans
+- parser/validator/analyzer separation
+- raw syntax preservation
+- delayed type/namepath/semantic interpretation
+
+This gives `ox-jsdoc` a practical v1 AST for oxlint and ESLint, without closing
+the door on richer JSDoc structure later.

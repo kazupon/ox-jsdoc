@@ -1,0 +1,6 @@
+/**
+ * Finds a user by identifier.
+ *
+ * @param {string} id - The user identifier.
+ * @returns {User} The matched user.
+ */

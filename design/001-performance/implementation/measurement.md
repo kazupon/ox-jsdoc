@@ -9,7 +9,7 @@ repeatable measurements against realistic inputs.
 At minimum, the project should measure:
 
 1. **Parse throughput**
-   - time to parse comments into `JSDocComment<'a>`
+   - time to parse comments into `JsdocBlock<'a>`
 2. **Validation throughput**
    - time to apply tag-specific and mode-specific rules on top of parsed AST
 3. **Serialization throughput**

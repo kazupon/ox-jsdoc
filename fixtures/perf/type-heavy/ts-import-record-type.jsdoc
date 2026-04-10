@@ -1,0 +1,7 @@
+/**
+ * @type {import('typedoc').TypeDocOptions & {
+ *   docsRoot?: string,
+ *   tags?: Record<string, string>,
+ *   parser?: Parameters<Foo>[0]
+ * }}
+ */

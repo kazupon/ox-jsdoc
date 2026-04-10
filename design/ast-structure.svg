@@ -1,455 +1,162 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 2520" font-family="'Helvetica Neue', Arial, sans-serif" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1350" font-family="'Helvetica Neue', Arial, sans-serif" font-size="13">
   <defs>
     <style>
-      .title { font-size: 24px; font-weight: 700; fill: #1a1a2e; }
-      .subtitle { font-size: 14px; fill: #5b6475; }
-      .section-label { font-size: 18px; font-weight: 700; fill: #2f3a4f; }
-      .section-line { stroke: #d7dde6; stroke-width: 1; stroke-dasharray: 5 5; }
-      .annotation { font-size: 11px; fill: #798394; font-style: italic; }
-      .node-root rect { fill: #1a1a2e; rx: 8; ry: 8; }
-      .node-root text { fill: #fff; font-weight: 700; }
-      .node-struct rect { fill: #e9f5ff; stroke: #3b82f6; stroke-width: 1.5; rx: 6; ry: 6; }
-      .node-struct .node-title { fill: #1249a7; font-weight: 700; font-size: 14px; }
-      .node-struct .node-field { fill: #334155; font-size: 12px; }
-      .node-struct .node-type { fill: #2563eb; font-size: 12px; font-style: italic; }
-      .node-enum rect { fill: #fff4e6; stroke: #f59e0b; stroke-width: 1.5; rx: 6; ry: 6; }
-      .node-enum .node-title { fill: #b45309; font-weight: 700; font-size: 14px; }
-      .node-enum .variant { fill: #9a3412; font-size: 12px; }
-      .node-leaf rect { fill: #edf9ee; stroke: #4caf50; stroke-width: 1.5; rx: 6; ry: 6; }
-      .node-leaf .node-title { fill: #166534; font-weight: 700; font-size: 14px; }
-      .node-leaf .node-field { fill: #334155; font-size: 12px; }
-      .node-note rect { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.2; rx: 6; ry: 6; }
-      .node-note .node-title { fill: #475569; font-weight: 700; font-size: 13px; }
-      .node-note .node-field { fill: #64748b; font-size: 12px; }
-      .edge { stroke: #667085; stroke-width: 1.5; fill: none; }
-      .edge-optional { stroke: #94a3b8; stroke-width: 1.2; fill: none; stroke-dasharray: 6 4; }
-      .edge-vec { stroke: #2563eb; stroke-width: 1.8; fill: none; }
-      .legend text { font-size: 11px; fill: #334155; }
+      .title { font-size: 25px; font-weight: 700; fill: #14213d; }
+      .subtitle { font-size: 14px; fill: #607089; }
+      .section { font-size: 17px; font-weight: 700; fill: #26364f; }
+      .note { font-size: 12px; fill: #64748b; }
+      .mono { font-family: Menlo, Consolas, monospace; }
+      .root rect { fill: #14213d; rx: 10; ry: 10; }
+      .root text { fill: #fff; font-weight: 700; }
+      .node rect { fill: #eaf4ff; stroke: #2563eb; stroke-width: 1.5; rx: 8; ry: 8; }
+      .node .name { fill: #1d4ed8; font-weight: 700; font-size: 15px; }
+      .node .field { fill: #334155; font-size: 12px; }
+      .line rect { fill: #ecfdf5; stroke: #16a34a; stroke-width: 1.5; rx: 8; ry: 8; }
+      .line .name { fill: #15803d; font-weight: 700; font-size: 15px; }
+      .tag rect { fill: #fff7ed; stroke: #f97316; stroke-width: 1.5; rx: 8; ry: 8; }
+      .tag .name { fill: #c2410c; font-weight: 700; font-size: 15px; }
+      .inline rect { fill: #fdf2f8; stroke: #db2777; stroke-width: 1.5; rx: 8; ry: 8; }
+      .inline .name { fill: #be185d; font-weight: 700; font-size: 15px; }
+      .future rect { fill: #f8fafc; stroke: #94a3b8; stroke-width: 1.3; stroke-dasharray: 6 4; rx: 8; ry: 8; }
+      .future .name { fill: #475569; font-weight: 700; font-size: 15px; }
+      .phase rect { fill: #fff; stroke: #cbd5e1; stroke-width: 1.3; rx: 8; ry: 8; }
+      .phase .name { fill: #334155; font-weight: 700; font-size: 14px; }
+      .edge { stroke: #64748b; stroke-width: 1.5; fill: none; }
+      .edge-vec { stroke: #2563eb; stroke-width: 2; fill: none; }
+      .edge-opt { stroke: #94a3b8; stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; }
+      .label { font-size: 11px; fill: #64748b; font-style: italic; }
     </style>
     <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6 Z" fill="#667085"/>
+      <path d="M0,0 L8,3 L0,6 Z" fill="#64748b"/>
     </marker>
-    <marker id="arrow-optional" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/>
-    </marker>
-    <marker id="arrow-vec" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+    <marker id="arrow-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
       <path d="M0,0 L8,3 L0,6 Z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-opt" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/>
     </marker>
   </defs>
 
   <text x="700" y="42" text-anchor="middle" class="title">ox-jsdoc AST Structure</text>
-  <text x="700" y="66" text-anchor="middle" class="subtitle">Updated to match design/ast.md: BlockTagBody, ParameterPath, NamePathLike, and expanded TypeExpr</text>
+  <text x="700" y="66" text-anchor="middle" class="subtitle">ESTree-like public AST for oxlint and ESLint, with delayed semantic extensions</text>
 
-  <g transform="translate(30, 88)">
-    <rect x="0" y="0" width="420" height="92" fill="#ffffff" stroke="#d7dde6" rx="6" ry="6"/>
-    <text x="210" y="19" text-anchor="middle" font-weight="700" font-size="12" fill="#475569">Legend</text>
-    <g class="legend">
-      <rect x="12" y="30" width="16" height="12" fill="#1a1a2e" rx="3" ry="3"/>
-      <text x="34" y="40">Root node</text>
-      <rect x="130" y="30" width="16" height="12" fill="#e9f5ff" stroke="#3b82f6" rx="3" ry="3"/>
-      <text x="152" y="40">Struct node</text>
-      <rect x="250" y="30" width="16" height="12" fill="#fff4e6" stroke="#f59e0b" rx="3" ry="3"/>
-      <text x="272" y="40">Enum node</text>
-      <rect x="12" y="54" width="16" height="12" fill="#edf9ee" stroke="#4caf50" rx="3" ry="3"/>
-      <text x="34" y="64">Leaf / compact struct</text>
-      <line x1="130" y1="60" x2="170" y2="60" class="edge" marker-end="url(#arrow)"/>
-      <text x="176" y="64">Required</text>
-      <line x1="240" y1="60" x2="280" y2="60" class="edge-optional" marker-end="url(#arrow-optional)"/>
-      <text x="286" y="64">Optional</text>
-      <line x1="340" y1="60" x2="380" y2="60" class="edge-vec" marker-end="url(#arrow-vec)"/>
-      <text x="386" y="64">Vec</text>
-    </g>
+  <g class="phase" transform="translate(80, 100)">
+    <rect x="0" y="0" width="1240" height="86"/>
+    <text x="22" y="28" class="name">Design split</text>
+    <text x="22" y="52" class="note">Rust AST stores Span and borrowed source slices. JS / JSON serialization emits ESTree-style type, start, end, optional range, and optional loc.</text>
+    <text x="22" y="72" class="note">Parser builds syntax. Validator, analyzer, and type parser attach semantic facts later.</text>
   </g>
 
-  <line x1="30" y1="208" x2="1370" y2="208" class="section-line"/>
-  <text x="40" y="232" class="section-label">1. Root and Comment Body</text>
+  <text x="80" y="235" class="section">1. Core visitable AST</text>
 
-  <g class="node-root" transform="translate(530, 258)">
-    <rect x="0" y="0" width="340" height="78"/>
-    <text x="170" y="28" text-anchor="middle">JSDocComment</text>
-    <text x="170" y="49" text-anchor="middle" font-size="12" fill="#cbd5e1">description? + tags[]</text>
-    <text x="170" y="65" text-anchor="middle" font-size="11" fill="#94a3b8">root parse result for one /** ... */ block</text>
+  <g class="root" transform="translate(530, 270)">
+    <rect x="0" y="0" width="340" height="86"/>
+    <text x="170" y="31" text-anchor="middle">JsdocBlock</text>
+    <text x="170" y="54" text-anchor="middle" font-size="12" fill="#cbd5e1">span, delimiter, terminal</text>
+    <text x="170" y="72" text-anchor="middle" font-size="12" fill="#cbd5e1">description + descriptionLines[] + tags[] + inlineTags[]</text>
   </g>
 
-  <g class="node-struct" transform="translate(110, 410)">
-    <rect x="0" y="0" width="360" height="68"/>
-    <text x="180" y="24" text-anchor="middle" class="node-title">Description</text>
-    <text x="16" y="46" class="node-field">parts:</text>
-    <text x="58" y="46" class="node-type">Vec&lt;DescriptionPart&gt;</text>
-    <text x="16" y="61" class="node-field">interleaves text, inline code, fenced blocks, and inline tags</text>
+  <g class="line" transform="translate(90, 445)">
+    <rect x="0" y="0" width="330" height="118"/>
+    <text x="165" y="28" text-anchor="middle" class="name">JsdocDescriptionLine</text>
+    <text x="20" y="54" class="field">span: Span</text>
+    <text x="20" y="74" class="field">delimiter: &amp;'a str</text>
+    <text x="20" y="94" class="field">postDelimiter, initial, description</text>
   </g>
 
-  <g class="node-struct" transform="translate(790, 398)">
-    <rect x="0" y="0" width="430" height="94"/>
-    <text x="215" y="24" text-anchor="middle" class="node-title">BlockTag</text>
-    <text x="16" y="46" class="node-field">tag_name:</text>
-    <text x="86" y="46" class="node-type">TagName</text>
-    <text x="16" y="62" class="node-field">body:</text>
-    <text x="50" y="62" class="node-type">Option&lt;BlockTagBody&gt;</text>
-    <text x="16" y="78" class="node-field">raw_body:</text>
-    <text x="78" y="78" class="node-type">Option&lt;Text&gt;</text>
+  <g class="tag" transform="translate(535, 430)">
+    <rect x="0" y="0" width="330" height="152"/>
+    <text x="165" y="28" text-anchor="middle" class="name">JsdocTag</text>
+    <text x="20" y="54" class="field">tag: JsdocTagName</text>
+    <text x="20" y="74" class="field">rawType?: JsdocTypeSource</text>
+    <text x="20" y="94" class="field">parsedType?: JsdocType</text>
+    <text x="20" y="114" class="field">name?, optional, defaultValue?</text>
+    <text x="20" y="134" class="field">descriptionLines[] + typeLines[] + inlineTags[]</text>
   </g>
 
-  <line x1="610" y1="336" x2="310" y2="410" class="edge-optional" marker-end="url(#arrow-optional)"/>
-  <text x="438" y="373" class="annotation">description?</text>
-  <line x1="790" y1="336" x2="1006" y2="398" class="edge-vec" marker-end="url(#arrow-vec)"/>
-  <text x="896" y="373" class="annotation">tags: Vec&lt;BlockTag&gt;</text>
-
-  <line x1="30" y1="532" x2="1370" y2="532" class="section-line"/>
-  <text x="40" y="556" class="section-label">2. Description and Inline Content</text>
-
-  <g class="node-enum" transform="translate(106, 596)">
-    <rect x="0" y="0" width="370" height="84"/>
-    <text x="185" y="24" text-anchor="middle" class="node-title">DescriptionPart</text>
-    <text x="16" y="46" class="variant">Text(Text)</text>
-    <text x="16" y="61" class="variant">InlineTag(InlineTag)</text>
-    <text x="16" y="76" class="variant">InlineCode(InlineCode) | FencedCodeBlock(FencedCodeBlock)</text>
+  <g class="inline" transform="translate(980, 445)">
+    <rect x="0" y="0" width="330" height="118"/>
+    <text x="165" y="28" text-anchor="middle" class="name">JsdocInlineTag</text>
+    <text x="20" y="54" class="field">tag: JsdocTagName</text>
+    <text x="20" y="74" class="field">namepathOrURL?, text?</text>
+    <text x="20" y="94" class="field">format: plain | pipe | space | prefix | unknown</text>
   </g>
 
-  <g class="node-leaf" transform="translate(30, 726)">
-    <rect x="0" y="0" width="200" height="56"/>
-    <text x="100" y="22" text-anchor="middle" class="node-title">Text</text>
-    <text x="16" y="42" class="node-field">value: &amp;'a str</text>
+  <path d="M 590,356 C 450,392 300,405 255,445" class="edge-vec" marker-end="url(#arrow-blue)"/>
+  <text x="350" y="397" class="label">descriptionLines[]</text>
+  <path d="M 700,356 L 700,430" class="edge-vec" marker-end="url(#arrow-blue)"/>
+  <text x="710" y="397" class="label">tags[]</text>
+  <path d="M 815,356 C 960,392 1105,405 1145,445" class="edge-vec" marker-end="url(#arrow-blue)"/>
+  <text x="980" y="397" class="label">inlineTags[]</text>
+
+  <g class="line" transform="translate(340, 645)">
+    <rect x="0" y="0" width="300" height="94"/>
+    <text x="150" y="28" text-anchor="middle" class="name">JsdocTypeLine</text>
+    <text x="20" y="54" class="field">rawType: &amp;'a str</text>
+    <text x="20" y="74" class="field">delimiter, postDelimiter, initial</text>
   </g>
 
-  <g class="node-leaf" transform="translate(254, 726)">
-    <rect x="0" y="0" width="200" height="56"/>
-    <text x="100" y="22" text-anchor="middle" class="node-title">InlineCode</text>
-    <text x="16" y="42" class="node-field">code: &amp;'a str</text>
+  <g class="node" transform="translate(760, 645)">
+    <rect x="0" y="0" width="300" height="94"/>
+    <text x="150" y="28" text-anchor="middle" class="name">JsdocTagBody</text>
+    <text x="20" y="54" class="field">Generic(type?, value?, description?)</text>
+    <text x="20" y="74" class="field">Borrows(source, target) | Raw(raw)</text>
   </g>
 
-  <g class="node-leaf" transform="translate(478, 726)">
-    <rect x="0" y="0" width="232" height="56"/>
-    <text x="116" y="22" text-anchor="middle" class="node-title">FencedCodeBlock</text>
-    <text x="16" y="42" class="node-field">info? + content</text>
+  <path d="M 610,582 C 570,615 510,615 490,645" class="edge-vec" marker-end="url(#arrow-blue)"/>
+  <text x="520" y="625" class="label">typeLines[]</text>
+  <path d="M 790,582 C 840,612 880,612 910,645" class="edge-opt" marker-end="url(#arrow-opt)"/>
+  <text x="850" y="625" class="label">body?</text>
+
+  <text x="80" y="815" class="section">2. Deferred structured extensions</text>
+
+  <g class="future" transform="translate(90, 860)">
+    <rect x="0" y="0" width="350" height="120"/>
+    <text x="175" y="28" text-anchor="middle" class="name">JsdocTypeSource -&gt; JsdocType*</text>
+    <text x="20" y="56" class="field">v1 parser stores raw type text</text>
+    <text x="20" y="76" class="field">future type parser fills parsedType</text>
+    <text x="20" y="96" class="field">keeps parser hot path small</text>
   </g>
 
-  <g class="node-struct" transform="translate(170, 822)">
-    <rect x="0" y="0" width="300" height="70"/>
-    <text x="150" y="22" text-anchor="middle" class="node-title">InlineTag</text>
-    <text x="16" y="44" class="node-field">tag_name:</text>
-    <text x="84" y="44" class="node-type">TagName</text>
-    <text x="16" y="59" class="node-field">body:</text>
-    <text x="49" y="59" class="node-type">InlineTagBody</text>
+  <g class="future" transform="translate(525, 860)">
+    <rect x="0" y="0" width="350" height="120"/>
+    <text x="175" y="28" text-anchor="middle" class="name">JsdocNamepathSource -&gt; JsdocNamepath*</text>
+    <text x="20" y="56" class="field">v1 parser stores raw namepath text</text>
+    <text x="20" y="76" class="field">validator checks mode-specific validity</text>
+    <text x="20" y="96" class="field">analyzer can expose normalized facts</text>
   </g>
 
-  <g class="node-enum" transform="translate(170, 936)">
-    <rect x="0" y="0" width="320" height="72"/>
-    <text x="160" y="24" text-anchor="middle" class="node-title">InlineTagBody</text>
-    <text x="16" y="46" class="variant">Link(InlineLinkBody)</text>
-    <text x="16" y="61" class="variant">Type(TypeExpression) | Unknown(Text)</text>
+  <g class="future" transform="translate(960, 860)">
+    <rect x="0" y="0" width="350" height="120"/>
+    <text x="175" y="28" text-anchor="middle" class="name">JsdocParameterPath*</text>
+    <text x="20" y="56" class="field">v1 exposes name + optional/default</text>
+    <text x="20" y="76" class="field">future parser attaches parsed_path</text>
+    <text x="20" y="96" class="field">supports strict lint fixes later</text>
   </g>
 
-  <g class="node-struct" transform="translate(40, 1052)">
-    <rect x="0" y="0" width="310" height="72"/>
-    <text x="155" y="24" text-anchor="middle" class="node-title">InlineLinkBody</text>
-    <text x="16" y="46" class="node-field">target:</text>
-    <text x="62" y="46" class="node-type">LinkTarget</text>
-    <text x="16" y="61" class="node-field">text:</text>
-    <text x="46" y="61" class="node-type">Option&lt;Text&gt;</text>
+  <text x="80" y="1065" class="section">3. Integration boundary</text>
+
+  <g class="phase" transform="translate(90, 1110)">
+    <rect x="0" y="0" width="350" height="120"/>
+    <text x="175" y="28" text-anchor="middle" class="name">Parser</text>
+    <text x="20" y="56" class="note">Builds JsdocBlock from one /** ... */ comment.</text>
+    <text x="20" y="78" class="note">Returns recoverable diagnostics with the AST.</text>
   </g>
 
-  <g class="node-enum" transform="translate(80, 1168)">
-    <rect x="0" y="0" width="250" height="58"/>
-    <text x="125" y="22" text-anchor="middle" class="node-title">LinkTarget</text>
-    <text x="16" y="43" class="variant">NamePath(NamePathLike)</text>
-    <text x="16" y="57" class="variant">URL(Text)</text>
+  <g class="phase" transform="translate(525, 1110)">
+    <rect x="0" y="0" width="350" height="120"/>
+    <text x="175" y="28" text-anchor="middle" class="name">Validator / Analyzer</text>
+    <text x="20" y="56" class="note">Applies TagSpec, mode rules, and derived facts.</text>
+    <text x="20" y="78" class="note">Does not rebuild the parse tree.</text>
   </g>
 
-  <line x1="290" y1="478" x2="290" y2="596" class="edge-vec" marker-end="url(#arrow-vec)"/>
-  <line x1="230" y1="680" x2="130" y2="726" class="edge" marker-end="url(#arrow)"/>
-  <line x1="290" y1="680" x2="354" y2="726" class="edge" marker-end="url(#arrow)"/>
-  <line x1="352" y1="680" x2="594" y2="726" class="edge" marker-end="url(#arrow)"/>
-  <line x1="414" y1="680" x2="320" y2="822" class="edge" marker-end="url(#arrow)"/>
-  <line x1="320" y1="892" x2="330" y2="936" class="edge" marker-end="url(#arrow)"/>
-  <line x1="270" y1="1008" x2="196" y2="1052" class="edge" marker-end="url(#arrow)"/>
-  <line x1="196" y1="1124" x2="205" y2="1168" class="edge" marker-end="url(#arrow)"/>
-
-  <line x1="30" y1="1266" x2="1370" y2="1266" class="section-line"/>
-  <text x="40" y="1290" class="section-label">3. Block Tag Body</text>
-
-  <g class="node-leaf" transform="translate(620, 586)">
-    <rect x="0" y="0" width="190" height="56"/>
-    <text x="95" y="22" text-anchor="middle" class="node-title">TagName</text>
-    <text x="16" y="42" class="node-field">value: &amp;'a str</text>
+  <g class="phase" transform="translate(960, 1110)">
+    <rect x="0" y="0" width="350" height="120"/>
+    <text x="175" y="28" text-anchor="middle" class="name">Serializer / Binding</text>
+    <text x="20" y="56" class="note">Emits ESTree-like type/start/end/range/loc.</text>
+    <text x="20" y="78" class="note">Converts borrowed slices to JS strings.</text>
   </g>
 
-  <g class="node-enum" transform="translate(856, 586)">
-    <rect x="0" y="0" width="300" height="58"/>
-    <text x="150" y="22" text-anchor="middle" class="node-title">BlockTagBody</text>
-    <text x="16" y="43" class="variant">Generic(GenericTagBody)</text>
-    <text x="16" y="57" class="variant">Borrows(BorrowsTagBody)</text>
-  </g>
-
-  <g class="node-struct" transform="translate(742, 714)">
-    <rect x="0" y="0" width="430" height="90"/>
-    <text x="215" y="24" text-anchor="middle" class="node-title">GenericTagBody</text>
-    <text x="16" y="46" class="node-field">type_expression:</text>
-    <text x="126" y="46" class="node-type">Option&lt;TypeExpression&gt;</text>
-    <text x="16" y="61" class="node-field">value:</text>
-    <text x="56" y="61" class="node-type">Option&lt;TagValueToken&gt;</text>
-    <text x="16" y="76" class="node-field">separator + description?</text>
-  </g>
-
-  <g class="node-struct" transform="translate(748, 862)">
-    <rect x="0" y="0" width="418" height="72"/>
-    <text x="209" y="24" text-anchor="middle" class="node-title">BorrowsTagBody</text>
-    <text x="16" y="46" class="node-field">source:</text>
-    <text x="64" y="46" class="node-type">NamePathLike</text>
-    <text x="220" y="46" class="node-field">target:</text>
-    <text x="268" y="46" class="node-type">NamePathLike</text>
-    <text x="16" y="61" class="node-field">dedicated only for lexically special @borrows source as target</text>
-  </g>
-
-  <g class="node-enum" transform="translate(840, 996)">
-    <rect x="0" y="0" width="286" height="72"/>
-    <text x="143" y="24" text-anchor="middle" class="node-title">TagValueToken</text>
-    <text x="16" y="46" class="variant">ParameterName(TagParameterName)</text>
-    <text x="16" y="61" class="variant">NamePathLike | Identifier | RawToken</text>
-  </g>
-
-  <g class="node-note" transform="translate(1188, 724)">
-    <rect x="0" y="0" width="170" height="78"/>
-    <text x="85" y="22" text-anchor="middle" class="node-title">Note</text>
-    <text x="14" y="44" class="node-field">@variation, @since,</text>
-    <text x="14" y="58" class="node-field">@requires, @memberof!</text>
-    <text x="14" y="72" class="node-field">stay Generic in v1</text>
-  </g>
-
-  <line x1="1010" y1="492" x2="1006" y2="586" class="edge-optional" marker-end="url(#arrow-optional)"/>
-  <text x="1016" y="544" class="annotation">body?</text>
-  <line x1="970" y1="492" x2="715" y2="586" class="edge" marker-end="url(#arrow)"/>
-  <text x="836" y="536" class="annotation">tag_name</text>
-  <line x1="1006" y1="644" x2="960" y2="714" class="edge" marker-end="url(#arrow)"/>
-  <line x1="1006" y1="644" x2="960" y2="862" class="edge" marker-end="url(#arrow)"/>
-  <line x1="956" y1="804" x2="980" y2="996" class="edge-optional" marker-end="url(#arrow-optional)"/>
-  <text x="990" y="904" class="annotation">value?</text>
-
-  <line x1="30" y1="1350" x2="1370" y2="1350" class="section-line"/>
-  <text x="40" y="1374" class="section-label">4. ParameterPath and NamePathLike</text>
-
-  <g class="node-enum" transform="translate(744, 1118)">
-    <rect x="0" y="0" width="300" height="58"/>
-    <text x="150" y="22" text-anchor="middle" class="node-title">TagParameterName</text>
-    <text x="16" y="43" class="variant">Required(RequiredParameterName)</text>
-    <text x="16" y="57" class="variant">Optional(OptionalParameterName)</text>
-  </g>
-
-  <g class="node-struct" transform="translate(540, 1418)">
-    <rect x="0" y="0" width="240" height="56"/>
-    <text x="120" y="22" text-anchor="middle" class="node-title">RequiredParameterName</text>
-    <text x="16" y="42" class="node-field">name: ParameterPath</text>
-  </g>
-
-  <g class="node-struct" transform="translate(816, 1410)">
-    <rect x="0" y="0" width="290" height="72"/>
-    <text x="145" y="22" text-anchor="middle" class="node-title">OptionalParameterName</text>
-    <text x="16" y="46" class="node-field">name:</text>
-    <text x="58" y="46" class="node-type">ParameterPath</text>
-    <text x="16" y="61" class="node-field">default_value:</text>
-    <text x="102" y="61" class="node-type">Option&lt;Text&gt;</text>
-  </g>
-
-  <g class="node-struct" transform="translate(514, 1546)">
-    <rect x="0" y="0" width="382" height="72"/>
-    <text x="191" y="24" text-anchor="middle" class="node-title">ParameterPath</text>
-    <text x="16" y="46" class="node-field">root:</text>
-    <text x="50" y="46" class="node-type">ParameterRoot</text>
-    <text x="16" y="61" class="node-field">continuations:</text>
-    <text x="101" y="61" class="node-type">Vec&lt;ParameterContinuation&gt;</text>
-  </g>
-
-  <g class="node-enum" transform="translate(428, 1658)">
-    <rect x="0" y="0" width="206" height="58"/>
-    <text x="103" y="22" text-anchor="middle" class="node-title">ParameterRoot</text>
-    <text x="16" y="43" class="variant">Identifier | StringLiteral</text>
-    <text x="16" y="57" class="variant">first segment only</text>
-  </g>
-
-  <g class="node-enum" transform="translate(666, 1658)">
-    <rect x="0" y="0" width="312" height="58"/>
-    <text x="156" y="22" text-anchor="middle" class="node-title">ParameterContinuation</text>
-    <text x="16" y="43" class="variant">ArrayElement(ArrayElementSegment)</text>
-    <text x="16" y="57" class="variant">Property(ParameterProperty)</text>
-  </g>
-
-  <g class="node-leaf" transform="translate(680, 1756)">
-    <rect x="0" y="0" width="170" height="56"/>
-    <text x="85" y="22" text-anchor="middle" class="node-title">ArrayElementSegment</text>
-    <text x="16" y="42" class="node-field">represents []</text>
-  </g>
-
-  <g class="node-struct" transform="translate(874, 1748)">
-    <rect x="0" y="0" width="286" height="72"/>
-    <text x="143" y="24" text-anchor="middle" class="node-title">ParameterProperty</text>
-    <text x="16" y="46" class="node-field">property:</text>
-    <text x="72" y="46" class="node-type">ParameterPropertyName</text>
-    <text x="16" y="61" class="node-field">is_array_element: bool</text>
-  </g>
-
-  <g class="node-enum" transform="translate(930, 1858)">
-    <rect x="0" y="0" width="204" height="58"/>
-    <text x="102" y="22" text-anchor="middle" class="node-title">ParameterPropertyName</text>
-    <text x="16" y="43" class="variant">Identifier | StringLiteral</text>
-    <text x="16" y="57" class="variant">quoted property supported</text>
-  </g>
-
-  <g class="node-struct" transform="translate(1016, 1418)">
-    <rect x="0" y="0" width="330" height="72"/>
-    <text x="165" y="24" text-anchor="middle" class="node-title">NamePathLike</text>
-    <text x="16" y="46" class="node-field">namespace:</text>
-    <text x="84" y="46" class="node-type">Option&lt;NamePathNamespace&gt;</text>
-    <text x="16" y="61" class="node-field">segments + variation? + trailing_connector?</text>
-  </g>
-
-  <g class="node-struct" transform="translate(1018, 1546)">
-    <rect x="0" y="0" width="322" height="72"/>
-    <text x="161" y="24" text-anchor="middle" class="node-title">NamePathComponent</text>
-    <text x="16" y="46" class="node-field">separator:</text>
-    <text x="78" y="46" class="node-type">Option&lt;NamePathSeparator&gt;</text>
-    <text x="16" y="61" class="node-field">segment:</text>
-    <text x="66" y="61" class="node-type">NamePathSegment</text>
-  </g>
-
-  <g class="node-enum" transform="translate(1014, 1658)">
-    <rect x="0" y="0" width="166" height="72"/>
-    <text x="83" y="22" text-anchor="middle" class="node-title">NamePathSeparator</text>
-    <text x="16" y="43" class="variant">Dot | Hash</text>
-    <text x="16" y="57" class="variant">Tilde | Slash</text>
-  </g>
-
-  <g class="node-enum" transform="translate(1198, 1658)">
-    <rect x="0" y="0" width="166" height="72"/>
-    <text x="83" y="22" text-anchor="middle" class="node-title">NamePathSegment</text>
-    <text x="16" y="43" class="variant">Name | StringLiteral</text>
-    <text x="16" y="57" class="variant">BracketString | Event</text>
-  </g>
-
-  <g class="node-leaf" transform="translate(1018, 1770)">
-    <rect x="0" y="0" width="150" height="56"/>
-    <text x="75" y="22" text-anchor="middle" class="node-title">Variation</text>
-    <text x="16" y="42" class="node-field">value: &amp;'a str</text>
-  </g>
-
-  <g class="node-leaf" transform="translate(1198, 1770)">
-    <rect x="0" y="0" width="166" height="56"/>
-    <text x="83" y="22" text-anchor="middle" class="node-title">NamePathNamespace</text>
-    <text x="16" y="42" class="node-field">name: Identifier</text>
-  </g>
-
-  <line x1="980" y1="1068" x2="894" y2="1118" class="edge" marker-end="url(#arrow)"/>
-  <line x1="980" y1="1068" x2="1180" y2="1418" class="edge" marker-end="url(#arrow)"/>
-  <text x="1100" y="1248" class="annotation">or NamePathLike</text>
-  <line x1="894" y1="1176" x2="660" y2="1418" class="edge" marker-end="url(#arrow)"/>
-  <line x1="894" y1="1176" x2="960" y2="1410" class="edge" marker-end="url(#arrow)"/>
-  <line x1="660" y1="1474" x2="706" y2="1546" class="edge" marker-end="url(#arrow)"/>
-  <line x1="706" y1="1618" x2="531" y2="1658" class="edge" marker-end="url(#arrow)"/>
-  <line x1="706" y1="1618" x2="822" y2="1658" class="edge-vec" marker-end="url(#arrow-vec)"/>
-  <line x1="822" y1="1716" x2="765" y2="1756" class="edge" marker-end="url(#arrow)"/>
-  <line x1="878" y1="1716" x2="1000" y2="1748" class="edge" marker-end="url(#arrow)"/>
-  <line x1="1017" y1="1820" x2="1032" y2="1858" class="edge" marker-end="url(#arrow)"/>
-  <line x1="1180" y1="1490" x2="1180" y2="1546" class="edge-vec" marker-end="url(#arrow-vec)"/>
-  <line x1="1180" y1="1618" x2="1098" y2="1658" class="edge-optional" marker-end="url(#arrow-optional)"/>
-  <line x1="1180" y1="1618" x2="1282" y2="1658" class="edge" marker-end="url(#arrow)"/>
-  <line x1="1180" y1="1490" x2="1093" y2="1770" class="edge-optional" marker-end="url(#arrow-optional)"/>
-  <line x1="1180" y1="1490" x2="1281" y2="1770" class="edge-optional" marker-end="url(#arrow-optional)"/>
-
-  <line x1="30" y1="1948" x2="1370" y2="1948" class="section-line"/>
-  <text x="40" y="1972" class="section-label">5. TypeExpression and Expanded TypeExpr</text>
-
-  <g class="node-struct" transform="translate(70, 2010)">
-    <rect x="0" y="0" width="300" height="56"/>
-    <text x="150" y="22" text-anchor="middle" class="node-title">TypeExpression</text>
-    <text x="16" y="42" class="node-field">type_expr: TypeExpr</text>
-  </g>
-
-  <g class="node-enum" transform="translate(402, 1988)">
-    <rect x="0" y="0" width="430" height="138"/>
-    <text x="215" y="24" text-anchor="middle" class="node-title">TypeExpr</text>
-    <text x="16" y="48" class="variant">AllLiteral | NullLiteral | UndefinedLiteral | UnknownLiteral</text>
-    <text x="16" y="64" class="variant">StringLiteral | NumericLiteral | Name(TypeName)</text>
-    <text x="16" y="80" class="variant">Union | TypeApplication | Function | Record</text>
-    <text x="16" y="96" class="variant">TypeQuery | IndexedAccess</text>
-    <text x="16" y="112" class="variant">Nullable | NonNullable | Optional | Variadic</text>
-    <text x="16" y="128" class="variant">ArrayShorthand | Parenthesized</text>
-  </g>
-
-  <g class="node-struct" transform="translate(868, 1996)">
-    <rect x="0" y="0" width="236" height="72"/>
-    <text x="118" y="24" text-anchor="middle" class="node-title">TypeName</text>
-    <text x="16" y="46" class="node-field">path:</text>
-    <text x="50" y="46" class="node-type">NamePathLike</text>
-    <text x="16" y="61" class="node-field">wrapper kept for type position</text>
-  </g>
-
-  <g class="node-struct" transform="translate(1128, 1996)">
-    <rect x="0" y="0" width="236" height="88"/>
-    <text x="118" y="24" text-anchor="middle" class="node-title">TypeApplication</text>
-    <text x="16" y="46" class="node-field">callee:</text>
-    <text x="60" y="46" class="node-type">TypeExpr</text>
-    <text x="16" y="61" class="node-field">type_arguments:</text>
-    <text x="105" y="61" class="node-type">Vec&lt;TypeExpr&gt;</text>
-    <text x="16" y="76" class="node-field">has_dot: bool</text>
-  </g>
-
-  <g class="node-struct" transform="translate(864, 2134)">
-    <rect x="0" y="0" width="236" height="56"/>
-    <text x="118" y="22" text-anchor="middle" class="node-title">TypeQuery</text>
-    <text x="16" y="42" class="node-field">argument: NamePathLike</text>
-  </g>
-
-  <g class="node-struct" transform="translate(1126, 2126)">
-    <rect x="0" y="0" width="238" height="72"/>
-    <text x="119" y="24" text-anchor="middle" class="node-title">IndexedAccessType</text>
-    <text x="16" y="46" class="node-field">object_type:</text>
-    <text x="84" y="46" class="node-type">TypeExpr</text>
-    <text x="16" y="61" class="node-field">index:</text>
-    <text x="52" y="61" class="node-type">IndexedAccessKey</text>
-  </g>
-
-  <g class="node-enum" transform="translate(1118, 2238)">
-    <rect x="0" y="0" width="246" height="74"/>
-    <text x="123" y="24" text-anchor="middle" class="node-title">IndexedAccessKey</text>
-    <text x="16" y="46" class="variant">TypeExpr | StringLiteral</text>
-    <text x="16" y="61" class="variant">NumericLiteral | Identifier</text>
-  </g>
-
-  <g class="node-struct" transform="translate(864, 2240)">
-    <rect x="0" y="0" width="220" height="72"/>
-    <text x="110" y="24" text-anchor="middle" class="node-title">RecordField</text>
-    <text x="16" y="46" class="node-field">key:</text>
-    <text x="42" y="46" class="node-type">RecordFieldKey</text>
-    <text x="16" y="61" class="node-field">value:</text>
-    <text x="54" y="61" class="node-type">Option&lt;TypeExpr&gt;</text>
-  </g>
-
-  <g class="node-enum" transform="translate(602, 2238)">
-    <rect x="0" y="0" width="236" height="74"/>
-    <text x="118" y="24" text-anchor="middle" class="node-title">RecordFieldKey</text>
-    <text x="16" y="46" class="variant">Identifier | StringLiteral</text>
-    <text x="16" y="61" class="variant">NumericLiteral | IndexSignature</text>
-  </g>
-
-  <g class="node-struct" transform="translate(602, 2350)">
-    <rect x="0" y="0" width="276" height="86"/>
-    <text x="138" y="24" text-anchor="middle" class="node-title">IndexSignatureField</text>
-    <text x="16" y="46" class="node-field">key_name:</text>
-    <text x="80" y="46" class="node-type">Identifier</text>
-    <text x="16" y="61" class="node-field">key_type:</text>
-    <text x="74" y="61" class="node-type">TypeExpr</text>
-    <text x="16" y="76" class="node-field">value_type:</text>
-    <text x="84" y="76" class="node-type">TypeExpr</text>
-  </g>
-
-  <line x1="320" y1="804" x2="220" y2="2010" class="edge" marker-end="url(#arrow)"/>
-  <text x="190" y="1410" class="annotation">type bodies eventually reference TypeExpression</text>
-  <line x1="370" y1="2038" x2="402" y2="2058" class="edge" marker-end="url(#arrow)"/>
-  <line x1="832" y1="2058" x2="868" y2="2032" class="edge" marker-end="url(#arrow)"/>
-  <line x1="832" y1="2058" x2="1128" y2="2038" class="edge" marker-end="url(#arrow)"/>
-  <line x1="832" y1="2058" x2="982" y2="2134" class="edge" marker-end="url(#arrow)"/>
-  <line x1="832" y1="2058" x2="1244" y2="2126" class="edge" marker-end="url(#arrow)"/>
-  <line x1="832" y1="2058" x2="974" y2="2240" class="edge" marker-end="url(#arrow)"/>
-  <line x1="1244" y1="2198" x2="1241" y2="2238" class="edge" marker-end="url(#arrow)"/>
-  <line x1="974" y1="2312" x2="838" y2="2275" class="edge" marker-end="url(#arrow)"/>
-  <line x1="720" y1="2312" x2="740" y2="2350" class="edge" marker-end="url(#arrow)"/>
+  <path d="M 440,1170 L 525,1170" class="edge" marker-end="url(#arrow)"/>
+  <path d="M 875,1170 L 960,1170" class="edge" marker-end="url(#arrow)"/>
 </svg>

@@ -1,0 +1,11 @@
+{
+  "description": "Toolchain-oriented fixture with custom vue-i18n tags and remarks.",
+  "source": "../../oss/intlify/vue-i18n",
+  "sourcePath": "../../oss/intlify/vue-i18n",
+  "category": "toolchain",
+  "features": ["custom-tag", "remarks", "defaultValue", "param", "returns"],
+  "expect": {
+    "parse": "ok",
+    "diagnostics": []
+  }
+}

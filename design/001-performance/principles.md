@@ -74,13 +74,13 @@ These should be pushed to later semantic validation and analysis phases.
 ##### Example 1. `@param {string} userId - The user ID`
 
 - parser
-  - creates `BlockTag(@param)`
-  - creates `GenericTagBody { type_expression, value, separator, description }`
+  - creates `JsdocTag(@param)`
+  - creates `JsdocTagBody::Generic { type_source, value, separator, description }`
   - assigns spans to each part
 - validator
   - checks whether `value` is a valid parameter name for `@param`
   - checks whether the type expression is valid in the current mode
-  - may refine a `RawToken` into a parameter-name-oriented interpretation
+  - may refine a `JsdocTagValue::Raw` into a parameter-name-oriented interpretation
 - analyzer
   - can expose consumer-friendly facts such as:
     - “this comment documents one parameter”
@@ -90,7 +90,7 @@ These should be pushed to later semantic validation and analysis phases.
 ##### Example 2. `@variation 3`
 
 - parser
-  - may stop at `GenericTagBody.value = RawToken("3")`
+  - may stop at `JsdocTagBody::Generic.value = JsdocTagValue::Raw("3")`
   - preserves `raw_body = "3"`
 - validator
   - interprets the value according to `@variation` rules
@@ -101,7 +101,7 @@ These should be pushed to later semantic validation and analysis phases.
 ##### Example 3. `@memberof! Foo.`
 
 - parser
-  - accepts incomplete `NamePathLike`
+  - accepts incomplete raw `JsdocNamepathSource`
   - preserves `raw_body`
 - validator
   - interprets the `!` semantics
@@ -112,7 +112,7 @@ These should be pushed to later semantic validation and analysis phases.
 ##### Example 4. `@borrows source as target`
 
 - parser
-  - creates `BorrowsTagBody` directly because the syntax is lexically special
+  - creates `JsdocTagBody::Borrows` directly because the syntax is lexically special
 - validator
   - checks that source and target are valid enough namepath-like values
 - analyzer
@@ -125,7 +125,7 @@ The important distinction is:
 
 Practical consequences:
 
-- `BlockTagBody::Generic` should remain intentionally broad
+- `JsdocTagBody::Generic` should remain intentionally broad
 - `raw_body` should be preserved
 - the parser should tolerate nodes that are syntactically valid but semantically unresolved
 
@@ -160,24 +160,25 @@ Rules worth adopting:
 
 Examples already reflected in the current design:
 
-- `DescriptionPart<'a>`
-  - instead of one large struct covering text, inline tags, and fenced blocks,
-    it uses separate variants
-- `BlockTagBody<'a>`
+- `JsdocDescriptionLine<'a>` and `JsdocInlineTag<'a>`
+  - line-level text and inline-tag boundaries are exposed separately, so rules
+    can traverse inline tags without flattening all description syntax
+- `JsdocTagBody<'a>`
   - generic bodies and `@borrows` bodies are separated
-- `TagValueToken<'a>`
+- `JsdocTagValue<'a>`
   - parameter names, namepaths, identifiers, and raw tokens are not reduced to one vague string
-- `TypeExpression` and `TypeExpr`
-  - the wrapper and the internal type tree are separated
+- `JsdocTypeSource` and future `JsdocType`
+  - raw type syntax and the internal type tree are separated
 
-For example, if `DescriptionPart` had fields for every possible case all at once,
-then even a plain text fragment would require traversing a larger node shape than necessary.
+For example, if description data tried to inline every possible future text,
+inline-code, fenced-code, and inline-tag case into one large node, then even a
+plain description line would require traversing a larger shape than necessary.
 
 The current design lets common cases stay small:
 
-- plain text uses `Text`
-- inline tags use `InlineTag`
-- fenced code uses `FencedCodeBlock`
+- plain description text uses `JsdocDescriptionLine`
+- inline tags use `JsdocInlineTag`
+- fenced code can remain scanner state or become a future `JsdocFencedCodeBlock`
 
 The important goal is not byte-for-byte similarity with `oxc_ast`.
 The real goal is to keep common-path nodes small and understandable.
@@ -190,7 +191,7 @@ and downstream analysis. `ox-jsdoc` should do the same at the level needed for J
 What should be preserved:
 
 - accurate spans
-- structured descriptions
+- source-preserving description lines
 - inline-tag boundaries
 - generic tag-body structure
 - raw tag body for parts whose final meaning is deferred
@@ -211,7 +212,7 @@ Input:
 
 Useful spans to preserve:
 
-- the full span of `BlockTag(@param)`
+- the full span of `JsdocTag(@param)`
 - the span of `{string}`
 - the span of `userId`
 
@@ -234,10 +235,12 @@ Input:
 Useful representation:
 
 ```text
-Description.parts = [
-  Text("Find a user. See "),
-  InlineTag({@link UserService}),
-  Text(" for details.")
+JsdocBlock.description = "Find a user. See {@link UserService} for details."
+JsdocBlock.description_lines = [
+  JsdocDescriptionLine("Find a user. See {@link UserService} for details.")
+]
+JsdocBlock.inline_tags = [
+  JsdocInlineTag(tag = "link", namepath_or_url = "UserService")
 ]
 ```
 
@@ -245,7 +248,7 @@ If this were flattened into a single string:
 
 - inline tags would need to be rediscovered later
 - formatting would become harder
-- the text / inline-tag boundary would be lost
+- the line-level syntax and inline-tag boundary would be lost
 
 #### Example 3. Inline-tag boundaries
 
@@ -283,16 +286,16 @@ Input:
 Useful representation:
 
 ```text
-@param.body = GenericTagBody {
-  type_expression = TypeExpression("string"),
-  value = ParameterName("userId"),
+@param.body = JsdocTagBody::Generic {
+  type_source = JsdocTypeSource("string"),
+  value = JsdocTagValue::Parameter("userId"),
   separator = Dash,
-  description = Description("The user ID")
+  description = "The user ID"
 }
 
-@since.body = GenericTagBody {
-  type_expression = None,
-  value = RawToken("2.0.0"),
+@since.body = JsdocTagBody::Generic {
+  type_source = None,
+  value = JsdocTagValue::Raw("2.0.0"),
   separator = None,
   description = None
 }
@@ -328,9 +331,9 @@ What is difficult at parse time:
 Useful preservation:
 
 ```text
-BlockTag.raw_body = "3"
-BlockTag.raw_body = "Foo."
-BlockTag.raw_body = "source as target"
+JsdocTag.raw_body = "3"
+JsdocTag.raw_body = "Foo."
+JsdocTag.raw_body = "source as target"
 ```
 
 Preserving `raw_body` means:
@@ -406,16 +409,18 @@ For example, API-documentation-heavy sources commonly use forms such as:
 Useful representation:
 
 ```text
-Description.parts = [
-  Text("Create a command from "),
-  InlineTag({@linkcode Command | entry command}),
-  Text(".")
+JsdocBlock.description_lines = [
+  JsdocDescriptionLine("Create a command from {@linkcode Command | entry command}.")
+]
+JsdocBlock.inline_tags = [
+  JsdocInlineTag(tag = "linkcode", namepath_or_url = "Command", text = "entry command")
 ]
 ```
 
 Flattening this into one string would make later phases rediscover the inline tag
-boundary. Keeping the boundary during parsing is both more accurate and cheaper
-for consumers such as linters, formatters, and renderers.
+boundary. Keeping line-level description syntax plus direct inline-tag nodes
+during parsing is both more accurate and cheaper for consumers such as linters,
+formatters, and renderers.
 
 This matters in real-world corpora:
 
@@ -498,8 +503,9 @@ strings. If measurement shows tag lookup or name comparison is hot, an
 Here, “structural repetition” means code that must be updated in many places
 whenever the AST changes, even though the updates follow a mostly mechanical pattern.
 
-If nodes such as `JSDocComment`, `Description`, `BlockTag`, `InlineTag`, and `TypeExpr`
-are maintained by hand across multiple support layers, the risk of drift is high.
+If nodes such as `JsdocBlock`, `JsdocTag`, `JsdocDescriptionLine`,
+`JsdocInlineTag`, and future `JsdocType` nodes are maintained by hand across
+multiple support layers, the risk of drift is high.
 
 Typical drift-prone areas:
 
@@ -527,11 +533,11 @@ Promising generation targets:
 
 Examples:
 
-- `walk_jsdoc_comment`
-- `walk_description`
-- `walk_block_tag`
-- `walk_inline_tag`
-- `walk_type_expr`
+- `walk_jsdoc_block`
+- `walk_jsdoc_description_line`
+- `walk_jsdoc_tag`
+- `walk_jsdoc_inline_tag`
+- `walk_jsdoc_type`
 
 These mostly follow the same pattern: visit children in order.
 If derived from AST definitions, they become much harder to forget or desynchronize.
@@ -540,10 +546,10 @@ If derived from AST definitions, they become much harder to forget or desynchron
 
 Examples:
 
-- `size_of::<BlockTag>()`
-- `size_of::<GenericTagBody>()`
-- `size_of::<DescriptionPart>()`
-- `offset_of!(BlockTag, body)`
+- `size_of::<JsdocTag>()`
+- `size_of::<JsdocGenericTagBody>()`
+- `size_of::<JsdocDescriptionLine>()`
+- `offset_of!(JsdocTag, body)`
 
 Even without immediate raw transfer, `ox-jsdoc` should detect regressions such as:
 
@@ -601,7 +607,7 @@ A practical order is:
    - hand-maintained omissions are common
 
 2. layout assertions for representative nodes
-   - such as `BlockTag`, `GenericTagBody`, `DescriptionPart`, and `TypeExpr`
+   - such as `JsdocTag`, `JsdocGenericTagBody`, `JsdocDescriptionLine`, and future `JsdocType`
 
 3. helper code for JSON serialization
    - once the transfer format starts to stabilize
@@ -765,7 +771,7 @@ such as `@`, `{@`, or line boundaries, instead of increasing branching on every 
 Frequent tags such as `@param`, `@returns`, and `@throws` should first be parsed
 into something like `type? + value? + description?`.
 
-At this stage, `GenericTagBody` plus `raw_body` is often enough.
+At this stage, `JsdocTagBody::Generic` plus `raw_body` is often enough.
 Specialized AST variants and strict normalization do not need to happen immediately.
 
 ##### 3. Push specialized interpretation backward
