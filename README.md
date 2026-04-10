@@ -4,31 +4,8 @@ High-performance JSDoc parser inspired by the `oxc` project.
 
 ## Status
 
-This repository is in the initial implementation phase.
-
-Current scope:
-
-- Rust workspace scaffold
-- `ox_jsdoc` core parser crate skeleton
-- `xtask` development tasks
-- performance fixture buckets
-
-The parser currently exposes the initial API shape and only implements minimal
-JSDoc block boundary checks. Full tag parsing, validation, analysis, serializer,
-and JavaScript / NAPI bindings are still planned work.
-
-## Repository Layout
-
-```text
-crates/ox_jsdoc      Rust core parser crate
-tasks/xtask          Repository development tasks
-fixtures/perf        Performance and parser fixture buckets
-design/              Design documents
-refers/              Reference implementations managed as git submodules
-```
-
-Start from [design/index.md](design/index.md) for the design document table of
-contents.
+> [!WARNING]
+> This project is sitll WIP, so don't use in production.
 
 ## Development
 
@@ -42,12 +19,12 @@ curl -fsSL https://vite.plus | bash
 Common commands:
 
 ```sh
-vp run fmt
-vp run check
-vp run test
+vpr fmt       # or `vp run fmt`, format for Rust and JavaScript codes
+vpr check     # or `vp run check`, lint for Rust and JavaScript codes
+vpr test      # or `vp run test`, test for Rust and JavaScript codes
 ```
 
-`vp run check` runs the Rust license-header task and `cargo check`.
+`vpr check` runs the Rust license-header task and `cargo check`.
 The header task checks Rust sources for:
 
 - non-empty `@author`
