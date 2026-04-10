@@ -1,314 +1,165 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1700 3000" font-family="'Helvetica Neue', Arial, sans-serif" font-size="12">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1180" font-family="'Helvetica Neue', Arial, sans-serif" font-size="13">
   <defs>
     <style>
-      .title { font-size: 24px; font-weight: 700; fill: #1a1a2e; }
-      .subtitle { font-size: 14px; fill: #667085; }
-      .section-label { font-size: 18px; font-weight: 700; fill: #334155; }
-      .section-line { stroke: #d0d7e2; stroke-width: 1; stroke-dasharray: 5 5; }
-      .mono { font-family: 'Menlo', 'Consolas', monospace; }
-      .addr { font-size: 10px; fill: #94a3b8; font-family: 'Menlo', 'Consolas', monospace; }
-      .annotation { font-size: 11px; fill: #64748b; font-style: italic; }
-
-      .source-box { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.4; rx: 8; ry: 8; }
-      .arena-bg { fill: #fcfcfd; stroke: #94a3b8; stroke-width: 2; rx: 12; ry: 12; }
-      .detail-bg { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.2; rx: 10; ry: 10; }
-      .note-box { fill: #fff8e1; stroke: #f59e0b; stroke-width: 1.2; rx: 8; ry: 8; }
-
-      .node-root { fill: #1a1a2e; rx: 6; ry: 6; }
-      .node-desc { fill: #e9f5ff; stroke: #3b82f6; stroke-width: 1.3; rx: 6; ry: 6; }
-      .node-tag { fill: #fff4e6; stroke: #f59e0b; stroke-width: 1.3; rx: 6; ry: 6; }
-      .node-type { fill: #f6ebff; stroke: #a855f7; stroke-width: 1.3; rx: 6; ry: 6; }
-      .node-name { fill: #eefbf3; stroke: #22c55e; stroke-width: 1.3; rx: 6; ry: 6; }
-      .node-inline { fill: #fde7f3; stroke: #ec4899; stroke-width: 1.3; rx: 6; ry: 6; }
-      .node-vec { fill: #fffde8; stroke: #eab308; stroke-width: 1.3; rx: 6; ry: 6; }
-      .node-raw { fill: #f8fafc; stroke: #64748b; stroke-width: 1.3; rx: 6; ry: 6; }
-
-      .box-title-dark { fill: #ffffff; font-weight: 700; font-size: 12px; }
-      .box-title { fill: #334155; font-weight: 700; font-size: 12px; }
-      .field-name { fill: #475569; font-size: 11px; font-family: 'Menlo', 'Consolas', monospace; }
-      .field-val { fill: #111827; font-size: 11px; font-family: 'Menlo', 'Consolas', monospace; }
-      .small { font-size: 10px; }
-
-      .ptr-box { stroke: #d92d20; stroke-width: 1.6; fill: none; }
+      .title { font-size: 25px; font-weight: 700; fill: #14213d; }
+      .subtitle { font-size: 14px; fill: #607089; }
+      .section { font-size: 17px; font-weight: 700; fill: #26364f; }
+      .mono { font-family: Menlo, Consolas, monospace; }
+      .note { font-size: 12px; fill: #64748b; }
+      .source rect { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.3; rx: 8; ry: 8; }
+      .arena rect { fill: #fff; stroke: #94a3b8; stroke-width: 1.6; rx: 10; ry: 10; }
+      .node rect { fill: #eaf4ff; stroke: #2563eb; stroke-width: 1.4; rx: 8; ry: 8; }
+      .node .name { fill: #1d4ed8; font-weight: 700; font-size: 14px; }
+      .vec rect { fill: #fffbea; stroke: #eab308; stroke-width: 1.4; rx: 8; ry: 8; }
+      .vec .name { fill: #a16207; font-weight: 700; font-size: 14px; }
+      .js rect { fill: #fdf2f8; stroke: #db2777; stroke-width: 1.5; rx: 8; ry: 8; }
+      .js .name { fill: #be185d; font-weight: 700; font-size: 14px; }
+      .phase rect { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.3; rx: 8; ry: 8; }
+      .phase .name { fill: #334155; font-weight: 700; font-size: 14px; }
+      .field { fill: #334155; font-size: 12px; }
+      .addr { fill: #94a3b8; font-size: 10px; }
+      .ptr-box { stroke: #dc2626; stroke-width: 1.5; fill: none; }
       .ptr-vec { stroke: #2563eb; stroke-width: 1.8; fill: none; }
-      .ptr-str { stroke: #16a34a; stroke-width: 1.4; fill: none; stroke-dasharray: 6 4; }
+      .ptr-str { stroke: #16a34a; stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; }
+      .ptr-js { stroke: #db2777; stroke-width: 1.5; fill: none; }
     </style>
-    <marker id="arrow-red" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L8,3 L0,6 Z" fill="#d92d20"/>
+    <marker id="red" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#dc2626"/>
     </marker>
-    <marker id="arrow-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+    <marker id="blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
       <path d="M0,0 L8,3 L0,6 Z" fill="#2563eb"/>
     </marker>
-    <marker id="arrow-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+    <marker id="green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
       <path d="M0,0 L8,3 L0,6 Z" fill="#16a34a"/>
+    </marker>
+    <marker id="pink" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#db2777"/>
     </marker>
   </defs>
 
-  <text x="850" y="40" text-anchor="middle" class="title">ox-jsdoc AST Memory Layout</text>
-  <text x="850" y="64" text-anchor="middle" class="subtitle">Arena-oriented allocation model aligned with design/ast.md and oxc-style ownership</text>
+  <text x="800" y="42" text-anchor="middle" class="title">ox-jsdoc AST Memory and Transfer Model</text>
+  <text x="800" y="66" text-anchor="middle" class="subtitle">Rust keeps Span and borrowed slices; JS binding emits ESTree-like fields</text>
 
-  <g transform="translate(36, 88)">
-    <rect x="0" y="0" width="640" height="96" fill="#ffffff" stroke="#d0d7e2" rx="8" ry="8"/>
-    <text x="16" y="20" font-size="12" font-weight="700" fill="#475569">Pointer Legend</text>
-    <line x1="20" y1="46" x2="62" y2="46" class="ptr-box" marker-end="url(#arrow-red)"/>
-    <text x="70" y="50" font-size="11" fill="#334155">Box&lt;'a, T&gt; arena pointer</text>
-    <line x1="280" y1="46" x2="322" y2="46" class="ptr-vec" marker-end="url(#arrow-blue)"/>
-    <text x="330" y="50" font-size="11" fill="#334155">Vec&lt;'a, T&gt; backing storage</text>
-    <line x1="20" y1="72" x2="62" y2="72" class="ptr-str" marker-end="url(#arrow-green)"/>
-    <text x="70" y="76" font-size="11" fill="#334155">&amp;'a str slice into source text</text>
+  <g class="phase" transform="translate(70, 95)">
+    <rect x="0" y="0" width="1460" height="76"/>
+    <text x="20" y="28" class="name">Pointer legend</text>
+    <line x1="150" y1="25" x2="210" y2="25" class="ptr-box" marker-end="url(#red)"/>
+    <text x="220" y="29" class="field">Box&lt;'a, T&gt; arena pointer</text>
+    <line x1="430" y1="25" x2="490" y2="25" class="ptr-vec" marker-end="url(#blue)"/>
+    <text x="500" y="29" class="field">Vec&lt;'a, T&gt; backing storage</text>
+    <line x1="740" y1="25" x2="800" y2="25" class="ptr-str" marker-end="url(#green)"/>
+    <text x="810" y="29" class="field">&amp;'a str slice into caller-owned source</text>
+    <line x1="1120" y1="25" x2="1180" y2="25" class="ptr-js" marker-end="url(#pink)"/>
+    <text x="1190" y="29" class="field">serialization to JS / JSON object</text>
+    <text x="20" y="58" class="note">The core AST never stores string node kinds. Node kind is Rust type internally and "type" string only in JS-facing output.</text>
   </g>
 
-  <line x1="36" y1="192" x2="1664" y2="192" class="section-line"/>
-  <text x="46" y="218" class="section-label">1. Source Storage</text>
-
-  <g transform="translate(46, 242)">
-    <rect class="source-box" x="0" y="0" width="1608" height="82"/>
-    <text x="16" y="22" class="addr">source buffer 0x7000_0000</text>
-    <text x="16" y="46" class="mono" font-size="11" fill="#334155">"/** Find a user.\n * See {@link UserService} for details.\n * @param {string|number} id - The user ID\n * ... */"</text>
-    <text x="16" y="66" class="annotation">Caller-owned source is separate from arena; all Text / Identifier / Variation string data are zero-copy slices.</text>
+  <text x="70" y="225" class="section">1. Caller-owned source</text>
+  <g class="source" transform="translate(70, 250)">
+    <rect x="0" y="0" width="1460" height="86"/>
+    <text x="18" y="25" class="addr mono">source buffer</text>
+    <text x="18" y="51" class="mono" font-size="12" fill="#334155">"/** Find a user. See {@link UserService}.\n * @param {string|number} id - The user ID\n */"</text>
+    <text x="18" y="72" class="note">AST strings are normally borrowed slices into this buffer. Serialization creates JS strings later.</text>
   </g>
 
-  <line x1="36" y1="360" x2="1664" y2="360" class="section-line"/>
-  <text x="46" y="386" class="section-label">2. Arena Allocation Overview</text>
+  <text x="70" y="390" class="section">2. Rust arena AST</text>
+  <g class="arena" transform="translate(70, 420)">
+    <rect x="0" y="0" width="960" height="650"/>
+    <text x="22" y="30" class="name">Bump arena</text>
+    <text x="22" y="52" class="note">Sequential allocations. All nodes are freed together with the arena.</text>
 
-  <rect class="arena-bg" x="46" y="410" width="940" height="1960"/>
-  <text x="68" y="438" font-size="15" font-weight="700" fill="#475569">Bump Arena</text>
-  <text x="68" y="456" class="addr">Sequential alloc() calls; every AST node stores Span and is dropped together when arena is freed.</text>
+    <g class="node" transform="translate(35, 85)">
+      <rect x="0" y="0" width="420" height="116"/>
+      <text x="18" y="26" class="name mono">JsdocBlock&lt;'a&gt;</text>
+      <text x="18" y="52" class="field mono">span: Span { start, end }</text>
+      <text x="18" y="72" class="field mono">description: Option&lt;&amp;'a str&gt;</text>
+      <text x="18" y="92" class="field mono">description_lines: Vec&lt;JsdocDescriptionLine&gt;</text>
+      <text x="18" y="112" class="field mono">tags: Vec&lt;JsdocTag&gt;  inline_tags: Vec&lt;JsdocInlineTag&gt;</text>
+    </g>
 
-  <g transform="translate(76, 496)">
-    <text x="0" y="-8" class="addr">0xA000_0000  alloc #1</text>
-    <rect class="node-root" x="0" y="0" width="610" height="66"/>
-    <text x="16" y="20" class="box-title-dark mono">JSDocComment</text>
-    <text x="16" y="40" class="mono small" fill="#cbd5e1">span + description: Box&lt;Description&gt; → 0xA000_0100</text>
-    <text x="16" y="56" class="mono small" fill="#93c5fd">tags: Vec&lt;BlockTag&gt; → 0xA000_0040  len=6</text>
+    <g class="vec" transform="translate(500, 85)">
+      <rect x="0" y="0" width="420" height="116"/>
+      <text x="18" y="26" class="name mono">Vec&lt;JsdocTag&gt; backing</text>
+      <text x="18" y="52" class="field mono">[0] JsdocTag { tag: "param", rawType, name }</text>
+      <text x="18" y="72" class="field mono">[1] JsdocTag { tag: "returns", rawType }</text>
+      <text x="18" y="92" class="field mono">common case is contiguous tag traversal</text>
+    </g>
+
+    <path d="M 350,178 L 500,150" class="ptr-vec" marker-end="url(#blue)"/>
+
+    <g class="vec" transform="translate(35, 250)">
+      <rect x="0" y="0" width="420" height="116"/>
+      <text x="18" y="26" class="name mono">Vec&lt;JsdocDescriptionLine&gt;</text>
+      <text x="18" y="52" class="field mono">delimiter: "*"</text>
+      <text x="18" y="72" class="field mono">description: &amp;'a str -&gt; source slice</text>
+      <text x="18" y="92" class="field mono">preserves line-level formatter data</text>
+    </g>
+
+    <g class="node" transform="translate(500, 250)">
+      <rect x="0" y="0" width="420" height="136"/>
+      <text x="18" y="26" class="name mono">JsdocTag&lt;'a&gt;</text>
+      <text x="18" y="52" class="field mono">tag.value: &amp;'a str -&gt; "param"</text>
+      <text x="18" y="72" class="field mono">raw_type.raw: &amp;'a str -&gt; "string|number"</text>
+      <text x="18" y="92" class="field mono">name.raw: &amp;'a str -&gt; "id"</text>
+      <text x="18" y="112" class="field mono">body: Option&lt;Box&lt;JsdocTagBody&gt;&gt;</text>
+      <text x="18" y="132" class="field mono">parsed_type: None in parser-only mode</text>
+    </g>
+
+    <path d="M 365,295 L 500,305" class="ptr-vec" marker-end="url(#blue)"/>
+
+    <g class="node" transform="translate(35, 430)">
+      <rect x="0" y="0" width="420" height="120"/>
+      <text x="18" y="26" class="name mono">JsdocInlineTag&lt;'a&gt;</text>
+      <text x="18" y="52" class="field mono">tag.value: "link"</text>
+      <text x="18" y="72" class="field mono">namepath_or_url: "UserService"</text>
+      <text x="18" y="92" class="field mono">format: Plain</text>
+      <text x="18" y="112" class="field mono">raw_body preserved for unknown tags</text>
+    </g>
+
+    <g class="node" transform="translate(500, 450)">
+      <rect x="0" y="0" width="420" height="100"/>
+      <text x="18" y="26" class="name mono">JsdocTagBody::Generic</text>
+      <text x="18" y="52" class="field mono">type_source + value + separator + description</text>
+      <text x="18" y="72" class="field mono">broad syntax, semantics resolved later</text>
+    </g>
+
+    <path d="M 800,362 L 720,450" class="ptr-box" marker-end="url(#red)"/>
   </g>
 
-  <g transform="translate(76, 600)">
-    <text x="0" y="-8" class="addr">0xA000_0040  alloc #2</text>
-    <rect class="node-vec" x="0" y="0" width="610" height="116"/>
-    <text x="16" y="20" class="box-title mono">Vec&lt;BlockTag&gt; backing</text>
-    <text x="16" y="42" class="field-val">[0] @param      tag_name + body(Box) + raw_body(Box)</text>
-    <text x="16" y="58" class="field-val">[1] @param      tag_name + body(Box) + raw_body(Box)</text>
-    <text x="16" y="74" class="field-val">[2] @returns    tag_name + body(Box)</text>
-    <text x="16" y="90" class="field-val">[3] @throws     tag_name + body(Box)</text>
-    <text x="16" y="106" class="field-val">[4] @since      tag_name + body(Box) + raw_body(Box)</text>
-  </g>
-  <path d="M 516,562 L 516,592" class="ptr-vec" marker-end="url(#arrow-blue)"/>
+  <path d="M 520,336 C 360,370 250,395 210,505" class="ptr-str" marker-end="url(#green)"/>
+  <path d="M 830,336 C 930,390 950,500 770,518" class="ptr-str" marker-end="url(#green)"/>
+  <path d="M 580,336 C 450,585 290,720 260,850" class="ptr-str" marker-end="url(#green)"/>
 
-  <g transform="translate(76, 760)">
-    <text x="0" y="-8" class="addr">0xA000_0100  alloc #3</text>
-    <rect class="node-desc" x="0" y="0" width="610" height="56"/>
-    <text x="16" y="20" class="box-title mono">Description</text>
-    <text x="16" y="40" class="field-val">parts: Vec&lt;DescriptionPart&gt; → 0xA000_0120  len=3</text>
-  </g>
-  <path d="M 270,562 C 270,614 170,684 240,752" class="ptr-box" marker-end="url(#arrow-red)"/>
-
-  <g transform="translate(76, 856)">
-    <text x="0" y="-8" class="addr">0xA000_0120  alloc #4</text>
-    <rect class="node-vec" x="0" y="0" width="610" height="58"/>
-    <text x="16" y="22" class="box-title mono">Vec&lt;DescriptionPart&gt; backing</text>
-    <text x="16" y="42" class="field-val">Text(Box→0xA000_0160)  InlineTag(Box→0xA000_01A0)  Text(Box→0xA000_0220)</text>
-  </g>
-  <path d="M 404,816 L 404,848" class="ptr-vec" marker-end="url(#arrow-blue)"/>
-
-  <g transform="translate(76, 954)">
-    <text x="0" y="-8" class="addr">0xA000_0160  alloc #5</text>
-    <rect class="node-name" x="0" y="0" width="610" height="58"/>
-    <text x="16" y="22" class="box-title mono">Text</text>
-    <text x="16" y="42" class="field-val">value: &amp;'a str → source[4..24]   "Find a user.\nSee "</text>
-  </g>
-  <path d="M 150,914 L 150,946" class="ptr-box" marker-end="url(#arrow-red)"/>
-  <path d="M 686,982 L 804,982 L 804,282" class="ptr-str" marker-end="url(#arrow-green)"/>
-
-  <g transform="translate(76, 1052)">
-    <text x="0" y="-8" class="addr">0xA000_01A0  alloc #6</text>
-    <rect class="node-inline" x="0" y="0" width="610" height="72"/>
-    <text x="16" y="20" class="box-title mono">InlineTag</text>
-    <text x="16" y="40" class="field-val">tag_name: "link"</text>
-    <text x="16" y="56" class="field-val">body: Link(Box&lt;InlineLinkBody&gt; → 0xA000_01E0)</text>
-  </g>
-  <path d="M 356,914 L 356,1044" class="ptr-box" marker-end="url(#arrow-red)"/>
-
-  <g transform="translate(76, 1158)">
-    <text x="0" y="-8" class="addr">0xA000_01E0  alloc #7</text>
-    <rect class="node-inline" x="0" y="0" width="610" height="72"/>
-    <text x="16" y="20" class="box-title mono">InlineLinkBody</text>
-    <text x="16" y="40" class="field-val">target: NamePath(Box&lt;NamePathLike&gt; → 0xA000_0210)</text>
-    <text x="16" y="56" class="field-val">text: None</text>
-  </g>
-  <path d="M 366,1124 L 366,1150" class="ptr-box" marker-end="url(#arrow-red)"/>
-
-  <g transform="translate(76, 1264)">
-    <text x="0" y="-8" class="addr">0xA000_0210  alloc #8</text>
-    <rect class="node-name" x="0" y="0" width="610" height="90"/>
-    <text x="16" y="20" class="box-title mono">NamePathLike</text>
-    <text x="16" y="40" class="field-val">namespace: None</text>
-    <text x="16" y="56" class="field-val">segments: Vec&lt;NamePathComponent&gt; → 0xA000_0240  len=1</text>
-    <text x="16" y="72" class="field-val">variation: None   trailing_connector: None</text>
-  </g>
-  <path d="M 376,1230 L 376,1256" class="ptr-box" marker-end="url(#arrow-red)"/>
-
-  <g transform="translate(76, 1394)">
-    <text x="0" y="-8" class="addr">0xA000_0240  alloc #9</text>
-    <rect class="node-vec" x="0" y="0" width="610" height="58"/>
-    <text x="16" y="22" class="box-title mono">Vec&lt;NamePathComponent&gt; backing</text>
-    <text x="16" y="42" class="field-val">[0] separator=None, segment=Name(Identifier("UserService"))</text>
-  </g>
-  <path d="M 420,1354 L 420,1386" class="ptr-vec" marker-end="url(#arrow-blue)"/>
-
-  <g transform="translate(76, 1492)">
-    <text x="0" y="-8" class="addr">0xA000_0280  alloc #10</text>
-    <rect class="node-name" x="0" y="0" width="610" height="58"/>
-    <text x="16" y="22" class="box-title mono">Text</text>
-    <text x="16" y="42" class="field-val">value: &amp;'a str → source[46..58]   " for details."</text>
-  </g>
-  <path d="M 610,914 L 610,1484" class="ptr-box" marker-end="url(#arrow-red)"/>
-
-  <g transform="translate(76, 1598)">
-    <text x="0" y="-8" class="addr">0xA000_0300  allocs #11-#24   tags[0] @param</text>
-    <rect class="node-tag" x="0" y="0" width="610" height="222"/>
-    <text x="16" y="22" class="box-title mono">BlockTag + GenericTagBody</text>
-    <text x="16" y="46" class="field-val">BlockTag.tag_name = "param"</text>
-    <text x="16" y="62" class="field-val">BlockTag.body: Box&lt;BlockTagBody::Generic&gt;</text>
-    <text x="16" y="78" class="field-val">BlockTag.raw_body: Box&lt;Text&gt;   preserves raw tail for recovery/validation</text>
-    <text x="16" y="104" class="field-val">GenericTagBody.type_expression → TypeExpression(Union)</text>
-    <text x="16" y="120" class="field-val">GenericTagBody.value → TagValueToken::ParameterName</text>
-    <text x="16" y="136" class="field-val">GenericTagBody.separator = Dash</text>
-    <text x="16" y="152" class="field-val">GenericTagBody.description → Description/Text("The user ID")</text>
-    <text x="16" y="178" class="field-val">RequiredParameterName.name → ParameterPath</text>
-    <text x="16" y="194" class="field-val">ParameterPath.root = Identifier("id"), continuations.len = 0</text>
-    <text x="16" y="210" class="field-val">TypeExpression.type_expr = Union([TypeName("string"), TypeName("number")])</text>
+  <text x="1090" y="390" class="section">3. JS / JSON transfer</text>
+  <g class="js" transform="translate(1090, 420)">
+    <rect x="0" y="0" width="440" height="300"/>
+    <text x="20" y="30" class="name">ESTree-like output</text>
+    <text x="20" y="60" class="mono field">{</text>
+    <text x="38" y="82" class="mono field">type: "JsdocTag",</text>
+    <text x="38" y="104" class="mono field">start: 42,</text>
+    <text x="38" y="126" class="mono field">end: 88,</text>
+    <text x="38" y="148" class="mono field">range: [42, 88],</text>
+    <text x="38" y="170" class="mono field">tag: "param",</text>
+    <text x="38" y="192" class="mono field">rawType: "string|number",</text>
+    <text x="38" y="214" class="mono field">name: "id",</text>
+    <text x="38" y="236" class="mono field">description: "The user ID",</text>
+    <text x="38" y="258" class="mono field">parsedType: null</text>
+    <text x="20" y="280" class="mono field">}</text>
   </g>
 
-  <g transform="translate(76, 1860)">
-    <text x="0" y="-8" class="addr">0xA000_0600  allocs #25-#33   tags[1] @param</text>
-    <rect class="node-tag" x="0" y="0" width="610" height="154"/>
-    <text x="16" y="22" class="box-title mono">BlockTag + GenericTagBody</text>
-    <text x="16" y="46" class="field-val">OptionalParameterName.name → ParameterPath("options")</text>
-    <text x="16" y="62" class="field-val">OptionalParameterName.default_value → Text("{}")</text>
-    <text x="16" y="88" class="field-val">TypeExpression.type_expr = TypeApplication</text>
-    <text x="16" y="104" class="field-val">TypeApplication.callee = TypeName(NamePathLike("Object"))</text>
-    <text x="16" y="120" class="field-val">TypeApplication.type_arguments = [TypeName("string"), AllLiteral]</text>
-    <text x="16" y="136" class="field-val">has_dot = true for Object.&lt;string, *&gt;</text>
+  <path d="M 1030,720 C 1060,650 1070,575 1090,555" class="ptr-js" marker-end="url(#pink)"/>
+
+  <g class="phase" transform="translate(1090, 760)">
+    <rect x="0" y="0" width="440" height="150"/>
+    <text x="20" y="30" class="name">Transfer rules</text>
+    <text x="20" y="58" class="note">1. Rust nodes store Span, not start/end/range/loc fields.</text>
+    <text x="20" y="82" class="note">2. JS output emits "type" strings for ESTree compatibility.</text>
+    <text x="20" y="106" class="note">3. range and loc are serialization options, not core AST layout.</text>
+    <text x="20" y="130" class="note">4. Type/namepath parsing can be attached after the parser phase.</text>
   </g>
 
-  <g transform="translate(76, 2050)">
-    <text x="0" y="-8" class="addr">0xA000_0780  allocs #34-#46   tags[2]..tags[5]</text>
-    <rect class="node-tag" x="0" y="0" width="610" height="208"/>
-    <text x="16" y="22" class="box-title mono">Remaining tags</text>
-    <text x="16" y="46" class="field-val">@returns → GenericTagBody.type_expression = TypeApplication(Promise.&lt;User&gt;)</text>
-    <text x="16" y="62" class="field-val">@throws  → GenericTagBody.type_expression = TypeName(NamePathLike("NotFoundError"))</text>
-    <text x="16" y="78" class="field-val">@since   → GenericTagBody.value = RawToken(Text("2.0.0"))</text>
-    <text x="16" y="94" class="field-val">@deprecated → GenericTagBody.description = Description</text>
-    <text x="16" y="110" class="field-val">nested Description.parts = [Text, InlineTag(link findUserById), Text]</text>
-    <text x="16" y="136" class="field-val">No dedicated node for @since or @deprecated: semantics stay in GenericTagBody</text>
-    <text x="16" y="162" class="field-val">A lexically special tag such as @borrows would allocate</text>
-    <text x="16" y="178" class="field-val">BlockTagBody::Borrows { source: NamePathLike, target: NamePathLike }</text>
-    <text x="16" y="194" class="field-val">instead of GenericTagBody</text>
-  </g>
-
-  <g transform="translate(76, 2298)">
-    <rect x="0" y="0" width="610" height="34" fill="#eef2ff" stroke="#6366f1" stroke-width="1.4" rx="6" ry="6"/>
-    <text x="305" y="22" text-anchor="middle" class="mono" font-size="11" fill="#3730a3">bump_ptr → next free region; one arena free tears down the entire AST</text>
-  </g>
-
-  <g transform="translate(1060, 410)">
-    <rect class="detail-bg" x="0" y="0" width="594" height="1310"/>
-    <text x="20" y="28" class="section-label" font-size="17">3. Representative Struct Layout</text>
-    <text x="20" y="52" class="annotation">Conceptual field ordering only. Exact byte size depends on allocator/runtime details.</text>
-
-    <text x="20" y="98" class="mono" font-size="12" font-weight="700" fill="#334155">JSDocComment&lt;'a&gt;</text>
-    <rect x="20" y="112" width="554" height="56" fill="#f8fafc" stroke="#cbd5e1" rx="6" ry="6"/>
-    <text x="34" y="134" class="field-name">span: Span | description: Option&lt;Box&lt;Description&gt;&gt; | tags: Vec&lt;BlockTag&gt;</text>
-    <text x="34" y="152" class="annotation">Root owns top-level description pointer and the block-tag vector header.</text>
-
-    <text x="20" y="208" class="mono" font-size="12" font-weight="700" fill="#334155">BlockTag&lt;'a&gt;</text>
-    <rect x="20" y="222" width="554" height="72" fill="#fff7ed" stroke="#fdba74" rx="6" ry="6"/>
-    <text x="34" y="244" class="field-name">span | tag_name: TagName | body: Option&lt;Box&lt;BlockTagBody&gt;&gt;</text>
-    <text x="34" y="262" class="field-name">raw_body: Option&lt;Box&lt;Text&gt;&gt;</text>
-    <text x="34" y="280" class="annotation">`raw_body` is retained even when a parsed body exists.</text>
-
-    <text x="20" y="334" class="mono" font-size="12" font-weight="700" fill="#334155">GenericTagBody&lt;'a&gt;</text>
-    <rect x="20" y="348" width="554" height="90" fill="#fff7ed" stroke="#fdba74" rx="6" ry="6"/>
-    <text x="34" y="370" class="field-name">span | type_expression: Option&lt;Box&lt;TypeExpression&gt;&gt;</text>
-    <text x="34" y="388" class="field-name">value: Option&lt;Box&lt;TagValueToken&gt;&gt; | separator: Option&lt;Separator&gt;</text>
-    <text x="34" y="406" class="field-name">description: Option&lt;Box&lt;Description&gt;&gt;</text>
-    <text x="34" y="424" class="annotation">Most tags reduce to type? + value? + description?.</text>
-
-    <text x="20" y="478" class="mono" font-size="12" font-weight="700" fill="#334155">NamePathLike&lt;'a&gt;</text>
-    <rect x="20" y="492" width="554" height="90" fill="#eefbf3" stroke="#86efac" rx="6" ry="6"/>
-    <text x="34" y="514" class="field-name">span | namespace: Option&lt;NamePathNamespace&gt;</text>
-    <text x="34" y="532" class="field-name">segments: Vec&lt;NamePathComponent&gt; | variation: Option&lt;Box&lt;Variation&gt;&gt;</text>
-    <text x="34" y="550" class="field-name">trailing_connector: Option&lt;NamePathSeparator&gt;</text>
-    <text x="34" y="568" class="annotation">Shared substrate for link targets, type names, and borrows endpoints.</text>
-
-    <text x="20" y="622" class="mono" font-size="12" font-weight="700" fill="#334155">ParameterPath&lt;'a&gt;</text>
-    <rect x="20" y="636" width="554" height="72" fill="#eefbf3" stroke="#86efac" rx="6" ry="6"/>
-    <text x="34" y="658" class="field-name">span | root: ParameterRoot | continuations: Vec&lt;ParameterContinuation&gt;</text>
-    <text x="34" y="676" class="annotation">Dedicated param/property path syntax is not reused as general namepath.</text>
-
-    <text x="20" y="752" class="mono" font-size="12" font-weight="700" fill="#334155">TypeExpression / TypeExpr&lt;'a&gt;</text>
-    <rect x="20" y="766" width="554" height="108" fill="#faf5ff" stroke="#d8b4fe" rx="6" ry="6"/>
-    <text x="34" y="788" class="field-name">TypeExpression { span, type_expr: TypeExpr }</text>
-    <text x="34" y="806" class="field-name">TypeExpr variants include Name, Union, TypeApplication, Function, Record,</text>
-    <text x="34" y="824" class="field-name">TypeQuery, IndexedAccess, Nullable, Optional, Variadic, ArrayShorthand ...</text>
-    <text x="34" y="852" class="annotation">Expanded compared with the old diagram: TypeQuery and IndexedAccess now matter.</text>
-
-    <text x="20" y="914" class="mono" font-size="12" font-weight="700" fill="#334155">TypeApplication&lt;'a&gt;</text>
-    <rect x="20" y="928" width="554" height="72" fill="#faf5ff" stroke="#d8b4fe" rx="6" ry="6"/>
-    <text x="34" y="950" class="field-name">span | callee: TypeExpr | type_arguments: Vec&lt;TypeExpr&gt; | has_dot: bool</text>
-    <text x="34" y="968" class="annotation">No longer hard-coded to TypeName; callee can be any TypeExpr.</text>
-
-    <text x="20" y="1042" class="mono" font-size="12" font-weight="700" fill="#334155">IndexedAccessType&lt;'a&gt;</text>
-    <rect x="20" y="1056" width="554" height="72" fill="#faf5ff" stroke="#d8b4fe" rx="6" ry="6"/>
-    <text x="34" y="1078" class="field-name">span | object_type: Box&lt;TypeExpr&gt; | index: Box&lt;IndexedAccessKey&gt;</text>
-    <text x="34" y="1096" class="annotation">Supports forms like Parameters&lt;Foo&gt;[0] and T["x"].</text>
-
-    <text x="20" y="1170" class="mono" font-size="12" font-weight="700" fill="#334155">RecordField / RecordFieldKey&lt;'a&gt;</text>
-    <rect x="20" y="1184" width="554" height="94" fill="#faf5ff" stroke="#d8b4fe" rx="6" ry="6"/>
-    <text x="34" y="1206" class="field-name">RecordField { span, key: RecordFieldKey, value: Option&lt;Box&lt;TypeExpr&gt;&gt; }</text>
-    <text x="34" y="1224" class="field-name">RecordFieldKey = Identifier | StringLiteral | NumericLiteral | IndexSignature</text>
-    <text x="34" y="1252" class="annotation">Replaces the older RecordFieldName-only model.</text>
-  </g>
-
-  <g transform="translate(1060, 1760)">
-    <rect class="note-box" x="0" y="0" width="594" height="214"/>
-    <text x="20" y="28" font-size="16" font-weight="700" fill="#92400e">4. Raw Transfer Notes</text>
-    <text x="20" y="56" class="note-text">The AST is designed in an oxc-compatible direction:</text>
-    <text x="20" y="76" class="note-text">arena allocation, #[repr(C)], and Span on every node.</text>
-    <text x="20" y="104" class="note-text">However, raw transfer is still a future phase.</text>
-    <text x="20" y="124" class="note-text">Vec backing layout is not yet treated as a stable JS ABI.</text>
-    <text x="20" y="152" class="note-text">This diagram therefore shows ownership and pointer shape,</text>
-    <text x="20" y="172" class="note-text">not a frozen cross-language binary contract.</text>
-    <text x="20" y="200" class="note-text">Design goal: later raw-transfer adaptation without transport-only fields in the core AST.</text>
-  </g>
-
-  <g transform="translate(1060, 2060)">
-    <rect class="detail-bg" x="0" y="0" width="594" height="500"/>
-    <text x="20" y="28" class="section-label" font-size="17">5. Allocation Pattern by Node Kind</text>
-
-    <rect x="20" y="56" width="554" height="88" fill="#fff7ed" stroke="#fdba74" rx="6" ry="6"/>
-    <text x="34" y="80" class="box-title mono">GenericTagBody path</text>
-    <text x="34" y="100" class="field-val">BlockTag → BlockTagBody::Generic</text>
-    <text x="34" y="118" class="field-val">→ TypeExpression? / TagValueToken? / Description?</text>
-    <text x="34" y="136" class="annotation">Most tags follow this shape.</text>
-
-    <rect x="20" y="168" width="554" height="88" fill="#eefbf3" stroke="#86efac" rx="6" ry="6"/>
-    <text x="34" y="192" class="box-title mono">NamePathLike path</text>
-    <text x="34" y="212" class="field-val">NamePathLike → Vec&lt;NamePathComponent&gt;</text>
-    <text x="34" y="230" class="field-val">→ segment payloads + optional Variation</text>
-    <text x="34" y="248" class="annotation">Used by link targets, type names, @borrows, and some tag values.</text>
-
-    <rect x="20" y="280" width="554" height="88" fill="#eefbf3" stroke="#86efac" rx="6" ry="6"/>
-    <text x="34" y="304" class="box-title mono">ParameterPath path</text>
-    <text x="34" y="324" class="field-val">TagParameterName → Required/Optional → ParameterPath</text>
-    <text x="34" y="342" class="field-val">→ Vec&lt;ParameterContinuation&gt;</text>
-    <text x="34" y="360" class="annotation">Separated from general namepath to preserve semantic role.</text>
-
-    <rect x="20" y="392" width="554" height="98" fill="#faf5ff" stroke="#d8b4fe" rx="6" ry="6"/>
-    <text x="34" y="416" class="box-title mono">TypeExpr path</text>
-    <text x="34" y="436" class="field-val">TypeExpression → TypeExpr variant</text>
-    <text x="34" y="454" class="field-val">→ Box children and Vec children depending on the variant</text>
-    <text x="34" y="472" class="annotation">Union, TypeApplication, Function, Record, TypeQuery, and IndexedAccess allocate differently.</text>
+  <g class="phase" transform="translate(70, 1100)">
+    <rect x="0" y="0" width="1460" height="52"/>
+    <text x="20" y="32" class="note">Memory policy: parser allocates node structure in the arena, borrows source text, and leaves semantic expansion to validator/analyzer/type-parser phases.</text>
   </g>
 </svg>
