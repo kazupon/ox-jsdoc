@@ -1,0 +1,23 @@
+name: Typos
+on:
+  pull_request:
+    branches-ignore:
+      - gh-pages
+      - releases/**
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+jobs:
+  run:
+    name: Spell check with Typos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Spell check
+        uses: crate-ci/typos@bb4666ad77b539a6b4ce4eda7ebb6de553704021 # v1.42.0
