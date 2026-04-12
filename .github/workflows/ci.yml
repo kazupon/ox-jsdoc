@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: vp install
 
+      - name: Add wasm target
+        run: rustup target add wasm32-unknown-unknown
+
       - name: Building
         run: vpr build
 
@@ -62,6 +65,12 @@ jobs:
 
       - name: Install dependencies
         run: vp install
+
+      - name: Add wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install playwright
+        run: vpx playwright install chromium
 
       - name: Building
         run: vpr build
