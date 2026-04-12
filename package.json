@@ -7,6 +7,8 @@
     "test": "cargo test && pnpm --filter ox-jsdoc test && vp test",
     "check": "cargo run -p xtask -- headers:check && cargo check && vp check",
     "fmt": "cargo fmt && vp fmt",
+    "release": "bumpp --commit \"release: v%s\" --all --push --tag",
+    "changelog": "gh-changelogen --repo=kazupon/ox-jsdoc",
     "bench:ox-jsdoc": "cargo bench -p ox_jsdoc_benchmark",
     "bench:ox-jsdoc:parser": "cargo bench -p ox_jsdoc_benchmark --bench parser",
     "bench:ox-jsdoc:validator": "cargo bench -p ox_jsdoc_benchmark --bench validator",
@@ -17,7 +19,9 @@
   "devDependencies": {
     "@kazupon/eslint-plugin": "^0.7.1",
     "@kazupon/vp-config": "^0.1.0",
-    "playwright": "^1.52.0",
+    "bumpp": "^11.0.1",
+    "gh-changelogen": "^0.2.8",
+    "playwright": "^1.59.1",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },
