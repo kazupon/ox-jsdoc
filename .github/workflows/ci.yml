@@ -14,8 +14,6 @@ on:
 
 jobs:
   lint:
-    needs:
-      - build
     runs-on: ${{ matrix.os }}
     name: Lint (${{ matrix.os }})
     strategy:
@@ -44,8 +42,6 @@ jobs:
         run: vpr check
 
   test:
-    needs:
-      - build
     runs-on: ${{ matrix.os }}
     name: Test (${{ matrix.os }})
     strategy:
