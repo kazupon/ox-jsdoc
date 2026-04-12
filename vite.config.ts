@@ -20,20 +20,22 @@ export default defineConfig({
   },
   test: {
     projects: [
+      // NOTE(kazupon): napi binding tests cannot run in the root config due to vitest's module runner limitations. See `napi/ox-jsdoc/vitest.config.ts` for details.
+      // {
+      //   test: {
+      //     name: 'napi',
+      //     include: ['napi/**/*.test.ts'],
+      //     environment: 'node'
+      //   }
+      // },
       {
         test: {
-          name: 'node',
-          include: ['napi/**/*.test.ts']
-        }
-      },
-      {
-        test: {
-          name: 'browser',
+          name: 'wasm',
           include: ['wasm/**/*.test.ts'],
           browser: {
             enabled: true,
-            provider: playwright(),
             headless: true,
+            provider: playwright() as any, // FIXME: The type of `provider` is not correctly inferred. It should be `PlaywrightProvider` instead of `BrowserProvider`.
             instances: [{ browser: 'chromium' }]
           }
         }

@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
-    "test": "cargo test && vp test",
+    "test": "cargo test && pnpm --filter ox-jsdoc test && vp test",
     "check": "cargo run -p xtask -- headers:check && cargo check && vp check",
     "fmt": "cargo fmt && vp fmt",
     "bench:ox-jsdoc": "cargo bench -p ox_jsdoc_benchmark",

@@ -8,7 +8,7 @@
   "scripts": {
     "build": "napi build --esm --platform --js bindings.js --dts bindings.d.ts --output-dir src-js",
     "build:release": "pnpm run build --release",
-    "test": "vp test run"
+    "test": "vp test run --config vitest.config.ts"
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.6.1",
