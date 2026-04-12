@@ -14,8 +14,6 @@ on:
 
 jobs:
   lint:
-    needs:
-      - build
     runs-on: ${{ matrix.os }}
     name: Lint (${{ matrix.os }})
     strategy:
@@ -37,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: vp install
 
+      - name: Add wasm target
+        run: rustup target add wasm32-unknown-unknown
+
       - name: Building
         run: vpr build
 
@@ -44,8 +45,6 @@ jobs:
         run: vpr check
 
   test:
-    needs:
-      - build
     runs-on: ${{ matrix.os }}
     name: Test (${{ matrix.os }})
     strategy:
@@ -66,6 +65,12 @@ jobs:
 
       - name: Install dependencies
         run: vp install
+
+      - name: Add wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install playwright
+        run: npx playwright install chromium
 
       - name: Building
         run: vpr build

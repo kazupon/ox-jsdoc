@@ -2,6 +2,7 @@ packages:
   - 'napi/*'
   - 'packages/*'
   - 'tasks/*'
+  - 'wasm/*'
 
 catalog:
   vite-plus: latest

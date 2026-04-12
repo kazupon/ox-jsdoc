@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite-plus'
+import { playwright } from 'vite-plus/test/browser-playwright'
 import {
   defineFmtConfig,
   defineLintConfig,
@@ -18,7 +19,28 @@ export default defineConfig({
     '*': 'vp check --fix'
   },
   test: {
-    include: ['napi/**/*.test.ts']
+    projects: [
+      // NOTE(kazupon): napi binding tests cannot run in the root config due to vitest's module runner limitations. See `napi/ox-jsdoc/vitest.config.ts` for details.
+      // {
+      //   test: {
+      //     name: 'napi',
+      //     include: ['napi/**/*.test.ts'],
+      //     environment: 'node'
+      //   }
+      // },
+      {
+        test: {
+          name: 'wasm',
+          include: ['wasm/**/*.test.ts'],
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: playwright() as any, // FIXME: The type of `provider` is not correctly inferred. It should be `PlaywrightProvider` instead of `BrowserProvider`.
+            instances: [{ browser: 'chromium' }]
+          }
+        }
+      }
+    ]
   },
   fmt: defineFmtConfig({
     ignorePatterns
