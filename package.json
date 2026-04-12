@@ -17,6 +17,7 @@
   "devDependencies": {
     "@kazupon/eslint-plugin": "^0.7.1",
     "@kazupon/vp-config": "^0.1.0",
+    "playwright": "^1.52.0",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },

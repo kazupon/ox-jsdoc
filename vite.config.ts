@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite-plus'
+import { playwright } from 'vite-plus/test/browser-playwright'
 import {
   defineFmtConfig,
   defineLintConfig,
@@ -18,7 +19,26 @@ export default defineConfig({
     '*': 'vp check --fix'
   },
   test: {
-    include: ['napi/**/*.test.ts']
+    projects: [
+      {
+        test: {
+          name: 'node',
+          include: ['napi/**/*.test.ts']
+        }
+      },
+      {
+        test: {
+          name: 'browser',
+          include: ['wasm/**/*.test.ts'],
+          browser: {
+            enabled: true,
+            provider: playwright(),
+            headless: true,
+            instances: [{ browser: 'chromium' }]
+          }
+        }
+      }
+    ]
   },
   fmt: defineFmtConfig({
     ignorePatterns
