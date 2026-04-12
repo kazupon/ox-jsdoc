@@ -7,7 +7,7 @@
     "test": "cargo test && pnpm --filter ox-jsdoc test && vp test",
     "check": "cargo run -p xtask -- headers:check && cargo check && vp check",
     "fmt": "cargo fmt && vp fmt",
-    "release": "bumpp --commit \"release: v%s\" --all --push --tag",
+    "release": "bumpp \"package.json\" \"wasm/**/package.json\" --commit \"release: v%s\" --all --push --tag",
     "changelog": "gh-changelogen --repo=kazupon/ox-jsdoc",
     "bench:ox-jsdoc": "cargo bench -p ox_jsdoc_benchmark",
     "bench:ox-jsdoc:parser": "cargo bench -p ox_jsdoc_benchmark --bench parser",
