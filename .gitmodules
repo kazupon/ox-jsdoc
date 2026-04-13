@@ -13,3 +13,6 @@
 [submodule "refers/jsdoccomment"]
 	path = refers/jsdoccomment
 	url = git@github.com:es-joy/jsdoccomment.git
+[submodule "refers/hybrid-type-aware-linting-performance"]
+	path = refers/hybrid-type-aware-linting-performance
+	url = git@github.com:auvred/hybrid-type-aware-linting-performance.git
