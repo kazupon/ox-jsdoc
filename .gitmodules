@@ -16,3 +16,6 @@
 [submodule "refers/hybrid-type-aware-linting-performance"]
 	path = refers/hybrid-type-aware-linting-performance
 	url = git@github.com:auvred/hybrid-type-aware-linting-performance.git
+[submodule "refers/typescript-go"]
+	path = refers/typescript-go
+	url = git@github.com:microsoft/typescript-go.git
