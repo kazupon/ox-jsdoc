@@ -4,9 +4,11 @@
   "type": "module",
   "scripts": {
     "benchmark:comment-parser": "node --expose-gc ./scripts/comment-parser-fixtures.mjs",
+    "benchmark:jsdoccomment": "node --expose-gc ./scripts/jsdoccomment-fixtures.mjs",
     "benchmark:ox-jsdoc": "node --expose-gc ./scripts/ox-jsdoc-fixtures.mjs"
   },
   "dependencies": {
+    "@es-joy/jsdoccomment": "^0.50.1",
     "comment-parser": "^1.4.1",
     "mitata": "^1.0.34",
     "ox-jsdoc": "workspace:*",
