@@ -162,8 +162,10 @@ impl<'a> ParserContext<'a> {
 
         let scan = scanner::logical_lines(self.source_text, self.base_offset);
         let (desc_range, tag_sections) = self.partition_sections(&scan);
-        let description =
-            self.parse_description_lines(&scan.lines[desc_range.start..desc_range.end], &scan.margins[desc_range.start..desc_range.end]);
+        let description = self.parse_description_lines(
+            &scan.lines[desc_range.start..desc_range.end],
+            &scan.margins[desc_range.start..desc_range.end],
+        );
         let tags = self.parse_tag_sections(&tag_sections);
 
         // Line metadata
@@ -329,7 +331,13 @@ impl<'a> ParserContext<'a> {
             tag_sections.push(section);
         }
 
-        (DescLineRange { start: 0, end: desc_end }, tag_sections)
+        (
+            DescLineRange {
+                start: 0,
+                end: desc_end,
+            },
+            tag_sections,
+        )
     }
 
     fn parse_tag_sections(&mut self, sections: &[TagSection<'a>]) -> ArenaVec<'a, JsdocTag<'a>> {
@@ -349,8 +357,16 @@ impl<'a> ParserContext<'a> {
         let parsed_body = normalized.map(|normalized| self.parse_generic_tag_body(normalized));
 
         let (
-            raw_type, name, optional, default_value, description,
-            type_lines, description_lines, inline_tags, body, raw_body,
+            raw_type,
+            name,
+            optional,
+            default_value,
+            description,
+            type_lines,
+            description_lines,
+            inline_tags,
+            body,
+            raw_body,
         ) = if let Some(parsed_body) = parsed_body {
             (
                 parsed_body.raw_type,
@@ -369,11 +385,16 @@ impl<'a> ParserContext<'a> {
             )
         } else {
             (
-                None, None, false, None, None,
+                None,
+                None,
+                false,
+                None,
+                None,
                 ArenaVec::new_in(self.allocator),
                 ArenaVec::new_in(self.allocator),
                 ArenaVec::new_in(self.allocator),
-                None, None,
+                None,
+                None,
             )
         };
 
@@ -535,7 +556,10 @@ impl<'a> ParserContext<'a> {
         let mut lines = ArenaVec::new_in(self.allocator);
         let mut inline_tags = ArenaVec::new_in(self.allocator);
 
-        if text.bytes().all(|b| b == b' ' || b == b'\t' || b == b'\n' || b == b'\r') {
+        if text
+            .bytes()
+            .all(|b| b == b' ' || b == b'\t' || b == b'\n' || b == b'\r')
+        {
             return ParsedDescription {
                 text: None,
                 lines,

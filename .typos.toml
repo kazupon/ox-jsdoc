@@ -1,2 +1,7 @@
 [files]
-extend-exclude = ["refers/", "design/syntax.ebnf"]
+extend-exclude = [
+  "refers/",
+  "design/005-jsdoccomment-compat/README.md",
+  "design/syntax.ebnf",
+  "fixtures/**"
+]

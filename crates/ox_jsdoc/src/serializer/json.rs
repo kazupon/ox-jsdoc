@@ -174,21 +174,36 @@ struct SerBlock<'a> {
     line_end: Option<&'a str>,
     #[serde(rename = "delimiterLineBreak", skip_serializing_if = "Option::is_none")]
     delimiter_line_break: Option<&'a str>,
-    #[serde(rename = "preterminalLineBreak", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "preterminalLineBreak",
+        skip_serializing_if = "Option::is_none"
+    )]
     preterminal_line_break: Option<&'a str>,
 
     // compat_mode line metadata
     #[serde(rename = "endLine", skip_serializing_if = "Option::is_none")]
     end_line: Option<u32>,
-    #[serde(rename = "descriptionStartLine", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "descriptionStartLine",
+        skip_serializing_if = "Option::is_none"
+    )]
     description_start_line: Option<u32>,
     #[serde(rename = "descriptionEndLine", skip_serializing_if = "Option::is_none")]
     description_end_line: Option<u32>,
-    #[serde(rename = "lastDescriptionLine", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "lastDescriptionLine",
+        skip_serializing_if = "Option::is_none"
+    )]
     last_description_line: Option<u32>,
-    #[serde(rename = "hasPreterminalDescription", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "hasPreterminalDescription",
+        skip_serializing_if = "Option::is_none"
+    )]
     has_preterminal_description: Option<u8>,
-    #[serde(rename = "hasPreterminalTagDescription", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "hasPreterminalTagDescription",
+        skip_serializing_if = "Option::is_none"
+    )]
     has_preterminal_tag_description: Option<u8>,
 
     description: &'a str,
@@ -264,11 +279,7 @@ impl<'a> SerBlock<'a> {
                 .iter()
                 .map(|l| SerDescriptionLine::new(l, opts))
                 .collect(),
-            tags: block
-                .tags
-                .iter()
-                .map(|t| SerTag::new(t, opts))
-                .collect(),
+            tags: block.tags.iter().map(|t| SerTag::new(t, opts)).collect(),
             inline_tags: block
                 .inline_tags
                 .iter()
@@ -417,11 +428,7 @@ impl<'a> SerTag<'a> {
             default_value: if compat { None } else { tag.default_value },
             description: tag.description.unwrap_or_default(),
             raw_body: if compat { None } else { tag.raw_body },
-            delimiter: if compat {
-                Some(tag.delimiter)
-            } else {
-                None
-            },
+            delimiter: if compat { Some(tag.delimiter) } else { None },
             post_delimiter: if compat {
                 Some(tag.post_delimiter)
             } else {
@@ -665,7 +672,9 @@ mod tests {
     use crate::parser::ParseOptions;
     use crate::validator::{ValidationOptions, validate_comment};
 
-    use super::{SerializeOptions, SpacingMode, serialize_comment_json, serialize_comment_json_with_options};
+    use super::{
+        SerializeOptions, SpacingMode, serialize_comment_json, serialize_comment_json_with_options,
+    };
 
     #[test]
     fn serializes_comment_with_validation_and_analysis() {
