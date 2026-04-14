@@ -21,6 +21,12 @@ pub struct JsdocBlock<'a> {
     pub terminal: &'a str,
     /// Line ending associated with the root delimiter, when known.
     pub line_end: &'a str,
+    /// Indentation before the opening `/**` delimiter.
+    pub initial: &'a str,
+    /// Line break after the opening delimiter: `"\n"` for multi-line, `""` for single-line.
+    pub delimiter_line_break: &'a str,
+    /// Line break before the closing `*/`: `"\n"` for normal, `""` when content is on the `*/` line.
+    pub preterminal_line_break: &'a str,
     /// Joined top-level description text before the first block tag.
     pub description: Option<&'a str>,
     /// Source-preserving top-level description lines.
@@ -29,6 +35,18 @@ pub struct JsdocBlock<'a> {
     pub tags: ArenaVec<'a, JsdocTag<'a>>,
     /// Inline tags found in the top-level description.
     pub inline_tags: ArenaVec<'a, JsdocInlineTag<'a>>,
+    /// 0-based line index of the closing `*/` line.
+    pub end_line: u32,
+    /// 0-based line index where block description starts (first non-empty description line).
+    pub description_start_line: Option<u32>,
+    /// 0-based line index where block description ends (last non-empty description line).
+    pub description_end_line: Option<u32>,
+    /// 0-based line index of the first tag or end line (description boundary).
+    pub last_description_line: Option<u32>,
+    /// 1 if block description text exists on the `*/` line, 0 otherwise.
+    pub has_preterminal_description: u8,
+    /// Some(1) if tag description exists on the `*/` line, None otherwise.
+    pub has_preterminal_tag_description: Option<u8>,
 }
 
 /// One source-preserving description line.
@@ -71,6 +89,10 @@ pub struct JsdocTag<'a> {
     pub delimiter: &'a str,
     /// Whitespace after the tag line delimiter, when known.
     pub post_delimiter: &'a str,
+    /// Indentation before the tag line delimiter.
+    pub initial: &'a str,
+    /// Line ending for the tag's first line.
+    pub line_end: &'a str,
     /// Whitespace after the tag name.
     pub post_tag: &'a str,
     /// Whitespace after the type source.

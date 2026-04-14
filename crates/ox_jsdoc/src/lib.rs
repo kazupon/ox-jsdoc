@@ -12,5 +12,5 @@ pub mod validator;
 
 pub use analyzer::{AnalysisOutput, analyze_comment};
 pub use parser::{ParseOptions, ParseOutput, parse_comment};
-pub use serializer::serialize_comment_json;
+pub use serializer::{SerializeOptions, SpacingMode, serialize_comment_json, serialize_comment_json_with_options};
 pub use validator::{ValidationMode, ValidationOptions, ValidationOutput, validate_comment};

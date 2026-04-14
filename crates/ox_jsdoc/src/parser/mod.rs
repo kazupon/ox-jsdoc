@@ -124,6 +124,7 @@ mod tests {
         assert!(output.diagnostics.is_empty());
         let comment = output.comment.expect("expected a comment AST");
         assert_eq!(comment.description, Some("Find a user."));
+        // Empty lines are skipped in description_lines; only content lines remain
         assert_eq!(comment.description_lines.len(), 1);
         assert_eq!(comment.description_lines[0].description, "Find a user.");
     }
