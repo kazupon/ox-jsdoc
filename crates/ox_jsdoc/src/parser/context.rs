@@ -31,10 +31,27 @@ struct TagSection<'a> {
     tag_name_start: u32,
     /// Absolute byte offset of the tag name end.
     tag_name_end: u32,
-    /// Logical lines that belong to the tag body.
+    /// Logical lines that belong to the tag body (content only, no margin).
     body_lines: Vec<scanner::LogicalLine<'a>>,
     /// Absolute byte offset where the tag section ends.
     end: u32,
+    /// Indentation before the `*` on the tag header line.
+    header_initial: &'a str,
+    /// The `*` delimiter on the tag header line.
+    header_delimiter: &'a str,
+    /// Whitespace after `*` on the tag header line.
+    header_post_delimiter: &'a str,
+    /// Line ending of the tag header line.
+    header_line_end: &'a str,
+}
+
+/// Index range into the parallel lines/margins arrays for description lines.
+#[derive(Debug, Clone, Copy)]
+struct DescLineRange {
+    /// Inclusive start index into ScanResult arrays.
+    start: usize,
+    /// Exclusive end index into ScanResult arrays.
+    end: usize,
 }
 
 /// Stateful parser for one JSDoc block.
@@ -143,24 +160,93 @@ impl<'a> ParserContext<'a> {
             };
         }
 
-        // Once the block shell is known-good, parsing works on logical content
-        // lines with comment margins removed.
-        let logical_lines = scanner::logical_lines(self.source_text, self.base_offset);
-        let (description_lines, tag_sections) = self.partition_sections(&logical_lines);
-        let description = self.parse_description_lines(&description_lines);
+        let scan = scanner::logical_lines(self.source_text, self.base_offset);
+        let (desc_range, tag_sections) = self.partition_sections(&scan);
+        let description = self.parse_description_lines(
+            &scan.lines[desc_range.start..desc_range.end],
+            &scan.margins[desc_range.start..desc_range.end],
+        );
         let tags = self.parse_tag_sections(&tag_sections);
+
+        // Line metadata
+        let line_count = scan.lines.len() as u32;
+        let end_line = if line_count > 0 { line_count - 1 } else { 0 };
+
+        let delimiter_line_break = if scan.lines.len() <= 1 { "" } else { "\n" };
+
+        let preterminal_line_break = if scan.lines.len() <= 1 {
+            ""
+        } else {
+            if scan.margins[scan.lines.len() - 1].is_content_empty {
+                "\n"
+            } else {
+                ""
+            }
+        };
+
+        let block_line_end = if scan.margins.is_empty() {
+            ""
+        } else {
+            scan.margins[0].line_end
+        };
+
+        // Description line indices
+        let mut description_start_line: Option<u32> = None;
+        let mut description_end_line: Option<u32> = None;
+        let mut last_description_line: Option<u32> = None;
+        let mut has_preterminal_description: u8 = 0;
+        let mut has_preterminal_tag_description: Option<u8> = None;
+
+        let has_tags = !tag_sections.is_empty();
+        let desc_lines = &scan.margins[desc_range.start..desc_range.end];
+        for (i, m) in desc_lines.iter().enumerate() {
+            if !m.is_content_empty {
+                let idx = i as u32;
+                if description_start_line.is_none() {
+                    description_start_line = Some(idx);
+                }
+                description_end_line = Some(idx);
+            }
+        }
+
+        if has_tags {
+            last_description_line = Some((desc_range.end - desc_range.start) as u32);
+        } else if !scan.lines.is_empty() {
+            last_description_line = Some(end_line);
+        }
+
+        if !scan.lines.is_empty() && !scan.margins[scan.lines.len() - 1].is_content_empty {
+            if has_tags {
+                has_preterminal_tag_description = Some(1);
+            } else {
+                has_preterminal_description = 1;
+            }
+        }
 
         let comment = ArenaBox::new_in(
             JsdocBlock {
                 span: Span::new(self.base_offset, end),
                 delimiter: "/**",
-                post_delimiter: "",
+                post_delimiter: if delimiter_line_break.is_empty() && !scan.lines.is_empty() {
+                    " "
+                } else {
+                    ""
+                },
                 terminal: "*/",
-                line_end: "",
+                line_end: block_line_end,
+                initial: "",
+                delimiter_line_break,
+                preterminal_line_break,
                 description: description.text,
                 description_lines: description.lines,
                 tags,
                 inline_tags: description.inline_tags,
+                end_line,
+                description_start_line,
+                description_end_line,
+                last_description_line,
+                has_preterminal_description,
+                has_preterminal_tag_description,
             },
             self.allocator,
         );
@@ -176,16 +262,20 @@ impl<'a> ParserContext<'a> {
         self.base_offset.checked_add(len)
     }
 
+    /// Partition logical lines into description range + tag sections.
+    /// Returns indices into scan arrays (not copies) for the description portion.
     fn partition_sections(
         &self,
-        lines: &[scanner::LogicalLine<'a>],
-    ) -> (Vec<scanner::LogicalLine<'a>>, Vec<TagSection<'a>>) {
-        let mut description_lines = Vec::new();
+        scan: &scanner::ScanResult<'a>,
+    ) -> (DescLineRange, Vec<TagSection<'a>>) {
+        let lines = &scan.lines;
+        let margins = &scan.margins;
+        let mut desc_end = 0usize; // exclusive end of description lines
         let mut tag_sections = Vec::new();
         let mut current_tag: Option<TagSection<'a>> = None;
         let mut in_fence = false;
 
-        for line in lines {
+        for (idx, line) in lines.iter().enumerate() {
             let trimmed = line.content.trim_start();
             let trimmed_delta = line.content.len() - trimmed.len();
             let trimmed_start = line.content_start + u32::try_from(trimmed_delta).unwrap();
@@ -207,30 +297,31 @@ impl<'a> ParserContext<'a> {
                         });
                     }
 
+                    let m = &margins[idx];
                     current_tag = Some(TagSection {
                         tag_name,
                         tag_name_start,
                         tag_name_end: tag_name_start + u32::try_from(tag_name.len()).unwrap(),
                         body_lines,
                         end: line.content_end,
+                        header_initial: m.initial,
+                        header_delimiter: m.delimiter,
+                        header_post_delimiter: m.post_delimiter,
+                        header_line_end: m.line_end,
                     });
                 } else if let Some(section) = current_tag.as_mut() {
-                    // Non-tag lines after a tag are continuation text for that
-                    // tag body.
                     section.body_lines.push(*line);
                     section.end = line.content_end;
                 } else {
-                    description_lines.push(*line);
+                    desc_end = idx + 1;
                 }
             } else if let Some(section) = current_tag.as_mut() {
                 section.body_lines.push(*line);
                 section.end = line.content_end;
             } else {
-                description_lines.push(*line);
+                desc_end = idx + 1;
             }
 
-            // Fenced examples often contain lines like `@decorator`; those
-            // should remain body text instead of creating new block tags.
             if self._options.fence_aware && trimmed.starts_with("```") {
                 in_fence = !in_fence;
             }
@@ -240,7 +331,13 @@ impl<'a> ParserContext<'a> {
             tag_sections.push(section);
         }
 
-        (description_lines, tag_sections)
+        (
+            DescLineRange {
+                start: 0,
+                end: desc_end,
+            },
+            tag_sections,
+        )
     }
 
     fn parse_tag_sections(&mut self, sections: &[TagSection<'a>]) -> ArenaVec<'a, JsdocTag<'a>> {
@@ -251,6 +348,8 @@ impl<'a> ParserContext<'a> {
         tags
     }
 
+    /// Parse a single block tag from its section, extracting type, name, and
+    /// description into the arena-backed AST node.
     fn parse_jsdoc_tag(&mut self, section: &TagSection<'a>) -> JsdocTag<'a> {
         // Preserve raw body separately from the structured parse so validators
         // and downstream tools can inspect the exact post-tag text.
@@ -312,8 +411,10 @@ impl<'a> ParserContext<'a> {
             default_value,
             description,
             raw_body,
-            delimiter: "*",
-            post_delimiter: " ",
+            delimiter: section.header_delimiter,
+            post_delimiter: section.header_post_delimiter,
+            initial: section.header_initial,
+            line_end: section.header_line_end,
             post_tag: " ",
             post_type: " ",
             post_name: " ",
@@ -324,6 +425,8 @@ impl<'a> ParserContext<'a> {
         }
     }
 
+    /// Parse a generic tag body: optional `{type}`, optional value token,
+    /// optional `-` separator, and remaining description text.
     fn parse_generic_tag_body(&mut self, normalized: NormalizedText<'a>) -> ParsedTagBody<'a> {
         let mut cursor = 0usize;
         let bytes = normalized.text.as_bytes();
@@ -332,8 +435,6 @@ impl<'a> ParserContext<'a> {
             cursor += 1;
         }
 
-        // `{...}` is optional and may contain nested braces. If it is malformed,
-        // report the diagnostic and continue parsing the rest as value/text.
         let type_source = if bytes.get(cursor) == Some(&b'{') {
             match find_matching_type_end(normalized.text, cursor) {
                 Some(end) => {
@@ -356,8 +457,8 @@ impl<'a> ParserContext<'a> {
         if let Some(type_source) = type_source {
             type_lines.push(JsdocTypeLine {
                 span: type_source.span,
-                delimiter: "*",
-                post_delimiter: " ",
+                delimiter: "",
+                post_delimiter: "",
                 initial: "",
                 raw_type: type_source.raw,
             });
@@ -367,8 +468,6 @@ impl<'a> ParserContext<'a> {
             cursor += 1;
         }
 
-        // The first token after the type is treated as the tag value. Optional
-        // parameters use bracket syntax and may contain whitespace-free `=`.
         let token_end = find_value_end(normalized.text, cursor);
         let value = if token_end > cursor {
             let token = &normalized.text[cursor..token_end];
@@ -380,7 +479,6 @@ impl<'a> ParserContext<'a> {
         };
         let (name, optional, default_value) = tag_value_name(value.as_ref());
 
-        // JSDoc descriptions commonly use `-` as a separator after the value.
         let mut separator = None;
         let mut remainder_start = cursor + leading_whitespace_len(&normalized.text[cursor..]);
         let mut remainder = &normalized.text[remainder_start..];
@@ -420,20 +518,22 @@ impl<'a> ParserContext<'a> {
         }
     }
 
+    /// Build description lines from scan results, using margin info for each line.
     fn parse_description_lines(
         &mut self,
         lines: &[scanner::LogicalLine<'a>],
+        margins: &[scanner::MarginInfo<'a>],
     ) -> ParsedDescription<'a> {
         let mut description_lines = ArenaVec::new_in(self.allocator);
-        for line in lines {
-            if line.content.trim().is_empty() {
+        for (line, margin) in lines.iter().zip(margins.iter()) {
+            if margin.is_content_empty {
                 continue;
             }
             description_lines.push(JsdocDescriptionLine {
                 span: Span::new(line.content_start, line.content_end),
-                delimiter: "*",
-                post_delimiter: " ",
-                initial: "",
+                delimiter: margin.delimiter,
+                post_delimiter: margin.post_delimiter,
+                initial: margin.initial,
                 description: line.content.trim_end(),
             });
         }
@@ -450,11 +550,16 @@ impl<'a> ParserContext<'a> {
         description
     }
 
+    /// Parse inline tags (`{@link ...}` etc.) from description text and wrap
+    /// the result in a `ParsedDescription`.
     fn parse_description_text(&mut self, text: &'a str, span: Span) -> ParsedDescription<'a> {
         let mut lines = ArenaVec::new_in(self.allocator);
         let mut inline_tags = ArenaVec::new_in(self.allocator);
 
-        if text.trim().is_empty() {
+        if text
+            .bytes()
+            .all(|b| b == b' ' || b == b'\t' || b == b'\n' || b == b'\r')
+        {
             return ParsedDescription {
                 text: None,
                 lines,
@@ -464,8 +569,8 @@ impl<'a> ParserContext<'a> {
 
         lines.push(JsdocDescriptionLine {
             span,
-            delimiter: "*",
-            post_delimiter: " ",
+            delimiter: "",
+            post_delimiter: "",
             initial: "",
             description: text,
         });
@@ -474,8 +579,6 @@ impl<'a> ParserContext<'a> {
         while let Some(relative_start) = text[cursor..].find("{@") {
             let inline_start = cursor + relative_start;
             let Some(relative_end) = text[inline_start + 2..].find('}') else {
-                // Recovery strategy: keep the unterminated inline tag as text
-                // so consumers do not lose source content.
                 self.diagnostics
                     .push(diagnostic(ParserDiagnosticKind::UnclosedInlineTag));
                 break;
@@ -484,8 +587,6 @@ impl<'a> ParserContext<'a> {
             let inline_end = inline_start + 2 + relative_end;
             let inside = &text[inline_start + 2..inline_end];
             let Some((tag_name, body)) = parse_inline_tag_header(inside) else {
-                // Invalid inline tag start is also recovered as literal text,
-                // then parsing resumes after `{@`.
                 self.diagnostics
                     .push(diagnostic(ParserDiagnosticKind::InvalidInlineTagStart));
                 cursor = inline_start + 2;
@@ -522,15 +623,16 @@ impl<'a> ParserContext<'a> {
         }
     }
 
+    /// Join logical lines into a single normalized text, dropping empty edge
+    /// lines but keeping internal newlines. Returns `None` when all lines are
+    /// empty or whitespace-only.
     fn normalize_lines(&self, lines: &[scanner::LogicalLine<'a>]) -> Option<NormalizedText<'a>> {
-        // Drop empty edge lines but keep internal newlines. This gives consumers
-        // compact text while retaining enough shape for multi-line descriptions.
         let first_index = lines
             .iter()
-            .position(|line| !line.content.trim().is_empty())?;
+            .position(|line| !line.content.bytes().all(|b| b == b' ' || b == b'\t'))?;
         let last_index = lines
             .iter()
-            .rposition(|line| !line.content.trim().is_empty())?;
+            .rposition(|line| !line.content.bytes().all(|b| b == b' ' || b == b'\t'))?;
         let lines = &lines[first_index..=last_index];
         let first = &lines[0];
         let last = &lines[lines.len() - 1];
@@ -543,7 +645,9 @@ impl<'a> ParserContext<'a> {
             });
         }
 
-        let mut normalized = String::new();
+        // Pre-calculate capacity to avoid reallocations.
+        let capacity: usize = lines.iter().map(|l| l.content.len() + 1).sum();
+        let mut normalized = String::with_capacity(capacity);
         for (index, line) in lines.iter().enumerate() {
             if index > 0 {
                 normalized.push('\n');
@@ -558,25 +662,39 @@ impl<'a> ParserContext<'a> {
     }
 }
 
+/// Intermediate result from parsing description lines plus inline tags.
 #[derive(Debug)]
 struct ParsedDescription<'a> {
+    /// Joined description text, or `None` when empty.
     text: Option<&'a str>,
+    /// Source-preserving description line nodes.
     lines: ArenaVec<'a, JsdocDescriptionLine<'a>>,
+    /// Inline tags found within the description text.
     inline_tags: ArenaVec<'a, JsdocInlineTag<'a>>,
 }
 
+/// Intermediate result from parsing a generic tag body.
 #[derive(Debug)]
 struct ParsedTagBody<'a> {
+    /// Raw body text after the tag name.
     raw_body: &'a str,
+    /// Extracted `{...}` type source, if present.
     raw_type: Option<JsdocTypeSource<'a>>,
+    /// First value token interpreted as a name, if present.
     name: Option<JsdocTagNameValue<'a>>,
+    /// Whether the name used optional bracket syntax.
     optional: bool,
+    /// Default value from `[name=value]` syntax.
     default_value: Option<&'a str>,
+    /// Source-preserving type lines.
     type_lines: ArenaVec<'a, JsdocTypeLine<'a>>,
+    /// Parsed description (text + lines + inline tags).
     description: ParsedDescription<'a>,
+    /// Structured body for the generic tag layout.
     body: JsdocGenericTagBody<'a>,
 }
 
+/// A normalized multi-line text span, either borrowed or arena-allocated.
 #[derive(Debug, Clone, Copy)]
 struct NormalizedText<'a> {
     /// Normalized text, either borrowed from source or allocated in the arena.
@@ -710,7 +828,6 @@ fn find_value_end(text: &str, start: usize) -> usize {
     text.len()
 }
 
-/// Classify a tag value into the most useful AST token.
 fn parse_tag_value_token<'a>(token: &'a str, span: Span) -> JsdocTagValue<'a> {
     if token.starts_with('[') && token.ends_with(']') {
         let inner = &token[1..token.len() - 1];
@@ -791,7 +908,6 @@ fn tag_value_name<'a>(
     }
 }
 
-/// Convert offsets inside a normalized text span back to absolute spans.
 fn relative_span(base: Span, relative_start: u32, relative_end: u32) -> Span {
     let start = base.start.saturating_add(relative_start);
     let end = base.start.saturating_add(relative_end);
@@ -864,12 +980,12 @@ mod tests {
         let allocator = Allocator::default();
         let source = "/**\n * Intro\n * @example\n * ```ts\n * @decorator()\n * ```\n * @returns {void}\n */";
         let context = context(&allocator, source);
-        let lines = scanner::logical_lines(source, 100);
+        let scan = scanner::logical_lines(source, 100);
 
-        let (description_lines, tag_sections) = context.partition_sections(&lines);
+        let (desc_range, tag_sections) = context.partition_sections(&scan);
 
-        assert_eq!(description_lines.len(), 2);
-        assert_eq!(description_lines[1].content, "Intro");
+        assert_eq!(desc_range.end - desc_range.start, 2);
+        assert_eq!(scan.lines[1].content, "Intro");
 
         assert_eq!(tag_sections.len(), 2);
         assert_eq!(tag_sections[0].tag_name, "example");
