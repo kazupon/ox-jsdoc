@@ -19,3 +19,6 @@
 [submodule "refers/typescript-go"]
 	path = refers/typescript-go
 	url = git@github.com:microsoft/typescript-go.git
+[submodule "refers/jsdoc-type-pratt-parser"]
+	path = refers/jsdoc-type-pratt-parser
+	url = git@github.com:jsdoc-type-pratt-parser/jsdoc-type-pratt-parser.git
