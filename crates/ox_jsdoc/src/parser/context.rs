@@ -9,8 +9,8 @@ use oxc_span::Span;
 use crate::ast::{
     JsdocBlock, JsdocDescriptionLine, JsdocGenericTagBody, JsdocIdentifier, JsdocInlineTag,
     JsdocInlineTagFormat, JsdocNamepathSource, JsdocParameterName, JsdocSeparator, JsdocTag,
-    JsdocTagBody, JsdocTagName, JsdocTagNameValue, JsdocTagValue, JsdocText, JsdocTypeLine,
-    JsdocTypeSource,
+    JsdocTagBody, JsdocTagName, JsdocTagNameValue, JsdocTagValue, JsdocText, JsdocType,
+    JsdocTypeLine, JsdocTypeSource,
 };
 
 use super::{
@@ -68,7 +68,7 @@ pub struct ParserContext<'a> {
     /// Current parser offset relative to `source_text`.
     pub(crate) offset: u32,
     /// Feature switches for this parse.
-    pub(crate) _options: ParseOptions,
+    pub(crate) options: ParseOptions,
     /// Diagnostics emitted while parsing this comment.
     pub(crate) diagnostics: Vec<OxcDiagnostic>,
     /// Current nested `{...}` depth for speculative scanners.
@@ -96,7 +96,7 @@ impl<'a> ParserContext<'a> {
             source_text,
             base_offset,
             offset: 0,
-            _options: options,
+            options,
             diagnostics: Vec::new(),
             brace_depth: 0,
             bracket_depth: 0,
@@ -322,7 +322,7 @@ impl<'a> ParserContext<'a> {
                 desc_end = idx + 1;
             }
 
-            if self._options.fence_aware && trimmed.starts_with("```") {
+            if self.options.fence_aware && trimmed.starts_with("```") {
                 in_fence = !in_fence;
             }
         }
@@ -398,6 +398,17 @@ impl<'a> ParserContext<'a> {
             )
         };
 
+        // Parse type expression if enabled and raw_type is available
+        let parsed_type = if self.options.parse_types {
+            raw_type.and_then(|ts| {
+                let mode = self.options.type_parse_mode;
+                self.parse_type_expression(ts.raw, ts.span.start + 1, mode)
+                    .map(|node| ArenaBox::new_in(JsdocType::Parsed(node), self.allocator))
+            })
+        } else {
+            None
+        };
+
         JsdocTag {
             span: Span::new(section.tag_name_start, section.end),
             tag: JsdocTagName {
@@ -405,7 +416,7 @@ impl<'a> ParserContext<'a> {
                 value: section.tag_name,
             },
             raw_type,
-            parsed_type: None,
+            parsed_type,
             name,
             optional,
             default_value,

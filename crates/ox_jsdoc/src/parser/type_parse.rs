@@ -329,12 +329,6 @@ impl<'a> ParserContext<'a> {
     // Helper methods
     // ========================================================================
 
-    /// Get the kind of the current token.
-    #[inline]
-    fn cur_kind(&self, lexer: &Lexer<'a>) -> TokenKind {
-        lexer.current.kind
-    }
-
     /// Consume the current token if it matches the expected kind.
     /// Returns `true` if consumed.
     #[inline]

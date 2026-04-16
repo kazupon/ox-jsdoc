@@ -58,6 +58,6 @@ fn convert_options(options: Option<JsParseOptions>) -> ParseOptions {
     let options = options.unwrap_or_default();
     ParseOptions {
         fence_aware: options.fence_aware.unwrap_or(true),
-        inline_code_aware: false,
+        ..ParseOptions::default()
     }
 }
