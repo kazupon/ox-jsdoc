@@ -8,6 +8,7 @@ pub mod analyzer;
 pub mod ast;
 pub mod parser;
 pub mod serializer;
+pub mod type_parser;
 pub mod validator;
 
 pub use analyzer::{AnalysisOutput, analyze_comment};

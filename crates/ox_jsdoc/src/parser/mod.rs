@@ -14,7 +14,7 @@ use crate::ast::JsdocBlock;
 
 pub use checkpoint::{Checkpoint, FenceState, QuoteKind};
 pub use context::ParserContext;
-pub use diagnostics::{ParserDiagnosticKind, diagnostic};
+pub use diagnostics::{ParserDiagnosticKind, TypeDiagnosticKind, diagnostic, type_diagnostic};
 
 /// Parser feature switches.
 #[derive(Debug, Clone, Copy)]
