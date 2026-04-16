@@ -95,7 +95,15 @@ impl<'a> ParserContext<'a> {
     ) -> Option<ArenaBox<'a, TypeNode<'a>>> {
         match lexer.current.kind {
             // Identifier — type name
-            TokenKind::Identifier | TokenKind::This | TokenKind::New => {
+            TokenKind::Identifier | TokenKind::This => {
+                self.parse_name(lexer, mode)
+            }
+
+            // `new` — name, or `new(...)` function in typescript mode
+            TokenKind::New if mode.is_typescript() && lexer.next.kind == TokenKind::LParen => {
+                self.parse_new_function(lexer, mode, disallow_conditional)
+            }
+            TokenKind::New => {
                 self.parse_name(lexer, mode)
             }
 
@@ -263,6 +271,7 @@ impl<'a> ParserContext<'a> {
             TokenKind::Pipe => Precedence::Union,
             TokenKind::Amp if mode.is_typescript() => Precedence::Intersection,
             TokenKind::Question => Precedence::Nullable,
+            TokenKind::Bang => Precedence::Nullable,
             TokenKind::Eq => Precedence::Optional,
             TokenKind::LBracket => Precedence::ArrayBrackets,
             TokenKind::Lt => Precedence::Generic,
@@ -297,6 +306,7 @@ impl<'a> ParserContext<'a> {
             TokenKind::LBracket => self.parse_array_brackets_or_indexed(lexer, mode, disallow_conditional, left),
             TokenKind::Dot | TokenKind::Hash | TokenKind::Tilde => self.parse_name_path(lexer, mode, left),
             TokenKind::Question => self.parse_nullable_suffix(lexer, left),
+            TokenKind::Bang => self.parse_not_nullable_suffix(lexer, left),
             TokenKind::Eq => self.parse_optional_suffix(lexer, left),
             TokenKind::Arrow => self.parse_arrow_function(lexer, mode, disallow_conditional, left),
             TokenKind::Is if mode.is_typescript() => self.parse_predicate(lexer, mode, disallow_conditional, left),
@@ -574,12 +584,12 @@ impl<'a> ParserContext<'a> {
         mode: ParseMode,
         disallow_conditional: &mut bool,
     ) -> Option<ArenaBox<'a, TypeNode<'a>>> {
-        // Try key: value pattern
+        // Try key: value pattern (also key?: value with optional `?`)
         if (lexer.current.kind == TokenKind::Identifier
             || lexer.current.kind == TokenKind::This
             || lexer.current.kind == TokenKind::New
             || lexer.current.kind.is_keyword())
-            && lexer.next.kind == TokenKind::Colon
+            && (lexer.next.kind == TokenKind::Colon || lexer.next.kind == TokenKind::Question)
         {
             return self.try_parse_type(lexer, |this, lex| {
                 this.parse_key_value(lex, mode, disallow_conditional)
@@ -918,9 +928,11 @@ impl<'a> ParserContext<'a> {
 
         self.expect(lexer, TokenKind::RParen);
 
-        // Return type after `:`
+        // Return type after `:` — parse at Precedence::Prefix so that
+        // union/intersection operators bind outside the function type,
+        // matching jsdoc-type-pratt-parser behavior.
         let return_type = if self.eat(lexer, TokenKind::Colon) {
-            Some(self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::All)?)
+            Some(self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?)
         } else {
             None
         };
@@ -934,6 +946,53 @@ impl<'a> ParserContext<'a> {
             type_parameters: ArenaVec::new_in(self.allocator),
             constructor,
             arrow: false,
+            parenthesis: true,
+        }), self.allocator))
+    }
+
+    /// Parse `new(params): ReturnType` (typescript mode).
+    fn parse_new_function(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        mode: ParseMode,
+        disallow_conditional: &mut bool,
+    ) -> Option<ArenaBox<'a, TypeNode<'a>>> {
+        let start = lexer.current.start;
+        lexer.bump(); // consume `new`
+
+        lexer.bump(); // consume `(`
+
+        let mut parameters = ArenaVec::new_in(self.allocator);
+        if lexer.current.kind != TokenKind::RParen {
+            loop {
+                let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
+                parameters.push(param);
+                if !self.eat(lexer, TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+
+        self.expect(lexer, TokenKind::RParen);
+
+        // Return type after `:`  or `=>`
+        let (return_type, arrow) = if self.eat(lexer, TokenKind::Arrow) {
+            (Some(self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?), true)
+        } else if self.eat(lexer, TokenKind::Colon) {
+            (Some(self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?), false)
+        } else {
+            (None, false)
+        };
+
+        let end = return_type.as_ref().map_or(lexer.current.start, |r| self.node_end(r));
+
+        Some(ArenaBox::new_in(TypeNode::Function(TypeFunction {
+            span: Span::new(start, end),
+            parameters,
+            return_type,
+            type_parameters: ArenaVec::new_in(self.allocator),
+            constructor: true,
+            arrow,
             parenthesis: true,
         }), self.allocator))
     }
@@ -981,7 +1040,7 @@ impl<'a> ParserContext<'a> {
     ) -> Option<ArenaBox<'a, TypeNode<'a>>> {
         let start = lexer.current.start;
         lexer.bump(); // consume `readonly`
-        let element = self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::ArrayBrackets)?;
+        let element = self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?;
         let end = self.node_end(&element);
         Some(ArenaBox::new_in(TypeNode::ReadonlyArray(TypeReadonlyArray {
             span: Span::new(start, end),
@@ -1342,10 +1401,35 @@ impl<'a> ParserContext<'a> {
             }), self.allocator));
         }
 
-        // Indexed access `T[K]`
+        // Property bracket access `T["key"]` — string literal inside brackets
+        if lexer.current.kind == TokenKind::StringValue {
+            let prop_token = lexer.current;
+            let prop_text = lexer.token_text(prop_token);
+            let quote = if prop_text.starts_with('"') { Some(QuoteStyle::Double) } else { Some(QuoteStyle::Single) };
+            // Extract unquoted value
+            let unquoted = if prop_text.len() >= 2 { &prop_text[1..prop_text.len()-1] } else { prop_text };
+            lexer.bump(); // consume string
+            self.expect(lexer, TokenKind::RBracket);
+            let end = lexer.current.start;
+            let right = ArenaBox::new_in(TypeNode::Property(TypeProperty {
+                span: Span::new(prop_token.start, prop_token.end),
+                value: unquoted,
+                quote,
+            }), self.allocator);
+            return Some(ArenaBox::new_in(TypeNode::NamePath(TypeNamePath {
+                span: Span::new(start, end),
+                left,
+                right,
+                path_type: NamePathType::PropertyBrackets,
+            }), self.allocator));
+        }
+
+        // Indexed access `T[K]` (typescript) or type expression
         if mode.is_typescript() {
             let index = self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::All)?;
-            self.expect(lexer, TokenKind::RBracket);
+            if !self.expect(lexer, TokenKind::RBracket) {
+                return None;
+            }
             let end = lexer.current.start;
             let right = ArenaBox::new_in(TypeNode::IndexedAccessIndex(TypeIndexedAccessIndex {
                 span: Span::new(start, end),
@@ -1360,7 +1444,9 @@ impl<'a> ParserContext<'a> {
         }
 
         // For non-typescript, just close and make array
-        self.expect(lexer, TokenKind::RBracket);
+        if !self.expect(lexer, TokenKind::RBracket) {
+            return None;
+        }
         let end = lexer.current.start;
         Some(ArenaBox::new_in(TypeNode::Generic(TypeGeneric {
             span: Span::new(start, end),
@@ -1426,6 +1512,22 @@ impl<'a> ParserContext<'a> {
         let end = lexer.current.end;
         lexer.bump(); // consume `?`
         Some(ArenaBox::new_in(TypeNode::Nullable(TypeNullable {
+            span: Span::new(start, end),
+            element: left,
+            position: ModifierPosition::Suffix,
+        }), self.allocator))
+    }
+
+    /// Parse not-nullable suffix: `T!`.
+    fn parse_not_nullable_suffix(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        left: ArenaBox<'a, TypeNode<'a>>,
+    ) -> Option<ArenaBox<'a, TypeNode<'a>>> {
+        let start = self.node_start(&left);
+        let end = lexer.current.end;
+        lexer.bump(); // consume `!`
+        Some(ArenaBox::new_in(TypeNode::NotNullable(TypeNotNullable {
             span: Span::new(start, end),
             element: left,
             position: ModifierPosition::Suffix,
