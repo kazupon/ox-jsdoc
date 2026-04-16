@@ -67,6 +67,11 @@ impl<'a> ParserContext<'a> {
 
         // Step 2: infix loop
         loop {
+            // When inside a conditional extends clause, `?` is the conditional
+            // delimiter, not a nullable suffix.
+            if *disallow_conditional && lexer.current.kind == TokenKind::Question {
+                break;
+            }
             let infix_prec = self.cur_infix_precedence(lexer, mode);
             if infix_prec <= min_precedence {
                 break;
