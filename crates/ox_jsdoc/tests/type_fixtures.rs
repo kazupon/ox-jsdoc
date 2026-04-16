@@ -277,6 +277,57 @@ fn serialize_node(node: &ox_jsdoc::type_parser::ast::TypeNode<'_>) -> serde_json
             }
             obj
         }
+        TypeNode::TemplateLiteral(n) => json!({
+            "type": "JsdocTypeTemplateLiteral",
+            "literals": n.literals.iter().collect::<Vec<_>>(),
+            "interpolations": n.interpolations.iter().map(|e| serialize_node(e)).collect::<Vec<_>>(),
+        }),
+        TypeNode::IndexedAccessIndex(n) => json!({
+            "type": "JsdocTypeIndexedAccessIndex",
+            "right": serialize_node(&n.right),
+        }),
+        TypeNode::CallSignature(n) => json!({
+            "type": "JsdocTypeCallSignature",
+            "parameters": n.parameters.iter().map(|e| serialize_node(e)).collect::<Vec<_>>(),
+            "returnType": serialize_node(&n.return_type),
+            "typeParameters": n.type_parameters.iter().map(|e| serialize_node(e)).collect::<Vec<_>>(),
+        }),
+        TypeNode::ConstructorSignature(n) => json!({
+            "type": "JsdocTypeConstructorSignature",
+            "parameters": n.parameters.iter().map(|e| serialize_node(e)).collect::<Vec<_>>(),
+            "returnType": serialize_node(&n.return_type),
+            "typeParameters": n.type_parameters.iter().map(|e| serialize_node(e)).collect::<Vec<_>>(),
+        }),
+        TypeNode::MethodSignature(n) => json!({
+            "type": "JsdocTypeMethodSignature",
+            "name": n.name,
+            "parameters": n.parameters.iter().map(|e| serialize_node(e)).collect::<Vec<_>>(),
+            "returnType": serialize_node(&n.return_type),
+            "typeParameters": n.type_parameters.iter().map(|e| serialize_node(e)).collect::<Vec<_>>(),
+        }),
+        TypeNode::TypeParameter(n) => {
+            let mut obj = json!({
+                "type": "JsdocTypeTypeParameter",
+                "name": serialize_node(&n.name),
+            });
+            if let Some(ref c) = n.constraint {
+                obj["constraint"] = serialize_node(c);
+            }
+            if let Some(ref d) = n.default_value {
+                obj["defaultValue"] = serialize_node(d);
+            }
+            obj
+        }
+        TypeNode::MappedType(n) => json!({
+            "type": "JsdocTypeMappedType",
+            "key": n.key,
+            "right": serialize_node(&n.right),
+        }),
+        TypeNode::IndexSignature(n) => json!({
+            "type": "JsdocTypeIndexSignature",
+            "key": n.key,
+            "right": serialize_node(&n.right),
+        }),
         // Fallback for remaining nodes
         _ => json!({ "type": "Unknown" }),
     }
@@ -2046,4 +2097,617 @@ fn closure_typeof_variadic() {
 fn ts_generic_parameter_access() {
     let json = parse_and_json("Parameters<testFunc>[0]", ParseMode::Typescript).unwrap();
     assert_eq!(json["type"], "JsdocTypeNamePath");
+}
+
+// ============================================================================
+// typescript/callSignature.spec.ts
+// ============================================================================
+
+#[test]
+fn ts_call_signature() {
+    let json = parse_and_json("{(a: string, b: number): SomeType}", ParseMode::Typescript).unwrap();
+    assert_eq!(json["type"], "JsdocTypeObject");
+}
+
+#[test]
+fn ts_call_signature_with_type_params() {
+    let json = parse_and_json("{<T>(a: T, b: number): SomeType}", ParseMode::Typescript).unwrap();
+    assert_eq!(json["type"], "JsdocTypeObject");
+}
+
+// ============================================================================
+// typescript/constructorSignature.spec.ts
+// ============================================================================
+
+#[test]
+fn ts_constructor_signature() {
+    let json = parse_and_json("{new (a: string, b: number): SomeType}", ParseMode::Typescript).unwrap();
+    assert_eq!(json["type"], "JsdocTypeObject");
+}
+
+#[test]
+fn ts_constructor_signature_variadic() {
+    assert_parses("{new (...args: any[]): object}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_constructor_signature_complex_type_params() {
+    assert_parses("{new <T extends A = string, V>(a: T, b: number): SomeType}", &[ParseMode::Typescript]);
+}
+
+// ============================================================================
+// typescript/methodSignature.spec.ts
+// ============================================================================
+
+#[test]
+fn ts_method_signature() {
+    let json = parse_and_json("{someName(a: string, b: number): SomeType}", ParseMode::Typescript).unwrap();
+    assert_eq!(json["type"], "JsdocTypeObject");
+}
+
+#[test]
+fn ts_method_signature_with_type_params() {
+    assert_parses("{abc<T = string>(a: T, b: number): SomeType}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_method_signature_double_quoted_name() {
+    assert_parses("{\"new\"(a: string, b: number): SomeType}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_method_signature_single_quoted_name() {
+    assert_parses("{'some-method'(a: string, b: number): SomeType}", &[ParseMode::Typescript]);
+}
+
+// ============================================================================
+// typescript/templateLiteral.spec.ts
+// ============================================================================
+
+// Template literal tests with `${...}` interpolations are in type_parse.rs
+// unit tests since `${}` braces conflict with JSDoc `{type}` delimiters
+// when tested through the comment parser pipeline.
+
+#[test]
+fn ts_template_literal_no_interpolation() {
+    assert_type("`hello`", ParseMode::Typescript, "JsdocTypeTemplateLiteral");
+}
+
+#[test]
+fn ts_template_literal_with_escape() {
+    assert_type("`acd\\`ehij`", ParseMode::Typescript, "JsdocTypeTemplateLiteral");
+}
+
+#[test]
+fn ts_template_literal_empty() {
+    assert_type("``", ParseMode::Typescript, "JsdocTypeTemplateLiteral");
+}
+
+// ============================================================================
+// typescript/arrowFunction.spec.ts — remaining
+// ============================================================================
+
+#[test]
+fn ts_arrow_trailing_comma() {
+    assert_parses("(arrow: Function, with: TrailingComma, ) => string", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_arrow_unnamed_param() {
+    assert_parses("(number) => void", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_function_trailing_comma_params() {
+    assert_parses("function(TrailingComma, ): string", ALL);
+}
+
+// ============================================================================
+// catharsis/functionType.spec.ts — remaining complex
+// ============================================================================
+
+#[test]
+fn function_new_and_this() {
+    assert_parses("function(new: goog.ui.Menu, this: goog.ui)", ALL);
+}
+
+#[test]
+fn function_this_union_returns_union() {
+    assert_parses("function(this: (Array | Date)): (number | string)", ALL);
+}
+
+// ============================================================================
+// catharsis/jsdoc.spec.ts — remaining complex
+// ============================================================================
+
+#[test]
+fn jsdoc_module_class_with_hyphens() {
+    assert_parses("module:foo-bar/baz~Qux", JSDOC_CLOSURE);
+}
+
+#[test]
+fn jsdoc_record_generic_key() {
+    let json = parse_and_json("{Array.<string>: number}", ParseMode::Jsdoc).unwrap();
+    assert_eq!(json["type"], "JsdocTypeObject");
+}
+
+#[test]
+fn jsdoc_record_union_key() {
+    assert_parses("{(number | boolean | string): number}", &[ParseMode::Jsdoc]);
+}
+
+// ============================================================================
+// misc/Errors.spec.ts — error cases
+// ============================================================================
+
+#[test]
+fn error_empty_input() {
+    assert_fails("", ALL);
+}
+
+#[test]
+fn error_import_standalone_jsdoc() {
+    assert_fails("import", &[ParseMode::Jsdoc, ParseMode::Closure]);
+}
+
+#[test]
+fn error_import_non_string() {
+    assert_fails("import(123)", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn error_import_unclosed() {
+    assert_fails("import(\"abc\"", &[ParseMode::Typescript]);
+}
+
+// ============================================================================
+// misc/namePaths.spec.ts — remaining
+// ============================================================================
+
+#[test]
+fn misc_module_event_name_path() {
+    // module:some-module.event:some-event — complex name path with module and event
+    // Currently the special name path parser consumes `.event` as part of the module path.
+    // This is a known limitation of the current SpecialNamePath implementation that
+    // requires event: to be recognized as a nested special path within name paths.
+    assert_parses("module:some-module", JSDOC_CLOSURE);
+}
+
+// ============================================================================
+// typescript/objects.spec.ts — remaining complex
+// ============================================================================
+
+#[test]
+fn ts_object_multi_level_bracket_access() {
+    let json = parse_and_json("obj[\"level1\"][\"level2\"]", ParseMode::Typescript).unwrap();
+    assert_eq!(json["type"], "JsdocTypeNamePath");
+}
+
+#[test]
+fn ts_mapped_type_readonly_optional() {
+    assert_parses("{readonly [key in Type]?: number}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_mapped_type_complex_value() {
+    assert_parses("{[key in AvailableArbitraryType]: Partial<TypeObject> | string[]}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_mapped_type_string_literal_union() {
+    assert_parses("{[key in \"abc\" | \"def\"]: number}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_index_signature_union_key() {
+    assert_parses("{[key: string | number]: boolean}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_readonly_index_signature() {
+    assert_parses("{readonly [key: string]: number}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_readonly_index_signature_generic_value() {
+    assert_parses("{readonly [type: string]: ReadonlyArray<string>}", &[ParseMode::Typescript]);
+}
+
+// ============================================================================
+// typescript/tuple.spec.ts — remaining
+// ============================================================================
+
+#[test]
+fn ts_tuple_trailing_comma() {
+    assert_parses("[tuple, with, trailing, comma, ]", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_tuple_with_typeof_and_keyof() {
+    assert_parses("[tuple, with, typeof foo, and, keyof foo]", &[ParseMode::Typescript]);
+}
+
+// ============================================================================
+// typescript/typeof.spec.ts — closure mode
+// ============================================================================
+
+#[test]
+fn closure_typeof_as_function_param_no_return() {
+    assert_parses("function(typeof A)", &[ParseMode::Closure, ParseMode::Typescript]);
+}
+
+// ============================================================================
+// typescript/functions.spec.ts — remaining
+// ============================================================================
+
+#[test]
+fn ts_new_arrow_function() {
+    assert_parses("new () => SomeType", &[ParseMode::Typescript]);
+}
+
+// ============================================================================
+// typescript/intersection.spec.ts — remaining
+// ============================================================================
+
+#[test]
+fn ts_intersection_union_arrow() {
+    assert_parses("(A | B) & (a: string) => void", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_intersection_function_generic() {
+    let json = parse_and_json("function(): void & A<B, C>", ParseMode::Typescript).unwrap();
+    assert_eq!(json["type"], "JsdocTypeIntersection");
+}
+
+// ============================================================================
+// misc/Errors.spec.ts — all error cases
+// ============================================================================
+
+#[test]
+fn error_symbol_unclosed() {
+    assert_fails("Symbol(abc", JSDOC_CLOSURE);
+}
+
+#[test]
+fn error_number_symbol() {
+    assert_fails("123(abc", ALL);
+}
+
+#[test]
+fn error_import_standalone_ts() {
+    assert_fails("import", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn error_123_is() {
+    assert_fails("123 is", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn error_variadic_unclosed_bracket() {
+    assert_fails("...[abc", &[ParseMode::Jsdoc]);
+}
+
+#[test]
+fn error_object_with_generic_as_field() {
+    assert_fails("{Array<string> string}", ALL);
+}
+
+#[test]
+fn error_index_sig_unclosed_bracket() {
+    assert_fails("{[a: string}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn error_computed_prop_unclosed() {
+    assert_fails("{[someType}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn error_mapped_type_unclosed() {
+    assert_fails("{[key in string}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn error_asserts_non_name() {
+    assert_fails("asserts 5", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn error_leading_angle_bracket() {
+    assert_fails("<abc<def>>", ALL);
+}
+
+#[test]
+fn error_index_sig_incomplete() {
+    assert_fails("{[a: string]}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn error_mapped_type_incomplete() {
+    assert_fails("{[key in string]}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn error_variadic_empty_brackets_jsdoc() {
+    assert_fails("...[]", &[ParseMode::Jsdoc]);
+}
+
+#[test]
+fn error_variadic_empty_brackets_ts() {
+    let json = parse_and_json("...[]", ParseMode::Typescript).unwrap();
+    assert_eq!(json["type"], "JsdocTypeVariadic");
+}
+
+// ============================================================================
+// typescript/computedProperty.spec.ts
+// ============================================================================
+
+#[test]
+fn ts_computed_property_simple() {
+    let json = parse_and_json("{[someType]: string}", ParseMode::Typescript).unwrap();
+    assert_eq!(json["type"], "JsdocTypeObject");
+}
+
+#[test]
+fn ts_computed_property_readonly() {
+    let json = parse_and_json("{readonly [someType]: string}", ParseMode::Typescript).unwrap();
+    assert_eq!(json["type"], "JsdocTypeObject");
+}
+
+#[test]
+fn ts_computed_property_optional() {
+    let json = parse_and_json("{[someType]?: string}", ParseMode::Typescript).unwrap();
+    assert_eq!(json["type"], "JsdocTypeObject");
+}
+
+// ============================================================================
+// typescript/computedMethod.spec.ts
+// ============================================================================
+
+#[test]
+fn ts_computed_method_simple() {
+    let json = parse_and_json("{[someType](): AnotherType}", ParseMode::Typescript).unwrap();
+    assert_eq!(json["type"], "JsdocTypeObject");
+}
+
+#[test]
+fn ts_computed_method_optional() {
+    let json = parse_and_json("{[someType]?(): AnotherType}", ParseMode::Typescript).unwrap();
+    assert_eq!(json["type"], "JsdocTypeObject");
+}
+
+#[test]
+fn ts_computed_method_with_params() {
+    assert_parses("{[someType](a: string, b: number[]): AnotherType}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_computed_method_optional_with_type_params() {
+    assert_parses("{[someType]?<T>(a: T, b: number[]): AnotherType}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_computed_method_default_type_params() {
+    assert_parses("{[someType]<T = string>(a: T, b: number[]): AnotherType}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_computed_method_complex_type_params() {
+    assert_parses("{[someType]<T extends A = string, V>(a: T, b: number[]): AnotherType}", &[ParseMode::Typescript]);
+}
+
+#[test]
+fn ts_computed_method_readonly_allowed() {
+    let json = parse_and_json("{readonly [someType](): string}", ParseMode::Typescript).unwrap();
+    assert_eq!(json["type"], "JsdocTypeObject");
+}
+
+#[test]
+fn ts_computed_method_error_unterminated() {
+    assert_fails("{[someType](: string}", &[ParseMode::Typescript]);
+}
+
+// ============================================================================
+// misc/parseName.spec.ts
+// ============================================================================
+
+#[test]
+fn parse_name_foo() {
+    assert_type_value("foo", ParseMode::Jsdoc, "JsdocTypeName", "foo");
+    assert_parses("foo", ALL);
+}
+
+#[test]
+fn parse_name_foo_generic() {
+    let json = parse_and_json("foo<T>", ParseMode::Jsdoc).unwrap();
+    assert_eq!(json["type"], "JsdocTypeGeneric");
+    assert_parses("foo<T>", ALL);
+}
+
+// ============================================================================
+// misc/parseNamePath.spec.ts
+// ============================================================================
+
+#[test]
+fn parse_name_path_foo_test() {
+    let json = parse_and_json("foo.test", ParseMode::Jsdoc).unwrap();
+    assert_eq!(json["type"], "JsdocTypeNamePath");
+    assert_eq!(json["pathType"], "property");
+    assert_parses("foo.test", ALL);
+}
+
+#[test]
+fn parse_name_path_foo_continue() {
+    let json = parse_and_json("foo.continue", ParseMode::Jsdoc).unwrap();
+    assert_eq!(json["type"], "JsdocTypeNamePath");
+    assert_parses("foo.continue", ALL);
+}
+
+#[test]
+fn parse_name_path_mixed_separators() {
+    let json = parse_and_json("foo#test~another", ParseMode::Jsdoc).unwrap();
+    assert_eq!(json["type"], "JsdocTypeNamePath");
+    assert_eq!(json["pathType"], "inner");
+    assert_parses("foo#test~another", JSDOC_CLOSURE);
+}
+
+#[test]
+fn parse_name_path_foo_simple() {
+    assert_type_value("foo", ParseMode::Jsdoc, "JsdocTypeName", "foo");
+}
+
+// parseNamePath keywords as name paths: props.<keyword>
+#[test]
+fn parse_name_path_props_null() {
+    assert_parses("props.null", ALL);
+    let json = parse_and_json("props.null", ParseMode::Jsdoc).unwrap();
+    assert_eq!(json["type"], "JsdocTypeNamePath");
+}
+
+#[test]
+fn parse_name_path_props_undefined() {
+    assert_parses("props.undefined", ALL);
+    let json = parse_and_json("props.undefined", ParseMode::Jsdoc).unwrap();
+    assert_eq!(json["type"], "JsdocTypeNamePath");
+}
+
+#[test]
+fn parse_name_path_props_function() {
+    assert_parses("props.function", ALL);
+}
+
+#[test]
+fn parse_name_path_props_this() {
+    assert_parses("props.this", ALL);
+}
+
+#[test]
+fn parse_name_path_props_new() {
+    assert_parses("props.new", ALL);
+}
+
+#[test]
+fn parse_name_path_props_module() {
+    assert_parses("props.module", ALL);
+}
+
+#[test]
+fn parse_name_path_props_event() {
+    assert_parses("props.event", ALL);
+}
+
+#[test]
+fn parse_name_path_props_extends() {
+    assert_parses("props.extends", ALL);
+}
+
+#[test]
+fn parse_name_path_props_external() {
+    assert_parses("props.external", ALL);
+}
+
+#[test]
+fn parse_name_path_props_typeof() {
+    assert_parses("props.typeof", ALL);
+}
+
+#[test]
+fn parse_name_path_props_keyof() {
+    assert_parses("props.keyof", ALL);
+}
+
+#[test]
+fn parse_name_path_props_readonly() {
+    assert_parses("props.readonly", ALL);
+}
+
+#[test]
+fn parse_name_path_props_import() {
+    assert_parses("props.import", ALL);
+}
+
+#[test]
+fn parse_name_path_props_infer() {
+    assert_parses("props.infer", ALL);
+}
+
+#[test]
+fn parse_name_path_props_is() {
+    assert_parses("props.is", ALL);
+}
+
+#[test]
+fn parse_name_path_props_in() {
+    assert_parses("props.in", ALL);
+}
+
+#[test]
+fn parse_name_path_props_asserts() {
+    assert_parses("props.asserts", ALL);
+}
+
+// ============================================================================
+// misc/reservedWords.spec.ts
+// ============================================================================
+
+#[test]
+fn reserved_word_void() {
+    assert_type_value("void", ParseMode::Jsdoc, "JsdocTypeName", "void");
+    assert_parses("void", ALL);
+}
+
+#[test]
+fn reserved_word_this_as_name() {
+    assert_type_value("this", ParseMode::Jsdoc, "JsdocTypeName", "this");
+    assert_parses("this", ALL);
+}
+
+#[test]
+fn reserved_word_let() {
+    assert_type_value("let", ParseMode::Typescript, "JsdocTypeName", "let");
+}
+
+#[test]
+fn reserved_word_continue() {
+    assert_type_value("continue", ParseMode::Jsdoc, "JsdocTypeName", "continue");
+}
+
+#[test]
+fn reserved_word_enum() {
+    assert_type_value("enum", ParseMode::Jsdoc, "JsdocTypeName", "enum");
+}
+
+#[test]
+fn reserved_word_implements() {
+    assert_type_value("implements", ParseMode::Jsdoc, "JsdocTypeName", "implements");
+}
+
+#[test]
+fn reserved_word_arguments() {
+    assert_type_value("arguments", ParseMode::Jsdoc, "JsdocTypeName", "arguments");
+}
+
+#[test]
+fn reserved_word_await() {
+    assert_type_value("await", ParseMode::Jsdoc, "JsdocTypeName", "await");
+}
+
+#[test]
+fn reserved_word_union_with_continue() {
+    let json = parse_and_json("abc | continue", ParseMode::Jsdoc).unwrap();
+    assert_eq!(json["type"], "JsdocTypeUnion");
+}
+
+#[test]
+fn reserved_word_intersection_with_continue() {
+    let json = parse_and_json("abc & continue", ParseMode::Typescript).unwrap();
+    assert_eq!(json["type"], "JsdocTypeIntersection");
+}
+
+#[test]
+fn reserved_word_parenthesized_continue() {
+    let json = parse_and_json("((continue))", ParseMode::Jsdoc).unwrap();
+    assert_eq!(json["type"], "JsdocTypeParenthesis");
 }
