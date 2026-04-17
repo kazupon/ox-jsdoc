@@ -820,10 +820,6 @@ JSDoc nodes and TypeNodes coexist in the same flat array:
 
 ## Phase Summaries
 
-For detailed code examples of each phase (Token/Lexer/Precedence, Pratt parser core,
-type AST definitions, parse function implementations, integration, stringify),
-see `draft.md`.
-
 ### Phase 1: Foundation (Token + Lexer + Precedence)
 
 - Token: 12-byte Copy type (start, end, kind). 3 bytes padding reserved for future flags.
