@@ -38,3 +38,4 @@ Related documents:
      - [Scanner / parser boundary](./implementation/scanner-parser.md)
      - [Performance measurement strategy](./implementation/measurement.md)
      - [Adoption summary and conclusion](./implementation/adoption.md)
+     - [Optimization patterns](./implementation/optimization-patterns.md)

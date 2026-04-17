@@ -42,3 +42,8 @@ read and updated independently.
    - what to adopt now
    - what to defer
    - what to avoid
+
+7. [Optimization patterns](./implementation/optimization-patterns.md)
+   - Optimization patterns adopted in the comment parser
+   - Optimization patterns planned for the type parser
+   - Design principles and implementation techniques referenced from oxc_parser
