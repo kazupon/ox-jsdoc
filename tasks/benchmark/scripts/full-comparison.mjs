@@ -21,6 +21,23 @@ import { parseComment as jsdoccommentParse } from "@es-joy/jsdoccomment";
 import { parse as oxParse, parseType as oxParseType, parseTypeCheck as oxParseTypeCheck } from "ox-jsdoc";
 import { parse as jtpParse } from "jsdoc-type-pratt-parser";
 
+// Load wasm version
+const wasmPath = path.resolve(
+  fileURLToPath(import.meta.url),
+  "../../../../wasm/ox-jsdoc/src-js/index.js",
+);
+const wasmModule = await import(wasmPath);
+const wasmBinary = await readFile(
+  path.resolve(
+    fileURLToPath(import.meta.url),
+    "../../../../wasm/ox-jsdoc/pkg/ox_jsdoc_wasm_bg.wasm",
+  ),
+);
+await wasmModule.initWasm(wasmBinary);
+const wasmParse = wasmModule.parse;
+const wasmParseType = wasmModule.parseType;
+const wasmParseTypeCheck = wasmModule.parseTypeCheck;
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
 const fixturesRoot = path.join(repoRoot, "fixtures", "perf");
@@ -69,6 +86,12 @@ group("comment parsing — per fixture", () => {
         oxParse(text);
       }
     });
+
+    bench(`ox-jsdoc wasm: ${label}`, () => {
+      for (const text of fixture.commentTexts) {
+        wasmParse(text);
+      }
+    });
   }
 });
 
@@ -100,6 +123,18 @@ group("comment parsing — all fixtures batch", () => {
       oxParse(text, { parseTypes: true, typeParseMode: "jsdoc" });
     }
   });
+
+  bench(`ox-jsdoc wasm (${allCommentTexts.length} blocks)`, () => {
+    for (const text of allCommentTexts) {
+      wasmParse(text);
+    }
+  });
+
+  bench(`ox-jsdoc wasm + parseTypes (${allCommentTexts.length} blocks)`, () => {
+    for (const text of allCommentTexts) {
+      wasmParse(text, { parseTypes: true, typeParseMode: "jsdoc" });
+    }
+  });
 });
 
 // ============================================================================
@@ -128,15 +163,27 @@ const TYPE_EXPRESSIONS = [
 ];
 
 group("type parser — batch", () => {
-  bench(`ox-jsdoc parseCheck (${TYPE_EXPRESSIONS.length} types)`, () => {
+  bench(`ox-jsdoc napi parseCheck (${TYPE_EXPRESSIONS.length} types)`, () => {
     for (const expr of TYPE_EXPRESSIONS) {
       oxParseTypeCheck(expr, "typescript");
     }
   });
 
-  bench(`ox-jsdoc parseType (${TYPE_EXPRESSIONS.length} types)`, () => {
+  bench(`ox-jsdoc napi parseType (${TYPE_EXPRESSIONS.length} types)`, () => {
     for (const expr of TYPE_EXPRESSIONS) {
       oxParseType(expr, "typescript");
+    }
+  });
+
+  bench(`ox-jsdoc wasm parseTypeCheck (${TYPE_EXPRESSIONS.length} types)`, () => {
+    for (const expr of TYPE_EXPRESSIONS) {
+      wasmParseTypeCheck(expr, "typescript");
+    }
+  });
+
+  bench(`ox-jsdoc wasm parseType (${TYPE_EXPRESSIONS.length} types)`, () => {
+    for (const expr of TYPE_EXPRESSIONS) {
+      wasmParseType(expr, "typescript");
     }
   });
 
@@ -161,8 +208,11 @@ const INDIVIDUAL_TYPES = [
 
 group("type parser — individual", () => {
   for (const expr of INDIVIDUAL_TYPES) {
-    bench(`ox-jsdoc parseCheck: ${expr}`, () => {
+    bench(`ox-jsdoc napi parseCheck: ${expr}`, () => {
       oxParseTypeCheck(expr, "typescript");
+    });
+    bench(`ox-jsdoc wasm parseTypeCheck: ${expr}`, () => {
+      wasmParseTypeCheck(expr, "typescript");
     });
     bench(`jsdoc-type-pratt-parser: ${expr}`, () => {
       try { jtpParse(expr, "typescript"); } catch {}
@@ -175,21 +225,27 @@ group("type parser — individual", () => {
 // ============================================================================
 
 group("ox-jsdoc — parseTypes on vs off (all fixtures)", () => {
-  bench("parseTypes: false", () => {
+  bench("napi parseTypes: false", () => {
     for (const text of allCommentTexts) {
       oxParse(text);
     }
   });
 
-  bench("parseTypes: true (jsdoc mode)", () => {
+  bench("napi parseTypes: true (jsdoc)", () => {
     for (const text of allCommentTexts) {
       oxParse(text, { parseTypes: true, typeParseMode: "jsdoc" });
     }
   });
 
-  bench("parseTypes: true (typescript mode)", () => {
+  bench("wasm parseTypes: false", () => {
     for (const text of allCommentTexts) {
-      oxParse(text, { parseTypes: true, typeParseMode: "typescript" });
+      wasmParse(text);
+    }
+  });
+
+  bench("wasm parseTypes: true (jsdoc)", () => {
+    for (const text of allCommentTexts) {
+      wasmParse(text, { parseTypes: true, typeParseMode: "jsdoc" });
     }
   });
 });

@@ -5,7 +5,11 @@
 
 // @ts-check
 
-import init, { parse as parseWasm } from '../pkg/ox_jsdoc_wasm.js'
+import init, {
+  parse as parseWasm,
+  parse_type_expression as parseTypeExpressionWasm,
+  parse_type_check as parseTypeCheckWasm
+} from '../pkg/ox_jsdoc_wasm.js'
 
 let initialized = false
 
@@ -31,14 +35,19 @@ export async function initWasm(wasmUrl) {
  * Parse a complete `/** ... *​/` JSDoc block comment.
  *
  * @param {string} sourceText
- * @param {{ fenceAware?: boolean }} [options]
+ * @param {{ fenceAware?: boolean, parseTypes?: boolean, typeParseMode?: 'jsdoc' | 'closure' | 'typescript' }} [options]
  * @returns {{ ast: any, diagnostics: Array<{ message: string }> }}
  */
 export function parse(sourceText, options) {
   if (!initialized) {
     throw new Error('Call initWasm() before parse()')
   }
-  const result = parseWasm(sourceText, options?.fenceAware)
+  const result = parseWasm(
+    sourceText,
+    options?.fenceAware,
+    options?.parseTypes,
+    options?.typeParseMode
+  )
   return {
     get ast() {
       const value = result.astJson === 'null' ? null : JSON.parse(result.astJson)
@@ -47,4 +56,32 @@ export function parse(sourceText, options) {
     },
     diagnostics: result.diagnostics
   }
+}
+
+/**
+ * Parse a standalone type expression (no comment parsing overhead).
+ *
+ * @param {string} typeText
+ * @param {'jsdoc' | 'closure' | 'typescript'} [mode]
+ * @returns {string | null}
+ */
+export function parseType(typeText, mode) {
+  if (!initialized) {
+    throw new Error('Call initWasm() before parseType()')
+  }
+  return parseTypeExpressionWasm(typeText, mode ?? 'jsdoc') ?? null
+}
+
+/**
+ * Parse a type expression and return whether it succeeded (no stringify overhead).
+ *
+ * @param {string} typeText
+ * @param {'jsdoc' | 'closure' | 'typescript'} [mode]
+ * @returns {boolean}
+ */
+export function parseTypeCheck(typeText, mode) {
+  if (!initialized) {
+    throw new Error('Call initWasm() before parseTypeCheck()')
+  }
+  return parseTypeCheckWasm(typeText, mode ?? 'jsdoc')
 }

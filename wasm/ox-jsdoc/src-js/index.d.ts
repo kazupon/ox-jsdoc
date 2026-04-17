@@ -6,6 +6,10 @@
 export interface ParseOptions {
   /** Suppress tag recognition inside fenced code blocks. Default: true. */
   fenceAware?: boolean
+  /** Enable type expression parsing for `{...}` in tags. Default: false. */
+  parseTypes?: boolean
+  /** Parse mode for type expressions: "jsdoc", "closure", or "typescript". Default: "jsdoc". */
+  typeParseMode?: 'jsdoc' | 'closure' | 'typescript'
 }
 
 export interface Diagnostic {
@@ -48,7 +52,7 @@ export interface JsdocTag {
   range: [number, number]
   tag: string
   rawType: string | null
-  parsedType: null
+  parsedType?: JsdocParsedType
   name: string | null
   optional: boolean
   defaultValue: string | null
@@ -119,7 +123,27 @@ export function initWasm(
   wasmUrl?: string | URL | Request | Response | WebAssembly.Module | ArrayBuffer | BufferSource
 ): Promise<void>
 
+/** Parsed JSDoc type expression AST (jsdoc-type-pratt-parser compatible). */
+export type JsdocParsedType = {
+  type: string
+  [key: string]: unknown
+}
+
 /**
  * Parse a complete `/** ... *​/` JSDoc block comment.
  */
 export function parse(sourceText: string, options?: ParseOptions): ParseResult
+
+/**
+ * Parse a standalone type expression (no comment parsing overhead).
+ * Returns the stringified type, or null if parsing fails.
+ */
+export function parseType(
+  typeText: string,
+  mode?: 'jsdoc' | 'closure' | 'typescript'
+): string | null
+
+/**
+ * Parse a type expression and return whether it succeeded (no stringify overhead).
+ */
+export function parseTypeCheck(typeText: string, mode?: 'jsdoc' | 'closure' | 'typescript'): boolean

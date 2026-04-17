@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeAll } from 'vite-plus/test'
-import { initWasm, parse } from '../src-js/index.js'
+import { initWasm, parse, parseType, parseTypeCheck } from '../src-js/index.js'
 
 beforeAll(async () => {
   await initWasm()
@@ -88,5 +88,136 @@ describe('initWasm', () => {
     await initWasm()
     const result = parse('/** @param x */')
     expect(result.ast).not.toBeNull()
+  })
+})
+
+describe('parse with parseTypes', () => {
+  it('does not include parsedType when parseTypes is disabled (default)', () => {
+    const result = parse('/** @param {string} id */')
+    expect(result.diagnostics).toEqual([])
+    const tag = result.ast!.tags[0]
+    expect(tag.rawType).toBe('string')
+    // parsedType is omitted from JSON when parseTypes is disabled
+    expect(tag.parsedType).toBeUndefined()
+  })
+
+  it('populates parsedType when parseTypes is enabled', () => {
+    const result = parse('/** @param {string} id */', {
+      parseTypes: true,
+      typeParseMode: 'jsdoc'
+    })
+    expect(result.diagnostics).toEqual([])
+    const tag = result.ast!.tags[0]
+    expect(tag.rawType).toBe('string')
+    expect(tag.parsedType).not.toBeNull()
+    expect(tag.parsedType!.type).toBe('JsdocTypeName')
+    expect(tag.parsedType!.value).toBe('string')
+  })
+
+  it('parses union types in typescript mode', () => {
+    const result = parse('/** @param {string | number} id */', {
+      parseTypes: true,
+      typeParseMode: 'typescript'
+    })
+    expect(result.diagnostics).toEqual([])
+    const tag = result.ast!.tags[0]
+    expect(tag.parsedType!.type).toBe('JsdocTypeUnion')
+    const elements = tag.parsedType!.elements as Array<{ type: string; value: string }>
+    expect(elements.length).toBe(2)
+    expect(elements[0].value).toBe('string')
+    expect(elements[1].value).toBe('number')
+  })
+
+  it('parses generic types', () => {
+    const result = parse('/** @returns {Array<string>} */', {
+      parseTypes: true,
+      typeParseMode: 'typescript'
+    })
+    expect(result.diagnostics).toEqual([])
+    const tag = result.ast!.tags[0]
+    expect(tag.parsedType!.type).toBe('JsdocTypeGeneric')
+  })
+})
+
+describe('parseType', () => {
+  it('parses a simple name', () => {
+    const result = parseType('string', 'jsdoc')
+    expect(result).not.toBeNull()
+    expect(result).toContain('string')
+  })
+
+  it('parses union types', () => {
+    const result = parseType('string | number', 'typescript')
+    expect(result).not.toBeNull()
+    expect(result).toBe('string | number')
+  })
+
+  it('parses generic types', () => {
+    const result = parseType('Array<string>', 'typescript')
+    expect(result).toBe('Array<string>')
+  })
+
+  it('parses dot notation generic in jsdoc mode', () => {
+    const result = parseType('Array.<string>', 'jsdoc')
+    expect(result).toBe('Array.<string>')
+  })
+
+  it('parses nullable types', () => {
+    const result = parseType('?string', 'jsdoc')
+    expect(result).toBe('?string')
+  })
+
+  it('parses optional types', () => {
+    const result = parseType('string=', 'jsdoc')
+    expect(result).toBe('string=')
+  })
+
+  it('parses variadic types', () => {
+    const result = parseType('...string', 'jsdoc')
+    expect(result).toBe('...string')
+  })
+
+  it('parses function types in jsdoc mode', () => {
+    const result = parseType('function(string): number', 'jsdoc')
+    expect(result).toBe('function(string): number')
+  })
+
+  it('parses arrow function in typescript mode', () => {
+    const result = parseType('(x: number) => string', 'typescript')
+    expect(result).toBe('(x: number) => string')
+  })
+
+  it('parses conditional types in typescript mode', () => {
+    const result = parseType('T extends U ? X : Y', 'typescript')
+    expect(result).toBe('T extends U ? X : Y')
+  })
+
+  it('returns null for invalid input', () => {
+    const result = parseType('!!!', 'jsdoc')
+    expect(result).toBeNull()
+  })
+})
+
+describe('parseTypeCheck', () => {
+  it('returns true for valid types', () => {
+    expect(parseTypeCheck('string', 'jsdoc')).toBe(true)
+    expect(parseTypeCheck('string | number', 'typescript')).toBe(true)
+    expect(parseTypeCheck('Array<string>', 'typescript')).toBe(true)
+    expect(parseTypeCheck('{a: string, b: number}', 'typescript')).toBe(true)
+  })
+
+  it('returns false for invalid types', () => {
+    expect(parseTypeCheck('!!!', 'jsdoc')).toBe(false)
+    expect(parseTypeCheck('', 'jsdoc')).toBe(false)
+  })
+
+  it('respects parse mode', () => {
+    // intersection only works in typescript mode
+    expect(parseTypeCheck('A & B', 'typescript')).toBe(true)
+    expect(parseTypeCheck('A & B', 'jsdoc')).toBe(false)
+  })
+
+  it('defaults to jsdoc mode when no mode specified', () => {
+    expect(parseTypeCheck('string')).toBe(true)
   })
 })

@@ -52,7 +52,7 @@ export interface JsdocTag {
   range: [number, number]
   tag: string
   rawType: string | null
-  parsedType: JsdocParsedType | null
+  parsedType?: JsdocParsedType
   name: string | null
   optional: boolean
   defaultValue: string | null
