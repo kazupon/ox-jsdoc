@@ -1,0 +1,23 @@
+/**
+ * @param {string} name
+ * @param {number} age
+ * @param {boolean} active
+ * @param {string[]} tags
+ * @param {Map<string, number>} scores
+ * @param {Set<string>} uniqueIds
+ * @param {Promise<void>} pending
+ * @param {Error | null} error
+ * @param {Record<string, unknown>} metadata
+ * @param {Array<{id: number, name: string}>} items
+ * @param {(event: Event) => void} handler
+ * @param {typeof window} win
+ * @param {keyof HTMLElementTagNameMap} tagName
+ * @param {Partial<Config>} config
+ * @param {Required<Options>} options
+ * @param {Readonly<State>} state
+ * @param {Pick<User, 'name' | 'email'>} contact
+ * @param {Omit<FullUser, 'password'>} safeUser
+ * @param {Extract<Animal, {swim: unknown}>} fish
+ * @param {Exclude<Shape, Circle>} nonCircle
+ * @returns {Promise<Result<T>>} result
+ */

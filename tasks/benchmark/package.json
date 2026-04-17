@@ -6,7 +6,8 @@
     "benchmark:comment-parser": "node --expose-gc ./scripts/comment-parser-fixtures.mjs",
     "benchmark:jsdoccomment": "node --expose-gc ./scripts/jsdoccomment-fixtures.mjs",
     "benchmark:ox-jsdoc": "node --expose-gc ./scripts/ox-jsdoc-fixtures.mjs",
-    "benchmark:type-parser": "node --expose-gc ./scripts/type-parser-compare.mjs"
+    "benchmark:type-parser": "node --expose-gc ./scripts/type-parser-compare.mjs",
+    "benchmark:full": "node --expose-gc ./scripts/full-comparison.mjs"
   },
   "dependencies": {
     "@es-joy/jsdoccomment": "^0.50.1",
