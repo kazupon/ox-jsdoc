@@ -18,7 +18,7 @@ pub fn parse(source_text: &str, fence_aware: Option<bool>) -> JsValue {
     let allocator = Allocator::default();
     let options = ParseOptions {
         fence_aware: fence_aware.unwrap_or(true),
-        inline_code_aware: false,
+        ..ParseOptions::default()
     };
     let output = parse_comment(&allocator, source_text, 0, options);
 

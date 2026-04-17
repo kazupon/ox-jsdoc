@@ -1,0 +1,18 @@
+/**
+ * @param {string | number | boolean | null | undefined} value - Union of primitives
+ * @param {Array<Map<string, Set<number>>>} nested - Deeply nested generics
+ * @param {(a: string, b: number, c: boolean) => Promise<void>} callback - Arrow function
+ * @param {{name: string, age: number, address?: {street: string, city: string}}} user - Object type
+ * @param {Record<string, Array<{id: number, label: string}>>} records - Generic record
+ * @param {keyof typeof import('./types').Config} configKey - keyof typeof import
+ * @param {T extends Array<infer U> ? U : never} extracted - Conditional with infer
+ * @param {readonly [string, number, ...boolean[]]} tuple - Readonly tuple with spread
+ * @param {?string} nullable - Nullable prefix
+ * @param {!Object} nonNullable - Non-nullable prefix
+ * @param {string=} optional - Optional suffix
+ * @param {...string} variadic - Variadic prefix
+ * @param {function(string, number): boolean} closure - Closure function
+ * @param {Object.<string, Array.<number>>} dotGeneric - Dot notation generic
+ * @param {string[] | number[] | boolean[]} arrayUnion - Union of arrays
+ * @returns {Promise<{data: T, error: Error | null, metadata: Record<string, unknown>}>} result
+ */

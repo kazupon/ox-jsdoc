@@ -151,10 +151,14 @@ pub struct JsdocTypeLine<'a> {
     pub raw_type: &'a str,
 }
 
-/// Placeholder for the future parsed JSDoc type AST.
+pub use crate::type_parser::ast::TypeNode;
+
+/// Parsed JSDoc type AST.
 #[derive(Debug)]
 pub enum JsdocType<'a> {
-    /// Raw fallback used until the dedicated type parser exists.
+    /// Structured type AST produced by the type parser.
+    Parsed(ArenaBox<'a, TypeNode<'a>>),
+    /// Raw fallback when type parsing is disabled or fails.
     Raw(JsdocTypeSource<'a>),
 }
 

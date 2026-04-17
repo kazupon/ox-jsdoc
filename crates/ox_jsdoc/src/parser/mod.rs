@@ -6,15 +6,17 @@ mod checkpoint;
 mod context;
 mod diagnostics;
 mod scanner;
+mod type_parse;
 
 use oxc_allocator::{Allocator, Box as ArenaBox};
 use oxc_diagnostics::OxcDiagnostic;
 
 use crate::ast::JsdocBlock;
+use crate::type_parser::ast::ParseMode;
 
 pub use checkpoint::{Checkpoint, FenceState, QuoteKind};
 pub use context::ParserContext;
-pub use diagnostics::{ParserDiagnosticKind, diagnostic};
+pub use diagnostics::{ParserDiagnosticKind, TypeDiagnosticKind, diagnostic, type_diagnostic};
 
 /// Parser feature switches.
 #[derive(Debug, Clone, Copy)]
@@ -24,6 +26,12 @@ pub struct ParseOptions {
     pub fence_aware: bool,
     /// Reserved for future inline-code handling.
     pub inline_code_aware: bool,
+    /// Enable type expression parsing for `{...}` in tags.
+    /// When `false`, `parsed_type` is always `None` (zero cost).
+    pub parse_types: bool,
+    /// Parse mode for type expressions. Only used when `parse_types` is `true`.
+    /// Defaults to `ParseMode::Jsdoc`.
+    pub type_parse_mode: ParseMode,
 }
 
 impl Default for ParseOptions {
@@ -31,6 +39,8 @@ impl Default for ParseOptions {
         Self {
             fence_aware: true,
             inline_code_aware: false,
+            parse_types: false,
+            type_parse_mode: ParseMode::Jsdoc,
         }
     }
 }
@@ -55,6 +65,34 @@ pub fn parse_comment<'a>(
     options: ParseOptions,
 ) -> ParseOutput<'a> {
     ParserContext::new(allocator, source_text, base_offset, options).parse_comment()
+}
+
+/// Parse a standalone type expression (e.g. `string | number`).
+///
+/// This is a lightweight entry point for type-only parsing without comment
+/// parsing overhead. Used by benchmarks and consumers that already have
+/// extracted type text.
+pub fn parse_type<'a>(
+    allocator: &'a Allocator,
+    type_text: &'a str,
+    base_offset: u32,
+    mode: crate::type_parser::ast::ParseMode,
+) -> ParseTypeOutput<'a> {
+    let mut ctx = ParserContext::new(allocator, "/** */", 0, ParseOptions::default());
+    let node = ctx.parse_type_expression(type_text, base_offset, mode);
+    ParseTypeOutput {
+        node,
+        diagnostics: ctx.diagnostics,
+    }
+}
+
+/// Result of standalone type expression parsing.
+#[derive(Debug)]
+pub struct ParseTypeOutput<'a> {
+    /// Parsed type AST node, absent when the input is invalid.
+    pub node: Option<ArenaBox<'a, crate::type_parser::ast::TypeNode<'a>>>,
+    /// Diagnostics collected during type parsing.
+    pub diagnostics: Vec<OxcDiagnostic>,
 }
 
 #[cfg(test)]
@@ -274,5 +312,67 @@ mod tests {
         assert_eq!(comment.tags.len(), 2);
         assert_eq!(comment.tags[0].tag.value, "example");
         assert_eq!(comment.tags[1].tag.value, "returns");
+    }
+
+    #[test]
+    fn parsed_type_is_none_when_parse_types_disabled() {
+        let allocator = Allocator::default();
+        let output = parse_comment(
+            &allocator,
+            "/**\n * @param {string} id\n */",
+            0,
+            ParseOptions::default(), // parse_types: false
+        );
+
+        assert!(output.diagnostics.is_empty());
+        let comment = output.comment.expect("expected a comment AST");
+        assert_eq!(comment.tags.len(), 1);
+        assert!(comment.tags[0].raw_type.is_some());
+        assert!(comment.tags[0].parsed_type.is_none());
+    }
+
+    #[test]
+    fn parsed_type_is_populated_when_parse_types_enabled() {
+        use crate::type_parser::ast::ParseMode;
+
+        let allocator = Allocator::default();
+        let output = parse_comment(
+            &allocator,
+            "/**\n * @param {string} id\n */",
+            0,
+            ParseOptions {
+                parse_types: true,
+                type_parse_mode: ParseMode::Jsdoc,
+                ..ParseOptions::default()
+            },
+        );
+
+        assert!(output.diagnostics.is_empty());
+        let comment = output.comment.expect("expected a comment AST");
+        assert_eq!(comment.tags.len(), 1);
+        assert!(comment.tags[0].raw_type.is_some());
+        assert!(comment.tags[0].parsed_type.is_some());
+    }
+
+    #[test]
+    fn parsed_type_handles_union_type() {
+        use crate::type_parser::ast::ParseMode;
+
+        let allocator = Allocator::default();
+        let output = parse_comment(
+            &allocator,
+            "/**\n * @param {string | number} id\n */",
+            0,
+            ParseOptions {
+                parse_types: true,
+                type_parse_mode: ParseMode::Typescript,
+                ..ParseOptions::default()
+            },
+        );
+
+        assert!(output.diagnostics.is_empty());
+        let comment = output.comment.expect("expected a comment AST");
+        assert_eq!(comment.tags.len(), 1);
+        assert!(comment.tags[0].parsed_type.is_some());
     }
 }

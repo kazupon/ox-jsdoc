@@ -23,6 +23,10 @@ harness = false
 name = "serializer"
 harness = false
 
+[[bench]]
+name = "type_parser"
+harness = false
+
 [dependencies]
 criterion2 = { version = "3.0.2", default-features = false }
 oxc_allocator.workspace = true

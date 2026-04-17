@@ -5,11 +5,14 @@
   "scripts": {
     "benchmark:comment-parser": "node --expose-gc ./scripts/comment-parser-fixtures.mjs",
     "benchmark:jsdoccomment": "node --expose-gc ./scripts/jsdoccomment-fixtures.mjs",
-    "benchmark:ox-jsdoc": "node --expose-gc ./scripts/ox-jsdoc-fixtures.mjs"
+    "benchmark:ox-jsdoc": "node --expose-gc ./scripts/ox-jsdoc-fixtures.mjs",
+    "benchmark:type-parser": "node --expose-gc ./scripts/type-parser-compare.mjs",
+    "benchmark:full": "node --expose-gc ./scripts/full-comparison.mjs"
   },
   "dependencies": {
     "@es-joy/jsdoccomment": "^0.50.1",
     "comment-parser": "^1.4.1",
+    "jsdoc-type-pratt-parser": "^4.1.0",
     "mitata": "^1.0.34",
     "ox-jsdoc": "workspace:*",
     "oxc-parser": "^0.124.0"
