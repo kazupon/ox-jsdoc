@@ -67,6 +67,34 @@ pub fn parse_comment<'a>(
     ParserContext::new(allocator, source_text, base_offset, options).parse_comment()
 }
 
+/// Parse a standalone type expression (e.g. `string | number`).
+///
+/// This is a lightweight entry point for type-only parsing without comment
+/// parsing overhead. Used by benchmarks and consumers that already have
+/// extracted type text.
+pub fn parse_type<'a>(
+    allocator: &'a Allocator,
+    type_text: &'a str,
+    base_offset: u32,
+    mode: crate::type_parser::ast::ParseMode,
+) -> ParseTypeOutput<'a> {
+    let mut ctx = ParserContext::new(allocator, "/** */", 0, ParseOptions::default());
+    let node = ctx.parse_type_expression(type_text, base_offset, mode);
+    ParseTypeOutput {
+        node,
+        diagnostics: ctx.diagnostics,
+    }
+}
+
+/// Result of standalone type expression parsing.
+#[derive(Debug)]
+pub struct ParseTypeOutput<'a> {
+    /// Parsed type AST node, absent when the input is invalid.
+    pub node: Option<ArenaBox<'a, crate::type_parser::ast::TypeNode<'a>>>,
+    /// Diagnostics collected during type parsing.
+    pub diagnostics: Vec<OxcDiagnostic>,
+}
+
 #[cfg(test)]
 mod tests {
     use oxc_allocator::Allocator;

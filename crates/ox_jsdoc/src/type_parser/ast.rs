@@ -187,6 +187,59 @@ pub enum TypeNode<'a> {
     ReadonlyProperty(TypeReadonlyProperty<'a>),
 }
 
+impl<'a> TypeNode<'a> {
+    #[inline]
+    pub fn span(&self) -> Span {
+        match self {
+            Self::Name(n) => n.span,
+            Self::Number(n) => n.span,
+            Self::StringValue(n) => n.span,
+            Self::Null(n) => n.span,
+            Self::Undefined(n) => n.span,
+            Self::Any(n) => n.span,
+            Self::Unknown(n) => n.span,
+            Self::Union(n) => n.span,
+            Self::Intersection(n) => n.span,
+            Self::Generic(n) => n.span,
+            Self::Function(n) => n.span,
+            Self::Object(n) => n.span,
+            Self::Tuple(n) => n.span,
+            Self::Parenthesis(n) => n.span,
+            Self::NamePath(n) => n.span,
+            Self::SpecialNamePath(n) => n.span,
+            Self::Nullable(n) => n.span,
+            Self::NotNullable(n) => n.span,
+            Self::Optional(n) => n.span,
+            Self::Variadic(n) => n.span,
+            Self::Conditional(n) => n.span,
+            Self::Infer(n) => n.span,
+            Self::KeyOf(n) => n.span,
+            Self::TypeOf(n) => n.span,
+            Self::Import(n) => n.span,
+            Self::Predicate(n) => n.span,
+            Self::Asserts(n) => n.span,
+            Self::AssertsPlain(n) => n.span,
+            Self::ReadonlyArray(n) => n.span,
+            Self::TemplateLiteral(n) => n.span,
+            Self::UniqueSymbol(n) => n.span,
+            Self::Symbol(n) => n.span,
+            Self::ObjectField(n) => n.span,
+            Self::JsdocObjectField(n) => n.span,
+            Self::KeyValue(n) => n.span,
+            Self::Property(n) => n.span,
+            Self::IndexSignature(n) => n.span,
+            Self::MappedType(n) => n.span,
+            Self::TypeParameter(n) => n.span,
+            Self::CallSignature(n) => n.span,
+            Self::ConstructorSignature(n) => n.span,
+            Self::MethodSignature(n) => n.span,
+            Self::IndexedAccessIndex(n) => n.span,
+            Self::ParameterList(n) => n.span,
+            Self::ReadonlyProperty(n) => n.span,
+        }
+    }
+}
+
 // ============================================================================
 // Basic type structs
 // ============================================================================

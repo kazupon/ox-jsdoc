@@ -60,6 +60,9 @@ importers:
       comment-parser:
         specifier: ^1.4.1
         version: 1.4.1
+      jsdoc-type-pratt-parser:
+        specifier: ^4.1.0
+        version: 4.1.0
       mitata:
         specifier: ^1.0.34
         version: 1.0.34

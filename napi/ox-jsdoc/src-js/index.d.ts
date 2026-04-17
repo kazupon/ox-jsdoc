@@ -124,3 +124,12 @@ export type JsdocParsedType = {
  * Parse a complete `/** ... *​/` JSDoc block comment.
  */
 export function parse(sourceText: string, options?: ParseOptions): ParseResult
+
+/**
+ * Parse a standalone type expression (no comment parsing overhead).
+ * Returns the stringified type, or null if parsing fails.
+ */
+export function parseType(
+  typeText: string,
+  mode?: 'jsdoc' | 'closure' | 'typescript'
+): string | null

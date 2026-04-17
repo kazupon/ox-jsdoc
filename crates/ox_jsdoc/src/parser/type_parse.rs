@@ -373,6 +373,7 @@ impl<'a> ParserContext<'a> {
     // ========================================================================
 
     /// Parse a name (identifier or keyword-as-name).
+    #[inline]
     fn parse_name(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -2064,108 +2065,14 @@ impl<'a> ParserContext<'a> {
     // Node span helpers
     // ========================================================================
 
-    /// Get the start offset of a node.
     #[inline]
     fn node_start(&self, node: &TypeNode<'a>) -> u32 {
-        match node {
-            TypeNode::Name(n) => n.span.start,
-            TypeNode::Number(n) => n.span.start,
-            TypeNode::StringValue(n) => n.span.start,
-            TypeNode::Null(n) => n.span.start,
-            TypeNode::Undefined(n) => n.span.start,
-            TypeNode::Any(n) => n.span.start,
-            TypeNode::Unknown(n) => n.span.start,
-            TypeNode::Union(n) => n.span.start,
-            TypeNode::Intersection(n) => n.span.start,
-            TypeNode::Generic(n) => n.span.start,
-            TypeNode::Function(n) => n.span.start,
-            TypeNode::Object(n) => n.span.start,
-            TypeNode::Tuple(n) => n.span.start,
-            TypeNode::Parenthesis(n) => n.span.start,
-            TypeNode::NamePath(n) => n.span.start,
-            TypeNode::SpecialNamePath(n) => n.span.start,
-            TypeNode::Nullable(n) => n.span.start,
-            TypeNode::NotNullable(n) => n.span.start,
-            TypeNode::Optional(n) => n.span.start,
-            TypeNode::Variadic(n) => n.span.start,
-            TypeNode::Conditional(n) => n.span.start,
-            TypeNode::Infer(n) => n.span.start,
-            TypeNode::KeyOf(n) => n.span.start,
-            TypeNode::TypeOf(n) => n.span.start,
-            TypeNode::Import(n) => n.span.start,
-            TypeNode::Predicate(n) => n.span.start,
-            TypeNode::Asserts(n) => n.span.start,
-            TypeNode::AssertsPlain(n) => n.span.start,
-            TypeNode::ReadonlyArray(n) => n.span.start,
-            TypeNode::TemplateLiteral(n) => n.span.start,
-            TypeNode::UniqueSymbol(n) => n.span.start,
-            TypeNode::Symbol(n) => n.span.start,
-            TypeNode::ObjectField(n) => n.span.start,
-            TypeNode::JsdocObjectField(n) => n.span.start,
-            TypeNode::KeyValue(n) => n.span.start,
-            TypeNode::Property(n) => n.span.start,
-            TypeNode::IndexSignature(n) => n.span.start,
-            TypeNode::MappedType(n) => n.span.start,
-            TypeNode::TypeParameter(n) => n.span.start,
-            TypeNode::CallSignature(n) => n.span.start,
-            TypeNode::ConstructorSignature(n) => n.span.start,
-            TypeNode::MethodSignature(n) => n.span.start,
-            TypeNode::IndexedAccessIndex(n) => n.span.start,
-            TypeNode::ParameterList(n) => n.span.start,
-            TypeNode::ReadonlyProperty(n) => n.span.start,
-        }
+        node.span().start
     }
 
-    /// Get the end offset of a node.
     #[inline]
     fn node_end(&self, node: &TypeNode<'a>) -> u32 {
-        match node {
-            TypeNode::Name(n) => n.span.end,
-            TypeNode::Number(n) => n.span.end,
-            TypeNode::StringValue(n) => n.span.end,
-            TypeNode::Null(n) => n.span.end,
-            TypeNode::Undefined(n) => n.span.end,
-            TypeNode::Any(n) => n.span.end,
-            TypeNode::Unknown(n) => n.span.end,
-            TypeNode::Union(n) => n.span.end,
-            TypeNode::Intersection(n) => n.span.end,
-            TypeNode::Generic(n) => n.span.end,
-            TypeNode::Function(n) => n.span.end,
-            TypeNode::Object(n) => n.span.end,
-            TypeNode::Tuple(n) => n.span.end,
-            TypeNode::Parenthesis(n) => n.span.end,
-            TypeNode::NamePath(n) => n.span.end,
-            TypeNode::SpecialNamePath(n) => n.span.end,
-            TypeNode::Nullable(n) => n.span.end,
-            TypeNode::NotNullable(n) => n.span.end,
-            TypeNode::Optional(n) => n.span.end,
-            TypeNode::Variadic(n) => n.span.end,
-            TypeNode::Conditional(n) => n.span.end,
-            TypeNode::Infer(n) => n.span.end,
-            TypeNode::KeyOf(n) => n.span.end,
-            TypeNode::TypeOf(n) => n.span.end,
-            TypeNode::Import(n) => n.span.end,
-            TypeNode::Predicate(n) => n.span.end,
-            TypeNode::Asserts(n) => n.span.end,
-            TypeNode::AssertsPlain(n) => n.span.end,
-            TypeNode::ReadonlyArray(n) => n.span.end,
-            TypeNode::TemplateLiteral(n) => n.span.end,
-            TypeNode::UniqueSymbol(n) => n.span.end,
-            TypeNode::Symbol(n) => n.span.end,
-            TypeNode::ObjectField(n) => n.span.end,
-            TypeNode::JsdocObjectField(n) => n.span.end,
-            TypeNode::KeyValue(n) => n.span.end,
-            TypeNode::Property(n) => n.span.end,
-            TypeNode::IndexSignature(n) => n.span.end,
-            TypeNode::MappedType(n) => n.span.end,
-            TypeNode::TypeParameter(n) => n.span.end,
-            TypeNode::CallSignature(n) => n.span.end,
-            TypeNode::ConstructorSignature(n) => n.span.end,
-            TypeNode::MethodSignature(n) => n.span.end,
-            TypeNode::IndexedAccessIndex(n) => n.span.end,
-            TypeNode::ParameterList(n) => n.span.end,
-            TypeNode::ReadonlyProperty(n) => n.span.end,
-        }
+        node.span().end
     }
 }
 

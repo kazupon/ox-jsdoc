@@ -5,7 +5,11 @@
 
 // @ts-check
 
-import { parse as parseBinding } from './bindings.js'
+import {
+  parse as parseBinding,
+  parseTypeExpression as parseTypeExpressionBinding,
+  parseTypeCheck as parseTypeCheckBinding
+} from './bindings.js'
 
 /**
  * Parse a complete `/** ... *​/` JSDoc block comment.
@@ -36,4 +40,26 @@ export function parse(sourceText, options) {
     },
     diagnostics: result.diagnostics
   }
+}
+
+/**
+ * Parse a standalone type expression (no comment parsing overhead).
+ *
+ * @param {string} typeText
+ * @param {'jsdoc' | 'closure' | 'typescript'} [mode]
+ * @returns {string | null}
+ */
+export function parseType(typeText, mode) {
+  return parseTypeExpressionBinding(typeText, mode ?? 'jsdoc') ?? null
+}
+
+/**
+ * Parse a type expression and return whether it succeeded (no stringify overhead).
+ *
+ * @param {string} typeText
+ * @param {'jsdoc' | 'closure' | 'typescript'} [mode]
+ * @returns {boolean}
+ */
+export function parseTypeCheck(typeText, mode) {
+  return parseTypeCheckBinding(typeText, mode ?? 'jsdoc')
 }
