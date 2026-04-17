@@ -7,13 +7,17 @@
 use napi_derive::napi;
 use oxc_allocator::Allocator;
 
-use ox_jsdoc::{ParseOptions, parse_comment, serialize_comment_json};
+use ox_jsdoc::{ParseMode, ParseOptions, parse_comment, serialize_comment_json};
 
 #[napi(object)]
 #[derive(Default)]
 pub struct JsParseOptions {
     /// Suppress tag recognition inside fenced code blocks. Default: true.
     pub fence_aware: Option<bool>,
+    /// Enable type expression parsing for `{...}` in tags. Default: false.
+    pub parse_types: Option<bool>,
+    /// Parse mode for type expressions: "jsdoc", "closure", or "typescript". Default: "jsdoc".
+    pub type_parse_mode: Option<String>,
 }
 
 #[napi(object)]
@@ -56,8 +60,15 @@ pub fn parse(source_text: String, options: Option<JsParseOptions>) -> JsParseRes
 
 fn convert_options(options: Option<JsParseOptions>) -> ParseOptions {
     let options = options.unwrap_or_default();
+    let type_parse_mode = match options.type_parse_mode.as_deref() {
+        Some("typescript") => ParseMode::Typescript,
+        Some("closure") => ParseMode::Closure,
+        _ => ParseMode::Jsdoc,
+    };
     ParseOptions {
         fence_aware: options.fence_aware.unwrap_or(true),
+        parse_types: options.parse_types.unwrap_or(false),
+        type_parse_mode,
         ..ParseOptions::default()
     }
 }

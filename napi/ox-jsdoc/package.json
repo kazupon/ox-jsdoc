@@ -12,6 +12,7 @@
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.6.1",
+    "jsdoc-type-pratt-parser": "^4.1.0",
     "vite-plus": "catalog:"
   },
   "napi": {

@@ -673,6 +673,28 @@ impl<'a> From<&'a JsdocTagValue<'a>> for SerTagValue<'a> {
 // TypeNode serialization — jsdoc-type-pratt-parser compatible JSON
 // ---------------------------------------------------------------------------
 
+/// Build a JSON object, omitting any fields with null values.
+fn json_obj(fields: Vec<(&str, serde_json::Value)>) -> serde_json::Value {
+    let mut map = serde_json::Map::new();
+    for (key, value) in fields {
+        if !value.is_null() {
+            map.insert(key.into(), value);
+        }
+    }
+    serde_json::Value::Object(map)
+}
+
+/// Build a meta object, omitting null fields. Returns None if empty.
+fn meta_obj(fields: Vec<(&str, serde_json::Value)>) -> Option<serde_json::Value> {
+    let mut map = serde_json::Map::new();
+    for (key, value) in fields {
+        if !value.is_null() {
+            map.insert(key.into(), value);
+        }
+    }
+    if map.is_empty() { None } else { Some(serde_json::Value::Object(map)) }
+}
+
 fn serialize_type_node(node: &TypeNode<'_>) -> serde_json::Value {
     use serde_json::json;
 
@@ -703,18 +725,31 @@ fn serialize_type_node(node: &TypeNode<'_>) -> serde_json::Value {
             "type": "JsdocTypeIntersection",
             "elements": n.elements.iter().map(|e| serialize_type_node(e)).collect::<Vec<_>>(),
         }),
-        TypeNode::Generic(n) => json!({
-            "type": "JsdocTypeGeneric",
-            "left": serialize_type_node(&n.left),
-            "elements": n.elements.iter().map(|e| serialize_type_node(e)).collect::<Vec<_>>(),
-            "meta": {
-                "brackets": match n.brackets {
-                    GenericBrackets::Angle => "angle",
-                    GenericBrackets::Square => "square",
-                },
-                "dot": n.dot,
-            },
-        }),
+        TypeNode::Generic(n) => {
+            // For square bracket syntax (T[]), jsdoc-type-pratt-parser outputs
+            // left: { type: "JsdocTypeName", value: "Array" }, elements: [T]
+            if n.brackets == GenericBrackets::Square && n.elements.is_empty() {
+                json!({
+                    "type": "JsdocTypeGeneric",
+                    "left": json!({"type": "JsdocTypeName", "value": "Array"}),
+                    "elements": [serialize_type_node(&n.left)],
+                    "meta": { "brackets": "square", "dot": false },
+                })
+            } else {
+                json!({
+                    "type": "JsdocTypeGeneric",
+                    "left": serialize_type_node(&n.left),
+                    "elements": n.elements.iter().map(|e| serialize_type_node(e)).collect::<Vec<_>>(),
+                    "meta": {
+                        "brackets": match n.brackets {
+                            GenericBrackets::Angle => "angle",
+                            GenericBrackets::Square => "square",
+                        },
+                        "dot": n.dot,
+                    },
+                })
+            }
+        }
         TypeNode::Function(n) => {
             let mut obj = json!({
                 "type": "JsdocTypeFunction",
@@ -732,13 +767,13 @@ fn serialize_type_node(node: &TypeNode<'_>) -> serde_json::Value {
             "type": "JsdocTypeObject",
             "elements": n.elements.iter().map(|e| serialize_type_node(e)).collect::<Vec<_>>(),
             "meta": {
-                "separator": n.separator.map(|s| match s {
-                    ObjectSeparator::Comma => "comma",
-                    ObjectSeparator::Semicolon => "semicolon",
-                    ObjectSeparator::Linebreak => "linebreak",
-                    ObjectSeparator::CommaAndLinebreak => "comma-and-linebreak",
-                    ObjectSeparator::SemicolonAndLinebreak => "semicolon-and-linebreak",
-                }),
+                "separator": match n.separator {
+                    Some(ObjectSeparator::Semicolon) => "semicolon",
+                    Some(ObjectSeparator::Linebreak) => "linebreak",
+                    Some(ObjectSeparator::CommaAndLinebreak) => "comma-and-linebreak",
+                    Some(ObjectSeparator::SemicolonAndLinebreak) => "semicolon-and-linebreak",
+                    _ => "comma", // Default to "comma" (matches jsdoc-type-pratt-parser)
+                },
             },
         }),
         TypeNode::Tuple(n) => json!({
@@ -761,18 +796,23 @@ fn serialize_type_node(node: &TypeNode<'_>) -> serde_json::Value {
                 NamePathType::PropertyBrackets => "property-brackets",
             },
         }),
-        TypeNode::SpecialNamePath(n) => json!({
-            "type": "JsdocTypeSpecialNamePath",
-            "value": n.value,
-            "specialType": match n.special_type {
-                SpecialPathType::Module => "module",
-                SpecialPathType::Event => "event",
-                SpecialPathType::External => "external",
-            },
-            "meta": {
-                "quote": n.quote.map(|q| quote_str(q)),
-            },
-        }),
+        TypeNode::SpecialNamePath(n) => {
+            let mut obj = json!({
+                "type": "JsdocTypeSpecialNamePath",
+                "value": n.value,
+                "specialType": match n.special_type {
+                    SpecialPathType::Module => "module",
+                    SpecialPathType::Event => "event",
+                    SpecialPathType::External => "external",
+                },
+            });
+            if let Some(meta) = meta_obj(vec![
+                ("quote", n.quote.map_or(serde_json::Value::Null, |q| json!(quote_str(q)))),
+            ]) {
+                obj["meta"] = meta;
+            }
+            obj
+        }
 
         TypeNode::Nullable(n) => json!({
             "type": "JsdocTypeNullable",
@@ -792,16 +832,19 @@ fn serialize_type_node(node: &TypeNode<'_>) -> serde_json::Value {
         TypeNode::Variadic(n) => {
             let mut obj = json!({
                 "type": "JsdocTypeVariadic",
-                "meta": {
-                    "position": n.position.map(|p| match p {
-                        VariadicPosition::Prefix => "prefix",
-                        VariadicPosition::Suffix => "suffix",
-                    }),
-                    "squareBrackets": n.square_brackets,
-                },
             });
             if let Some(ref element) = n.element {
                 obj["element"] = serialize_type_node(element);
+            }
+            let pos_val = n.position.map_or(serde_json::Value::Null, |p| json!(match p {
+                VariadicPosition::Prefix => "prefix",
+                VariadicPosition::Suffix => "suffix",
+            }));
+            if let Some(meta) = meta_obj(vec![
+                ("position", pos_val),
+                ("squareBrackets", json!(n.square_brackets)),
+            ]) {
+                obj["meta"] = meta;
             }
             obj
         }
@@ -866,17 +909,25 @@ fn serialize_type_node(node: &TypeNode<'_>) -> serde_json::Value {
         }
 
         TypeNode::ObjectField(n) => {
+            let key_str = match n.key.as_ref() {
+                TypeNode::Name(name) => name.value,
+                TypeNode::StringValue(sv) => unquote(sv.value),
+                TypeNode::Number(num) => num.value,
+                _ => "",
+            };
             let mut obj = json!({
                 "type": "JsdocTypeObjectField",
-                "key": serialize_type_node(&n.key),
+                "key": key_str,
                 "optional": n.optional,
                 "readonly": n.readonly,
-                "meta": {
-                    "quote": n.quote.map(|q| quote_str(q)),
-                },
             });
             if let Some(ref right) = n.right {
                 obj["right"] = serialize_type_node(right);
+            }
+            if let Some(meta) = meta_obj(vec![
+                ("quote", n.quote.map_or(serde_json::Value::Null, |q| json!(quote_str(q)))),
+            ]) {
+                obj["meta"] = meta;
             }
             obj
         }
@@ -897,13 +948,18 @@ fn serialize_type_node(node: &TypeNode<'_>) -> serde_json::Value {
             }
             obj
         }
-        TypeNode::Property(n) => json!({
-            "type": "JsdocTypeProperty",
-            "value": n.value,
-            "meta": {
-                "quote": n.quote.map(|q| quote_str(q)),
-            },
-        }),
+        TypeNode::Property(n) => {
+            let mut obj = json!({
+                "type": "JsdocTypeProperty",
+                "value": n.value,
+            });
+            if let Some(meta) = meta_obj(vec![
+                ("quote", n.quote.map_or(serde_json::Value::Null, |q| json!(quote_str(q)))),
+            ]) {
+                obj["meta"] = meta;
+            }
+            obj
+        }
         TypeNode::IndexSignature(n) => json!({
             "type": "JsdocTypeIndexSignature",
             "key": n.key,
@@ -939,14 +995,21 @@ fn serialize_type_node(node: &TypeNode<'_>) -> serde_json::Value {
             "returnType": serialize_type_node(&n.return_type),
             "typeParameters": n.type_parameters.iter().map(|e| serialize_type_node(e)).collect::<Vec<_>>(),
         }),
-        TypeNode::MethodSignature(n) => json!({
-            "type": "JsdocTypeMethodSignature",
-            "name": n.name,
-            "parameters": n.parameters.iter().map(|e| serialize_type_node(e)).collect::<Vec<_>>(),
-            "returnType": serialize_type_node(&n.return_type),
-            "typeParameters": n.type_parameters.iter().map(|e| serialize_type_node(e)).collect::<Vec<_>>(),
-            "meta": { "quote": n.quote.map(|q| quote_str(q)) },
-        }),
+        TypeNode::MethodSignature(n) => {
+            let mut obj = json!({
+                "type": "JsdocTypeMethodSignature",
+                "name": n.name,
+                "parameters": n.parameters.iter().map(|e| serialize_type_node(e)).collect::<Vec<_>>(),
+                "returnType": serialize_type_node(&n.return_type),
+                "typeParameters": n.type_parameters.iter().map(|e| serialize_type_node(e)).collect::<Vec<_>>(),
+            });
+            if let Some(meta) = meta_obj(vec![
+                ("quote", n.quote.map_or(serde_json::Value::Null, |q| json!(quote_str(q)))),
+            ]) {
+                obj["meta"] = meta;
+            }
+            obj
+        }
         TypeNode::IndexedAccessIndex(n) => json!({
             "type": "JsdocTypeIndexedAccessIndex",
             "right": serialize_type_node(&n.right),

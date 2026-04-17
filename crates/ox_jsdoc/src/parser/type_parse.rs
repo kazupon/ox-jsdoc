@@ -801,8 +801,13 @@ impl<'a> ParserContext<'a> {
             _ => None,
         };
 
-        // In jsdoc mode with allowKeyTypes, the key can be a full type expression
-        if mode.is_jsdoc() && !matches!(lexer.next.kind, TokenKind::Colon | TokenKind::Question) {
+        // In jsdoc mode with allowKeyTypes, the key can be a full type expression.
+        // But only enter this path when the key is NOT a simple identifier
+        // (identifiers without `:` should be regular ObjectField without value).
+        if mode.is_jsdoc()
+            && !matches!(lexer.next.kind, TokenKind::Colon | TokenKind::Question
+                | TokenKind::Comma | TokenKind::Semicolon | TokenKind::RBrace)
+        {
             let left = self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::KeyValue)?;
             if self.eat(lexer, TokenKind::Colon) {
                 let right = self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::KeyValue)?;
@@ -813,6 +818,7 @@ impl<'a> ParserContext<'a> {
                     right,
                 }), self.allocator));
             }
+            // No colon — the parsed type is just a value-less field
             let end = self.node_end(&left);
             return Some(ArenaBox::new_in(TypeNode::JsdocObjectField(TypeJsdocObjectField {
                 span: Span::new(start, end),
@@ -1610,7 +1616,13 @@ impl<'a> ParserContext<'a> {
                 lexer.bump();
             }
 
-            let value = self.get_type_source_text(lexer, value_start, value_end);
+            let raw_value = self.get_type_source_text(lexer, value_start, value_end);
+            // Unquote the value if it was a quoted string
+            let value = if quote.is_some() && raw_value.len() >= 2 {
+                &raw_value[1..raw_value.len() - 1]
+            } else {
+                raw_value
+            };
 
             return Some(ArenaBox::new_in(TypeNode::SpecialNamePath(TypeSpecialNamePath {
                 span: Span::new(start, value_end),

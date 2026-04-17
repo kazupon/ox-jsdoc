@@ -6,6 +6,10 @@
 export interface ParseOptions {
   /** Suppress tag recognition inside fenced code blocks. Default: true. */
   fenceAware?: boolean
+  /** Enable type expression parsing for `{...}` in tags. Default: false. */
+  parseTypes?: boolean
+  /** Parse mode for type expressions: "jsdoc", "closure", or "typescript". Default: "jsdoc". */
+  typeParseMode?: 'jsdoc' | 'closure' | 'typescript'
 }
 
 export interface Diagnostic {
@@ -48,7 +52,7 @@ export interface JsdocTag {
   range: [number, number]
   tag: string
   rawType: string | null
-  parsedType: null
+  parsedType: JsdocParsedType | null
   name: string | null
   optional: boolean
   defaultValue: string | null
@@ -109,6 +113,12 @@ export type JsdocTagValue =
   | { kind: 'namepath'; raw: string }
   | { kind: 'identifier'; name: string }
   | { kind: 'raw'; value: string }
+
+/** Parsed JSDoc type expression AST (jsdoc-type-pratt-parser compatible). */
+export type JsdocParsedType = {
+  type: string
+  [key: string]: unknown
+}
 
 /**
  * Parse a complete `/** ... *​/` JSDoc block comment.
