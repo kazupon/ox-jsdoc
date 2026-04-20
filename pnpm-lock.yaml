@@ -52,6 +52,19 @@ importers:
         specifier: 'catalog:'
         version: 0.1.16(jiti@2.6.1)(vite@8.0.8(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)
 
+  napi/ox-jsdoc-binary:
+    dependencies:
+      '@ox-jsdoc/decoder':
+        specifier: workspace:*
+        version: link:../../packages/decoder
+    devDependencies:
+      '@napi-rs/cli':
+        specifier: ^3.6.1
+        version: 3.6.1(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.1.18(jiti@2.6.1)(vite@8.0.8(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)
+
   packages/decoder:
     devDependencies:
       vite-plus:

@@ -1,0 +1,19 @@
+[package]
+name = "ox_jsdoc_binary_napi"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ox_jsdoc_binary = { path = "../../crates/ox_jsdoc_binary" }
+oxc_allocator.workspace = true
+napi = { version = "3", default-features = false }
+napi-derive = "3"
+
+[build-dependencies]
+napi-build = "2"

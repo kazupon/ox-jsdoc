@@ -137,7 +137,15 @@ pub fn parse<'arena>(
 ) -> ParseResult<'arena> {
     use crate::writer::BinaryWriter;
 
-    let parsed = context::parse_block_into_data(source, options.base_offset, options);
+    // Parse with relative spans (base_offset = 0). The root index entry's
+    // base_offset captures the absolute position, and the lazy decoder's
+    // `range` getter combines them. This avoids double-counting when the
+    // caller passes a non-zero base_offset.
+    let parser_options = ParseOptions {
+        base_offset: 0,
+        ..options
+    };
+    let parsed = context::parse_block_into_data(source, 0, parser_options);
 
     let mut writer = BinaryWriter::new(arena);
     if options.compat_mode {
