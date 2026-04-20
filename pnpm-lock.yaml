@@ -76,6 +76,12 @@ importers:
       '@es-joy/jsdoccomment':
         specifier: ^0.50.1
         version: 0.50.2
+      '@ox-jsdoc/wasm':
+        specifier: workspace:*
+        version: link:../../wasm/ox-jsdoc
+      '@ox-jsdoc/wasm-binary':
+        specifier: workspace:*
+        version: link:../../wasm/ox-jsdoc-binary
       comment-parser:
         specifier: ^1.4.1
         version: 1.4.1
@@ -88,6 +94,9 @@ importers:
       ox-jsdoc:
         specifier: workspace:*
         version: link:../../napi/ox-jsdoc
+      ox-jsdoc-binary:
+        specifier: workspace:*
+        version: link:../../napi/ox-jsdoc-binary
       oxc-parser:
         specifier: ^0.124.0
         version: 0.124.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)

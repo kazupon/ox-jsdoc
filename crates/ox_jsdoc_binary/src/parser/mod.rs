@@ -120,6 +120,32 @@ pub struct ParseResult<'arena> {
     pub diagnostics: ArenaVec<'arena, Diagnostic<'arena>>,
 }
 
+/// Heap-owned counterpart of [`Diagnostic`] returned by [`parse_to_bytes`].
+///
+/// `message` is borrowed from the `&'static` table inside
+/// [`crate::parser::diagnostics`], so this struct itself owns no heap data.
+#[derive(Debug, Clone, Copy)]
+pub struct OwnedDiagnostic {
+    /// Human-readable description of the issue.
+    pub message: &'static str,
+    /// Source span the diagnostic refers to, when known.
+    pub span: Option<Span>,
+}
+
+/// Result of [`parse_to_bytes`] — the bytes-only path used by binding code.
+///
+/// Unlike [`ParseResult`], `binary_bytes` is a heap-owned `Vec<u8>` so it
+/// can move directly into a NAPI `Uint8Array` or a `Box<[u8]>` for WASM
+/// without going through an arena copy. Use this when you do not need the
+/// Rust-side `LazySourceFile` / `LazyJsdocBlock` handles.
+#[derive(Debug)]
+pub struct ParseBytesResult {
+    /// Binary AST bytes — owned, 8-byte aligned by the writer.
+    pub binary_bytes: Vec<u8>,
+    /// Diagnostics produced while parsing.
+    pub diagnostics: Vec<OwnedDiagnostic>,
+}
+
 /// Parse a single JSDoc block comment into Binary AST.
 ///
 /// `source` is the raw `/** ... */` text exactly as it appears in the
@@ -196,6 +222,61 @@ pub fn parse<'arena>(
     }
 }
 
+/// Parse a single JSDoc block comment and return only the Binary AST bytes.
+///
+/// This is the bytes-only sibling of [`parse`]. Binding code that hands the
+/// buffer straight to JS (NAPI `Uint8Array`, WASM `Box<[u8]>`) should call
+/// this entry point: it skips the arena copy that [`parse`] performs to
+/// satisfy the `&'arena [u8]` lifetime needed by [`LazySourceFile`].
+///
+/// Output bytes are byte-for-byte identical to
+/// [`ParseResult::binary_bytes`] for the same input.
+#[must_use]
+pub fn parse_to_bytes(source: &str, options: ParseOptions) -> ParseBytesResult {
+    use crate::writer::BinaryWriter;
+
+    let arena = Allocator::default();
+
+    let parser_options = ParseOptions {
+        base_offset: 0,
+        ..options
+    };
+    let parsed = context::parse_block_into_data(source, 0, parser_options);
+
+    let mut writer = BinaryWriter::new(&arena);
+    if options.compat_mode {
+        writer.set_compat_mode(true);
+    }
+    let _ = writer.append_source_text(source);
+
+    let root_node_index = if parsed.is_failure() {
+        0
+    } else {
+        context::emit_block(&mut writer, &parsed).unwrap_or(0)
+    };
+    writer.push_root(root_node_index, 0, options.base_offset);
+
+    for diag in parsed.diagnostics() {
+        writer.push_diagnostic(0, diag.message());
+    }
+
+    let diagnostics: Vec<OwnedDiagnostic> = parsed
+        .diagnostics()
+        .iter()
+        .map(|d| OwnedDiagnostic {
+            message: d.message(),
+            span: d.span,
+        })
+        .collect();
+
+    let binary_bytes = writer.finish();
+
+    ParseBytesResult {
+        binary_bytes,
+        diagnostics,
+    }
+}
+
 /// One input item for [`parse_batch`].
 ///
 /// Mirrors the public `BatchItem` interface in `js-decoder.md` (the JS-side
@@ -207,6 +288,33 @@ pub struct BatchItem<'a> {
     pub source_text: &'a str,
     /// Original-file absolute byte offset.
     pub base_offset: u32,
+}
+
+/// Arena-backed diagnostic emitted by [`parse_batch`].
+///
+/// Carries the `root_index` so callers can correlate each diagnostic with
+/// the matching `lazy_roots[root_index]` entry without re-decoding the
+/// `Diagnostics` section of the Binary AST.
+#[derive(Debug, Clone, Copy)]
+pub struct BatchDiagnostic<'arena> {
+    /// Human-readable description of the issue.
+    pub message: &'arena str,
+    /// Source span the diagnostic refers to, when known.
+    pub span: Option<Span>,
+    /// Index of the input item this diagnostic belongs to (`0..items.len()`).
+    pub root_index: u32,
+}
+
+/// Heap-owned counterpart of [`BatchDiagnostic`] returned by
+/// [`parse_batch_to_bytes`].
+#[derive(Debug, Clone, Copy)]
+pub struct OwnedBatchDiagnostic {
+    /// Human-readable description of the issue.
+    pub message: &'static str,
+    /// Source span the diagnostic refers to, when known.
+    pub span: Option<Span>,
+    /// Index of the input item this diagnostic belongs to.
+    pub root_index: u32,
 }
 
 /// Result of [`parse_batch`]; carries N roots in a single shared buffer.
@@ -223,25 +331,150 @@ pub struct BatchResult<'arena> {
     pub lazy_roots: ArenaVec<'arena, Option<LazyJsdocBlock<'arena>>>,
     /// Decoder handle that wraps `binary_bytes`.
     pub source_file: LazySourceFile<'arena>,
-    /// All diagnostics produced during the batch (`root_index` is implied
-    /// by the corresponding entry in the Binary AST `Diagnostics` section).
-    pub diagnostics: ArenaVec<'arena, Diagnostic<'arena>>,
+    /// All diagnostics produced during the batch, in input order.
+    pub diagnostics: ArenaVec<'arena, BatchDiagnostic<'arena>>,
+}
+
+/// Result of [`parse_batch_to_bytes`] — heap-owned bytes + diagnostics.
+///
+/// Bytes-only sibling of [`BatchResult`]; suitable for handing straight to
+/// NAPI/WASM bindings.
+#[derive(Debug)]
+pub struct ParseBatchBytesResult {
+    /// Binary AST bytes — owned, 8-byte aligned by the writer.
+    pub binary_bytes: Vec<u8>,
+    /// All diagnostics produced during the batch, in input order.
+    pub diagnostics: Vec<OwnedBatchDiagnostic>,
 }
 
 /// Parse N JSDoc block comments into a single shared Binary AST buffer.
 ///
-/// **Reserved for Phase 2** — see `design/007-binary-ast/phases.md`
-/// "Phase 2: Batch support + public encoder API". Phase 1 deliberately
-/// implements only the single-comment path so the Phase 1.3 cutover
-/// decision is driven by the simpler shape.
+/// All N roots share the same `String Data` (so common tag names like
+/// `param`, `returns` are interned once), the same Extended Data buffer,
+/// and the same Nodes section laid out side-by-side. See
+/// `design/007-binary-ast/batch-processing.md` for the format details.
+///
+/// On parse failure for `items[i]`, `lazy_roots[i]` is `None` and at least
+/// one matching diagnostic is recorded with `root_index == i`.
 pub fn parse_batch<'arena>(
-    _arena: &'arena Allocator,
-    _items: &[BatchItem<'_>],
-    _options: ParseOptions,
+    arena: &'arena Allocator,
+    items: &[BatchItem<'_>],
+    options: ParseOptions,
 ) -> BatchResult<'arena> {
-    unimplemented!(
-        "Phase 2: implement batch parsing per design/007-binary-ast/batch-processing.md"
-    )
+    use crate::writer::BinaryWriter;
+
+    let mut writer = BinaryWriter::new(arena);
+    if options.compat_mode {
+        writer.set_compat_mode(true);
+    }
+
+    // Parse with relative spans (base_offset = 0); each root index entry
+    // carries the absolute offset so the lazy decoder can rebuild ranges.
+    let parser_options = ParseOptions {
+        base_offset: 0,
+        ..options
+    };
+
+    let mut arena_diagnostics: ArenaVec<'arena, BatchDiagnostic<'arena>> = ArenaVec::new_in(arena);
+
+    for (index, item) in items.iter().enumerate() {
+        let root_index = index as u32;
+        let source_offset_in_data = writer.append_source_text(item.source_text);
+
+        let parsed = context::parse_block_into_data(item.source_text, 0, parser_options);
+
+        let root_node_index = if parsed.is_failure() {
+            0
+        } else {
+            context::emit_block(&mut writer, &parsed).unwrap_or(0)
+        };
+        writer.push_root(root_node_index, source_offset_in_data, item.base_offset);
+
+        for diag in parsed.diagnostics() {
+            writer.push_diagnostic(root_index, diag.message());
+            arena_diagnostics.push(BatchDiagnostic {
+                message: arena.alloc_str(diag.message()),
+                span: diag.span,
+                root_index,
+            });
+        }
+    }
+
+    let bytes_vec = writer.finish();
+    let binary_bytes: &'arena [u8] = arena.alloc_slice_copy(&bytes_vec);
+    let source_file_owned = LazySourceFile::new(binary_bytes)
+        .expect("BinaryWriter::finish() always produces a header-valid buffer");
+    let source_file_ref: &'arena LazySourceFile<'arena> = arena.alloc(source_file_owned);
+
+    let mut lazy_roots: ArenaVec<'arena, Option<LazyJsdocBlock<'arena>>> = ArenaVec::new_in(arena);
+    for root in source_file_ref.asts() {
+        lazy_roots.push(root);
+    }
+
+    BatchResult {
+        binary_bytes,
+        lazy_roots,
+        source_file: *source_file_ref,
+        diagnostics: arena_diagnostics,
+    }
+}
+
+/// Bytes-only sibling of [`parse_batch`].
+///
+/// Skips the arena copy used by [`parse_batch`] for `binary_bytes`; binding
+/// code that hands the buffer straight to JS should call this instead.
+///
+/// Output bytes are byte-for-byte identical to [`BatchResult::binary_bytes`]
+/// for the same input.
+#[must_use]
+pub fn parse_batch_to_bytes(
+    items: &[BatchItem<'_>],
+    options: ParseOptions,
+) -> ParseBatchBytesResult {
+    use crate::writer::BinaryWriter;
+
+    let arena = Allocator::default();
+    let mut writer = BinaryWriter::new(&arena);
+    if options.compat_mode {
+        writer.set_compat_mode(true);
+    }
+
+    let parser_options = ParseOptions {
+        base_offset: 0,
+        ..options
+    };
+
+    let mut diagnostics: Vec<OwnedBatchDiagnostic> = Vec::new();
+
+    for (index, item) in items.iter().enumerate() {
+        let root_index = index as u32;
+        let source_offset_in_data = writer.append_source_text(item.source_text);
+
+        let parsed = context::parse_block_into_data(item.source_text, 0, parser_options);
+
+        let root_node_index = if parsed.is_failure() {
+            0
+        } else {
+            context::emit_block(&mut writer, &parsed).unwrap_or(0)
+        };
+        writer.push_root(root_node_index, source_offset_in_data, item.base_offset);
+
+        for diag in parsed.diagnostics() {
+            writer.push_diagnostic(root_index, diag.message());
+            diagnostics.push(OwnedBatchDiagnostic {
+                message: diag.message(),
+                span: diag.span,
+                root_index,
+            });
+        }
+    }
+
+    let binary_bytes = writer.finish();
+
+    ParseBatchBytesResult {
+        binary_bytes,
+        diagnostics,
+    }
 }
 
 #[cfg(test)]
@@ -414,6 +647,236 @@ mod tests {
             tag.parsed_type().expect("parsedType emitted"),
             LazyTypeNode::TemplateLiteral(_)
         ));
+    }
+
+    #[test]
+    fn parse_to_bytes_matches_parse_for_simple_block() {
+        let arena = Allocator::default();
+        let opts = ParseOptions::default();
+        let typed = parse(&arena, "/** ok */", opts);
+        let bytes_only = parse_to_bytes("/** ok */", opts);
+        assert_eq!(typed.binary_bytes, bytes_only.binary_bytes.as_slice());
+        assert_eq!(typed.diagnostics.len(), bytes_only.diagnostics.len());
+    }
+
+    #[test]
+    fn parse_to_bytes_matches_parse_for_param_tag() {
+        let arena = Allocator::default();
+        let mut opts = ParseOptions::default();
+        opts.parse_types = true;
+        let src = "/**\n * @param {string | number} id - The user ID\n */";
+        let typed = parse(&arena, src, opts);
+        let bytes_only = parse_to_bytes(src, opts);
+        assert_eq!(typed.binary_bytes, bytes_only.binary_bytes.as_slice());
+    }
+
+    #[test]
+    fn parse_to_bytes_matches_parse_with_compat_mode() {
+        let arena = Allocator::default();
+        let mut opts = ParseOptions::default();
+        opts.compat_mode = true;
+        let src = "/**\n * Description.\n * @param x The value\n */";
+        let typed = parse(&arena, src, opts);
+        let bytes_only = parse_to_bytes(src, opts);
+        assert_eq!(typed.binary_bytes, bytes_only.binary_bytes.as_slice());
+    }
+
+    #[test]
+    fn parse_to_bytes_matches_parse_for_failure() {
+        let arena = Allocator::default();
+        let opts = ParseOptions::default();
+        let typed = parse(&arena, "/* plain */", opts);
+        let bytes_only = parse_to_bytes("/* plain */", opts);
+        assert_eq!(typed.binary_bytes, bytes_only.binary_bytes.as_slice());
+        assert_eq!(typed.diagnostics.len(), bytes_only.diagnostics.len());
+        assert_eq!(
+            typed.diagnostics[0].message,
+            bytes_only.diagnostics[0].message
+        );
+    }
+
+    #[test]
+    fn parse_to_bytes_preserves_base_offset() {
+        let opts = ParseOptions {
+            base_offset: 12345,
+            ..ParseOptions::default()
+        };
+        let arena = Allocator::default();
+        let typed = parse(&arena, "/** ok */", opts);
+        let bytes_only = parse_to_bytes("/** ok */", opts);
+        assert_eq!(typed.binary_bytes, bytes_only.binary_bytes.as_slice());
+    }
+
+    #[test]
+    fn parse_batch_empty_items_returns_empty_result() {
+        let arena = Allocator::default();
+        let result = parse_batch(&arena, &[], ParseOptions::default());
+        assert_eq!(result.lazy_roots.len(), 0);
+        assert_eq!(result.diagnostics.len(), 0);
+        assert_eq!(result.source_file.root_count, 0);
+    }
+
+    #[test]
+    fn parse_batch_single_item_emits_root() {
+        let arena = Allocator::default();
+        let items = [BatchItem {
+            source_text: "/** ok */",
+            base_offset: 0,
+        }];
+        let result = parse_batch(&arena, &items, ParseOptions::default());
+        assert_eq!(result.lazy_roots.len(), 1);
+        let root = result.lazy_roots[0].expect("root present");
+        assert_eq!(root.description(), Some("ok"));
+        assert_eq!(result.diagnostics.len(), 0);
+    }
+
+    #[test]
+    fn parse_batch_multiple_items_each_produces_root() {
+        let arena = Allocator::default();
+        let items = [
+            BatchItem {
+                source_text: "/** first */",
+                base_offset: 0,
+            },
+            BatchItem {
+                source_text: "/**\n * @param {string} id - second\n */",
+                base_offset: 100,
+            },
+            BatchItem {
+                source_text: "/** third */",
+                base_offset: 200,
+            },
+        ];
+        let result = parse_batch(&arena, &items, ParseOptions::default());
+        assert_eq!(result.lazy_roots.len(), 3);
+        assert_eq!(result.lazy_roots[0].unwrap().description(), Some("first"));
+        let second_tag = result.lazy_roots[1].unwrap().tags().next().expect("tag");
+        assert_eq!(second_tag.tag().value(), "param");
+        assert_eq!(result.lazy_roots[2].unwrap().description(), Some("third"));
+    }
+
+    #[test]
+    fn parse_batch_failure_yields_none_root_and_diagnostic() {
+        let arena = Allocator::default();
+        let items = [
+            BatchItem {
+                source_text: "/** good */",
+                base_offset: 0,
+            },
+            BatchItem {
+                source_text: "/* not jsdoc */",
+                base_offset: 50,
+            },
+            BatchItem {
+                source_text: "/** also good */",
+                base_offset: 100,
+            },
+        ];
+        let result = parse_batch(&arena, &items, ParseOptions::default());
+        assert_eq!(result.lazy_roots.len(), 3);
+        assert!(result.lazy_roots[0].is_some());
+        assert!(result.lazy_roots[1].is_none(), "failed parse → None");
+        assert!(result.lazy_roots[2].is_some());
+        assert!(result.diagnostics.iter().any(|d| d.root_index == 1));
+    }
+
+    #[test]
+    fn parse_batch_diagnostics_carry_root_index() {
+        let arena = Allocator::default();
+        let items = [
+            BatchItem {
+                source_text: "/* first not jsdoc */",
+                base_offset: 0,
+            },
+            BatchItem {
+                source_text: "/** ok */",
+                base_offset: 100,
+            },
+            BatchItem {
+                source_text: "/* third not jsdoc */",
+                base_offset: 200,
+            },
+        ];
+        let result = parse_batch(&arena, &items, ParseOptions::default());
+        let indices: Vec<u32> = result.diagnostics.iter().map(|d| d.root_index).collect();
+        assert!(indices.contains(&0));
+        assert!(indices.contains(&2));
+        assert!(!indices.contains(&1));
+    }
+
+    #[test]
+    fn parse_batch_preserves_base_offset_per_item() {
+        let arena = Allocator::default();
+        let items = [
+            BatchItem {
+                source_text: "/** a */",
+                base_offset: 1000,
+            },
+            BatchItem {
+                source_text: "/** b */",
+                base_offset: 2000,
+            },
+        ];
+        let result = parse_batch(&arena, &items, ParseOptions::default());
+        assert_eq!(result.source_file.get_root_base_offset(0), 1000);
+        assert_eq!(result.source_file.get_root_base_offset(1), 2000);
+    }
+
+    #[test]
+    fn parse_batch_to_bytes_matches_parse_batch() {
+        let arena = Allocator::default();
+        let items = [
+            BatchItem {
+                source_text: "/** alpha */",
+                base_offset: 10,
+            },
+            BatchItem {
+                source_text: "/**\n * @param {string} x - one\n * @returns {number} two\n */",
+                base_offset: 200,
+            },
+            BatchItem {
+                source_text: "/* parse failure */",
+                base_offset: 500,
+            },
+        ];
+        let opts = ParseOptions::default();
+        let typed = parse_batch(&arena, &items, opts);
+        let bytes_only = parse_batch_to_bytes(&items, opts);
+        assert_eq!(typed.binary_bytes, bytes_only.binary_bytes.as_slice());
+        assert_eq!(typed.diagnostics.len(), bytes_only.diagnostics.len());
+        for (t, b) in typed.diagnostics.iter().zip(bytes_only.diagnostics.iter()) {
+            assert_eq!(t.message, b.message);
+            assert_eq!(t.root_index, b.root_index);
+        }
+    }
+
+    #[test]
+    fn parse_batch_dedups_strings_across_roots() {
+        // Same comment N times — String Data should not grow linearly with N
+        // because the dedup table stores common strings (`*`, `*/`, ` `, the
+        // tag name, etc.) once for the whole batch.
+        let single_src = "/**\n * @param {string} id\n */";
+        let single = parse_to_bytes(single_src, ParseOptions::default());
+        let single_size = single.binary_bytes.len();
+
+        let mut items: Vec<BatchItem<'_>> = Vec::with_capacity(50);
+        for _ in 0..50 {
+            items.push(BatchItem {
+                source_text: single_src,
+                base_offset: 0,
+            });
+        }
+        let batch = parse_batch_to_bytes(&items, ParseOptions::default());
+        // Sanity: 50 roots emitted
+        let lazy = LazySourceFile::new(&batch.binary_bytes).unwrap();
+        assert_eq!(lazy.root_count, 50);
+        // Per-comment cost is much less than a standalone parse (header,
+        // string table dedup amortise away).
+        let per_comment = batch.binary_bytes.len() / 50;
+        assert!(
+            per_comment < single_size,
+            "per-comment size {per_comment} should be < standalone size {single_size}"
+        );
     }
 
     #[test]

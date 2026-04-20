@@ -30,34 +30,115 @@ const fixturePath = path.join(repoRoot, 'fixtures/perf/source/typescript-checker
 
 const sourceText = await readFile(fixturePath, 'utf8')
 const allComments = extractJsdocComments(fixturePath, sourceText)
-const single = allComments[0]
 const batch100 = allComments.slice(0, 100)
 
+// Pick a comment whose length is closest to the median so the "single"
+// scenario reflects a typical input rather than a degenerate /** */.
+const median = pickMedianLength(allComments)
+const single = median.text
+
 console.log(`Loaded ${allComments.length} JSDoc comments from typescript-checker.ts`)
-console.log(`Single comment length: ${single.length} bytes`)
+console.log(
+  `Single comment: ${single.length} bytes (median; range ${median.min}-${median.max} across all comments)`
+)
 console.log(`Batch 100 cumulative length: ${batch100.reduce((a, c) => a + c.length, 0)} bytes`)
 console.log('')
 
-group('Single comment (typed vs binary)', () => {
-  bench('parseTyped (NAPI)', () => parseTyped(single))
-  bench('parseBinary (NAPI)', () => parseBinary(single))
+function pickMedianLength(comments) {
+  const lengths = comments.map(c => c.length).sort((a, b) => a - b)
+  const target = lengths[Math.floor(lengths.length / 2)]
+  let chosen = comments[0]
+  let bestDelta = Math.abs(comments[0].length - target)
+  for (const c of comments) {
+    const d = Math.abs(c.length - target)
+    if (d < bestDelta) {
+      chosen = c
+      bestDelta = d
+    }
+  }
+  return { text: chosen, min: lengths[0], max: lengths[lengths.length - 1] }
+}
+
+// Fair comparison: force `.ast` materialization on both sides. The typed
+// wrapper exposes `ast` as a lazy getter that triggers `JSON.parse`, while
+// the binary wrapper eagerly builds `RemoteSourceFile + asts[0]` inside
+// `parse()`. Without the explicit access, the typed measurement skips the
+// JSON.parse cost.
+
+group('Single comment (typed vs binary, .ast accessed)', () => {
+  bench('parseTyped (NAPI)', () => {
+    void parseTyped(single).ast
+  })
+  bench('parseBinary (NAPI)', () => {
+    void parseBinary(single).ast
+  })
 })
 
-group('Batch 100 comments (typed vs binary)', () => {
+group('Batch 100 comments (typed vs binary, .ast accessed)', () => {
   bench('parseTyped (NAPI) x100', () => {
-    for (const comment of batch100) parseTyped(comment)
+    for (const comment of batch100) void parseTyped(comment).ast
   })
   bench('parseBinary (NAPI) x100', () => {
-    for (const comment of batch100) parseBinary(comment)
+    for (const comment of batch100) void parseBinary(comment).ast
   })
 })
 
-group(`Full file: ${allComments.length} comments`, () => {
+group(`Full file: ${allComments.length} comments (.ast accessed)`, () => {
   bench('parseTyped (NAPI) full', () => {
-    for (const comment of allComments) parseTyped(comment)
+    for (const comment of allComments) void parseTyped(comment).ast
   })
   bench('parseBinary (NAPI) full', () => {
-    for (const comment of allComments) parseBinary(comment)
+    for (const comment of allComments) void parseBinary(comment).ast
+  })
+})
+
+// Sparse access — read a single root scalar (no child traversal). For
+// typed this still pays the full JSON.parse; for binary it only touches
+// the root node's Extended Data string. Closest match to the design's
+// "Recommended: lazy sparse access" KPI (target: 1/10 of typed time).
+//
+// Note: `ast.tags.length` is NOT a sparse access for binary — the
+// `tags` getter eagerly walks the NodeList and constructs every
+// `RemoteJsdocTag` instance. Use a scalar field instead.
+group('Sparse access — root.description only (full file)', () => {
+  bench('parseTyped (NAPI) sparse', () => {
+    for (const comment of allComments) void parseTyped(comment).ast?.description
+  })
+  bench('parseBinary (NAPI) sparse', () => {
+    for (const comment of allComments) void parseBinary(comment).ast?.description
+  })
+})
+
+// Full materialisation — walk every tag and read every accessor. Binary's
+// worst case (forces RemoteJsdocTag construction per tag); typed already
+// has the full object after JSON.parse.
+group('Full materialisation — read every tag field (full file)', () => {
+  bench('parseTyped (NAPI) walk', () => {
+    for (const comment of allComments) {
+      const ast = parseTyped(comment).ast
+      if (!ast) continue
+      const tags = ast.tags ?? []
+      for (const tag of tags) {
+        // touch every commonly-read scalar
+        void tag.tag
+        void tag.rawType
+        void tag.name
+        void tag.description
+      }
+    }
+  })
+  bench('parseBinary (NAPI) walk', () => {
+    for (const comment of allComments) {
+      const ast = parseBinary(comment).ast
+      if (!ast) continue
+      const tags = ast.tags
+      for (const tag of tags) {
+        void tag.tag?.value
+        void tag.rawType?.raw
+        void tag.name?.raw
+        void tag.description
+      }
+    }
   })
 })
 
@@ -77,7 +158,9 @@ console.log('|---|---:|---:|---:|')
 const pairs = [
   ['parseTyped (NAPI)', 'parseBinary (NAPI)', 'Single comment'],
   ['parseTyped (NAPI) x100', 'parseBinary (NAPI) x100', 'Batch 100'],
-  ['parseTyped (NAPI) full', 'parseBinary (NAPI) full', `Full file (${allComments.length} comments)`]
+  ['parseTyped (NAPI) full', 'parseBinary (NAPI) full', `Full file (${allComments.length} comments)`],
+  ['parseTyped (NAPI) sparse', 'parseBinary (NAPI) sparse', 'Sparse: root.description only'],
+  ['parseTyped (NAPI) walk', 'parseBinary (NAPI) walk', 'Full walk: every tag field']
 ]
 for (const [typedName, binaryName, label] of pairs) {
   const typed = rows.find(r => r.name === typedName)

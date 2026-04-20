@@ -764,5 +764,6 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { parseJsdoc } = nativeBinding
+const { parseJsdoc, parseJsdocBatch } = nativeBinding
 export { parseJsdoc }
+export { parseJsdocBatch }

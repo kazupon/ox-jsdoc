@@ -12,9 +12,10 @@
 
 use napi::bindgen_prelude::Uint8Array;
 use napi_derive::napi;
-use oxc_allocator::Allocator;
 
-use ox_jsdoc_binary::parser::{parse, type_data::ParseMode, ParseOptions};
+use ox_jsdoc_binary::parser::{
+    parse_batch_to_bytes, parse_to_bytes, type_data::ParseMode, BatchItem, ParseOptions,
+};
 
 #[napi(object)]
 #[derive(Default)]
@@ -50,9 +51,8 @@ pub struct JsParseResult {
 /// Parse a complete `/** ... */` JSDoc block and return the Binary AST.
 #[napi]
 pub fn parse_jsdoc(source_text: String, options: Option<JsParseOptions>) -> JsParseResult {
-    let arena = Allocator::default();
     let opts = convert_options(options);
-    let result = parse(&arena, source_text.as_str(), opts);
+    let result = parse_to_bytes(source_text.as_str(), opts);
 
     let diagnostics = result
         .diagnostics
@@ -62,12 +62,76 @@ pub fn parse_jsdoc(source_text: String, options: Option<JsParseOptions>) -> JsPa
         })
         .collect();
 
-    // `binary_bytes` is arena-allocated — we copy into a Vec<u8> so the
-    // resulting NAPI Buffer owns its memory and the arena can be dropped.
-    let bytes = result.binary_bytes.to_vec();
-
+    // `parse_to_bytes` returns a heap-owned `Vec<u8>` (no arena copy on the
+    // Rust side). Moving it into `Uint8Array::from` transfers ownership to
+    // NAPI without an additional memcpy.
     JsParseResult {
-        buffer: Uint8Array::from(bytes),
+        buffer: Uint8Array::from(result.binary_bytes),
+        diagnostics,
+    }
+}
+
+#[napi(object)]
+pub struct JsBatchItem {
+    /// `/** ... */` source text for this comment.
+    pub source_text: String,
+    /// Original-file absolute byte offset. Default: 0.
+    pub base_offset: Option<u32>,
+}
+
+#[napi(object)]
+pub struct JsBatchDiagnostic {
+    /// Human-readable diagnostic message.
+    pub message: String,
+    /// Index of the input item this diagnostic belongs to (`0..items.len()`).
+    pub root_index: u32,
+}
+
+#[napi(object)]
+pub struct JsBatchParseResult {
+    /// Encoded Binary AST bytes — pass to `@ox-jsdoc/decoder`'s
+    /// `RemoteSourceFile` constructor; one buffer carries N roots.
+    pub buffer: Uint8Array,
+    /// Parser diagnostics for the entire batch (input order). Use
+    /// `root_index` to attribute each diagnostic back to a `BatchItem`.
+    pub diagnostics: Vec<JsBatchDiagnostic>,
+}
+
+/// Parse N JSDoc block comments into a single shared Binary AST buffer.
+///
+/// The returned buffer carries N roots side-by-side; the JS-side decoder
+/// exposes them via `RemoteSourceFile.asts`. Strings recur across comments
+/// (`*`, `*/`, common tag names) are interned once for the whole batch.
+#[napi]
+pub fn parse_jsdoc_batch(
+    items: Vec<JsBatchItem>,
+    options: Option<JsParseOptions>,
+) -> JsBatchParseResult {
+    let opts = convert_options(options);
+
+    // BatchItem borrows `source_text: &str` from the input Vec, so we need
+    // to project the JS-side Strings into a parallel Vec<BatchItem>.
+    let batch_items: Vec<BatchItem<'_>> = items
+        .iter()
+        .map(|i| BatchItem {
+            source_text: i.source_text.as_str(),
+            base_offset: i.base_offset.unwrap_or(0),
+        })
+        .collect();
+
+    let result = parse_batch_to_bytes(&batch_items, opts);
+
+    let diagnostics = result
+        .diagnostics
+        .iter()
+        .map(|d| JsBatchDiagnostic {
+            message: d.message.to_string(),
+            root_index: d.root_index,
+        })
+        .collect();
+
+    JsBatchParseResult {
+        buffer: Uint8Array::from(result.binary_bytes),
         diagnostics,
     }
 }

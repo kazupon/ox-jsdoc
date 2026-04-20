@@ -7,14 +7,21 @@
     "benchmark:jsdoccomment": "node --expose-gc ./scripts/jsdoccomment-fixtures.mjs",
     "benchmark:ox-jsdoc": "node --expose-gc ./scripts/ox-jsdoc-fixtures.mjs",
     "benchmark:type-parser": "node --expose-gc ./scripts/type-parser-compare.mjs",
-    "benchmark:full": "node --expose-gc ./scripts/full-comparison.mjs"
+    "benchmark:full": "node --expose-gc ./scripts/full-comparison.mjs",
+    "benchmark:napi-binary-vs-typed": "node --expose-gc ./scripts/binary-vs-typed-napi.mjs",
+    "benchmark:wasm-binary-vs-typed": "node --expose-gc ./scripts/binary-vs-typed-wasm.mjs",
+    "benchmark:binary-size": "node --expose-gc ./scripts/binary-size-comparison.mjs",
+    "benchmark:parse-batch": "node --expose-gc ./scripts/parse-batch-vs-loop.mjs"
   },
   "dependencies": {
     "@es-joy/jsdoccomment": "^0.50.1",
+    "@ox-jsdoc/wasm": "workspace:*",
+    "@ox-jsdoc/wasm-binary": "workspace:*",
     "comment-parser": "^1.4.1",
     "jsdoc-type-pratt-parser": "^4.1.0",
     "mitata": "^1.0.34",
     "ox-jsdoc": "workspace:*",
+    "ox-jsdoc-binary": "workspace:*",
     "oxc-parser": "^0.124.0"
   }
 }

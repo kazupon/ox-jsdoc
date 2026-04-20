@@ -531,7 +531,6 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "ox_jsdoc_binary",
- "oxc_allocator",
 ]
 
 [[package]]
@@ -540,7 +539,6 @@ version = "0.0.0"
 dependencies = [
  "js-sys",
  "ox_jsdoc_binary",
- "oxc_allocator",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]

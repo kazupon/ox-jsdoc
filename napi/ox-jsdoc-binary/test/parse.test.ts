@@ -8,7 +8,7 @@ import type {
 } from '@ox-jsdoc/decoder'
 import { describe, expect, it } from 'vite-plus/test'
 
-import { parse } from '../src-js/index.js'
+import { parse, parseBatch } from '../src-js/index.js'
 
 describe('parse (binary NAPI binding)', () => {
   it('parses a basic param tag and exposes lazy getters', () => {
@@ -76,5 +76,64 @@ describe('parse (binary NAPI binding)', () => {
     const result = parse('/** ok */', { baseOffset: 100 })
     expect(result.diagnostics).toEqual([])
     expect((result.ast as RemoteJsdocBlock).range).toEqual([100, 109])
+  })
+})
+
+describe('parseBatch (binary NAPI binding)', () => {
+  it('returns empty result for an empty input', () => {
+    const result = parseBatch([])
+    expect(result.asts).toEqual([])
+    expect(result.diagnostics).toEqual([])
+    expect(result.sourceFile.rootCount).toBe(0)
+  })
+
+  it('parses N comments and yields one root per item', () => {
+    const result = parseBatch([
+      { sourceText: '/** first */' },
+      { sourceText: '/**\n * @param {string} id\n */' },
+      { sourceText: '/** third */' }
+    ])
+    expect(result.diagnostics).toEqual([])
+    expect(result.asts.length).toBe(3)
+    expect(result.asts[0]!.description).toBe('first')
+    const tag = result.asts[1]!.tags[0] as RemoteJsdocTag
+    expect((tag.tag as RemoteJsdocTagName).value).toBe('param')
+    expect(result.asts[2]!.description).toBe('third')
+  })
+
+  it('marks failed items with null and emits diagnostic with rootIndex', () => {
+    const result = parseBatch([
+      { sourceText: '/** good */' },
+      { sourceText: '/* not jsdoc */' },
+      { sourceText: '/** also good */' }
+    ])
+    expect(result.asts[0]).not.toBeNull()
+    expect(result.asts[1]).toBeNull()
+    expect(result.asts[2]).not.toBeNull()
+    const failureDiag = result.diagnostics.find(d => d.rootIndex === 1)
+    expect(failureDiag).toBeDefined()
+    expect(failureDiag!.message).toContain('not a JSDoc block')
+  })
+
+  it('respects per-item baseOffset for absolute range computation', () => {
+    const result = parseBatch([
+      { sourceText: '/** a */', baseOffset: 1000 },
+      { sourceText: '/** b */', baseOffset: 2000 }
+    ])
+    expect((result.asts[0] as RemoteJsdocBlock).range[0]).toBe(1000)
+    expect((result.asts[1] as RemoteJsdocBlock).range[0]).toBe(2000)
+  })
+
+  it('shares a single buffer across N roots (string dedup engaged)', () => {
+    const single = parseBatch([{ sourceText: '/**\n * @param {string} id\n */' }])
+    const singleBytes = (single.sourceFile as unknown as { view: DataView }).view.byteLength
+    const batch50 = parseBatch(
+      Array.from({ length: 50 }, () => ({ sourceText: '/**\n * @param {string} id\n */' }))
+    )
+    const batchBytes = (batch50.sourceFile as unknown as { view: DataView }).view.byteLength
+    const perItem = batchBytes / 50
+    // Per-item amortised size must be smaller than the standalone size
+    // (header + dedup table amortise away).
+    expect(perItem).toBeLessThan(singleBytes)
   })
 })
