@@ -11,11 +11,11 @@
 //! `design/007-binary-ast/format.md`; this crate aims to be the single Rust
 //! reference implementation for that spec.
 //!
-//! The crate is currently in **Phase 1.0a** (skeleton construction): only the
-//! `format` module is populated, and even that only provides type definitions
-//! and layout constants. Encoder, decoder, parser, and visitor modules will
+//! The crate is currently in **Phase 1.0b** (skeleton construction): the
+//! `format` module is fully populated with layout constants, and the
+//! `writer` module exposes the public surface (struct, function signatures)
+//! with `unimplemented!()` bodies. Decoder, parser, and visitor modules will
 //! land in subsequent sub-phases.
 
-#![cfg_attr(not(test), no_std)]
-
 pub mod format;
+pub mod writer;

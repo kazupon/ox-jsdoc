@@ -12,5 +12,7 @@ missing_docs = "warn"
 unused_must_use = "warn"
 
 [dependencies]
+oxc_allocator.workspace = true
+oxc_span.workspace = true
 
 [dev-dependencies]

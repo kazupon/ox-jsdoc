@@ -1,0 +1,24 @@
+//! Binary AST writer (parser-integrated, approach c-1).
+//!
+//! See `design/007-binary-ast/rust-impl.md#parser-integrated-binary-writer`
+//! for the design rationale.
+//!
+//! The writer is invoked from inside the parser as it produces nodes. It
+//! emits Binary AST bytes directly into an arena-backed buffer per section
+//! ([`BinaryWriter`]), then concatenates them into the final
+//! `Vec<u8>` at [`BinaryWriter::finish`]. There is no separate encoder pass;
+//! parsing and encoding happen in lockstep.
+//!
+//! This module is currently a **Phase 1.0b skeleton**: the public surface
+//! (struct, types, signatures) is in place but every implementation body is
+//! `unimplemented!()`. The first real bodies land in Phase 1.1a.
+
+mod binary_writer;
+mod extended_data;
+pub mod nodes;
+mod string_table;
+
+pub use binary_writer::BinaryWriter;
+pub use extended_data::{ExtOffset, ExtendedDataBuilder};
+pub use nodes::NodeIndex;
+pub use string_table::{StringIndex, StringTableBuilder};
