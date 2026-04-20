@@ -11,12 +11,10 @@
 //! `design/007-binary-ast/format.md`; this crate aims to be the single Rust
 //! reference implementation for that spec.
 //!
-//! Phase **1.0d** complete: the `format` module ships full layout
-//! constants, while the `writer`, `decoder`, and `parser` modules expose
-//! the entire public surface (structs, traits, function signatures) with
-//! `unimplemented!()` / `todo!()` bodies. Real bodies land starting in
-//! Phase 1.1a (encoder), 1.1b (decoder), 1.1c (visitor), 1.2a (parser).
-//! The `LazyJsdocVisitor` trait will land in Phase 1.1c.
+//! Phase **1.1c** complete: the `format`, `writer`, and `decoder` modules
+//! ship working implementations including the [`decoder::LazyJsdocVisitor`]
+//! depth-first walker. The `parser` module is still skeletal; real bodies
+//! land in Phase 1.2a.
 
 pub mod decoder;
 pub mod format;

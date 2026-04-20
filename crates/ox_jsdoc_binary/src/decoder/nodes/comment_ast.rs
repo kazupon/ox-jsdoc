@@ -6,6 +6,7 @@
 //! Phase 1.2a parser and Phase 1.1c visitor will rely on.
 
 use crate::format::kind::Kind;
+use crate::format::node_record::{KIND_OFFSET, NODE_RECORD_SIZE};
 use crate::format::string_table::U16_NONE_SENTINEL;
 
 use super::super::helpers::{
@@ -250,6 +251,29 @@ impl<'a> LazyJsdocTag<'a> {
         let bitmask = self.children_bitmask();
         let idx = child_at_visitor_index(self.source_file, self.node_index, bitmask, 3)?;
         LazyTypeNode::from_index(self.source_file, idx, self.root_index)
+    }
+    /// `body` child (one of `JsdocGenericTagBody` / `JsdocBorrowsTagBody` /
+    /// `JsdocRawTagBody`). The variant is determined from the child's Kind
+    /// byte; returns `None` when bit4 of the Children bitmask is unset or
+    /// the child is not one of the three body kinds.
+    pub fn body(&self) -> Option<LazyJsdocTagBody<'a>> {
+        let bitmask = self.children_bitmask();
+        let idx = child_at_visitor_index(self.source_file, self.node_index, bitmask, 4)?;
+        let kind_byte = self.source_file.bytes()
+            [self.source_file.nodes_offset as usize + idx as usize * NODE_RECORD_SIZE + KIND_OFFSET];
+        let kind = Kind::from_u8(kind_byte).ok()?;
+        match kind {
+            Kind::JsdocGenericTagBody => Some(LazyJsdocTagBody::Generic(
+                LazyJsdocGenericTagBody::from_index(self.source_file, idx, self.root_index),
+            )),
+            Kind::JsdocBorrowsTagBody => Some(LazyJsdocTagBody::Borrows(
+                LazyJsdocBorrowsTagBody::from_index(self.source_file, idx, self.root_index),
+            )),
+            Kind::JsdocRawTagBody => Some(LazyJsdocTagBody::Raw(
+                LazyJsdocRawTagBody::from_index(self.source_file, idx, self.root_index),
+            )),
+            _ => None,
+        }
     }
 
     /// Source-preserving description lines (visitor index 6, NodeList).
