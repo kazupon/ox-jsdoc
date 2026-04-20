@@ -12,10 +12,10 @@
 //! layout, and `format::string_table` for the on-wire constants.
 
 use core::num::NonZeroU32;
-use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use oxc_allocator::{Allocator, Vec as ArenaVec};
+use rustc_hash::FxHashMap;
 
 use crate::format::string_table::{STRING_TABLE_MAX_INDEX, U16_NONE_SENTINEL};
 
@@ -93,7 +93,12 @@ pub struct StringTableBuilder<'arena> {
     /// Dedup map: arena-allocated string → its `StringIndex`. Stored on
     /// the `std` heap (not the arena) because `HashMap` cannot live inside
     /// `oxc_allocator` without a custom allocator binding.
-    dedup: HashMap<&'arena str, StringIndex>,
+    ///
+    /// Uses `FxHashMap` (rustc-hash) instead of the default `SipHash` for
+    /// ~2x faster hashing on the unique-string slow path. Inputs are
+    /// parser-derived AST text (no untrusted user input), so the lack of
+    /// HashDoS resistance is acceptable.
+    dedup: FxHashMap<&'arena str, StringIndex>,
 }
 
 /// Number of common strings pre-interned by [`StringTableBuilder::new`].
@@ -264,7 +269,7 @@ impl<'arena> StringTableBuilder<'arena> {
             data_buffer,
             count: COMMON_STRING_COUNT,
             arena,
-            dedup: HashMap::new(),
+            dedup: FxHashMap::default(),
         }
     }
 

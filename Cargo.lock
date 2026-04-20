@@ -521,6 +521,7 @@ dependencies = [
  "criterion2",
  "oxc_allocator",
  "oxc_span",
+ "rustc-hash",
 ]
 
 [[package]]
