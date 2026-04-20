@@ -535,6 +535,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ox_jsdoc_binary_wasm"
+version = "0.0.0"
+dependencies = [
+ "js-sys",
+ "ox_jsdoc_binary",
+ "oxc_allocator",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "ox_jsdoc_napi"
 version = "0.0.0"
 dependencies = [
