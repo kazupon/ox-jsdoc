@@ -21,3 +21,7 @@ criterion2 = { version = "3.0.2", default-features = false }
 [[bench]]
 name = "encoder"
 harness = false
+
+[[bench]]
+name = "decoder"
+harness = false

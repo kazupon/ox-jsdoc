@@ -6,19 +6,19 @@
 //! lazy node can reach the String table or Root array in O(1) without
 //! re-parsing the Header.
 
-use core::marker::PhantomData;
-
 use crate::format::header::{
     self, COMPAT_MODE_BIT, DIAGNOSTICS_OFFSET_FIELD, EXTENDED_DATA_OFFSET_FIELD, FLAGS_OFFSET,
     HEADER_SIZE, NODES_OFFSET_FIELD, NODE_COUNT_FIELD, ROOT_ARRAY_OFFSET_FIELD, ROOT_COUNT_FIELD,
     STRING_DATA_OFFSET_FIELD, STRING_OFFSETS_OFFSET_FIELD,
 };
 use crate::format::node_record::STRING_PAYLOAD_NONE_SENTINEL;
-use crate::format::root_index::{BASE_OFFSET_FIELD, ROOT_INDEX_ENTRY_SIZE};
+use crate::format::root_index::{BASE_OFFSET_FIELD, NODE_INDEX_OFFSET, ROOT_INDEX_ENTRY_SIZE};
 use crate::format::string_table::{STRING_OFFSET_ENTRY_SIZE, U16_NONE_SENTINEL};
 
 use super::error::DecodeError;
 use super::helpers::read_u32;
+use super::nodes::comment_ast::LazyJsdocBlock;
+use super::nodes::LazyNode;
 
 /// Lazy decoder root. Holds the underlying byte slice plus all Header-derived
 /// offsets/counts.
@@ -133,13 +133,11 @@ impl<'a> LazySourceFile<'a> {
     /// Iterate over the AST root for each entry in the Root index array.
     ///
     /// Yields `None` for entries whose `node_index = 0` (parse failure
-    /// sentinel) and `Some(LazyJsdocBlock)` for successful parses. The
-    /// generic parameter ties the iterator's lifetime to `self`.
+    /// sentinel) and `Some(LazyJsdocBlock)` for successful parses.
     pub fn asts(&'a self) -> AstsIter<'a> {
         AstsIter {
             source_file: self,
             cursor: 0,
-            _marker: PhantomData,
         }
     }
 }
@@ -149,27 +147,31 @@ impl<'a> LazySourceFile<'a> {
 pub struct AstsIter<'a> {
     source_file: &'a LazySourceFile<'a>,
     cursor: u32,
-    // Reserved for future generic refinements (e.g. LazyJsdocBlock once
-    // comment_ast.rs is fully populated). Held here to keep the iterator
-    // signature stable across phases.
-    _marker: PhantomData<&'a u8>,
 }
 
 impl<'a> Iterator for AstsIter<'a> {
-    /// `None` when the root parsed successfully (placeholder until Phase
-    /// 1.1b wires up the real `Option<LazyJsdocBlock<'a>>` return type).
-    type Item = Option<u32>;
+    type Item = Option<LazyJsdocBlock<'a>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.cursor >= self.source_file.root_count {
             return None;
         }
-        // Phase 1.1b: read u32 at root_array_offset + cursor * 12, return
-        // None for sentinel (0) and Some(LazyJsdocBlock::from_index(...))
-        // otherwise. Today we just advance the cursor so callers can verify
-        // the iterator yields exactly `root_count` entries.
+        let root_index = self.cursor;
+        let off = self.source_file.root_array_offset as usize
+            + root_index as usize * ROOT_INDEX_ENTRY_SIZE
+            + NODE_INDEX_OFFSET;
+        let node_index = read_u32(self.source_file.bytes, off);
         self.cursor += 1;
-        Some(None)
+        if node_index == 0 {
+            // Parse failure sentinel.
+            Some(None)
+        } else {
+            Some(Some(LazyJsdocBlock::from_index(
+                self.source_file,
+                node_index,
+                root_index,
+            )))
+        }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {

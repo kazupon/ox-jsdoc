@@ -301,6 +301,111 @@ fn node_list_wrapper_payload_counts_elements() {
 }
 
 #[test]
+fn lazy_decoder_reads_jsdoc_text_value() {
+    use ox_jsdoc_binary::decoder::nodes::LazyNode;
+    use ox_jsdoc_binary::decoder::nodes::comment_ast::LazyJsdocText;
+
+    let arena = Allocator::default();
+    let mut writer = BinaryWriter::new(&arena);
+    let value = writer.intern_string("hello world");
+    let _ = write_jsdoc_text(&mut writer, Span::new(0, 11), 0, value);
+    writer.push_root(1, 0, 100);
+
+    let bytes = writer.finish();
+    let sf = LazySourceFile::new(&bytes).unwrap();
+
+    // Construct a lazy view by hand (root_index = 0, node_index = 1).
+    let text = LazyJsdocText::from_index(&sf, 1, 0);
+    assert_eq!(text.value(), "hello world");
+    assert_eq!(text.pos(), 0);
+    assert_eq!(text.end(), 11);
+    // base_offset = 100 → absolute range
+    assert_eq!(text.range(), [100, 111]);
+}
+
+#[test]
+fn lazy_decoder_walks_jsdoc_block_via_asts_iterator() {
+    use ox_jsdoc_binary::decoder::nodes::LazyNode;
+
+    let arena = Allocator::default();
+    let mut writer = BinaryWriter::new(&arena);
+
+    let desc = writer.intern_string("hi");
+    let s = writer.intern_string("");
+    let block = write_jsdoc_block(
+        &mut writer,
+        Span::new(0, 12),
+        0,
+        Some(desc),
+        s, s, s, s, s, s, s,
+        0, // no children
+    );
+    writer.push_root(block.as_u32(), 0, 50);
+
+    let bytes = writer.finish();
+    let sf = LazySourceFile::new(&bytes).unwrap();
+
+    let asts: Vec<_> = sf.asts().collect();
+    assert_eq!(asts.len(), 1);
+    let block = asts[0].expect("root is not a parse failure");
+    assert_eq!(block.description(), Some("hi"));
+    assert_eq!(block.range(), [50, 62], "absolute range = base_offset + pos/end");
+    assert_eq!(block.tags().count(), 0);
+    assert_eq!(block.description_lines().count(), 0);
+    assert_eq!(block.inline_tags().count(), 0);
+}
+
+#[test]
+fn lazy_decoder_tag_with_parsed_type_dispatches_correctly() {
+    use ox_jsdoc_binary::decoder::nodes::type_node::LazyTypeNode;
+
+    let arena = Allocator::default();
+    let mut writer = BinaryWriter::new(&arena);
+
+    let tag_name_str = writer.intern_string("param");
+    let type_str = writer.intern_string("string");
+
+    // JsdocTag with bit0 (tag) + bit3 (parsedType) bitmask.
+    let bitmask = 0b0000_1001u8;
+    let tag = ox_jsdoc_binary::writer::nodes::comment_ast::write_jsdoc_tag(
+        &mut writer,
+        Span::new(0, 20),
+        0,
+        false, None, None, None,
+        bitmask,
+    );
+    let _ = ox_jsdoc_binary::writer::nodes::comment_ast::write_jsdoc_tag_name(
+        &mut writer,
+        Span::new(1, 6),
+        tag.as_u32(),
+        tag_name_str,
+    );
+    let _ = ox_jsdoc_binary::writer::nodes::type_node::write_type_name(
+        &mut writer,
+        Span::new(8, 14),
+        tag.as_u32(),
+        type_str,
+    );
+
+    writer.push_root(tag.as_u32(), 0, 0);
+
+    let bytes = writer.finish();
+    let sf = LazySourceFile::new(&bytes).unwrap();
+
+    // We pushed JsdocTag as the root for testing convenience; access it directly.
+    use ox_jsdoc_binary::decoder::nodes::LazyNode;
+    use ox_jsdoc_binary::decoder::nodes::comment_ast::LazyJsdocTag;
+    let lazy_tag = LazyJsdocTag::from_index(&sf, tag.as_u32(), 0);
+    assert!(!lazy_tag.optional());
+    assert_eq!(lazy_tag.tag().value(), "param");
+    let parsed = lazy_tag.parsed_type().expect("parsedType present");
+    match parsed {
+        LazyTypeNode::Name(n) => assert_eq!(n.value(), "string"),
+        _ => panic!("expected TypeName variant"),
+    }
+}
+
+#[test]
 fn dedup_intern_returns_same_index() {
     let arena = Allocator::default();
     let mut writer = BinaryWriter::new(&arena);

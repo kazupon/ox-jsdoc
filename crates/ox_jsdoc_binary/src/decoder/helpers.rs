@@ -2,7 +2,10 @@
 //!
 //! See `design/007-binary-ast/rust-impl.md#helper-functions-shared-parts-for-reading-binary-ast`.
 
-use crate::format::node_record::{NEXT_SIBLING_OFFSET, NODE_DATA_OFFSET, NODE_RECORD_SIZE, PAYLOAD_MASK, TYPE_TAG_SHIFT, TypeTag};
+use crate::format::node_record::{
+    NEXT_SIBLING_OFFSET, NODE_DATA_OFFSET, NODE_RECORD_SIZE, PARENT_INDEX_OFFSET, PAYLOAD_MASK,
+    TYPE_TAG_SHIFT, TypeTag,
+};
 
 use super::source_file::LazySourceFile;
 
@@ -56,6 +59,62 @@ pub fn read_next_sibling(sf: &LazySourceFile<'_>, node_index: u32) -> u32 {
     let off =
         sf.nodes_offset as usize + node_index as usize * NODE_RECORD_SIZE + NEXT_SIBLING_OFFSET;
     read_u32(sf.bytes(), off)
+}
+
+/// Read the `parent_index` field for the given node.
+#[inline]
+#[must_use]
+pub fn read_parent_index(sf: &LazySourceFile<'_>, node_index: u32) -> u32 {
+    let off =
+        sf.nodes_offset as usize + node_index as usize * NODE_RECORD_SIZE + PARENT_INDEX_OFFSET;
+    read_u32(sf.bytes(), off)
+}
+
+/// Return the first child of `parent_index` (= `parent_index + 1` if it
+/// exists and its `parent_index` field equals `parent_index`).
+///
+/// Returns `None` when the parent has no child.
+#[inline]
+#[must_use]
+pub fn first_child(sf: &LazySourceFile<'_>, parent_index: u32) -> Option<u32> {
+    let candidate = parent_index + 1;
+    if candidate >= sf.node_count {
+        return None;
+    }
+    if read_parent_index(sf, candidate) == parent_index {
+        Some(candidate)
+    } else {
+        None
+    }
+}
+
+/// Resolve the 30-bit String payload of a String-type node into its
+/// underlying string. `None` when the writer used the
+/// [`crate::format::node_record::STRING_PAYLOD_NONE_SENTINEL`] sentinel.
+#[inline]
+#[must_use]
+pub fn string_payload<'a>(sf: &LazySourceFile<'a>, node_index: u32) -> Option<&'a str> {
+    let nd = read_node_data(sf, node_index);
+    debug_assert_eq!(
+        TypeTag::from_u32((nd >> TYPE_TAG_SHIFT) & 0b11),
+        Ok(TypeTag::String),
+        "string_payload called on a non-String node"
+    );
+    sf.get_string(nd & PAYLOAD_MASK)
+}
+
+/// Read the Children bitmask from the 30-bit Node Data payload of a
+/// Children-type node.
+#[inline]
+#[must_use]
+pub fn children_bitmask_payload(sf: &LazySourceFile<'_>, node_index: u32) -> u32 {
+    let nd = read_node_data(sf, node_index);
+    debug_assert_eq!(
+        TypeTag::from_u32((nd >> TYPE_TAG_SHIFT) & 0b11),
+        Ok(TypeTag::Children),
+        "children_bitmask_payload called on a non-Children node"
+    );
+    nd & PAYLOAD_MASK
 }
 
 /// Find the `visitor_index`-th set bit in `bitmask` and return the
