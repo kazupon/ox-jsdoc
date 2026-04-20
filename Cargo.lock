@@ -515,6 +515,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ox_jsdoc_binary"
+version = "0.0.0"
+
+[[package]]
 name = "ox_jsdoc_napi"
 version = "0.0.0"
 dependencies = [
