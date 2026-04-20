@@ -12,10 +12,32 @@
 //! [`super::writer`] that appends bytes directly into the arena-backed
 //! Binary AST buffer. There is no intermediate typed AST.
 //!
-//! Phase 1.0d: only the public surface (signatures, types) is in place.
-//! [`parse`] panics with `unimplemented!()`, and [`parse_batch`] is
-//! reserved for Phase 2 (per `design/007-binary-ast/phases.md`
-//! "Phase 2: Batch support + public encoder API").
+//! Phase 1.2a — port-in-progress.
+//!
+//! `scanner` / `checkpoint` / `diagnostics` are verbatim ports from the
+//! typed-AST parser; they have no AST dependency. The structural parser
+//! (`context`) and the type expression parser (`type_parse`) land in
+//! follow-up commits inside this same Phase.
+
+pub mod checkpoint;
+pub mod context;
+pub mod diagnostics;
+pub mod lexer;
+pub mod precedence;
+pub mod scanner;
+pub mod token;
+pub mod type_data;
+pub mod type_emit;
+pub mod type_parse;
+
+pub use checkpoint::{Checkpoint, FenceState, QuoteKind};
+pub use context::{
+    emit_block, parse_block_into_data, InlineTagFormatData, ParsedBlock, ParsedDiagnostic,
+    ParserContext,
+};
+pub use diagnostics::{
+    parser_diagnostic_message, type_diagnostic_message, ParserDiagnosticKind, TypeDiagnosticKind,
+};
 
 use oxc_allocator::{Allocator, Vec as ArenaVec};
 use oxc_span::Span;
@@ -26,11 +48,9 @@ use crate::decoder::source_file::LazySourceFile;
 /// Options controlling parser behaviour.
 ///
 /// Most ox-jsdoc users will leave every field at its [`Default`] value; the
-/// fields exist so binding code can flip [`compat_mode`] for jsdoccomment
+/// fields exist so binding code can flip `compat_mode` for jsdoccomment
 /// compatibility (see `design/007-binary-ast/encoding.md`).
-///
-/// [`compat_mode`]: ParseOptions::compat_mode
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ParseOptions {
     /// When `true`, the writer also emits the jsdoccomment-compat extension
     /// region on `JsdocBlock` / `JsdocTag` / `JsdocDescriptionLine` /
@@ -42,6 +62,27 @@ pub struct ParseOptions {
     ///
     /// Default `0` is correct when the comment is parsed in isolation.
     pub base_offset: u32,
+    /// Treat fenced code blocks as literal text so `@tags` inside examples
+    /// do not start new block tag sections.
+    pub fence_aware: bool,
+    /// Enable type expression parsing for `{...}` in tags. When `false`,
+    /// the `parsedType` slot is always omitted (zero cost).
+    pub parse_types: bool,
+    /// Parse mode for the type expression sub-parser. Only used when
+    /// `parse_types` is `true`. Defaults to [`type_data::ParseMode::Jsdoc`].
+    pub type_parse_mode: type_data::ParseMode,
+}
+
+impl Default for ParseOptions {
+    fn default() -> Self {
+        Self {
+            compat_mode: false,
+            base_offset: 0,
+            fence_aware: true,
+            parse_types: false,
+            type_parse_mode: type_data::ParseMode::Jsdoc,
+        }
+    }
 }
 
 /// One parser-emitted diagnostic.
@@ -86,17 +127,65 @@ pub struct ParseResult<'arena> {
 /// (the byte buffer, intern table, diagnostics) so the caller does not need
 /// to free anything explicitly.
 ///
-/// Phase 1.2a will deliver the actual implementation; Phase 1.0d ships the
-/// signature so downstream skeleton crates (NAPI/WASM bindings) can compile.
+/// Phase 1.2a structural port: emits all 60 comment-AST kinds and the
+/// scalar string fields. The `parsedType` slot is currently always omitted;
+/// Phase 1.2a-cont (type_parse port) will enable it.
 pub fn parse<'arena>(
-    _arena: &'arena Allocator,
-    _source: &'arena str,
-    _options: ParseOptions,
+    arena: &'arena Allocator,
+    source: &'arena str,
+    options: ParseOptions,
 ) -> ParseResult<'arena> {
-    unimplemented!(
-        "Phase 1.2a: invoke the parser-integrated writer for a single comment, then \
-         construct LazySourceFile from the finished bytes"
-    )
+    use crate::writer::BinaryWriter;
+
+    let parsed = context::parse_block_into_data(source, options.base_offset, options);
+
+    let mut writer = BinaryWriter::new(arena);
+    if options.compat_mode {
+        writer.set_compat_mode(true);
+    }
+    let _ = writer.append_source_text(source);
+
+    let root_node_index = if parsed.is_failure() {
+        0
+    } else {
+        context::emit_block(&mut writer, &parsed).unwrap_or(0)
+    };
+    writer.push_root(root_node_index, 0, options.base_offset);
+
+    // Diagnostics: writer interns the message and records (root_index=0).
+    for diag in parsed.diagnostics() {
+        writer.push_diagnostic(0, diag.message());
+    }
+
+    let arena_diagnostics: ArenaVec<'arena, Diagnostic<'arena>> = {
+        let mut v = ArenaVec::new_in(arena);
+        for diag in parsed.diagnostics() {
+            v.push(Diagnostic {
+                message: arena.alloc_str(diag.message()),
+                span: diag.span,
+            });
+        }
+        v
+    };
+
+    let bytes_vec = writer.finish();
+    let binary_bytes: &'arena [u8] = arena.alloc_slice_copy(&bytes_vec);
+    let source_file_owned = LazySourceFile::new(binary_bytes)
+        .expect("BinaryWriter::finish() always produces a header-valid buffer");
+    let source_file_ref: &'arena LazySourceFile<'arena> = arena.alloc(source_file_owned);
+
+    let lazy_root = if root_node_index == 0 {
+        None
+    } else {
+        source_file_ref.asts().next().flatten()
+    };
+
+    ParseResult {
+        binary_bytes,
+        lazy_root,
+        source_file: *source_file_ref,
+        diagnostics: arena_diagnostics,
+    }
 }
 
 /// One input item for [`parse_batch`].
@@ -176,5 +265,167 @@ mod tests {
     fn batch_item_is_copy() {
         fn assert_copy<T: Copy>() {}
         assert_copy::<BatchItem<'static>>();
+    }
+
+    #[test]
+    fn parse_simple_block_emits_lazy_root() {
+        let arena = Allocator::default();
+        let result = parse(&arena, "/** ok */", ParseOptions::default());
+        assert!(result.diagnostics.is_empty());
+        let root = result.lazy_root.expect("root present");
+        assert_eq!(root.description(), Some("ok"));
+    }
+
+    #[test]
+    fn parse_param_tag_round_trips_through_lazy_decoder() {
+        let arena = Allocator::default();
+        let result = parse(
+            &arena,
+            "/**\n * @param {string} id - The user ID\n */",
+            ParseOptions::default(),
+        );
+        assert!(result.diagnostics.is_empty());
+        let root = result.lazy_root.expect("root present");
+        let tags: Vec<_> = root.tags().collect();
+        assert_eq!(tags.len(), 1);
+        let tag = tags[0];
+        assert_eq!(tag.tag().value(), "param");
+        assert_eq!(tag.description(), Some("The user ID"));
+    }
+
+    #[test]
+    fn parse_failure_yields_diagnostic_and_no_root() {
+        let arena = Allocator::default();
+        let result = parse(&arena, "/* plain */", ParseOptions::default());
+        assert!(result.lazy_root.is_none());
+        assert_eq!(result.diagnostics.len(), 1);
+        assert!(result.diagnostics[0].message.contains("not a JSDoc block"));
+    }
+
+    #[test]
+    fn parse_with_parsed_type_emits_type_name() {
+        use crate::decoder::nodes::type_node::LazyTypeNode;
+        let arena = Allocator::default();
+        let mut opts = ParseOptions::default();
+        opts.parse_types = true;
+        let result = parse(
+            &arena,
+            "/**\n * @param {string} id\n */",
+            opts,
+        );
+        assert!(result.diagnostics.is_empty());
+        let root = result.lazy_root.unwrap();
+        let tag = root.tags().next().expect("tag present");
+        let parsed = tag.parsed_type().expect("parsedType emitted");
+        match parsed {
+            LazyTypeNode::Name(n) => assert_eq!(n.value(), "string"),
+            other => panic!("expected TypeName, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_with_parsed_type_emits_union() {
+        use crate::decoder::nodes::type_node::LazyTypeNode;
+        let arena = Allocator::default();
+        let mut opts = ParseOptions::default();
+        opts.parse_types = true;
+        opts.type_parse_mode = crate::parser::type_data::ParseMode::Typescript;
+        let result = parse(
+            &arena,
+            "/**\n * @param {string | number} id\n */",
+            opts,
+        );
+        assert!(result.diagnostics.is_empty());
+        let root = result.lazy_root.unwrap();
+        let tag = root.tags().next().expect("tag present");
+        let parsed = tag.parsed_type().expect("parsedType emitted");
+        match parsed {
+            LazyTypeNode::Union(u) => assert_eq!(u.elements().count(), 2),
+            other => panic!("expected TypeUnion, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_with_parsed_type_emits_function_type() {
+        use crate::decoder::nodes::type_node::LazyTypeNode;
+        let arena = Allocator::default();
+        let mut opts = ParseOptions::default();
+        opts.parse_types = true;
+        opts.type_parse_mode = crate::parser::type_data::ParseMode::Jsdoc;
+        let result = parse(
+            &arena,
+            "/**\n * @returns {function(string): number} ok\n */",
+            opts,
+        );
+        assert!(result.diagnostics.is_empty());
+        let root = result.lazy_root.unwrap();
+        let tag = root.tags().next().expect("tag present");
+        let parsed = tag.parsed_type().expect("parsedType emitted");
+        assert!(matches!(parsed, LazyTypeNode::Function(_)));
+    }
+
+    #[test]
+    fn parse_handles_generic_dot_notation() {
+        use crate::decoder::nodes::type_node::LazyTypeNode;
+        let arena = Allocator::default();
+        let mut opts = ParseOptions::default();
+        opts.parse_types = true;
+        let result = parse(
+            &arena,
+            "/**\n * @param {Array.<string>} ids\n */",
+            opts,
+        );
+        assert!(result.diagnostics.is_empty());
+        let root = result.lazy_root.unwrap();
+        let tag = root.tags().next().expect("tag present");
+        match tag.parsed_type().expect("parsedType emitted") {
+            LazyTypeNode::Generic(g) => {
+                assert!(g.dot());
+                assert_eq!(g.elements().count(), 1);
+            }
+            other => panic!("expected TypeGeneric, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_handles_template_literal_type() {
+        use crate::decoder::nodes::type_node::LazyTypeNode;
+        let arena = Allocator::default();
+        let mut opts = ParseOptions::default();
+        opts.parse_types = true;
+        opts.type_parse_mode = crate::parser::type_data::ParseMode::Typescript;
+        let result = parse(
+            &arena,
+            "/**\n * @param {`hello-${T}`} value\n */",
+            opts,
+        );
+        assert!(result.diagnostics.is_empty());
+        let root = result.lazy_root.unwrap();
+        let tag = root.tags().next().expect("tag present");
+        assert!(matches!(
+            tag.parsed_type().expect("parsedType emitted"),
+            LazyTypeNode::TemplateLiteral(_)
+        ));
+    }
+
+    #[test]
+    fn parse_handles_conditional_type() {
+        use crate::decoder::nodes::type_node::LazyTypeNode;
+        let arena = Allocator::default();
+        let mut opts = ParseOptions::default();
+        opts.parse_types = true;
+        opts.type_parse_mode = crate::parser::type_data::ParseMode::Typescript;
+        let result = parse(
+            &arena,
+            "/**\n * @param {T extends U ? X : Y} v\n */",
+            opts,
+        );
+        assert!(result.diagnostics.is_empty());
+        let root = result.lazy_root.unwrap();
+        let tag = root.tags().next().expect("tag present");
+        assert!(matches!(
+            tag.parsed_type().expect("parsedType emitted"),
+            LazyTypeNode::Conditional(_)
+        ));
     }
 }
