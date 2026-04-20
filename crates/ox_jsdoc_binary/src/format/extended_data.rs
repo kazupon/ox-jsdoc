@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Extended Data section constants.
 //!
 //! See `design/007-binary-ast/format.md#extended-data-section` for the full

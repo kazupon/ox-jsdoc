@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Errors raised by the lazy decoder.
 
 use core::fmt;

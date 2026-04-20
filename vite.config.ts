@@ -9,6 +9,10 @@ import {
 const ignorePatterns = [
   'crates/**',
   'napi/ox-jsdoc/src-js/binding.*',
+  // @ox-jsdoc/decoder is a hand-written shim until Phase 4 codegen lands;
+  // its 60 lazy classes have repetitive constructors that don't carry their
+  // own JSDoc types yet. Lint coverage will return once the codegen ships.
+  'packages/decoder/**',
   'tasks/**',
   'refers/**',
   'fixtures/**'

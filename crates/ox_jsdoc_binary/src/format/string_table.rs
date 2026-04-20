@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! String table (String Offsets + String Data) constants.
 //!
 //! See `design/007-binary-ast/format.md#string-table` for the full layout.

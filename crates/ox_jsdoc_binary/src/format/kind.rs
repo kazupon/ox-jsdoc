@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Node kinds (62 in total) and category checks.
 //!
 //! See `design/007-binary-ast/ast-nodes.md#kind-number-space` for the full

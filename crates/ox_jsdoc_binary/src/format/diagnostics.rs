@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Diagnostics section constants.
 //!
 //! See `design/007-binary-ast/format.md#diagnostics-section-4--8m-bytes` for

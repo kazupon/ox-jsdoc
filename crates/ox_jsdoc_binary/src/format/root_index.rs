@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Root index array constants (12 bytes per root).
 //!
 //! See `design/007-binary-ast/format.md#root-index-array-12n-bytes` for the

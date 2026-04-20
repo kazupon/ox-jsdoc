@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Public parser entry points.
 //!
 //! See `design/007-binary-ast/rust-impl.md#parser-integrated-binary-writer`

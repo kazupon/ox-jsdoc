@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! End-to-end roundtrip tests for the encoder + decoder.
 //!
 //! These tests build a small Binary AST through the writer API, run it

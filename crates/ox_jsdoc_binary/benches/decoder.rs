@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Decoder microbenchmarks.
 //!
 //! Measures three lazy-access patterns against the same encoded buffer:

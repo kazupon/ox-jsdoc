@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Integration tests for the [`LazyJsdocVisitor`] trait.
 //!
 //! Builds a multi-tag JsdocBlock through the writer API, walks it with a

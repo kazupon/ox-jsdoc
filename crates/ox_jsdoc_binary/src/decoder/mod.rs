@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Rust-side lazy decoder.
 //!
 //! See `design/007-binary-ast/rust-impl.md#rust-side-lazy-decoder` and

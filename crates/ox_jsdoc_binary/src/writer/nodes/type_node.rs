@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! `write_*` helpers for the 45 TypeNode kinds (`0x80 - 0xAC`).
 //!
 //! TypeNodes split into 4 patterns (see `format.md` "Node catalog matrix"):

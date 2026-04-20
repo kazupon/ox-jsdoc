@@ -1,0 +1,25 @@
+{
+  "name": "@ox-jsdoc/decoder",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Lazy JS decoder for the ox-jsdoc Binary AST format. Shared by NAPI and WASM bindings.",
+  "files": [
+    "src/**/*.js",
+    "src/**/*.d.ts"
+  ],
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "scripts": {
+    "test": "vp test run --config vitest.config.ts"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  }
+}

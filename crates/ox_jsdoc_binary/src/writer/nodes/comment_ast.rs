@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! `write_*` helpers for the 15 comment AST kinds (`0x01 - 0x0F`).
 //!
 //! Convention: every helper takes the writer first, then the node's

@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Extended Data buffer builder used by [`super::BinaryWriter`].
 //!
 //! Manages a single byte buffer onto which per-Kind Extended Data records

@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Node record layout (24 bytes per node) and Node Data bit packing.
 //!
 //! See `design/007-binary-ast/format.md#nodes-section-24-bytesnode` and

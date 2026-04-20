@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! `LazyJsdocVisitor` — depth-first walker over the lazy decoder.
 //!
 //! See `design/007-binary-ast/rust-impl.md#lazy-visitor-trait-code-generation`.

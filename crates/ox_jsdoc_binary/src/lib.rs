@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Binary AST for ox_jsdoc.
 //!
 //! This crate hosts the Binary AST format specification (`format`), the

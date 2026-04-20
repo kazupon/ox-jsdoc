@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Binary AST writer (parser-integrated, approach c-1).
 //!
 //! See `design/007-binary-ast/rust-impl.md#parser-integrated-binary-writer`

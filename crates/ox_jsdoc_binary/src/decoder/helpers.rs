@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Common helpers shared by lazy node implementations.
 //!
 //! See `design/007-binary-ast/rust-impl.md#helper-functions-shared-parts-for-reading-binary-ast`.

@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Lazy structs for the 45 TypeNode kinds (`0x80 - 0xAC`).
 //!
 //! Each struct mirrors the comment-AST style in

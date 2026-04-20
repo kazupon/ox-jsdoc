@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Lazy structs for the 15 comment AST kinds (`0x01 - 0x0F`).
 //!
 //! Every struct is a `Copy` value type wrapping

@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Binary AST format specification (constants, layouts, type definitions).
 //!
 //! The format is documented in detail in

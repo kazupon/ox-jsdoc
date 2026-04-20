@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Lazy node structs (60 in total) and the [`LazyNode`] trait.
 //!
 //! Per `design/007-binary-ast/rust-impl.md#lazy-nodes-are-stack-value-types-no-box-allocation`,

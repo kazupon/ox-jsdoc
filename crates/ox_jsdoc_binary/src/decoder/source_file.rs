@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! [`LazySourceFile`] — root of the lazy decoder.
 //!
 //! See `design/007-binary-ast/rust-impl.md#lazysourcefile-root-of-the-decoder`.

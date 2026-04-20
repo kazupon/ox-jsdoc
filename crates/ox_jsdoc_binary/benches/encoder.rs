@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Encoder microbenchmarks.
 //!
 //! Phase 1.1a-vi seed benchmarks. The benches measure how long it takes to

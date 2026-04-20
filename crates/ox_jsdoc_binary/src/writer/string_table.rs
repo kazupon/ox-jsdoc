@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! String table builder used by [`super::BinaryWriter`].
 //!
 //! Owns the **String Offsets** (`8K` bytes) and **String Data** buffers.

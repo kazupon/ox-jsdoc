@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Per-Kind `write_*` helpers (Phase 1.0b: signatures only).
 //!
 //! There is one `write_*` function per concrete node Kind (15 comment AST
