@@ -518,6 +518,7 @@ dependencies = [
 name = "ox_jsdoc_binary"
 version = "0.0.0"
 dependencies = [
+ "criterion2",
  "oxc_allocator",
  "oxc_span",
 ]

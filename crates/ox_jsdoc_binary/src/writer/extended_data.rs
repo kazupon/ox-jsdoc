@@ -12,6 +12,8 @@ use core::num::NonZeroU32;
 
 use oxc_allocator::{Allocator, Vec as ArenaVec};
 
+use crate::format::extended_data::EXTENDED_DATA_ALIGNMENT;
+
 /// Byte offset into the Extended Data section.
 ///
 /// Newtype wrapper to avoid mixing up Extended Data offsets with String
@@ -57,18 +59,33 @@ pub struct ExtendedDataBuilder<'arena> {
 impl<'arena> ExtendedDataBuilder<'arena> {
     /// Create an empty builder backed by the supplied arena.
     #[must_use]
-    pub fn new(_arena: &'arena Allocator) -> Self {
-        unimplemented!("Phase 1.1a: allocate buffer in arena")
+    pub fn new(arena: &'arena Allocator) -> Self {
+        ExtendedDataBuilder {
+            buffer: ArenaVec::new_in(arena),
+        }
     }
 
     /// Reserve `size` bytes for a new record, returning the resulting
     /// [`ExtOffset`].
     ///
     /// Inserts zero-fill padding before the record so the offset is
-    /// 8-byte aligned. Caller is responsible for writing exactly `size`
-    /// bytes after the call.
-    pub fn reserve(&mut self, _size: usize) -> ExtOffset {
-        unimplemented!("Phase 1.1a: align(buffer.len(), 8); push zeros; return offset")
+    /// 8-byte aligned. The returned offset points to the first reserved
+    /// byte; the reserved bytes themselves are zeroed and can be patched
+    /// in place by the caller using indexing.
+    pub fn reserve(&mut self, size: usize) -> ExtOffset {
+        let aligned_offset = self.next_aligned_offset();
+        let padding = aligned_offset - self.buffer.len();
+        self.buffer.extend(core::iter::repeat_n(0u8, padding + size));
+        ExtOffset::from_u32(aligned_offset as u32).expect("Extended Data offset overflow")
+    }
+
+    /// Mutable view of `len` bytes starting at `offset` in the underlying
+    /// buffer. Helper for callers that want to write multi-byte fields
+    /// after [`Self::reserve`].
+    #[inline]
+    pub fn slice_mut(&mut self, offset: ExtOffset, len: usize) -> &mut [u8] {
+        let start = offset.as_u32() as usize;
+        &mut self.buffer[start..start + len]
     }
 
     /// Total Extended Data section size in bytes (includes padding).
@@ -83,6 +100,14 @@ impl<'arena> ExtendedDataBuilder<'arena> {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.buffer.is_empty()
+    }
+
+    /// Round the current buffer length up to the next 8-byte boundary.
+    #[inline]
+    fn next_aligned_offset(&self) -> usize {
+        let unaligned = self.buffer.len();
+        let align = EXTENDED_DATA_ALIGNMENT;
+        unaligned.div_ceil(align) * align
     }
 }
 
@@ -107,5 +132,35 @@ mod tests {
     #[test]
     fn ext_offset_rejects_u32_max() {
         assert!(ExtOffset::from_u32(u32::MAX).is_none());
+    }
+
+    #[test]
+    fn reserve_first_record_starts_at_zero() {
+        let arena = Allocator::default();
+        let mut b = ExtendedDataBuilder::new(&arena);
+        let off = b.reserve(2);
+        assert_eq!(off.as_u32(), 0);
+        assert_eq!(b.size(), 2);
+    }
+
+    #[test]
+    fn reserve_pads_to_8_byte_alignment() {
+        let arena = Allocator::default();
+        let mut b = ExtendedDataBuilder::new(&arena);
+        // First reserve 2 bytes (so the buffer ends at offset 2)
+        let _ = b.reserve(2);
+        // Second reserve must round up to offset 8 (6 bytes padding inserted)
+        let off = b.reserve(2);
+        assert_eq!(off.as_u32(), 8);
+        assert_eq!(b.size(), 10);
+    }
+
+    #[test]
+    fn slice_mut_round_trip() {
+        let arena = Allocator::default();
+        let mut b = ExtendedDataBuilder::new(&arena);
+        let off = b.reserve(4);
+        b.slice_mut(off, 4).copy_from_slice(&[1, 2, 3, 4]);
+        assert_eq!(&b.buffer[..], &[1, 2, 3, 4]);
     }
 }

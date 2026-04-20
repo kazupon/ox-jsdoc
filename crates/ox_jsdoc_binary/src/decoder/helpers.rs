@@ -2,6 +2,8 @@
 //!
 //! See `design/007-binary-ast/rust-impl.md#helper-functions-shared-parts-for-reading-binary-ast`.
 
+use crate::format::node_record::{NEXT_SIBLING_OFFSET, NODE_DATA_OFFSET, NODE_RECORD_SIZE, PAYLOAD_MASK, TYPE_TAG_SHIFT, TypeTag};
+
 use super::source_file::LazySourceFile;
 
 /// Read a little-endian `u32` at `offset` from `bytes`.
@@ -10,27 +12,50 @@ use super::source_file::LazySourceFile;
 /// caller (via the lazy decoder) guarantees this through Header validation.
 #[inline]
 #[must_use]
-pub fn read_u32(_bytes: &[u8], _offset: usize) -> u32 {
-    todo!("Phase 1.1b: u32::from_le_bytes(bytes[offset..offset+4].try_into().unwrap())")
+pub fn read_u32(bytes: &[u8], offset: usize) -> u32 {
+    u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap())
+}
+
+/// Read a little-endian `u16` at `offset` from `bytes`.
+#[inline]
+#[must_use]
+pub fn read_u16(bytes: &[u8], offset: usize) -> u16 {
+    u16::from_le_bytes(bytes[offset..offset + 2].try_into().unwrap())
 }
 
 /// Resolve the Extended Data byte offset for the node at `node_index`.
 ///
 /// The node must use Extended type Node Data (`0b10`); calling this on a
 /// Children/String/Reserved node debug-asserts in development builds.
-///
-/// Per the format spec:
-///
-/// ```text
-/// node_data       = u32 read at nodes_offset + node_index * 24 + 12
-/// type_tag        = (node_data >> 30) & 0b11        // must equal 0b10
-/// payload         = node_data & 0x3FFF_FFFF
-/// ext_data_offset = sf.extended_data_offset + payload
-/// ```
 #[inline]
 #[must_use]
-pub fn ext_offset(_sf: &LazySourceFile<'_>, _node_index: u32) -> u32 {
-    todo!("Phase 1.1b: read Node Data, validate type tag = 0b10, return absolute offset")
+pub fn ext_offset(sf: &LazySourceFile<'_>, node_index: u32) -> u32 {
+    let nd = read_node_data(sf, node_index);
+    let tag = TypeTag::from_u32((nd >> TYPE_TAG_SHIFT) & 0b11)
+        .expect("Node Data type tag bits cover 0..=3 by construction");
+    debug_assert_eq!(
+        tag,
+        TypeTag::Extended,
+        "ext_offset called on a non-Extended node ({tag:?})"
+    );
+    sf.extended_data_offset + (nd & PAYLOAD_MASK)
+}
+
+/// Read the raw 32-bit Node Data field for the given node.
+#[inline]
+#[must_use]
+pub fn read_node_data(sf: &LazySourceFile<'_>, node_index: u32) -> u32 {
+    let off = sf.nodes_offset as usize + node_index as usize * NODE_RECORD_SIZE + NODE_DATA_OFFSET;
+    read_u32(sf.bytes(), off)
+}
+
+/// Read the `next_sibling` field for the given node.
+#[inline]
+#[must_use]
+pub fn read_next_sibling(sf: &LazySourceFile<'_>, node_index: u32) -> u32 {
+    let off =
+        sf.nodes_offset as usize + node_index as usize * NODE_RECORD_SIZE + NEXT_SIBLING_OFFSET;
+    read_u32(sf.bytes(), off)
 }
 
 /// Find the `visitor_index`-th set bit in `bitmask` and return the
@@ -47,10 +72,26 @@ pub fn ext_offset(_sf: &LazySourceFile<'_>, _node_index: u32) -> u32 {
 #[inline]
 #[must_use]
 pub fn child_at_visitor_index(
-    _sf: &LazySourceFile<'_>,
-    _parent_index: u32,
-    _bitmask: u8,
-    _visitor_index: u8,
+    sf: &LazySourceFile<'_>,
+    parent_index: u32,
+    bitmask: u8,
+    visitor_index: u8,
 ) -> Option<u32> {
-    todo!("Phase 1.1b: walk visitor bits, follow next_sibling links to the target child")
+    if (bitmask & (1u8 << visitor_index)) == 0 {
+        return None;
+    }
+    // Count the number of set bits below `visitor_index` to know how many
+    // siblings to walk past.
+    let mask_below = (1u8 << visitor_index).wrapping_sub(1);
+    let skip = (bitmask & mask_below).count_ones();
+
+    let mut child = parent_index + 1;
+    for _ in 0..skip {
+        let next = read_next_sibling(sf, child);
+        if next == 0 {
+            return None; // truncated sibling chain
+        }
+        child = next;
+    }
+    Some(child)
 }

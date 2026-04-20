@@ -8,7 +8,17 @@
 
 use core::marker::PhantomData;
 
+use crate::format::header::{
+    self, COMPAT_MODE_BIT, DIAGNOSTICS_OFFSET_FIELD, EXTENDED_DATA_OFFSET_FIELD, FLAGS_OFFSET,
+    HEADER_SIZE, NODES_OFFSET_FIELD, NODE_COUNT_FIELD, ROOT_ARRAY_OFFSET_FIELD, ROOT_COUNT_FIELD,
+    STRING_DATA_OFFSET_FIELD, STRING_OFFSETS_OFFSET_FIELD,
+};
+use crate::format::node_record::STRING_PAYLOAD_NONE_SENTINEL;
+use crate::format::root_index::{BASE_OFFSET_FIELD, ROOT_INDEX_ENTRY_SIZE};
+use crate::format::string_table::{STRING_OFFSET_ENTRY_SIZE, U16_NONE_SENTINEL};
+
 use super::error::DecodeError;
+use super::helpers::read_u32;
 
 /// Lazy decoder root. Holds the underlying byte slice plus all Header-derived
 /// offsets/counts.
@@ -45,10 +55,37 @@ impl<'a> LazySourceFile<'a> {
     /// Returns [`DecodeError::TooShort`] when the slice cannot fit a Header,
     /// and [`DecodeError::IncompatibleMajor`] when the buffer's major version
     /// disagrees with [`crate::format::header::SUPPORTED_MAJOR`]. Decoders
-    /// log a warning (but accept the input) when the buffer's minor version
-    /// is newer than the decoder's supported minor.
-    pub fn new(_bytes: &'a [u8]) -> Result<Self, DecodeError> {
-        todo!("Phase 1.1b: parse Header (40 bytes), validate major, populate fields")
+    /// silently accept buffers with a newer minor version (forward
+    /// compatibility) — Phase 1.1a is the first version, so the only valid
+    /// value is `0`.
+    pub fn new(bytes: &'a [u8]) -> Result<Self, DecodeError> {
+        if bytes.len() < HEADER_SIZE {
+            return Err(DecodeError::TooShort {
+                actual: bytes.len(),
+                required: HEADER_SIZE,
+            });
+        }
+        let version_byte = bytes[0];
+        let major = header::major(version_byte);
+        if major != header::SUPPORTED_MAJOR {
+            return Err(DecodeError::IncompatibleMajor {
+                buffer_major: major,
+                decoder_major: header::SUPPORTED_MAJOR,
+            });
+        }
+        let flags = bytes[FLAGS_OFFSET];
+        Ok(LazySourceFile {
+            bytes,
+            compat_mode: (flags & COMPAT_MODE_BIT) != 0,
+            root_array_offset: read_u32(bytes, ROOT_ARRAY_OFFSET_FIELD),
+            string_offsets_offset: read_u32(bytes, STRING_OFFSETS_OFFSET_FIELD),
+            string_data_offset: read_u32(bytes, STRING_DATA_OFFSET_FIELD),
+            extended_data_offset: read_u32(bytes, EXTENDED_DATA_OFFSET_FIELD),
+            diagnostics_offset: read_u32(bytes, DIAGNOSTICS_OFFSET_FIELD),
+            nodes_offset: read_u32(bytes, NODES_OFFSET_FIELD),
+            node_count: read_u32(bytes, NODE_COUNT_FIELD),
+            root_count: read_u32(bytes, ROOT_COUNT_FIELD),
+        })
     }
 
     /// Borrow the underlying byte slice. Useful for advanced consumers that
@@ -62,18 +99,35 @@ impl<'a> LazySourceFile<'a> {
     /// Resolve the string at `idx` (None when `idx` is the u16 None sentinel
     /// `0xFFFF` or the 30-bit `0x3FFF_FFFF`).
     ///
-    /// Performs an in-place UTF-8 slice from String Data; the returned `&str`
-    /// borrows directly from the buffer (zero-copy). Phase 1.1b will use
-    /// `from_utf8_unchecked` after the writer guarantees valid UTF-8.
-    pub fn get_string(&self, _idx: u32) -> Option<&'a str> {
-        todo!("Phase 1.1b: lookup (start, end) in String Offsets, slice String Data")
+    /// Performs a zero-copy slice from String Data; the returned `&str`
+    /// borrows directly from the buffer. The writer is responsible for
+    /// only feeding valid UTF-8 (`&str` inputs), so we use the unchecked
+    /// `from_utf8` variant to keep the hot path branch-free.
+    #[must_use]
+    pub fn get_string(&self, idx: u32) -> Option<&'a str> {
+        if idx == STRING_PAYLOAD_NONE_SENTINEL || idx == U16_NONE_SENTINEL as u32 {
+            return None;
+        }
+        let so_offset =
+            self.string_offsets_offset as usize + idx as usize * STRING_OFFSET_ENTRY_SIZE;
+        let start = read_u32(self.bytes, so_offset) as usize;
+        let end = read_u32(self.bytes, so_offset + 4) as usize;
+        let sd_offset = self.string_data_offset as usize;
+        let slice = &self.bytes[sd_offset + start..sd_offset + end];
+        // SAFETY: Phase 1 writers only accept `&str` inputs and feed them
+        // verbatim into String Data, so the slice is guaranteed UTF-8.
+        Some(unsafe { core::str::from_utf8_unchecked(slice) })
     }
 
     /// Get the `base_offset` (original-file absolute byte position) for
     /// root index `root_index`. Used by lazy nodes when computing the
     /// `range` getter.
-    pub fn get_root_base_offset(&self, _root_index: u32) -> u32 {
-        todo!("Phase 1.1b: read u32 at root_array_offset + root_index * 12 + 8")
+    #[must_use]
+    pub fn get_root_base_offset(&self, root_index: u32) -> u32 {
+        let off = self.root_array_offset as usize
+            + root_index as usize * ROOT_INDEX_ENTRY_SIZE
+            + BASE_OFFSET_FIELD;
+        read_u32(self.bytes, off)
     }
 
     /// Iterate over the AST root for each entry in the Root index array.
