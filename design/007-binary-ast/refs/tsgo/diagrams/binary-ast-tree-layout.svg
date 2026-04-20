@@ -1,0 +1,195 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1050 820" font-family="monospace" font-size="13">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="10" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,3 L0,6 Z" fill="#888"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="10" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,3 L0,6 Z" fill="#4a90d9"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="10" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,3 L0,6 Z" fill="#50b86c"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="10" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,3 L0,6 Z" fill="#d95050"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="10" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,3 L0,6 Z" fill="#e8a838"/>
+    </marker>
+  </defs>
+
+  <text x="525" y="28" text-anchor="middle" font-size="18" font-weight="bold" fill="#222">Flat Array Layout &amp; Tree Reconstruction</text>
+  <text x="525" y="48" text-anchor="middle" font-size="12" fill="#666">Nodes stored in source order; parent/sibling indices encode tree structure</text>
+
+  <!-- Source code -->
+  <rect x="30" y="62" width="990" height="40" rx="4" fill="#f8f8f8" stroke="#ccc"/>
+  <text x="45" y="86" fill="#333" font-size="12">Source: <tspan fill="#8e6cbf">import</tspan> { <tspan fill="#4a90d9">add</tspan> } <tspan fill="#8e6cbf">from</tspan> <tspan fill="#d95050">"./math"</tspan>;  <tspan fill="#8e6cbf">const</tspan> <tspan fill="#4a90d9">a</tspan> = <tspan fill="#4a90d9">add</tspan>(<tspan fill="#e8a838">1</tspan>, <tspan fill="#e8a838">2</tspan>);</text>
+
+  <!-- Flat array -->
+  <text x="45" y="130" font-weight="bold" fill="#333" font-size="14">Flat Node Array (28 bytes/node, source order):</text>
+
+  <!-- Node boxes - row 1 -->
+  <g transform="translate(30, 140)">
+    <rect width="65" height="50" rx="3" fill="#eee" stroke="#ccc"/><text x="32" y="16" text-anchor="middle" fill="#999" font-size="9">[0] nil</text><text x="32" y="30" text-anchor="middle" fill="#bbb" font-size="8">sentinel</text><text x="32" y="42" text-anchor="middle" fill="#bbb" font-size="7">28B = 0</text>
+
+    <rect x="70" width="80" height="50" rx="3" fill="#8e6cbf" opacity="0.2" stroke="#8e6cbf"/><text x="110" y="16" text-anchor="middle" fill="#7b59ac" font-size="9">[1] SourceFile</text><text x="110" y="30" text-anchor="middle" fill="#7b59ac" font-size="8">p=0 n=0</text>
+
+    <rect x="155" width="80" height="50" rx="3" fill="#8e6cbf" opacity="0.25" stroke="#8e6cbf"/><text x="195" y="16" text-anchor="middle" fill="#7b59ac" font-size="9">[2] ImportDecl</text><text x="195" y="30" text-anchor="middle" fill="#7b59ac" font-size="8">p=1 n=9</text>
+
+    <rect x="240" width="80" height="50" rx="3" fill="#8e6cbf" opacity="0.2" stroke="#8e6cbf"/><text x="280" y="16" text-anchor="middle" fill="#7b59ac" font-size="9">[3] ImpClause</text><text x="280" y="30" text-anchor="middle" fill="#7b59ac" font-size="8">p=2 n=8</text>
+
+    <rect x="325" width="80" height="50" rx="3" fill="#8e6cbf" opacity="0.2" stroke="#8e6cbf"/><text x="365" y="16" text-anchor="middle" fill="#7b59ac" font-size="9">[4] NamedImp</text><text x="365" y="30" text-anchor="middle" fill="#7b59ac" font-size="8">p=3 n=0</text>
+
+    <rect x="410" width="70" height="50" rx="3" fill="#e8a838" opacity="0.2" stroke="#e8a838"/><text x="445" y="16" text-anchor="middle" fill="#d49520" font-size="9">[5] NList</text><text x="445" y="30" text-anchor="middle" fill="#d49520" font-size="8">p=4 len=1</text>
+
+    <rect x="485" width="70" height="50" rx="3" fill="#8e6cbf" opacity="0.2" stroke="#8e6cbf"/><text x="520" y="16" text-anchor="middle" fill="#7b59ac" font-size="9">[6] ImpSpec</text><text x="520" y="30" text-anchor="middle" fill="#7b59ac" font-size="8">p=5 n=0</text>
+
+    <rect x="560" width="70" height="50" rx="3" fill="#4a90d9" opacity="0.2" stroke="#4a90d9"/><text x="595" y="16" text-anchor="middle" fill="#357abd" font-size="9">[7] "add"</text><text x="595" y="30" text-anchor="middle" fill="#357abd" font-size="8">p=6 n=0</text>
+
+    <rect x="635" width="80" height="50" rx="3" fill="#d95050" opacity="0.2" stroke="#d95050"/><text x="675" y="16" text-anchor="middle" fill="#c43e3e" font-size="9">[8] StrLit</text><text x="675" y="30" text-anchor="middle" fill="#c43e3e" font-size="8">"./math"</text><text x="675" y="42" text-anchor="middle" fill="#c43e3e" font-size="7">p=2 n=0</text>
+
+    <rect x="720" width="70" height="50" rx="3" fill="#8e6cbf" opacity="0.2" stroke="#8e6cbf"/><text x="755" y="16" text-anchor="middle" fill="#7b59ac" font-size="9">[9] VarStmt</text><text x="755" y="30" text-anchor="middle" fill="#7b59ac" font-size="8">p=1 n=19</text>
+
+    <rect x="795" width="55" height="50" rx="3" fill="#ddd" stroke="#bbb"/><text x="822" y="28" text-anchor="middle" fill="#888" font-size="10">...</text>
+
+    <rect x="855" width="65" height="50" rx="3" fill="#999" opacity="0.15" stroke="#999"/><text x="887" y="16" text-anchor="middle" fill="#666" font-size="9">[19] EOF</text><text x="887" y="30" text-anchor="middle" fill="#666" font-size="8">p=1 n=0</text>
+  </g>
+
+  <!-- Node boxes - row 2 (continuation note) -->
+  <text x="45" y="215" fill="#888" font-size="10">[10] VarDeclList  [11] NList  [12] VarDecl  [13] Ident"a"  [14] CallExpr  [15] Ident"add"  [16] NList  [17] Num"1"  [18] Num"2"</text>
+
+  <!-- Tree reconstruction -->
+  <text x="45" y="250" font-weight="bold" fill="#333" font-size="14">Reconstructed Tree (via parent + next sibling indices):</text>
+
+  <!-- Tree -->
+  <g transform="translate(525, 275)">
+    <!-- SourceFile -->
+    <rect x="-60" y="0" width="120" height="28" rx="4" fill="#8e6cbf" opacity="0.3" stroke="#8e6cbf"/>
+    <text x="0" y="19" text-anchor="middle" fill="#7b59ac" font-size="11">SourceFile [1]</text>
+
+    <!-- Two children: ImportDecl and VarStmt -->
+    <line x1="-20" y1="28" x2="-220" y2="58" stroke="#8e6cbf" marker-end="url(#arrow)"/>
+    <line x1="20" y1="28" x2="220" y2="58" stroke="#8e6cbf" marker-end="url(#arrow)"/>
+
+    <!-- ImportDecl [2] -->
+    <rect x="-280" y="60" width="120" height="28" rx="4" fill="#8e6cbf" opacity="0.25" stroke="#8e6cbf"/>
+    <text x="-220" y="79" text-anchor="middle" fill="#7b59ac" font-size="10">ImportDecl [2]</text>
+
+    <!-- VarStmt [9] -->
+    <rect x="160" y="60" width="120" height="28" rx="4" fill="#8e6cbf" opacity="0.25" stroke="#8e6cbf"/>
+    <text x="220" y="79" text-anchor="middle" fill="#7b59ac" font-size="10">VarStmt [9]</text>
+
+    <!-- Sibling annotation -->
+    <line x1="-160" y1="74" x2="160" y2="74" stroke="#8e6cbf" stroke-dasharray="4,2" opacity="0.4"/>
+    <text x="0" y="70" text-anchor="middle" fill="#8e6cbf" font-size="8">next=9</text>
+
+    <!-- === ImportDecl children === -->
+    <line x1="-250" y1="88" x2="-320" y2="118" stroke="#8e6cbf" marker-end="url(#arrow)"/>
+    <line x1="-190" y1="88" x2="-120" y2="118" stroke="#d95050" marker-end="url(#arrowRed)"/>
+
+    <!-- ImportClause [3] -->
+    <rect x="-380" y="120" width="120" height="28" rx="4" fill="#8e6cbf" opacity="0.2" stroke="#8e6cbf"/>
+    <text x="-320" y="139" text-anchor="middle" fill="#7b59ac" font-size="10">ImportClause [3]</text>
+
+    <!-- StringLit [8] -->
+    <rect x="-175" y="120" width="110" height="28" rx="4" fill="#d95050" opacity="0.2" stroke="#d95050"/>
+    <text x="-120" y="133" text-anchor="middle" fill="#c43e3e" font-size="9">StrLit [8]</text>
+    <text x="-120" y="145" text-anchor="middle" fill="#c43e3e" font-size="8">"./math"</text>
+
+    <!-- Sibling annotation -->
+    <line x1="-260" y1="134" x2="-175" y2="134" stroke="#8e6cbf" stroke-dasharray="3,2" opacity="0.4"/>
+    <text x="-218" y="130" text-anchor="middle" fill="#8e6cbf" font-size="7">next=8</text>
+
+    <!-- ImportClause -> NamedImports -->
+    <line x1="-320" y1="148" x2="-320" y2="170" stroke="#888" marker-end="url(#arrow)"/>
+    <rect x="-385" y="172" width="130" height="28" rx="4" fill="#8e6cbf" opacity="0.15" stroke="#8e6cbf"/>
+    <text x="-320" y="191" text-anchor="middle" fill="#7b59ac" font-size="10">NamedImports [4]</text>
+
+    <!-- NamedImports -> NodeList -> ImportSpec -> Ident -->
+    <line x1="-320" y1="200" x2="-320" y2="220" stroke="#e8a838" marker-end="url(#arrowOrange)"/>
+    <rect x="-370" y="222" width="100" height="24" rx="4" fill="#e8a838" opacity="0.15" stroke="#e8a838"/>
+    <text x="-320" y="239" text-anchor="middle" fill="#d49520" font-size="9">NList [5] len=1</text>
+
+    <line x1="-320" y1="246" x2="-320" y2="262" stroke="#888" marker-end="url(#arrow)"/>
+    <rect x="-370" y="264" width="100" height="24" rx="4" fill="#8e6cbf" opacity="0.15" stroke="#8e6cbf"/>
+    <text x="-320" y="281" text-anchor="middle" fill="#7b59ac" font-size="9">ImportSpec [6]</text>
+
+    <line x1="-320" y1="288" x2="-320" y2="304" stroke="#4a90d9" marker-end="url(#arrowBlue)"/>
+    <rect x="-370" y="306" width="100" height="24" rx="4" fill="#4a90d9" opacity="0.2" stroke="#4a90d9"/>
+    <text x="-320" y="323" text-anchor="middle" fill="#357abd" font-size="9">Ident "add" [7]</text>
+
+    <!-- === VarStmt children === -->
+    <line x1="220" y1="88" x2="220" y2="118" stroke="#888" marker-end="url(#arrow)"/>
+
+    <!-- VarDeclList [10] -->
+    <rect x="155" y="120" width="130" height="28" rx="4" fill="#8e6cbf" opacity="0.2" stroke="#8e6cbf"/>
+    <text x="220" y="133" text-anchor="middle" fill="#7b59ac" font-size="9">VarDeclList [10]</text>
+    <text x="220" y="145" text-anchor="middle" fill="#7b59ac" font-size="8">const</text>
+
+    <!-- VarDeclList -> NodeList -> VarDecl -->
+    <line x1="220" y1="148" x2="220" y2="168" stroke="#e8a838" marker-end="url(#arrowOrange)"/>
+    <rect x="170" y="170" width="100" height="24" rx="4" fill="#e8a838" opacity="0.15" stroke="#e8a838"/>
+    <text x="220" y="187" text-anchor="middle" fill="#d49520" font-size="9">NList [11] len=1</text>
+
+    <line x1="220" y1="194" x2="220" y2="210" stroke="#888" marker-end="url(#arrow)"/>
+    <rect x="165" y="212" width="110" height="28" rx="4" fill="#8e6cbf" opacity="0.2" stroke="#8e6cbf"/>
+    <text x="220" y="225" text-anchor="middle" fill="#7b59ac" font-size="9">VarDecl [12]</text>
+    <text x="220" y="237" text-anchor="middle" fill="#7b59ac" font-size="8">a = add(1,2)</text>
+
+    <!-- VarDecl children: Ident "a" and CallExpr -->
+    <line x1="195" y1="240" x2="130" y2="268" stroke="#4a90d9" marker-end="url(#arrowBlue)"/>
+    <line x1="245" y1="240" x2="330" y2="268" stroke="#8e6cbf" marker-end="url(#arrow)"/>
+
+    <!-- Ident "a" [13] -->
+    <rect x="80" y="270" width="100" height="24" rx="4" fill="#4a90d9" opacity="0.2" stroke="#4a90d9"/>
+    <text x="130" y="287" text-anchor="middle" fill="#357abd" font-size="9">Ident "a" [13]</text>
+
+    <!-- CallExpr [14] -->
+    <rect x="275" y="270" width="110" height="24" rx="4" fill="#8e6cbf" opacity="0.2" stroke="#8e6cbf"/>
+    <text x="330" y="287" text-anchor="middle" fill="#7b59ac" font-size="9">CallExpr [14]</text>
+
+    <!-- Sibling annotation -->
+    <line x1="180" y1="282" x2="275" y2="282" stroke="#4a90d9" stroke-dasharray="3,2" opacity="0.4"/>
+    <text x="228" y="278" text-anchor="middle" fill="#4a90d9" font-size="7">next=14</text>
+
+    <!-- CallExpr children: Ident "add" and NodeList(args) -->
+    <line x1="305" y1="294" x2="260" y2="318" stroke="#4a90d9" marker-end="url(#arrowBlue)"/>
+    <line x1="355" y1="294" x2="400" y2="318" stroke="#e8a838" marker-end="url(#arrowOrange)"/>
+
+    <!-- Ident "add" [15] -->
+    <rect x="200" y="320" width="110" height="24" rx="4" fill="#4a90d9" opacity="0.2" stroke="#4a90d9"/>
+    <text x="255" y="337" text-anchor="middle" fill="#357abd" font-size="9">Ident "add" [15]</text>
+
+    <!-- NodeList args [16] -->
+    <rect x="355" y="320" width="100" height="24" rx="4" fill="#e8a838" opacity="0.15" stroke="#e8a838"/>
+    <text x="405" y="337" text-anchor="middle" fill="#d49520" font-size="9">NList [16] len=2</text>
+
+    <!-- Sibling annotation -->
+    <line x1="310" y1="332" x2="355" y2="332" stroke="#4a90d9" stroke-dasharray="3,2" opacity="0.4"/>
+    <text x="332" y="328" text-anchor="middle" fill="#4a90d9" font-size="7">n=16</text>
+
+    <!-- Args: Num "1" and Num "2" -->
+    <line x1="385" y1="344" x2="355" y2="366" stroke="#e8a838" marker-end="url(#arrowOrange)"/>
+    <line x1="425" y1="344" x2="455" y2="366" stroke="#e8a838" marker-end="url(#arrowOrange)"/>
+
+    <rect x="305" y="368" width="90" height="24" rx="4" fill="#e8a838" opacity="0.15" stroke="#e8a838"/>
+    <text x="350" y="385" text-anchor="middle" fill="#d49520" font-size="9">Num "1" [17]</text>
+
+    <rect x="415" y="368" width="90" height="24" rx="4" fill="#e8a838" opacity="0.15" stroke="#e8a838"/>
+    <text x="460" y="385" text-anchor="middle" fill="#d49520" font-size="9">Num "2" [18]</text>
+
+    <!-- Sibling annotation -->
+    <line x1="395" y1="380" x2="415" y2="380" stroke="#d49520" stroke-dasharray="3,2" opacity="0.4"/>
+    <text x="405" y="376" text-anchor="middle" fill="#d49520" font-size="6">n=18</text>
+  </g>
+
+  <!-- Legend -->
+  <rect x="30" y="700" width="990" height="105" rx="6" fill="#fafafa" stroke="#ddd"/>
+  <text x="45" y="720" font-weight="bold" fill="#333" font-size="13">Navigation Rules:</text>
+  <text x="45" y="740" fill="#555" font-size="11">first child of node[i] = node[i+1] if node[i+1].parent == i</text>
+  <text x="45" y="757" fill="#555" font-size="11">next sibling = follow next pointer (0 = no more siblings)</text>
+  <text x="45" y="774" fill="#555" font-size="11">parent = parent index (0 = root / nil)</text>
+  <text x="530" y="740" fill="#555" font-size="11">NodeList: kind=0xFFFFFFFF, data=child count</text>
+  <text x="530" y="757" fill="#555" font-size="11">Decoder adjusts NodeList children's parent</text>
+  <text x="530" y="774" fill="#555" font-size="11">p=parent, n=next sibling</text>
+  <text x="530" y="791" fill="#888" font-size="10">Ref: marvinh.dev/blog/speeding-up-javascript-ecosystem-part-11/</text>
+</svg>

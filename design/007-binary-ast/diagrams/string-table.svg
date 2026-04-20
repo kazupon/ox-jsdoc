@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 640" font-family="monospace" font-size="13">
+  <defs>
+    <linearGradient id="str" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#50b86c"/>
+      <stop offset="100%" stop-color="#3da558"/>
+    </linearGradient>
+    <linearGradient id="strLight" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#a8dcb4"/>
+      <stop offset="100%" stop-color="#88c997"/>
+    </linearGradient>
+    <linearGradient id="ext" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#e8a838"/>
+      <stop offset="100%" stop-color="#d49520"/>
+    </linearGradient>
+    <marker id="ar" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,3.5 L0,7 Z" fill="#555"/>
+    </marker>
+    <marker id="ar-thin" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="8" markerHeight="6" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#888"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="460" y="28" text-anchor="middle" font-size="18" font-weight="bold" fill="#222" font-family="-apple-system, system-ui, sans-serif">String Table = String Offsets + String Data</text>
+  <text x="460" y="50" text-anchor="middle" font-size="11" fill="#666" font-family="-apple-system, system-ui, sans-serif">tsgo-style zero-copy: each string is a slice (start, end) into the concatenated UTF-8 byte stream</text>
+
+  <!-- ============================================================ -->
+  <!-- Section 1: String Offsets (top, fixed 8 bytes/entry)        -->
+  <!-- ============================================================ -->
+  <text x="55" y="82" font-size="13" font-weight="bold" fill="#3da558" font-family="-apple-system, system-ui, sans-serif">(1) String Offsets section (8 bytes/string × K entries)</text>
+
+  <g transform="translate(55, 95)">
+    <!-- offsets[0] -->
+    <rect width="155" height="60" rx="6" fill="url(#str)" opacity="0.85" stroke="#3da558" stroke-width="1.5"/>
+    <text x="77" y="22" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">offsets[0]</text>
+    <text x="77" y="40" text-anchor="middle" fill="#e8f5ec" font-size="10">start | end</text>
+    <text x="77" y="54" text-anchor="middle" fill="#e8f5ec" font-size="9">u32 + u32 = 8 bytes</text>
+
+    <!-- offsets[1] -->
+    <rect x="170" width="155" height="60" rx="6" fill="url(#str)" opacity="0.7" stroke="#3da558" stroke-width="1.5"/>
+    <text x="247" y="22" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">offsets[1]</text>
+    <text x="247" y="40" text-anchor="middle" fill="#e8f5ec" font-size="10">start | end</text>
+    <text x="247" y="54" text-anchor="middle" fill="#e8f5ec" font-size="9">8 bytes</text>
+
+    <!-- offsets[2] -->
+    <rect x="340" width="155" height="60" rx="6" fill="url(#str)" opacity="0.85" stroke="#3da558" stroke-width="1.5"/>
+    <text x="417" y="22" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">offsets[2]</text>
+    <text x="417" y="40" text-anchor="middle" fill="#e8f5ec" font-size="10">start | end</text>
+    <text x="417" y="54" text-anchor="middle" fill="#e8f5ec" font-size="9">8 bytes</text>
+
+    <!-- ... -->
+    <text x="515" y="36" fill="#3da558" font-size="20" font-weight="bold">...</text>
+
+    <!-- offsets[K-1] -->
+    <rect x="540" width="170" height="60" rx="6" fill="url(#str)" opacity="0.7" stroke="#3da558" stroke-width="1.5"/>
+    <text x="625" y="22" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">offsets[K-1]</text>
+    <text x="625" y="40" text-anchor="middle" fill="#e8f5ec" font-size="10">start | end</text>
+    <text x="625" y="54" text-anchor="middle" fill="#e8f5ec" font-size="9">8 bytes</text>
+
+    <!-- Limit annotation -->
+    <text x="730" y="22" fill="#666" font-size="11" font-family="-apple-system, system-ui, sans-serif" font-style="italic">K ≤ 65,535</text>
+    <text x="730" y="40" fill="#666" font-size="10" font-family="-apple-system, system-ui, sans-serif" font-style="italic">(u16 limit when</text>
+    <text x="730" y="54" fill="#666" font-size="10" font-family="-apple-system, system-ui, sans-serif" font-style="italic">indexed by Ext Data)</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Arrows: each offset entry points into String Data            -->
+  <!-- ============================================================ -->
+  <line x1="132" y1="158" x2="180" y2="265" stroke="#888" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#ar-thin)"/>
+  <line x1="302" y1="158" x2="290" y2="265" stroke="#888" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#ar-thin)"/>
+  <line x1="472" y1="158" x2="430" y2="265" stroke="#888" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#ar-thin)"/>
+  <line x1="680" y1="158" x2="700" y2="265" stroke="#888" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#ar-thin)"/>
+
+  <text x="460" y="195" text-anchor="middle" fill="#888" font-size="10" font-family="-apple-system, system-ui, sans-serif" font-style="italic">each (start, end) pair specifies a UTF-8 byte slice in String Data ↓</text>
+
+  <!-- ============================================================ -->
+  <!-- Section 2: String Data (bottom, concatenated UTF-8 bytes)   -->
+  <!-- ============================================================ -->
+  <text x="55" y="222" font-size="13" font-weight="bold" fill="#3da558" font-family="-apple-system, system-ui, sans-serif">(2) String Data section (variable size, UTF-8 bytes)</text>
+
+  <g transform="translate(55, 235)">
+    <!-- Whole bar background -->
+    <rect width="810" height="50" rx="6" fill="url(#strLight)" opacity="0.4" stroke="#3da558" stroke-width="1.5" stroke-dasharray="4,2"/>
+
+    <!-- sourceText[0] region -->
+    <rect width="200" height="50" rx="6" fill="url(#strLight)" opacity="0.7"/>
+    <text x="100" y="22" text-anchor="middle" fill="#2d8b48" font-size="11" font-weight="bold">sourceText[0]</text>
+    <text x="100" y="38" text-anchor="middle" fill="#3da558" font-size="9">"/** @param x */"</text>
+
+    <!-- sourceText[1] region -->
+    <rect x="200" width="200" height="50" rx="0" fill="url(#strLight)" opacity="0.55"/>
+    <text x="300" y="22" text-anchor="middle" fill="#2d8b48" font-size="11" font-weight="bold">sourceText[1]</text>
+    <text x="300" y="38" text-anchor="middle" fill="#3da558" font-size="9">"/** @returns y */"</text>
+
+    <!-- ... -->
+    <text x="412" y="32" fill="#3da558" font-size="14" font-weight="bold">...</text>
+
+    <!-- sourceText[N-1] region -->
+    <rect x="430" width="200" height="50" rx="0" fill="url(#strLight)" opacity="0.7"/>
+    <text x="530" y="22" text-anchor="middle" fill="#2d8b48" font-size="11" font-weight="bold">sourceText[N-1]</text>
+    <text x="530" y="38" text-anchor="middle" fill="#3da558" font-size="9">"..."</text>
+
+    <!-- divider -->
+    <line x1="635" y1="0" x2="635" y2="50" stroke="#3da558" stroke-width="2" stroke-dasharray="3,2"/>
+
+    <!-- Unique strings region -->
+    <rect x="635" width="175" height="50" rx="6" fill="#e8a838" opacity="0.3"/>
+    <text x="722" y="22" text-anchor="middle" fill="#a87515" font-size="11" font-weight="bold">unique strings</text>
+    <text x="722" y="38" text-anchor="middle" fill="#d49520" font-size="9">(escape-resolved etc.)</text>
+  </g>
+
+  <!-- Region annotations -->
+  <text x="318" y="306" text-anchor="middle" fill="#3da558" font-size="10" font-family="-apple-system, system-ui, sans-serif">◄──── zero-copy slice region (most strings reference here) ────►</text>
+  <text x="722" y="306" text-anchor="middle" fill="#a87515" font-size="10" font-family="-apple-system, system-ui, sans-serif">◄── appended strings ──►</text>
+
+  <!-- ============================================================ -->
+  <!-- Section 3: Concrete example -->
+  <!-- ============================================================ -->
+  <text x="55" y="340" font-size="13" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">(3) Example: extracting "param" from sourceText[0] = "/** @param x */"</text>
+
+  <!-- Source text byte breakdown -->
+  <g transform="translate(55, 355)">
+    <text x="0" y="14" font-size="10" fill="#666" font-family="monospace">byte:</text>
+    <text x="50" y="14" font-size="10" fill="#666" font-family="monospace">0  1  2  3  4  5  6  7  8  9  10 11 12 13 14</text>
+
+    <text x="0" y="32" font-size="10" fill="#666" font-family="monospace">char:</text>
+    <g transform="translate(50, 30)">
+      <rect width="270" height="22" fill="url(#strLight)" opacity="0.4" stroke="#3da558" stroke-width="0.5"/>
+      <text x="135" y="14" text-anchor="middle" font-size="11" font-family="monospace" fill="#2d8b48">/  *  *     @  p  a  r  a  m     x     *  /</text>
+    </g>
+
+    <!-- Highlight "param" slice -->
+    <rect x="170" y="30" width="60" height="22" fill="#50b86c" opacity="0.5" stroke="#2d8b48" stroke-width="2"/>
+    <text x="200" y="73" text-anchor="middle" font-size="10" fill="#2d8b48" font-weight="bold">"param"</text>
+    <text x="200" y="88" text-anchor="middle" font-size="9" fill="#666">slice [byte 5..10)</text>
+
+    <line x1="170" y1="55" x2="170" y2="65" stroke="#2d8b48" stroke-width="1"/>
+    <line x1="230" y1="55" x2="230" y2="65" stroke="#2d8b48" stroke-width="1"/>
+  </g>
+
+  <!-- offsets entry corresponding to "param" -->
+  <g transform="translate(450, 380)">
+    <rect width="200" height="60" rx="6" fill="url(#str)" opacity="0.85" stroke="#3da558" stroke-width="1.5"/>
+    <text x="100" y="20" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">offsets[i] for "param"</text>
+    <text x="100" y="38" text-anchor="middle" fill="#e8f5ec" font-size="10">start = 5, end = 10</text>
+    <text x="100" y="52" text-anchor="middle" fill="#e8f5ec" font-size="9">(absolute byte offsets in StrData)</text>
+  </g>
+
+  <line x1="200" y1="448" x2="500" y2="445" stroke="#888" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#ar-thin)"/>
+
+  <!-- ============================================================ -->
+  <!-- Section 4: Key properties / notes                            -->
+  <!-- ============================================================ -->
+  <g transform="translate(55, 470)">
+    <rect width="810" height="155" rx="6" fill="#f8f8f8" stroke="#ccc" stroke-width="1"/>
+    <text x="15" y="20" font-size="12" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">Key properties</text>
+
+    <text x="15" y="45" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan fill="#3da558" font-weight="bold">zero-copy slicing</tspan>: most strings (tag names, type sources, parameter names, descriptions) are byte slices into sourceText</text>
+    <text x="15" y="65" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan fill="#a87515" font-weight="bold">unique strings region</tspan>: only strings that don't match a source position (escape-resolved, etc.) are appended afterward</text>
+    <text x="15" y="85" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">batch dedup</tspan>: frequent tag names like <tspan font-family="monospace">@param</tspan> / <tspan font-family="monospace">@returns</tspan> consolidate into 1 entry across N comments (encoder dedupes)</text>
+    <text x="15" y="105" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">JS decoder optimization</tspan>: <tspan font-family="monospace">TextDecoder</tspan> converts entire StrData in one pass → subsequent reads are zero-alloc substring</text>
+    <text x="15" y="125" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">None representation</tspan>: u16 string index <tspan font-family="monospace">0xFFFF</tspan> = None (for Optional fields in Extended Data)</text>
+    <text x="15" y="145" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">Upper limit</tspan>: max 65,535 unique strings per buffer (u16 string index limit in Extended Data)</text>
+  </g>
+</svg>

@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 760" font-family="-apple-system, system-ui, 'Helvetica Neue', sans-serif" font-size="13">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,3.5 L0,7 Z" fill="#555"/>
+    </marker>
+    <marker id="ar-bold" viewBox="0 0 12 8" refX="12" refY="4" markerWidth="12" markerHeight="8" orient="auto">
+      <path d="M0,0 L12,4 L0,8 Z" fill="#333"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="460" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#222">Separation of Concerns (Rust ↔ JS)</text>
+  <text x="460" y="50" text-anchor="middle" font-size="11" fill="#666">Binary AST is uniquely stored in the Rust arena and accessed by lazy decoders on both sides</text>
+
+  <!-- ====== Rust side container ====== -->
+  <rect x="40" y="70" width="840" height="420" rx="12" fill="#8e6cbf" opacity="0.05" stroke="#8e6cbf" stroke-width="2" stroke-dasharray="6,3"/>
+  <text x="60" y="95" font-size="14" font-weight="bold" fill="#7b59ac">Rust side (within a single arena)</text>
+
+  <!-- Parser box -->
+  <rect x="280" y="115" width="360" height="55" rx="8" fill="#8e6cbf" opacity="0.18" stroke="#8e6cbf" stroke-width="1.5"/>
+  <text x="460" y="138" text-anchor="middle" font-size="14" fill="#7b59ac" font-weight="bold">Parser</text>
+  <text x="460" y="156" text-anchor="middle" font-size="11" fill="#7b59ac">(refactored to write Binary AST directly = method c-1)</text>
+
+  <!-- Arrow: writes directly -->
+  <line x1="460" y1="170" x2="460" y2="200" stroke="#555" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="475" y="190" font-size="11" fill="#555" font-style="italic">writes directly</text>
+
+  <!-- Binary AST byte stream (the central element) -->
+  <rect x="240" y="205" width="440" height="80" rx="8" fill="#e8a838" opacity="0.22" stroke="#d49520" stroke-width="2.5"/>
+  <text x="460" y="232" text-anchor="middle" font-size="15" fill="#a87515" font-weight="bold">Binary AST byte stream</text>
+  <text x="460" y="252" text-anchor="middle" font-size="11" fill="#a87515">(uniquely stored in the arena)</text>
+  <text x="460" y="273" text-anchor="middle" font-size="11" fill="#a87515" font-weight="bold">★ Single Source of Truth</text>
+
+  <!-- Arrow: zero-copy reference (Rust internal) -->
+  <line x1="460" y1="285" x2="460" y2="320" stroke="#555" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="475" y="307" font-size="11" fill="#555" font-style="italic">zero-copy reference</text>
+
+  <!-- Rust lazy decoder -->
+  <rect x="240" y="325" width="440" height="140" rx="8" fill="#50b86c" opacity="0.15" stroke="#50b86c" stroke-width="1.5"/>
+  <text x="460" y="350" text-anchor="middle" font-size="14" fill="#2d8b48" font-weight="bold">Rust lazy decoder</text>
+  <text x="460" y="378" text-anchor="middle" font-size="12" fill="#3da558" font-family="monospace">LazyJsdocBlock</text>
+  <text x="460" y="398" text-anchor="middle" font-size="12" fill="#3da558" font-family="monospace">LazyJsdocTag</text>
+  <text x="460" y="418" text-anchor="middle" font-size="12" fill="#3da558" font-family="monospace">LazyTypeNode, etc.</text>
+  <text x="460" y="446" text-anchor="middle" font-size="10" fill="#666" font-style="italic">Built on Rust heap on access (stack value type + Copy, no Box allocation)</text>
+
+  <!-- Rust walker side annotation (right side) -->
+  <line x1="685" y1="395" x2="725" y2="395" stroke="#888" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="730" y="385" font-size="11" fill="#555" font-weight="bold">Rust walker</text>
+  <text x="730" y="400" font-size="10" fill="#555">(linter, etc.)</text>
+  <text x="730" y="415" font-size="10" fill="#555">only what's needed</text>
+
+  <!-- ====== Bridge: Rust → JS ====== -->
+  <line x1="460" y1="490" x2="460" y2="535" stroke="#333" stroke-width="2.5" marker-end="url(#ar-bold)"/>
+  <rect x="490" y="500" width="180" height="24" rx="4" fill="#fffaf0" stroke="#d49520" stroke-width="1"/>
+  <text x="580" y="517" text-anchor="middle" font-size="12" fill="#a87515" font-weight="bold">zero-copy reference</text>
+  <line x1="465" y1="512" x2="490" y2="512" stroke="#888" stroke-width="1" stroke-dasharray="2,2"/>
+
+  <!-- ====== JS side container ====== -->
+  <rect x="40" y="540" width="840" height="200" rx="12" fill="#4a90d9" opacity="0.05" stroke="#4a90d9" stroke-width="2" stroke-dasharray="6,3"/>
+  <text x="60" y="565" font-size="14" font-weight="bold" fill="#357abd">JS side</text>
+
+  <!-- Uint8Array -->
+  <rect x="240" y="580" width="440" height="50" rx="8" fill="#4a90d9" opacity="0.18" stroke="#4a90d9" stroke-width="1.5"/>
+  <text x="460" y="600" text-anchor="middle" font-size="13" fill="#2a5d8d" font-weight="bold" font-family="monospace">Uint8Array</text>
+  <text x="460" y="618" text-anchor="middle" font-size="11" fill="#357abd">Direct view of the arena region (NAPI Buffer / WASM memory.buffer)</text>
+
+  <!-- Arrow: DataView -->
+  <line x1="460" y1="630" x2="460" y2="660" stroke="#555" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="475" y="650" font-size="11" fill="#555" font-style="italic">Dynamic read via DataView (lazy decoder)</text>
+
+  <!-- JS lazy class -->
+  <rect x="240" y="665" width="440" height="65" rx="8" fill="#50b86c" opacity="0.15" stroke="#50b86c" stroke-width="1.5"/>
+  <text x="460" y="685" text-anchor="middle" font-size="11" fill="#3da558" font-family="monospace">RemoteJsdocBlock / RemoteJsdocTag / RemoteTypeNode, etc.</text>
+  <text x="460" y="703" text-anchor="middle" font-size="10" fill="#666" font-style="italic">Allocated on JS heap (#internal encapsulation, RemoteNodeList extends Array)</text>
+  <text x="460" y="722" text-anchor="middle" font-size="10" fill="#666" font-style="italic">toJSON / nodejs.util.inspect.custom support</text>
+
+  <!-- JS walker side annotation -->
+  <line x1="685" y1="697" x2="725" y2="697" stroke="#888" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="730" y="687" font-size="11" fill="#555" font-weight="bold">JS walker</text>
+  <text x="730" y="702" font-size="10" fill="#555">(ESLint / on demand)</text>
+</svg>

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 580" font-family="-apple-system, system-ui, 'Helvetica Neue', sans-serif" font-size="13">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,3.5 L0,7 Z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="460" y="28" text-anchor="middle" font-size="18" font-weight="bold" fill="#222">in-process Sharing (NAPI / WASM) — Main Use Case</text>
+  <text x="460" y="50" text-anchor="middle" font-size="11" fill="#666">JS receives the Binary AST byte stream from Rust with zero-copy; both bindings share a single decoder</text>
+
+  <!-- ====== Top: Rust arena Binary AST ====== -->
+  <rect x="240" y="68" width="440" height="62" rx="8" fill="#e8a838" opacity="0.22" stroke="#d49520" stroke-width="2.5"/>
+  <text x="460" y="93" text-anchor="middle" font-size="14" fill="#a87515" font-weight="bold">Binary AST in Rust arena</text>
+  <text x="460" y="113" text-anchor="middle" font-size="11" fill="#a87515" font-weight="bold">★ Single Source of Truth</text>
+
+  <!-- Branching -->
+  <line x1="460" y1="130" x2="460" y2="155" stroke="#555" stroke-width="1.5"/>
+  <line x1="220" y1="155" x2="700" y2="155" stroke="#555" stroke-width="1.5"/>
+  <line x1="220" y1="155" x2="220" y2="183" stroke="#555" stroke-width="1.5" marker-end="url(#ar)"/>
+  <line x1="700" y1="155" x2="700" y2="183" stroke="#555" stroke-width="1.5" marker-end="url(#ar)"/>
+
+  <!-- ====== NAPI binding (left) ====== -->
+  <rect x="100" y="188" width="240" height="52" rx="8" fill="#4a90d9" opacity="0.2" stroke="#4a90d9" stroke-width="1.5"/>
+  <text x="220" y="212" text-anchor="middle" font-size="13" fill="#2a5d8d" font-weight="bold">NAPI binding</text>
+  <text x="220" y="229" text-anchor="middle" font-size="10" fill="#357abd" font-style="italic">(Node.js / Deno / Bun via N-API)</text>
+
+  <!-- ====== WASM binding (right) ====== -->
+  <rect x="580" y="188" width="240" height="52" rx="8" fill="#654ff0" opacity="0.18" stroke="#654ff0" stroke-width="1.5"/>
+  <text x="700" y="212" text-anchor="middle" font-size="13" fill="#3d2bb3" font-weight="bold">WASM binding</text>
+  <text x="700" y="229" text-anchor="middle" font-size="10" fill="#4a3aaf" font-style="italic">(Browser / Node / wasm runtime)</text>
+
+  <!-- Arrows down to buffer/view -->
+  <line x1="220" y1="240" x2="220" y2="268" stroke="#555" stroke-width="1.5" marker-end="url(#ar)"/>
+  <line x1="700" y1="240" x2="700" y2="268" stroke="#555" stroke-width="1.5" marker-end="url(#ar)"/>
+
+  <!-- NAPI Buffer (left) -->
+  <rect x="100" y="273" width="240" height="62" rx="8" fill="#4a90d9" opacity="0.12" stroke="#4a90d9"/>
+  <text x="220" y="296" text-anchor="middle" font-size="12" fill="#2a5d8d" font-family="monospace" font-weight="bold">NAPI Buffer</text>
+  <text x="220" y="316" text-anchor="middle" font-size="10" fill="#357abd" font-style="italic">zero-copy reference</text>
+  <text x="220" y="329" text-anchor="middle" font-size="9" fill="#357abd" font-style="italic">(no memcpy)</text>
+
+  <!-- WASM Uint8Array view (right) -->
+  <rect x="580" y="273" width="240" height="62" rx="8" fill="#654ff0" opacity="0.1" stroke="#654ff0"/>
+  <text x="700" y="294" text-anchor="middle" font-size="11" fill="#4a3aaf" font-family="monospace">new Uint8Array(</text>
+  <text x="700" y="309" text-anchor="middle" font-size="11" fill="#4a3aaf" font-family="monospace">wasm.memory.buffer, ofs, len)</text>
+  <text x="700" y="328" text-anchor="middle" font-size="9" fill="#4a3aaf" font-style="italic">direct view (no copy)</text>
+
+  <!-- Merge arrows: down + horizontal join + central down -->
+  <line x1="220" y1="335" x2="220" y2="380" stroke="#555" stroke-width="1.5"/>
+  <line x1="700" y1="335" x2="700" y2="380" stroke="#555" stroke-width="1.5"/>
+  <line x1="220" y1="380" x2="700" y2="380" stroke="#555" stroke-width="1.5"/>
+  <line x1="460" y1="380" x2="460" y2="412" stroke="#555" stroke-width="1.5" marker-end="url(#ar)"/>
+
+  <!-- ====== Common JS Decoder ====== -->
+  <rect x="240" y="417" width="440" height="72" rx="8" fill="#50b86c" opacity="0.18" stroke="#50b86c" stroke-width="2"/>
+  <text x="460" y="441" text-anchor="middle" font-size="14" fill="#2d8b48" font-weight="bold">Common JS Decoder</text>
+  <text x="460" y="461" text-anchor="middle" font-size="11" fill="#3da558" font-family="monospace">DataView + lazy node classes (RemoteJsdocBlock, etc.)</text>
+  <text x="460" y="481" text-anchor="middle" font-size="10" fill="#666" font-style="italic">Same code shared between NAPI / WASM bindings (only buffer source differs)</text>
+
+  <!-- Arrow to ESLint -->
+  <line x1="460" y1="489" x2="460" y2="518" stroke="#555" stroke-width="1.5" marker-end="url(#ar)"/>
+
+  <!-- ESLint plugin -->
+  <rect x="280" y="523" width="360" height="50" rx="8" fill="#f4f4f4" stroke="#888" stroke-width="1"/>
+  <text x="460" y="545" text-anchor="middle" font-size="12" fill="#444" font-weight="bold">ESLint plugin walks the AST (on demand)</text>
+  <text x="460" y="563" text-anchor="middle" font-size="10" fill="#666" font-style="italic">Only accessed nodes are materialized in JS heap</text>
+</svg>

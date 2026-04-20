@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 810" font-family="monospace" font-size="13">
+  <defs>
+    <linearGradient id="hdr" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4a90d9"/>
+      <stop offset="100%" stop-color="#357abd"/>
+    </linearGradient>
+    <linearGradient id="str" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#50b86c"/>
+      <stop offset="100%" stop-color="#3da558"/>
+    </linearGradient>
+    <linearGradient id="ext" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#e8a838"/>
+      <stop offset="100%" stop-color="#d49520"/>
+    </linearGradient>
+    <linearGradient id="sd" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#d95050"/>
+      <stop offset="100%" stop-color="#c43e3e"/>
+    </linearGradient>
+    <linearGradient id="nd" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8e6cbf"/>
+      <stop offset="100%" stop-color="#7b59ac"/>
+    </linearGradient>
+  </defs>
+
+  <text x="450" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#222">Binary AST Wire Format</text>
+  <text x="450" y="50" text-anchor="middle" font-size="12" fill="#666">internal/api/encoder/ - Protocol Version 5</text>
+
+  <!-- === Section 1: Header  y=65  h=110 === -->
+  <rect x="40" y="65" width="820" height="110" rx="6" fill="url(#hdr)" opacity="0.15" stroke="#4a90d9" stroke-width="1.5"/>
+  <text x="55" y="85" font-weight="bold" fill="#4a90d9" font-size="14">Header (44 bytes)</text>
+  <g transform="translate(55, 95)">
+    <rect width="115" height="36" rx="3" fill="#4a90d9" opacity="0.8"/><text x="57" y="15" text-anchor="middle" fill="#fff" font-size="10">metadata (LE uint32)</text><text x="57" y="28" text-anchor="middle" fill="#ddd" font-size="9">version in byte 3 (upper 8bit)</text>
+    <rect x="120" width="130" height="36" rx="3" fill="#4a90d9" opacity="0.8"/><text x="185" y="15" text-anchor="middle" fill="#fff" font-size="10">content hash (xxh3)</text><text x="185" y="28" text-anchor="middle" fill="#ddd" font-size="9">16 bytes (uint128)</text>
+    <rect x="255" width="100" height="36" rx="3" fill="#4a90d9" opacity="0.6"/><text x="305" y="15" text-anchor="middle" fill="#fff" font-size="10">parse options</text><text x="305" y="28" text-anchor="middle" fill="#ddd" font-size="9">4 bytes (uint32)</text>
+    <rect x="360" width="430" height="36" rx="3" fill="#4a90d9" opacity="0.8"/><text x="575" y="15" text-anchor="middle" fill="#fff" font-size="10">section offsets: strOffsets | strData | extData | structData | nodes</text><text x="575" y="28" text-anchor="middle" fill="#ddd" font-size="9">5 x uint32 = 20 bytes</text>
+  </g>
+  <text x="55" y="163" fill="#4a90d9" font-size="11">parse options: bit0=JSX, bit1=Force</text>
+
+  <!-- === Section 2: String Offsets  y=190 (65+110+15)  h=75 === -->
+  <rect x="40" y="190" width="820" height="75" rx="6" fill="url(#str)" opacity="0.15" stroke="#50b86c" stroke-width="1.5"/>
+  <text x="55" y="210" font-weight="bold" fill="#3da558" font-size="14">String Offsets (8 bytes/string)</text>
+  <g transform="translate(55, 220)">
+    <rect width="120" height="30" rx="3" fill="#50b86c" opacity="0.7"/><text x="60" y="20" text-anchor="middle" fill="#fff" font-size="10">[start0, end0]</text>
+    <rect x="125" width="120" height="30" rx="3" fill="#50b86c" opacity="0.8"/><text x="185" y="20" text-anchor="middle" fill="#fff" font-size="10">[start1, end1]</text>
+    <rect x="250" width="120" height="30" rx="3" fill="#50b86c" opacity="0.7"/><text x="310" y="20" text-anchor="middle" fill="#fff" font-size="10">[start2, end2]</text>
+    <text x="385" y="20" fill="#3da558" font-size="14"> ...</text>
+    <rect x="420" width="120" height="30" rx="3" fill="#50b86c" opacity="0.8"/><text x="480" y="20" text-anchor="middle" fill="#fff" font-size="10">[startN, endN]</text>
+  </g>
+
+  <!-- === Section 3: String Data  y=280 (190+75+15)  h=75 === -->
+  <rect x="40" y="280" width="820" height="75" rx="6" fill="url(#str)" opacity="0.1" stroke="#50b86c" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="55" y="300" font-weight="bold" fill="#3da558" font-size="14">String Data (variable)</text>
+  <g transform="translate(55, 310)">
+    <rect width="400" height="30" rx="3" fill="#50b86c" opacity="0.5"/><text x="200" y="20" text-anchor="middle" fill="#fff" font-size="10">source file text (zero-copy reuse)</text>
+    <rect x="405" width="200" height="30" rx="3" fill="#50b86c" opacity="0.7"/><text x="505" y="20" text-anchor="middle" fill="#fff" font-size="10">other unique strings (appended)</text>
+  </g>
+
+  <!-- === Section 4: Extended Node Data  y=370 (280+75+15)  h=90 === -->
+  <rect x="40" y="370" width="820" height="90" rx="6" fill="url(#ext)" opacity="0.15" stroke="#e8a838" stroke-width="1.5"/>
+  <text x="55" y="390" font-weight="bold" fill="#d49520" font-size="14">Extended Node Data (variable)</text>
+  <text x="55" y="405" fill="#d49520" font-size="11">SourceFile, StringLiteral, NumericLiteral, TemplateLiteral, RegExp, BigInt</text>
+  <g transform="translate(55, 415)">
+    <rect width="280" height="30" rx="3" fill="#e8a838" opacity="0.7"/><text x="140" y="19" text-anchor="middle" fill="#fff" font-size="9">SourceFile (48 bytes): text, path, imports...</text>
+    <rect x="288" width="250" height="30" rx="3" fill="#e8a838" opacity="0.8"/><text x="413" y="19" text-anchor="middle" fill="#fff" font-size="9">StringLiteral: hasExtendedEscape</text>
+    <rect x="546" width="250" height="30" rx="3" fill="#e8a838" opacity="0.7"/><text x="671" y="19" text-anchor="middle" fill="#fff" font-size="9">Template: rawText string index</text>
+  </g>
+
+  <!-- === Section 5: Structured Data  y=475 (370+90+15)  h=60 === -->
+  <rect x="40" y="475" width="820" height="60" rx="6" fill="url(#sd)" opacity="0.15" stroke="#d95050" stroke-width="1.5"/>
+  <text x="55" y="495" font-weight="bold" fill="#c43e3e" font-size="14">Structured Data (msgpack, variable)</text>
+  <text x="55" y="515" fill="#c43e3e" font-size="11">fileReferences, typeReferenceDirectives, libReferenceDirectives, nodeIndexArrays, stringArrays</text>
+
+  <!-- === Section 6: Nodes  y=550 (475+60+15)  h=245 === -->
+  <rect x="40" y="550" width="820" height="245" rx="6" fill="url(#nd)" opacity="0.15" stroke="#8e6cbf" stroke-width="1.5"/>
+  <text x="55" y="572" font-weight="bold" fill="#7b59ac" font-size="14">Nodes (28 bytes/node, flat array, source order)</text>
+
+  <!-- Nil node -->
+  <g transform="translate(55, 582)">
+    <rect width="790" height="28" rx="3" fill="#8e6cbf" opacity="0.3"/><text x="395" y="18" text-anchor="middle" fill="#7b59ac" font-size="10">Node[0]: all zeros (nil sentinel)</text>
+  </g>
+
+  <!-- Node record detail -->
+  <g transform="translate(55, 618)">
+    <rect width="100" height="36" rx="3" fill="#8e6cbf" opacity="0.7"/><text x="50" y="14" text-anchor="middle" fill="#fff" font-size="9">Kind</text><text x="50" y="28" text-anchor="middle" fill="#ddd" font-size="8">uint32 [0:4]</text>
+    <rect x="105" width="100" height="36" rx="3" fill="#8e6cbf" opacity="0.8"/><text x="155" y="14" text-anchor="middle" fill="#fff" font-size="9">Pos (UTF-16)</text><text x="155" y="28" text-anchor="middle" fill="#ddd" font-size="8">uint32 [4:8]</text>
+    <rect x="210" width="100" height="36" rx="3" fill="#8e6cbf" opacity="0.7"/><text x="260" y="14" text-anchor="middle" fill="#fff" font-size="9">End (UTF-16)</text><text x="260" y="28" text-anchor="middle" fill="#ddd" font-size="8">uint32 [8:12]</text>
+    <rect x="315" width="115" height="36" rx="3" fill="#8e6cbf" opacity="0.8"/><text x="372" y="14" text-anchor="middle" fill="#fff" font-size="9">Next Sibling idx</text><text x="372" y="28" text-anchor="middle" fill="#ddd" font-size="8">uint32 [12:16]</text>
+    <rect x="435" width="100" height="36" rx="3" fill="#8e6cbf" opacity="0.7"/><text x="485" y="14" text-anchor="middle" fill="#fff" font-size="9">Parent idx</text><text x="485" y="28" text-anchor="middle" fill="#ddd" font-size="8">uint32 [16:20]</text>
+    <rect x="540" width="140" height="36" rx="3" fill="#8e6cbf" opacity="0.8"/><text x="610" y="14" text-anchor="middle" fill="#fff" font-size="9">Node Data</text><text x="610" y="28" text-anchor="middle" fill="#ddd" font-size="8">uint32 [20:24]</text>
+    <rect x="685" width="100" height="36" rx="3" fill="#8e6cbf" opacity="0.7"/><text x="735" y="14" text-anchor="middle" fill="#fff" font-size="9">Flags</text><text x="735" y="28" text-anchor="middle" fill="#ddd" font-size="8">uint32 [24:28]</text>
+  </g>
+
+  <!-- More nodes -->
+  <g transform="translate(55, 662)">
+    <rect width="790" height="28" rx="3" fill="#8e6cbf" opacity="0.3"/><text x="395" y="18" text-anchor="middle" fill="#7b59ac" font-size="10">Node[2], Node[3], ... Node[N]  (same 28-byte layout, source order)</text>
+  </g>
+
+  <!-- Node Data field detail -->
+  <g transform="translate(55, 700)">
+    <text x="0" y="14" fill="#7b59ac" font-size="11" font-weight="bold">Node Data field encoding (bits):</text>
+    <text x="0" y="32" fill="#555" font-size="10">[31..30] type: 0b00=Children, 0b01=String, 0b10=Extended, 0b11=Reserved</text>
+    <text x="0" y="48" fill="#555" font-size="10">[29..24] node-specific 6-bit data (flags, operator kind, etc.)    [23..0] type-dependent payload</text>
+  </g>
+</svg>

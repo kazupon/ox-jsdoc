@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 400" font-family="monospace" font-size="13">
+  <defs>
+    <linearGradient id="strLight" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#a8dcb4"/>
+      <stop offset="100%" stop-color="#88c997"/>
+    </linearGradient>
+    <linearGradient id="ext" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#e8a838"/>
+      <stop offset="100%" stop-color="#d49520"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Title -->
+  <text x="460" y="28" text-anchor="middle" font-size="18" font-weight="bold" fill="#222" font-family="-apple-system, system-ui, sans-serif">String Data Internal Layout</text>
+  <text x="460" y="50" text-anchor="middle" font-size="11" fill="#666" font-family="-apple-system, system-ui, sans-serif">2 regions: concatenated sourceText (zero-copy slice region) + unique strings (appended)</text>
+
+  <!-- ============================================================ -->
+  <!-- Big horizontal bar with 2 regions                            -->
+  <!-- ============================================================ -->
+  <g transform="translate(40, 80)">
+    <!-- Outer container (whole String Data section) -->
+    <rect width="840" height="100" rx="6" fill="#f5f5f5" stroke="#999" stroke-width="1.5"/>
+
+    <!-- Region 1: Concatenated sourceText area -->
+    <rect width="560" height="100" rx="6" fill="url(#strLight)" opacity="0.5" stroke="#3da558" stroke-width="2"/>
+    <text x="280" y="20" text-anchor="middle" fill="#2d8b48" font-size="11" font-weight="bold">Concatenated sourceText area</text>
+
+    <!-- sourceText[0] -->
+    <rect x="20" y="35" width="100" height="55" rx="4" fill="url(#strLight)" opacity="0.85" stroke="#3da558" stroke-width="1.5"/>
+    <text x="70" y="55" text-anchor="middle" fill="#2d8b48" font-size="11" font-weight="bold">sourceText[0]</text>
+    <text x="70" y="72" text-anchor="middle" fill="#3da558" font-size="9">UTF-8 bytes</text>
+    <text x="70" y="84" text-anchor="middle" fill="#666" font-size="8">(items[0])</text>
+
+    <!-- sourceText[1] -->
+    <rect x="125" y="35" width="100" height="55" rx="4" fill="url(#strLight)" opacity="0.7" stroke="#3da558" stroke-width="1.5"/>
+    <text x="175" y="55" text-anchor="middle" fill="#2d8b48" font-size="11" font-weight="bold">sourceText[1]</text>
+    <text x="175" y="72" text-anchor="middle" fill="#3da558" font-size="9">UTF-8 bytes</text>
+    <text x="175" y="84" text-anchor="middle" fill="#666" font-size="8">(items[1])</text>
+
+    <!-- sourceText[2] -->
+    <rect x="230" y="35" width="100" height="55" rx="4" fill="url(#strLight)" opacity="0.85" stroke="#3da558" stroke-width="1.5"/>
+    <text x="280" y="55" text-anchor="middle" fill="#2d8b48" font-size="11" font-weight="bold">sourceText[2]</text>
+    <text x="280" y="72" text-anchor="middle" fill="#3da558" font-size="9">UTF-8 bytes</text>
+    <text x="280" y="84" text-anchor="middle" fill="#666" font-size="8">(items[2])</text>
+
+    <!-- ... -->
+    <text x="355" y="65" text-anchor="middle" fill="#3da558" font-size="22" font-weight="bold">...</text>
+
+    <!-- sourceText[N-1] -->
+    <rect x="395" y="35" width="120" height="55" rx="4" fill="url(#strLight)" opacity="0.7" stroke="#3da558" stroke-width="1.5"/>
+    <text x="455" y="55" text-anchor="middle" fill="#2d8b48" font-size="11" font-weight="bold">sourceText[N-1]</text>
+    <text x="455" y="72" text-anchor="middle" fill="#3da558" font-size="9">UTF-8 bytes</text>
+    <text x="455" y="84" text-anchor="middle" fill="#666" font-size="8">(items[N-1])</text>
+
+    <!-- Region boundary line -->
+    <line x1="560" y1="0" x2="560" y2="100" stroke="#666" stroke-width="2.5" stroke-dasharray="6,3"/>
+
+    <!-- Region 2: Unique strings area -->
+    <rect x="560" width="280" height="100" rx="6" fill="url(#ext)" opacity="0.25" stroke="#d49520" stroke-width="2"/>
+    <text x="700" y="20" text-anchor="middle" fill="#a87515" font-size="11" font-weight="bold">Unique strings area (appended)</text>
+
+    <!-- unique[0] -->
+    <rect x="580" y="35" width="60" height="55" rx="4" fill="url(#ext)" opacity="0.6" stroke="#d49520" stroke-width="1.5"/>
+    <text x="610" y="58" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">u[0]</text>
+    <text x="610" y="78" text-anchor="middle" fill="#fff5e0" font-size="8">"abc"</text>
+
+    <!-- unique[1] -->
+    <rect x="645" y="35" width="80" height="55" rx="4" fill="url(#ext)" opacity="0.7" stroke="#d49520" stroke-width="1.5"/>
+    <text x="685" y="58" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">u[1]</text>
+    <text x="685" y="78" text-anchor="middle" fill="#fff5e0" font-size="8">"x\nesc"</text>
+
+    <!-- ... -->
+    <text x="745" y="65" text-anchor="middle" fill="#a87515" font-size="22" font-weight="bold">...</text>
+
+    <!-- unique[M-1] -->
+    <rect x="765" y="35" width="60" height="55" rx="4" fill="url(#ext)" opacity="0.6" stroke="#d49520" stroke-width="1.5"/>
+    <text x="795" y="58" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">u[M-1]</text>
+    <text x="795" y="78" text-anchor="middle" fill="#fff5e0" font-size="8">"..."</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Region annotations (range bars)                              -->
+  <!-- ============================================================ -->
+  <g transform="translate(40, 195)">
+    <!-- Left region range -->
+    <line x1="20" y1="0" x2="540" y2="0" stroke="#3da558" stroke-width="2"/>
+    <line x1="20" y1="-5" x2="20" y2="5" stroke="#3da558" stroke-width="2"/>
+    <line x1="540" y1="-5" x2="540" y2="5" stroke="#3da558" stroke-width="2"/>
+    <text x="280" y="20" text-anchor="middle" fill="#2d8b48" font-size="11" font-weight="bold">N input items (zero-copy slice region)</text>
+    <text x="280" y="35" text-anchor="middle" fill="#666" font-size="10" font-style="italic">most string indices reference byte ranges in this region</text>
+
+    <!-- Right region range -->
+    <line x1="580" y1="0" x2="820" y2="0" stroke="#d49520" stroke-width="2"/>
+    <line x1="580" y1="-5" x2="580" y2="5" stroke="#d49520" stroke-width="2"/>
+    <line x1="820" y1="-5" x2="820" y2="5" stroke="#d49520" stroke-width="2"/>
+    <text x="700" y="20" text-anchor="middle" fill="#a87515" font-size="11" font-weight="bold">M appended strings</text>
+    <text x="700" y="35" text-anchor="middle" fill="#666" font-size="10" font-style="italic">escape-resolved, normalized,</text>
+    <text x="700" y="48" text-anchor="middle" fill="#666" font-size="10" font-style="italic">joined-multi-line, etc.</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Notes -->
+  <!-- ============================================================ -->
+  <g transform="translate(40, 280)">
+    <rect width="840" height="100" rx="6" fill="#f8f8f8" stroke="#ccc" stroke-width="1"/>
+    <text x="15" y="22" font-size="12" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">Layout rules</text>
+    <text x="15" y="45" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">No separator bytes</tspan> between sourceText[i] and sourceText[i+1] — they are concatenated raw</text>
+    <text x="15" y="63" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• sourceText[i] starts at <tspan font-family="monospace">root[i].source_offset_in_data</tspan> (recorded in Root Index Array)</text>
+    <text x="15" y="81" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• Unique strings are added <tspan font-weight="bold">on-demand</tspan> by encoder when a string cannot be expressed as a sourceText slice</text>
+  </g>
+</svg>

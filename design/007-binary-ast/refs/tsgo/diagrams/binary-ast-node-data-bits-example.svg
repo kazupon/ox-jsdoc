@@ -1,0 +1,330 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1050 920" font-family="monospace" font-size="12">
+  <defs>
+    <style>
+      .bit { stroke: #ccc; stroke-width: 0.5; rx: 1; }
+      .b0 { fill: #f0f0f0; }
+      .b1 { fill: #333; }
+      .bt0 { fill: #666; font-size: 10; }
+      .bt1 { fill: #fff; font-size: 10; }
+    </style>
+  </defs>
+
+  <text x="525" y="28" text-anchor="middle" font-size="18" font-weight="bold" fill="#222">Node Data Field - Bit-Level Examples</text>
+  <text x="525" y="48" text-anchor="middle" font-size="11" fill="#666">from: import { add } from "./math"; const a = add(1, 2);</text>
+
+  <!-- Bit position header (reused) -->
+  <!-- bits 31..0, grouped: [31 30] [29 28 27 26 25 24] [23 .. 0] -->
+
+  <!-- ================================================================ -->
+  <!-- Example 1: Children type - ImportDeclaration [2] -->
+  <!-- ================================================================ -->
+  <g transform="translate(40, 80)">
+    <text x="0" y="0" font-size="14" font-weight="bold" fill="#7b59ac">Example 1: Children type - ImportDeclaration [2]</text>
+    <text x="0" y="18" font-size="10" fill="#888">mask=0x06 (bit1=importClause, bit2=moduleSpecifier), no 6-bit flags</text>
+
+    <!-- Bit labels -->
+    <text x="0" y="40" font-size="8" fill="#999">bit:</text>
+    <g transform="translate(30, 30)">
+      <text x="5" y="10" font-size="7" fill="#999">31</text><text x="22" y="10" font-size="7" fill="#999">30</text>
+      <text x="46" y="10" font-size="7" fill="#999">29</text><text x="63" y="10" font-size="7" fill="#999">28</text><text x="80" y="10" font-size="7" fill="#999">27</text><text x="97" y="10" font-size="7" fill="#999">26</text><text x="114" y="10" font-size="7" fill="#999">25</text><text x="131" y="10" font-size="7" fill="#999">24</text>
+      <text x="162" y="10" font-size="7" fill="#999">23</text><text x="179" y="10" font-size="7" fill="#999">22</text><text x="196" y="10" font-size="7" fill="#999">21</text><text x="213" y="10" font-size="7" fill="#999">20</text><text x="230" y="10" font-size="7" fill="#999">19</text><text x="247" y="10" font-size="7" fill="#999">18</text><text x="264" y="10" font-size="7" fill="#999">17</text><text x="281" y="10" font-size="7" fill="#999">16</text>
+      <text x="305" y="10" font-size="7" fill="#999">15</text><text x="322" y="10" font-size="7" fill="#999">14</text><text x="339" y="10" font-size="7" fill="#999">13</text><text x="356" y="10" font-size="7" fill="#999">12</text><text x="373" y="10" font-size="7" fill="#999">11</text><text x="390" y="10" font-size="7" fill="#999">10</text><text x="410" y="10" font-size="7" fill="#999">9</text><text x="424" y="10" font-size="7" fill="#999">8</text>
+      <text x="451" y="10" font-size="7" fill="#999">7</text><text x="468" y="10" font-size="7" fill="#999">6</text><text x="485" y="10" font-size="7" fill="#999">5</text><text x="502" y="10" font-size="7" fill="#999">4</text><text x="519" y="10" font-size="7" fill="#999">3</text><text x="536" y="10" font-size="7" fill="#999">2</text><text x="553" y="10" font-size="7" fill="#999">1</text><text x="570" y="10" font-size="7" fill="#999">0</text>
+    </g>
+
+    <!-- Bit cells -->
+    <g transform="translate(30, 42)">
+      <!-- Type: 0b00 -->
+      <rect x="0" y="0" width="17" height="22" class="bit b0"/><text x="8" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="17" y="0" width="17" height="22" class="bit b0"/><text x="25" y="15" text-anchor="middle" class="bt0">0</text>
+      <!-- gap -->
+      <!-- 6-bit: 000000 -->
+      <rect x="40" y="0" width="17" height="22" class="bit b0"/><text x="48" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="57" y="0" width="17" height="22" class="bit b0"/><text x="65" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="74" y="0" width="17" height="22" class="bit b0"/><text x="82" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="91" y="0" width="17" height="22" class="bit b0"/><text x="99" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="108" y="0" width="17" height="22" class="bit b0"/><text x="116" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="125" y="0" width="17" height="22" class="bit b0"/><text x="133" y="15" text-anchor="middle" class="bt0">0</text>
+      <!-- gap -->
+      <!-- 24-bit payload: 00000000 00000000 00000110 -->
+      <rect x="155" y="0" width="17" height="22" class="bit b0"/><text x="163" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="172" y="0" width="17" height="22" class="bit b0"/><text x="180" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="189" y="0" width="17" height="22" class="bit b0"/><text x="197" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="206" y="0" width="17" height="22" class="bit b0"/><text x="214" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="223" y="0" width="17" height="22" class="bit b0"/><text x="231" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="240" y="0" width="17" height="22" class="bit b0"/><text x="248" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="257" y="0" width="17" height="22" class="bit b0"/><text x="265" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="274" y="0" width="17" height="22" class="bit b0"/><text x="282" y="15" text-anchor="middle" class="bt0">0</text>
+
+      <rect x="298" y="0" width="17" height="22" class="bit b0"/><text x="306" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="315" y="0" width="17" height="22" class="bit b0"/><text x="323" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="332" y="0" width="17" height="22" class="bit b0"/><text x="340" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="349" y="0" width="17" height="22" class="bit b0"/><text x="357" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="366" y="0" width="17" height="22" class="bit b0"/><text x="374" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="383" y="0" width="17" height="22" class="bit b0"/><text x="391" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="400" y="0" width="17" height="22" class="bit b0"/><text x="408" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="417" y="0" width="17" height="22" class="bit b0"/><text x="425" y="15" text-anchor="middle" class="bt0">0</text>
+
+      <rect x="444" y="0" width="17" height="22" class="bit b0"/><text x="452" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="461" y="0" width="17" height="22" class="bit b0"/><text x="469" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="478" y="0" width="17" height="22" class="bit b0"/><text x="486" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="495" y="0" width="17" height="22" class="bit b0"/><text x="503" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="512" y="0" width="17" height="22" class="bit b0"/><text x="520" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="529" y="0" width="17" height="22" class="bit b1"/><text x="537" y="15" text-anchor="middle" class="bt1">1</text>
+      <rect x="546" y="0" width="17" height="22" class="bit b1"/><text x="554" y="15" text-anchor="middle" class="bt1">1</text>
+      <rect x="563" y="0" width="17" height="22" class="bit b0"/><text x="571" y="15" text-anchor="middle" class="bt0">0</text>
+
+      <!-- Bracket labels -->
+      <rect x="0" y="26" width="34" height="4" rx="1" fill="#8e6cbf" opacity="0.6"/>
+      <text x="17" y="40" text-anchor="middle" fill="#7b59ac" font-size="9">0b00</text>
+      <text x="17" y="50" text-anchor="middle" fill="#7b59ac" font-size="8">Children</text>
+
+      <rect x="40" y="26" width="102" height="4" rx="1" fill="#e8a838" opacity="0.6"/>
+      <text x="91" y="40" text-anchor="middle" fill="#d49520" font-size="9">000000</text>
+      <text x="91" y="50" text-anchor="middle" fill="#d49520" font-size="8">(no flags)</text>
+
+      <rect x="155" y="26" width="425" height="4" rx="1" fill="#50b86c" opacity="0.6"/>
+      <text x="367" y="40" text-anchor="middle" fill="#3da558" font-size="9">0x000006 = child bitmask</text>
+      <text x="367" y="50" text-anchor="middle" fill="#3da558" font-size="8">bit1=importClause=1, bit2=moduleSpecifier=1</text>
+    </g>
+  </g>
+
+  <!-- ================================================================ -->
+  <!-- Example 2: String type - Identifier "add" [7] -->
+  <!-- ================================================================ -->
+  <g transform="translate(40, 240)">
+    <text x="0" y="0" font-size="14" font-weight="bold" fill="#357abd">Example 2: String type - Identifier "add" [7]</text>
+    <text x="0" y="18" font-size="10" fill="#888">strIdx=1, no 6-bit flags</text>
+
+    <g transform="translate(30, 30)">
+      <!-- Type: 0b01 -->
+      <rect x="0" y="0" width="17" height="22" class="bit b0"/><text x="8" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="17" y="0" width="17" height="22" class="bit b1"/><text x="25" y="15" text-anchor="middle" class="bt1">1</text>
+      <!-- 6-bit: 000000 -->
+      <rect x="40" y="0" width="17" height="22" class="bit b0"/><text x="48" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="57" y="0" width="17" height="22" class="bit b0"/><text x="65" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="74" y="0" width="17" height="22" class="bit b0"/><text x="82" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="91" y="0" width="17" height="22" class="bit b0"/><text x="99" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="108" y="0" width="17" height="22" class="bit b0"/><text x="116" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="125" y="0" width="17" height="22" class="bit b0"/><text x="133" y="15" text-anchor="middle" class="bt0">0</text>
+      <!-- 24-bit: 00000000 00000000 00000001 = strIdx 1 -->
+      <rect x="155" y="0" width="17" height="22" class="bit b0"/><text x="163" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="172" y="0" width="17" height="22" class="bit b0"/><text x="180" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="189" y="0" width="17" height="22" class="bit b0"/><text x="197" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="206" y="0" width="17" height="22" class="bit b0"/><text x="214" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="223" y="0" width="17" height="22" class="bit b0"/><text x="231" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="240" y="0" width="17" height="22" class="bit b0"/><text x="248" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="257" y="0" width="17" height="22" class="bit b0"/><text x="265" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="274" y="0" width="17" height="22" class="bit b0"/><text x="282" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="298" y="0" width="17" height="22" class="bit b0"/><text x="306" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="315" y="0" width="17" height="22" class="bit b0"/><text x="323" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="332" y="0" width="17" height="22" class="bit b0"/><text x="340" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="349" y="0" width="17" height="22" class="bit b0"/><text x="357" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="366" y="0" width="17" height="22" class="bit b0"/><text x="374" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="383" y="0" width="17" height="22" class="bit b0"/><text x="391" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="400" y="0" width="17" height="22" class="bit b0"/><text x="408" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="417" y="0" width="17" height="22" class="bit b0"/><text x="425" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="444" y="0" width="17" height="22" class="bit b0"/><text x="452" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="461" y="0" width="17" height="22" class="bit b0"/><text x="469" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="478" y="0" width="17" height="22" class="bit b0"/><text x="486" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="495" y="0" width="17" height="22" class="bit b0"/><text x="503" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="512" y="0" width="17" height="22" class="bit b0"/><text x="520" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="529" y="0" width="17" height="22" class="bit b0"/><text x="537" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="546" y="0" width="17" height="22" class="bit b0"/><text x="554" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="563" y="0" width="17" height="22" class="bit b1"/><text x="571" y="15" text-anchor="middle" class="bt1">1</text>
+
+      <rect x="0" y="26" width="34" height="4" rx="1" fill="#4a90d9" opacity="0.6"/>
+      <text x="17" y="40" text-anchor="middle" fill="#357abd" font-size="9">0b01</text>
+      <text x="17" y="50" text-anchor="middle" fill="#357abd" font-size="8">String</text>
+
+      <rect x="40" y="26" width="102" height="4" rx="1" fill="#e8a838" opacity="0.6"/>
+      <text x="91" y="40" text-anchor="middle" fill="#d49520" font-size="9">000000</text>
+      <text x="91" y="50" text-anchor="middle" fill="#d49520" font-size="8">(no flags)</text>
+
+      <rect x="155" y="26" width="425" height="4" rx="1" fill="#50b86c" opacity="0.6"/>
+      <text x="367" y="40" text-anchor="middle" fill="#3da558" font-size="9">0x000001 = string table index 1</text>
+      <text x="367" y="50" text-anchor="middle" fill="#3da558" font-size="8">-> str[1] = "add" (offset [9,12] in String Data)</text>
+    </g>
+  </g>
+
+  <!-- ================================================================ -->
+  <!-- Example 3: Extended type - SourceFile [1] -->
+  <!-- ================================================================ -->
+  <g transform="translate(40, 400)">
+    <text x="0" y="0" font-size="14" font-weight="bold" fill="#d49520">Example 3: Extended type - SourceFile [1]</text>
+    <text x="0" y="18" font-size="10" fill="#888">offset=0 into Extended Data section, no 6-bit flags</text>
+
+    <g transform="translate(30, 30)">
+      <!-- Type: 0b10 -->
+      <rect x="0" y="0" width="17" height="22" class="bit b1"/><text x="8" y="15" text-anchor="middle" class="bt1">1</text>
+      <rect x="17" y="0" width="17" height="22" class="bit b0"/><text x="25" y="15" text-anchor="middle" class="bt0">0</text>
+      <!-- 6-bit: 000000 -->
+      <rect x="40" y="0" width="17" height="22" class="bit b0"/><text x="48" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="57" y="0" width="17" height="22" class="bit b0"/><text x="65" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="74" y="0" width="17" height="22" class="bit b0"/><text x="82" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="91" y="0" width="17" height="22" class="bit b0"/><text x="99" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="108" y="0" width="17" height="22" class="bit b0"/><text x="116" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="125" y="0" width="17" height="22" class="bit b0"/><text x="133" y="15" text-anchor="middle" class="bt0">0</text>
+      <!-- 24-bit: all zeros = offset 0 -->
+      <rect x="155" y="0" width="17" height="22" class="bit b0"/><text x="163" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="172" y="0" width="17" height="22" class="bit b0"/><text x="180" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="189" y="0" width="17" height="22" class="bit b0"/><text x="197" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="206" y="0" width="17" height="22" class="bit b0"/><text x="214" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="223" y="0" width="17" height="22" class="bit b0"/><text x="231" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="240" y="0" width="17" height="22" class="bit b0"/><text x="248" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="257" y="0" width="17" height="22" class="bit b0"/><text x="265" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="274" y="0" width="17" height="22" class="bit b0"/><text x="282" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="298" y="0" width="17" height="22" class="bit b0"/><text x="306" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="315" y="0" width="17" height="22" class="bit b0"/><text x="323" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="332" y="0" width="17" height="22" class="bit b0"/><text x="340" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="349" y="0" width="17" height="22" class="bit b0"/><text x="357" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="366" y="0" width="17" height="22" class="bit b0"/><text x="374" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="383" y="0" width="17" height="22" class="bit b0"/><text x="391" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="400" y="0" width="17" height="22" class="bit b0"/><text x="408" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="417" y="0" width="17" height="22" class="bit b0"/><text x="425" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="444" y="0" width="17" height="22" class="bit b0"/><text x="452" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="461" y="0" width="17" height="22" class="bit b0"/><text x="469" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="478" y="0" width="17" height="22" class="bit b0"/><text x="486" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="495" y="0" width="17" height="22" class="bit b0"/><text x="503" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="512" y="0" width="17" height="22" class="bit b0"/><text x="520" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="529" y="0" width="17" height="22" class="bit b0"/><text x="537" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="546" y="0" width="17" height="22" class="bit b0"/><text x="554" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="563" y="0" width="17" height="22" class="bit b0"/><text x="571" y="15" text-anchor="middle" class="bt0">0</text>
+
+      <rect x="0" y="26" width="34" height="4" rx="1" fill="#e8a838" opacity="0.6"/>
+      <text x="17" y="40" text-anchor="middle" fill="#d49520" font-size="9">0b10</text>
+      <text x="17" y="50" text-anchor="middle" fill="#d49520" font-size="8">Extended</text>
+
+      <rect x="40" y="26" width="102" height="4" rx="1" fill="#e8a838" opacity="0.4"/>
+      <text x="91" y="40" text-anchor="middle" fill="#d49520" font-size="9">000000</text>
+      <text x="91" y="50" text-anchor="middle" fill="#d49520" font-size="8">(no flags)</text>
+
+      <rect x="155" y="26" width="425" height="4" rx="1" fill="#e8a838" opacity="0.6"/>
+      <text x="367" y="40" text-anchor="middle" fill="#d49520" font-size="9">0x000000 = byte offset 0 into Extended Data</text>
+      <text x="367" y="50" text-anchor="middle" fill="#d49520" font-size="8">-> SourceFile metadata (48 bytes: text, fileName, path, imports...)</text>
+    </g>
+  </g>
+
+  <!-- ================================================================ -->
+  <!-- Example 4: Children with 6-bit data - VarDeclList [10] (const) -->
+  <!-- ================================================================ -->
+  <g transform="translate(40, 560)">
+    <text x="0" y="0" font-size="14" font-weight="bold" fill="#7b59ac">Example 4: Children + 6-bit flags - VariableDeclarationList [10]</text>
+    <text x="0" y="18" font-size="10" fill="#888">6-bit: bit1=isConst=1 (value=0b000010=2), mask=0x01 (bit0=declarations)</text>
+
+    <g transform="translate(30, 30)">
+      <!-- Type: 0b00 -->
+      <rect x="0" y="0" width="17" height="22" class="bit b0"/><text x="8" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="17" y="0" width="17" height="22" class="bit b0"/><text x="25" y="15" text-anchor="middle" class="bt0">0</text>
+      <!-- 6-bit: 000010 (isConst at bit1) -->
+      <rect x="40" y="0" width="17" height="22" class="bit b0"/><text x="48" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="57" y="0" width="17" height="22" class="bit b0"/><text x="65" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="74" y="0" width="17" height="22" class="bit b0"/><text x="82" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="91" y="0" width="17" height="22" class="bit b0"/><text x="99" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="108" y="0" width="17" height="22" class="bit b1"/><text x="116" y="15" text-anchor="middle" class="bt1">1</text>
+      <rect x="125" y="0" width="17" height="22" class="bit b0"/><text x="133" y="15" text-anchor="middle" class="bt0">0</text>
+      <!-- 24-bit: 00000000 00000000 00000001 -->
+      <rect x="155" y="0" width="17" height="22" class="bit b0"/><text x="163" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="172" y="0" width="17" height="22" class="bit b0"/><text x="180" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="189" y="0" width="17" height="22" class="bit b0"/><text x="197" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="206" y="0" width="17" height="22" class="bit b0"/><text x="214" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="223" y="0" width="17" height="22" class="bit b0"/><text x="231" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="240" y="0" width="17" height="22" class="bit b0"/><text x="248" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="257" y="0" width="17" height="22" class="bit b0"/><text x="265" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="274" y="0" width="17" height="22" class="bit b0"/><text x="282" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="298" y="0" width="17" height="22" class="bit b0"/><text x="306" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="315" y="0" width="17" height="22" class="bit b0"/><text x="323" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="332" y="0" width="17" height="22" class="bit b0"/><text x="340" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="349" y="0" width="17" height="22" class="bit b0"/><text x="357" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="366" y="0" width="17" height="22" class="bit b0"/><text x="374" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="383" y="0" width="17" height="22" class="bit b0"/><text x="391" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="400" y="0" width="17" height="22" class="bit b0"/><text x="408" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="417" y="0" width="17" height="22" class="bit b0"/><text x="425" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="444" y="0" width="17" height="22" class="bit b0"/><text x="452" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="461" y="0" width="17" height="22" class="bit b0"/><text x="469" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="478" y="0" width="17" height="22" class="bit b0"/><text x="486" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="495" y="0" width="17" height="22" class="bit b0"/><text x="503" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="512" y="0" width="17" height="22" class="bit b0"/><text x="520" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="529" y="0" width="17" height="22" class="bit b0"/><text x="537" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="546" y="0" width="17" height="22" class="bit b0"/><text x="554" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="563" y="0" width="17" height="22" class="bit b1"/><text x="571" y="15" text-anchor="middle" class="bt1">1</text>
+
+      <rect x="0" y="26" width="34" height="4" rx="1" fill="#8e6cbf" opacity="0.6"/>
+      <text x="17" y="40" text-anchor="middle" fill="#7b59ac" font-size="9">0b00</text>
+      <text x="17" y="50" text-anchor="middle" fill="#7b59ac" font-size="8">Children</text>
+
+      <rect x="40" y="26" width="102" height="4" rx="1" fill="#e8a838" opacity="0.6"/>
+      <text x="91" y="40" text-anchor="middle" fill="#d49520" font-size="9">000010</text>
+      <text x="91" y="50" text-anchor="middle" fill="#d49520" font-size="8">bit0=isLet=0</text>
+      <text x="91" y="60" text-anchor="middle" fill="#d49520" font-size="8" font-weight="bold">bit1=isConst=1</text>
+
+      <rect x="155" y="26" width="425" height="4" rx="1" fill="#50b86c" opacity="0.6"/>
+      <text x="367" y="40" text-anchor="middle" fill="#3da558" font-size="9">0x000001 = child bitmask</text>
+      <text x="367" y="50" text-anchor="middle" fill="#3da558" font-size="8">bit0=declarations=1</text>
+    </g>
+  </g>
+
+  <!-- ================================================================ -->
+  <!-- Example 5: Extended type - StringLiteral "./math" [8] -->
+  <!-- ================================================================ -->
+  <g transform="translate(40, 730)">
+    <text x="0" y="0" font-size="14" font-weight="bold" fill="#c43e3e">Example 5: Extended type - StringLiteral "./math" [8]</text>
+    <text x="0" y="18" font-size="10" fill="#888">offset=48 (0x30) into Extended Data section, no 6-bit flags</text>
+
+    <g transform="translate(30, 30)">
+      <!-- Type: 0b10 -->
+      <rect x="0" y="0" width="17" height="22" class="bit b1"/><text x="8" y="15" text-anchor="middle" class="bt1">1</text>
+      <rect x="17" y="0" width="17" height="22" class="bit b0"/><text x="25" y="15" text-anchor="middle" class="bt0">0</text>
+      <!-- 6-bit: 000000 -->
+      <rect x="40" y="0" width="17" height="22" class="bit b0"/><text x="48" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="57" y="0" width="17" height="22" class="bit b0"/><text x="65" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="74" y="0" width="17" height="22" class="bit b0"/><text x="82" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="91" y="0" width="17" height="22" class="bit b0"/><text x="99" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="108" y="0" width="17" height="22" class="bit b0"/><text x="116" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="125" y="0" width="17" height="22" class="bit b0"/><text x="133" y="15" text-anchor="middle" class="bt0">0</text>
+      <!-- 24-bit: 00000000 00000000 00110000 = 48 = 0x30 -->
+      <rect x="155" y="0" width="17" height="22" class="bit b0"/><text x="163" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="172" y="0" width="17" height="22" class="bit b0"/><text x="180" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="189" y="0" width="17" height="22" class="bit b0"/><text x="197" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="206" y="0" width="17" height="22" class="bit b0"/><text x="214" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="223" y="0" width="17" height="22" class="bit b0"/><text x="231" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="240" y="0" width="17" height="22" class="bit b0"/><text x="248" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="257" y="0" width="17" height="22" class="bit b0"/><text x="265" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="274" y="0" width="17" height="22" class="bit b0"/><text x="282" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="298" y="0" width="17" height="22" class="bit b0"/><text x="306" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="315" y="0" width="17" height="22" class="bit b0"/><text x="323" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="332" y="0" width="17" height="22" class="bit b0"/><text x="340" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="349" y="0" width="17" height="22" class="bit b0"/><text x="357" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="366" y="0" width="17" height="22" class="bit b0"/><text x="374" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="383" y="0" width="17" height="22" class="bit b0"/><text x="391" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="400" y="0" width="17" height="22" class="bit b0"/><text x="408" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="417" y="0" width="17" height="22" class="bit b0"/><text x="425" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="444" y="0" width="17" height="22" class="bit b0"/><text x="452" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="461" y="0" width="17" height="22" class="bit b0"/><text x="469" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="478" y="0" width="17" height="22" class="bit b1"/><text x="486" y="15" text-anchor="middle" class="bt1">1</text>
+      <rect x="495" y="0" width="17" height="22" class="bit b1"/><text x="503" y="15" text-anchor="middle" class="bt1">1</text>
+      <rect x="512" y="0" width="17" height="22" class="bit b0"/><text x="520" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="529" y="0" width="17" height="22" class="bit b0"/><text x="537" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="546" y="0" width="17" height="22" class="bit b0"/><text x="554" y="15" text-anchor="middle" class="bt0">0</text>
+      <rect x="563" y="0" width="17" height="22" class="bit b0"/><text x="571" y="15" text-anchor="middle" class="bt0">0</text>
+
+      <rect x="0" y="26" width="34" height="4" rx="1" fill="#d95050" opacity="0.6"/>
+      <text x="17" y="40" text-anchor="middle" fill="#c43e3e" font-size="9">0b10</text>
+      <text x="17" y="50" text-anchor="middle" fill="#c43e3e" font-size="8">Extended</text>
+
+      <rect x="40" y="26" width="102" height="4" rx="1" fill="#e8a838" opacity="0.4"/>
+      <text x="91" y="40" text-anchor="middle" fill="#d49520" font-size="9">000000</text>
+      <text x="91" y="50" text-anchor="middle" fill="#d49520" font-size="8">(no flags)</text>
+
+      <rect x="155" y="26" width="425" height="4" rx="1" fill="#d95050" opacity="0.6"/>
+      <text x="367" y="40" text-anchor="middle" fill="#c43e3e" font-size="9">0x000030 = byte offset 48 into Extended Data</text>
+      <text x="367" y="50" text-anchor="middle" fill="#c43e3e" font-size="8">-> StringLiteral (8 bytes: text=str[2]="./math", hasExtendedEscape=0)</text>
+    </g>
+  </g>
+
+  <!-- Summary -->
+  <g transform="translate(40, 890)">
+    <text x="0" y="0" font-size="10" fill="#888">uint32 Node Data = [31:30 type tag] [29:24 node-specific 6-bit] [23:0 payload (bitmask / strIdx / extOffset)]</text>
+    <text x="0" y="16" font-size="10" fill="#888">Black cells = 1, Gray cells = 0. All values are from: import { add } from "./math"; const a = add(1, 2);</text>
+  </g>
+</svg>

@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 600" font-family="monospace" font-size="13">
+  <defs>
+    <linearGradient id="gDiag" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#d95050"/>
+      <stop offset="100%" stop-color="#c43e3e"/>
+    </linearGradient>
+    <linearGradient id="gRid" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38b6c8"/>
+      <stop offset="100%" stop-color="#2a8d9c"/>
+    </linearGradient>
+    <linearGradient id="gStr" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#50b86c"/>
+      <stop offset="100%" stop-color="#3da558"/>
+    </linearGradient>
+    <linearGradient id="gCount" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#a87d28"/>
+      <stop offset="100%" stop-color="#8e6a20"/>
+    </linearGradient>
+    <marker id="ar" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,3.5 L0,7 Z" fill="#555"/>
+    </marker>
+    <marker id="ar-thin" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="8" markerHeight="6" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#888"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="460" y="28" text-anchor="middle" font-size="18" font-weight="bold" fill="#222" font-family="-apple-system, system-ui, sans-serif">Diagnostics Section (4 + 8M bytes)</text>
+  <text x="460" y="50" text-anchor="middle" font-size="11" fill="#666" font-family="-apple-system, system-ui, sans-serif">Per-comment parse errors/warnings, sorted by root_index for fast binary-search lookup</text>
+
+  <!-- ============================================================ -->
+  <!-- Section 1: Layout overview                                   -->
+  <!-- ============================================================ -->
+  <text x="40" y="82" font-size="13" font-weight="bold" fill="#c43e3e" font-family="-apple-system, system-ui, sans-serif">(1) Layout: count header + M diagnostic entries (sorted by root_index ascending)</text>
+
+  <g transform="translate(40, 95)">
+    <!-- Count header (4 bytes) -->
+    <rect width="100" height="60" rx="6" fill="url(#gCount)" opacity="0.85" stroke="#7a5a1c" stroke-width="1.5"/>
+    <text x="50" y="22" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">M</text>
+    <text x="50" y="40" text-anchor="middle" fill="#f5edd9" font-size="10">Diagnostic count</text>
+    <text x="50" y="54" text-anchor="middle" fill="#f5edd9" font-size="9">u32 [0:4]</text>
+
+    <!-- diag[0] -->
+    <rect x="110" width="160" height="60" rx="6" fill="url(#gDiag)" opacity="0.85" stroke="#c43e3e" stroke-width="1.5"/>
+    <text x="190" y="22" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">diag[0]</text>
+    <text x="190" y="40" text-anchor="middle" fill="#fce8e8" font-size="10">root_idx | msg_idx</text>
+    <text x="190" y="54" text-anchor="middle" fill="#fce8e8" font-size="9">2 × u32 = 8 bytes</text>
+
+    <!-- diag[1] -->
+    <rect x="280" width="160" height="60" rx="6" fill="url(#gDiag)" opacity="0.7" stroke="#c43e3e" stroke-width="1.5"/>
+    <text x="360" y="22" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">diag[1]</text>
+    <text x="360" y="40" text-anchor="middle" fill="#fce8e8" font-size="10">root_idx | msg_idx</text>
+    <text x="360" y="54" text-anchor="middle" fill="#fce8e8" font-size="9">8 bytes</text>
+
+    <!-- ... -->
+    <text x="460" y="36" fill="#c43e3e" font-size="20" font-weight="bold">...</text>
+
+    <!-- diag[i] (highlighted) -->
+    <rect x="490" width="160" height="60" rx="6" fill="url(#gDiag)" opacity="1" stroke="#c43e3e" stroke-width="2.5"/>
+    <text x="570" y="22" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">diag[i]</text>
+    <text x="570" y="40" text-anchor="middle" fill="#fce8e8" font-size="10">root_idx | msg_idx</text>
+    <text x="570" y="54" text-anchor="middle" fill="#fce8e8" font-size="9">8 bytes</text>
+
+    <!-- ... -->
+    <text x="660" y="36" fill="#c43e3e" font-size="20" font-weight="bold">...</text>
+
+    <!-- diag[M-1] -->
+    <rect x="690" width="160" height="60" rx="6" fill="url(#gDiag)" opacity="0.7" stroke="#c43e3e" stroke-width="1.5"/>
+    <text x="770" y="22" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">diag[M-1]</text>
+    <text x="770" y="40" text-anchor="middle" fill="#fce8e8" font-size="10">root_idx | msg_idx</text>
+    <text x="770" y="54" text-anchor="middle" fill="#fce8e8" font-size="9">8 bytes</text>
+  </g>
+
+  <!-- Total size annotation -->
+  <text x="40" y="180" font-size="11" fill="#666" font-family="-apple-system, system-ui, sans-serif" font-style="italic">Total size: 4 + 8M bytes (e.g. M=10 → 84 bytes, M=100 → 804 bytes; usually M is small)</text>
+  <text x="40" y="196" font-size="11" fill="#666" font-family="-apple-system, system-ui, sans-serif" font-style="italic">Random access: diag[i] is at offset (DiagnosticsOffset + 4 + i × 8)</text>
+
+  <!-- Zoom-in indicator (dotted lines from diag[i] to detail) -->
+  <line x1="500" y1="155" x2="240" y2="240" stroke="#c43e3e" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="640" y1="155" x2="700" y2="240" stroke="#c43e3e" stroke-width="1" stroke-dasharray="3,3"/>
+
+  <!-- ============================================================ -->
+  <!-- Section 2: Entry detail (zoom-in)                            -->
+  <!-- ============================================================ -->
+  <text x="40" y="232" font-size="13" font-weight="bold" fill="#c43e3e" font-family="-apple-system, system-ui, sans-serif">(2) Entry detail: diag[i] (8 bytes)</text>
+
+  <g transform="translate(240, 245)">
+    <!-- root_index field -->
+    <rect width="230" height="55" rx="4" fill="url(#gDiag)" opacity="0.85" stroke="#c43e3e" stroke-width="1.5"/>
+    <text x="115" y="22" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">root_index</text>
+    <text x="115" y="40" text-anchor="middle" fill="#fce8e8" font-size="10">u32 [8*i + 4 : +8]</text>
+
+    <!-- message_index field -->
+    <rect x="235" width="230" height="55" rx="4" fill="url(#gDiag)" opacity="0.7" stroke="#c43e3e" stroke-width="1.5"/>
+    <text x="350" y="22" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">message_index</text>
+    <text x="350" y="40" text-anchor="middle" fill="#fce8e8" font-size="10">u32 [8*i + 8 : +12]</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Section 3: Cross-references (arrows to other sections)      -->
+  <!-- ============================================================ -->
+
+  <!-- Arrows from each field to its target -->
+  <line x1="355" y1="305" x2="200" y2="370" stroke="#555" stroke-width="1.5" marker-end="url(#ar)"/>
+  <line x1="590" y1="305" x2="720" y2="370" stroke="#555" stroke-width="1.5" marker-end="url(#ar)"/>
+
+  <text x="40" y="345" font-size="13" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">(3) References (each field points to…)</text>
+
+  <!-- Target 1: Root Index Array -->
+  <g transform="translate(40, 380)">
+    <rect width="320" height="115" rx="6" fill="url(#gRid)" opacity="0.18" stroke="#2a8d9c" stroke-width="1.5"/>
+    <text x="160" y="22" text-anchor="middle" font-size="12" font-weight="bold" fill="#2a8d9c" font-family="-apple-system, system-ui, sans-serif">Root Index Array</text>
+    <text x="160" y="42" text-anchor="middle" font-size="11" fill="#2a8d9c">→ Index of the failed root</text>
+    <text x="160" y="60" text-anchor="middle" font-size="10" fill="#666" font-style="italic">(roots[root_index] is the comment)</text>
+    <line x1="20" y1="72" x2="300" y2="72" stroke="#888" stroke-dasharray="2,2"/>
+    <text x="160" y="89" text-anchor="middle" font-size="10" fill="#666" font-weight="bold">Range:</text>
+    <text x="160" y="105" text-anchor="middle" font-size="10" fill="#444">0 ≤ root_index &lt; N (Header.rootCount)</text>
+  </g>
+
+  <!-- Target 2: String Offsets -->
+  <g transform="translate(560, 380)">
+    <rect width="320" height="115" rx="6" fill="url(#gStr)" opacity="0.18" stroke="#3da558" stroke-width="1.5"/>
+    <text x="160" y="22" text-anchor="middle" font-size="12" font-weight="bold" fill="#3da558" font-family="-apple-system, system-ui, sans-serif">String Offsets</text>
+    <text x="160" y="42" text-anchor="middle" font-size="11" fill="#3da558">→ Index of the error message string</text>
+    <text x="160" y="60" text-anchor="middle" font-size="10" fill="#666" font-style="italic">(stringOffsets[message_index])</text>
+    <line x1="20" y1="72" x2="300" y2="72" stroke="#888" stroke-dasharray="2,2"/>
+    <text x="160" y="89" text-anchor="middle" font-size="10" fill="#666" font-weight="bold">Range:</text>
+    <text x="160" y="105" text-anchor="middle" font-size="10" fill="#444">0 ≤ message_index ≤ 65,535 (u16 limit)</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Section 4: Sort order & failure rule                         -->
+  <!-- ============================================================ -->
+  <g transform="translate(40, 510)">
+    <rect width="840" height="80" rx="6" fill="#f8f8f8" stroke="#ccc" stroke-width="1"/>
+    <text x="15" y="22" font-size="12" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">Sorting and rules</text>
+    <text x="15" y="44" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">Sorted by root_index ascending</tspan>: entries are sorted by root_index — enables <tspan font-weight="bold">binary search</tspan> for "all diagnostics for root i"</text>
+    <text x="15" y="62" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold" fill="#c43e3e">Required on failure</tspan>: parse failure (root.node_index = 0) requires <tspan font-weight="bold">at least 1 diagnostic</tspan> with the matching root_index</text>
+  </g>
+</svg>

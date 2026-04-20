@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" font-family="monospace" font-size="13">
+  <text x="450" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#222">Node Data Field Encoding (32 bits)</text>
+
+  <!-- Bit layout header -->
+  <g transform="translate(50, 55)">
+    <text x="0" y="0" fill="#888" font-size="10">bit:</text>
+    <text x="60" y="0" fill="#888" font-size="10">31  30</text>
+    <text x="175" y="0" fill="#888" font-size="10">29  28  27  26  25  24</text>
+    <text x="480" y="0" fill="#888" font-size="10">23 ......................... 0</text>
+  </g>
+
+  <!-- Children type (0b00) -->
+  <g transform="translate(50, 80)">
+    <text x="0" y="15" font-weight="bold" fill="#8e6cbf" font-size="14">Type 0b00: Children</text>
+    <rect x="50" y="25" width="80" height="40" rx="4" fill="#8e6cbf" opacity="0.3" stroke="#8e6cbf"/>
+    <text x="90" y="50" text-anchor="middle" fill="#7b59ac" font-size="11">0b00</text>
+    <rect x="135" y="25" width="230" height="40" rx="4" fill="#e8a838" opacity="0.3" stroke="#e8a838"/>
+    <text x="250" y="50" text-anchor="middle" fill="#d49520" font-size="11">node-specific 6 bits</text>
+    <rect x="370" y="25" width="400" height="40" rx="4" fill="#50b86c" opacity="0.3" stroke="#50b86c"/>
+    <text x="570" y="45" text-anchor="middle" fill="#3da558" font-size="10">child bitmask (visitor order)</text>
+    <text x="570" y="58" text-anchor="middle" fill="#3da558" font-size="9">bit=1: child present, bit=0: child absent</text>
+    <text x="0" y="88" fill="#555" font-size="10">e.g. IfStatement: bit0=expression, bit1=thenStatement, bit2=elseStatement</text>
+    <text x="0" y="103" fill="#555" font-size="10">e.g. MethodDecl: bit0=modifiers, bit1=asterisk, bit2=name, bit3=postfix, bit4=typeParams...</text>
+  </g>
+
+  <!-- String type (0b01) -->
+  <g transform="translate(50, 200)">
+    <text x="0" y="15" font-weight="bold" fill="#4a90d9" font-size="14">Type 0b01: String</text>
+    <rect x="50" y="25" width="80" height="40" rx="4" fill="#4a90d9" opacity="0.3" stroke="#4a90d9"/>
+    <text x="90" y="50" text-anchor="middle" fill="#357abd" font-size="11">0b01</text>
+    <rect x="135" y="25" width="230" height="40" rx="4" fill="#e8a838" opacity="0.3" stroke="#e8a838"/>
+    <text x="250" y="50" text-anchor="middle" fill="#d49520" font-size="11">node-specific 6 bits</text>
+    <rect x="370" y="25" width="400" height="40" rx="4" fill="#4a90d9" opacity="0.2" stroke="#4a90d9"/>
+    <text x="570" y="50" text-anchor="middle" fill="#357abd" font-size="10">string table index (24-bit uint)</text>
+    <text x="0" y="88" fill="#555" font-size="10">e.g. Identifier: string index -> "myFunction"</text>
+    <text x="0" y="103" fill="#555" font-size="10">e.g. StringLiteral: string index -> "hello world"</text>
+  </g>
+
+  <!-- Extended type (0b10) -->
+  <g transform="translate(50, 320)">
+    <text x="0" y="15" font-weight="bold" fill="#d95050" font-size="14">Type 0b10: Extended</text>
+    <rect x="50" y="25" width="80" height="40" rx="4" fill="#d95050" opacity="0.3" stroke="#d95050"/>
+    <text x="90" y="50" text-anchor="middle" fill="#c43e3e" font-size="11">0b10</text>
+    <rect x="135" y="25" width="230" height="40" rx="4" fill="#e8a838" opacity="0.3" stroke="#e8a838"/>
+    <text x="250" y="50" text-anchor="middle" fill="#d49520" font-size="11">node-specific 6 bits</text>
+    <rect x="370" y="25" width="400" height="40" rx="4" fill="#d95050" opacity="0.2" stroke="#d95050"/>
+    <text x="570" y="50" text-anchor="middle" fill="#c43e3e" font-size="10">byte offset into Extended Data section</text>
+    <text x="0" y="88" fill="#555" font-size="10">e.g. SourceFile: 48 bytes (text, fileName, path, imports, ...)</text>
+    <text x="0" y="103" fill="#555" font-size="10">e.g. TemplateLiteral: rawText string index</text>
+    <text x="0" y="118" fill="#555" font-size="10">e.g. NumericLiteral, BigIntLiteral, RegularExpressionLiteral</text>
+  </g>
+
+  <!-- Node-specific 6-bit examples -->
+  <rect x="40" y="455" width="820" height="130" rx="6" fill="#f5f5f5" stroke="#ddd"/>
+  <text x="55" y="478" font-weight="bold" fill="#333" font-size="14">Node-Specific 6-bit Data Examples (bits 24-29)</text>
+  <g transform="translate(55, 490)">
+    <text x="0" y="15" fill="#555" font-size="11">ImportSpecifier:        bit0 = isTypeOnly</text>
+    <text x="0" y="32" fill="#555" font-size="11">ImportClause:           bit0 = isTypeOnly, bit1 = isDefer</text>
+    <text x="0" y="49" fill="#555" font-size="11">VariableDeclarationList: bit0 = isLet, bit1 = isConst</text>
+    <text x="0" y="66" fill="#555" font-size="11">PrefixUnaryExpression:  bits[0:5] = operator SyntaxKind (e.g. PlusPlusToken=45)</text>
+    <text x="0" y="83" fill="#555" font-size="11">Block/ArrayLiteral:    bit0 = multiline</text>
+  </g>
+
+  <!-- NodeList special -->
+  <g transform="translate(450, 490)">
+    <rect x="-5" y="-5" width="370" height="85" rx="4" fill="#fff3e0" stroke="#e8a838" stroke-dasharray="4,2"/>
+    <text x="0" y="15" fill="#d49520" font-weight="bold" font-size="11">NodeList (special kind = 0xFFFFFFFF)</text>
+    <text x="0" y="35" fill="#555" font-size="10">Kind = 0xFFFFFFFF (sentinel)</text>
+    <text x="0" y="52" fill="#555" font-size="10">Data field = child count (uint32)</text>
+    <text x="0" y="69" fill="#555" font-size="10">Decoder adjusts parent to NodeList's parent</text>
+  </g>
+</svg>

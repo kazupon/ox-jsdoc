@@ -1,0 +1,166 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 980" font-family="monospace" font-size="13">
+  <defs>
+    <linearGradient id="hdr" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4a90d9"/>
+      <stop offset="100%" stop-color="#357abd"/>
+    </linearGradient>
+    <linearGradient id="rid" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38b6c8"/>
+      <stop offset="100%" stop-color="#2a8d9c"/>
+    </linearGradient>
+    <linearGradient id="str" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#50b86c"/>
+      <stop offset="100%" stop-color="#3da558"/>
+    </linearGradient>
+    <linearGradient id="ext" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#e8a838"/>
+      <stop offset="100%" stop-color="#d49520"/>
+    </linearGradient>
+    <linearGradient id="diag" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#d95050"/>
+      <stop offset="100%" stop-color="#c43e3e"/>
+    </linearGradient>
+    <linearGradient id="nd" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8e6cbf"/>
+      <stop offset="100%" stop-color="#7b59ac"/>
+    </linearGradient>
+  </defs>
+
+  <text x="460" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#222">Binary AST Format</text>
+  <text x="460" y="50" text-anchor="middle" font-size="12" fill="#666">ox-jsdoc — Protocol Version 1.0 (byte 0 = 0x10) — 7 sections, all multi-byte integers in little-endian</text>
+
+  <!-- ============================================================ -->
+  <!-- === Section 1: Header (40 bytes)  y=68  h=200 === -->
+  <!-- ============================================================ -->
+  <rect x="40" y="68" width="840" height="200" rx="6" fill="url(#hdr)" opacity="0.15" stroke="#4a90d9" stroke-width="1.5"/>
+  <text x="55" y="90" font-weight="bold" fill="#4a90d9" font-size="14">1. Header (40 bytes, fixed)</text>
+
+  <!-- Row A: byte 0-3 (version + flags + reserved) -->
+  <g transform="translate(55, 100)">
+    <rect width="80" height="36" rx="3" fill="#4a90d9" opacity="0.85"/><text x="40" y="15" text-anchor="middle" fill="#fff" font-size="10">version (u8)</text><text x="40" y="28" text-anchor="middle" fill="#ddd" font-size="9">[0]: Major.Minor</text>
+    <rect x="85" width="80" height="36" rx="3" fill="#4a90d9" opacity="0.7"/><text x="125" y="15" text-anchor="middle" fill="#fff" font-size="10">flags (u8)</text><text x="125" y="28" text-anchor="middle" fill="#ddd" font-size="9">[1]: bit0=compat</text>
+    <rect x="170" width="80" height="36" rx="3" fill="#4a90d9" opacity="0.5"/><text x="210" y="15" text-anchor="middle" fill="#fff" font-size="10">reserved</text><text x="210" y="28" text-anchor="middle" fill="#ddd" font-size="9">[2:4] u16=0</text>
+    <text x="265" y="22" fill="#4a90d9" font-size="10" font-style="italic">— byte 0-3 (head)</text>
+  </g>
+
+  <!-- Row B: byte 4-27 (6 section offsets, all u32) -->
+  <g transform="translate(55, 145)">
+    <rect width="125" height="36" rx="3" fill="#4a90d9" opacity="0.8"/><text x="62" y="15" text-anchor="middle" fill="#fff" font-size="10">RootIdx offset</text><text x="62" y="28" text-anchor="middle" fill="#ddd" font-size="9">u32 [4:8]</text>
+    <rect x="130" width="125" height="36" rx="3" fill="#4a90d9" opacity="0.7"/><text x="192" y="15" text-anchor="middle" fill="#fff" font-size="10">StrOffsets offset</text><text x="192" y="28" text-anchor="middle" fill="#ddd" font-size="9">u32 [8:12]</text>
+    <rect x="260" width="125" height="36" rx="3" fill="#4a90d9" opacity="0.8"/><text x="322" y="15" text-anchor="middle" fill="#fff" font-size="10">StrData offset</text><text x="322" y="28" text-anchor="middle" fill="#ddd" font-size="9">u32 [12:16]</text>
+    <rect x="390" width="125" height="36" rx="3" fill="#4a90d9" opacity="0.7"/><text x="452" y="15" text-anchor="middle" fill="#fff" font-size="10">ExtData offset</text><text x="452" y="28" text-anchor="middle" fill="#ddd" font-size="9">u32 [16:20]</text>
+    <rect x="520" width="125" height="36" rx="3" fill="#4a90d9" opacity="0.8"/><text x="582" y="15" text-anchor="middle" fill="#fff" font-size="10">Diagnostics offset</text><text x="582" y="28" text-anchor="middle" fill="#ddd" font-size="9">u32 [20:24]</text>
+    <rect x="650" width="125" height="36" rx="3" fill="#4a90d9" opacity="0.7"/><text x="712" y="15" text-anchor="middle" fill="#fff" font-size="10">Nodes offset</text><text x="712" y="28" text-anchor="middle" fill="#ddd" font-size="9">u32 [24:28]</text>
+  </g>
+
+  <!-- Row C: byte 28-39 (3 metadata) -->
+  <g transform="translate(55, 190)">
+    <rect width="255" height="36" rx="3" fill="#4a90d9" opacity="0.8"/><text x="127" y="15" text-anchor="middle" fill="#fff" font-size="10">node count (total nodes)</text><text x="127" y="28" text-anchor="middle" fill="#ddd" font-size="9">u32 [28:32]</text>
+    <rect x="260" width="255" height="36" rx="3" fill="#4a90d9" opacity="0.7"/><text x="387" y="15" text-anchor="middle" fill="#fff" font-size="10">source text length (UTF-8 bytes)</text><text x="387" y="28" text-anchor="middle" fill="#ddd" font-size="9">u32 [32:36]</text>
+    <rect x="520" width="255" height="36" rx="3" fill="#4a90d9" opacity="0.8"/><text x="647" y="15" text-anchor="middle" fill="#fff" font-size="10">root count N (=1 for single comment)</text><text x="647" y="28" text-anchor="middle" fill="#ddd" font-size="9">u32 [36:40]</text>
+  </g>
+
+  <text x="55" y="251" fill="#4a90d9" font-size="11" font-style="italic">Version: upper 4-bit Major + lower 4-bit Minor (e.g. 0x10 = v1.0). Major mismatch → reject; Minor higher → warn.</text>
+
+  <!-- ============================================================ -->
+  <!-- === Section 2: Root Index Array  y=283  h=85 === -->
+  <!-- ============================================================ -->
+  <rect x="40" y="283" width="840" height="85" rx="6" fill="url(#rid)" opacity="0.15" stroke="#38b6c8" stroke-width="1.5"/>
+  <text x="55" y="305" font-weight="bold" fill="#2a8d9c" font-size="14">2. Root Index Array (12 bytes/root × N roots)</text>
+  <g transform="translate(55, 315)">
+    <rect width="245" height="36" rx="3" fill="#38b6c8" opacity="0.75"/><text x="122" y="15" text-anchor="middle" fill="#fff" font-size="10">root[0]: node_idx | src_ofs | base_ofs</text><text x="122" y="28" text-anchor="middle" fill="#ddd" font-size="9">3 × u32 = 12 bytes</text>
+    <rect x="250" width="245" height="36" rx="3" fill="#38b6c8" opacity="0.85"/><text x="372" y="15" text-anchor="middle" fill="#fff" font-size="10">root[1]: node_idx | src_ofs | base_ofs</text><text x="372" y="28" text-anchor="middle" fill="#ddd" font-size="9">3 × u32 = 12 bytes</text>
+    <text x="510" y="22" fill="#2a8d9c" font-size="14"> ...</text>
+    <rect x="540" width="245" height="36" rx="3" fill="#38b6c8" opacity="0.75"/><text x="662" y="15" text-anchor="middle" fill="#fff" font-size="10">root[N-1]: node_idx | src_ofs | base_ofs</text><text x="662" y="28" text-anchor="middle" fill="#ddd" font-size="9">3 × u32 = 12 bytes</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- === Section 3: String Offsets  y=383  h=70 === -->
+  <!-- ============================================================ -->
+  <rect x="40" y="383" width="840" height="70" rx="6" fill="url(#str)" opacity="0.15" stroke="#50b86c" stroke-width="1.5"/>
+  <text x="55" y="405" font-weight="bold" fill="#3da558" font-size="14">3. String Offsets (8 bytes/string)</text>
+  <g transform="translate(55, 415)">
+    <rect width="120" height="30" rx="3" fill="#50b86c" opacity="0.7"/><text x="60" y="20" text-anchor="middle" fill="#fff" font-size="10">[start0, end0]</text>
+    <rect x="125" width="120" height="30" rx="3" fill="#50b86c" opacity="0.85"/><text x="185" y="20" text-anchor="middle" fill="#fff" font-size="10">[start1, end1]</text>
+    <rect x="250" width="120" height="30" rx="3" fill="#50b86c" opacity="0.7"/><text x="310" y="20" text-anchor="middle" fill="#fff" font-size="10">[start2, end2]</text>
+    <text x="385" y="20" fill="#3da558" font-size="14"> ...</text>
+    <rect x="420" width="120" height="30" rx="3" fill="#50b86c" opacity="0.85"/><text x="480" y="20" text-anchor="middle" fill="#fff" font-size="10">[startK, endK]</text>
+    <text x="555" y="20" fill="#3da558" font-size="11" font-style="italic">K ≤ 65,535</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- === Section 4: String Data  y=468  h=70 === -->
+  <!-- ============================================================ -->
+  <rect x="40" y="468" width="840" height="70" rx="6" fill="url(#str)" opacity="0.1" stroke="#50b86c" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="55" y="490" font-weight="bold" fill="#3da558" font-size="14">4. String Data (variable, UTF-8)</text>
+  <g transform="translate(55, 500)">
+    <rect width="180" height="30" rx="3" fill="#50b86c" opacity="0.5"/><text x="90" y="20" text-anchor="middle" fill="#fff" font-size="10">sourceText[0]</text>
+    <rect x="185" width="180" height="30" rx="3" fill="#50b86c" opacity="0.5"/><text x="275" y="20" text-anchor="middle" fill="#fff" font-size="10">sourceText[1] ...</text>
+    <rect x="370" width="180" height="30" rx="3" fill="#50b86c" opacity="0.5"/><text x="460" y="20" text-anchor="middle" fill="#fff" font-size="10">sourceText[N-1]</text>
+    <rect x="555" width="225" height="30" rx="3" fill="#50b86c" opacity="0.75"/><text x="667" y="20" text-anchor="middle" fill="#fff" font-size="10">other unique strings (appended)</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- === Section 5: Extended Data  y=553  h=95 === -->
+  <!-- ============================================================ -->
+  <rect x="40" y="553" width="840" height="95" rx="6" fill="url(#ext)" opacity="0.15" stroke="#e8a838" stroke-width="1.5"/>
+  <text x="55" y="575" font-weight="bold" fill="#d49520" font-size="14">5. Extended Data (variable, u16 string indices)</text>
+  <text x="55" y="592" fill="#a87515" font-size="11" font-style="italic">Per-node detail records pointed to by Node Data offsets. String indices are u16 (max 65,535 strings/buffer).</text>
+  <g transform="translate(55, 600)">
+    <rect width="170" height="36" rx="3" fill="#e8a838" opacity="0.85"/><text x="85" y="15" text-anchor="middle" fill="#fff" font-size="9">JsdocBlock (18 / 40 bytes)</text><text x="85" y="28" text-anchor="middle" fill="#ddd" font-size="8">bitmask + desc + delim×7 + compat</text>
+    <rect x="175" width="160" height="36" rx="3" fill="#e8a838" opacity="0.7"/><text x="255" y="15" text-anchor="middle" fill="#fff" font-size="9">JsdocTag (8 / 22 bytes)</text><text x="255" y="28" text-anchor="middle" fill="#ddd" font-size="8">bitmask + 3 string idx</text>
+    <rect x="340" width="155" height="36" rx="3" fill="#e8a838" opacity="0.85"/><text x="417" y="15" text-anchor="middle" fill="#fff" font-size="9">JsdocInlineTag (6 bytes)</text><text x="417" y="28" text-anchor="middle" fill="#ddd" font-size="8">3 × u16 string idx</text>
+    <rect x="500" width="135" height="36" rx="3" fill="#e8a838" opacity="0.7"/><text x="567" y="15" text-anchor="middle" fill="#fff" font-size="9">TypeNode mixed (2-2N B)</text><text x="567" y="28" text-anchor="middle" fill="#ddd" font-size="8">6 variants pattern</text>
+    <rect x="640" width="140" height="36" rx="3" fill="#e8a838" opacity="0.85"/><text x="710" y="15" text-anchor="middle" fill="#fff" font-size="9">JsdocParamName (4 B)</text><text x="710" y="28" text-anchor="middle" fill="#ddd" font-size="8">path + default_value idx</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- === Section 6: Diagnostics  y=663  h=80 === -->
+  <!-- ============================================================ -->
+  <rect x="40" y="663" width="840" height="80" rx="6" fill="url(#diag)" opacity="0.15" stroke="#d95050" stroke-width="1.5"/>
+  <text x="55" y="685" font-weight="bold" fill="#c43e3e" font-size="14">6. Diagnostics (4 + 8M bytes, sorted by root_index)</text>
+  <g transform="translate(55, 695)">
+    <rect width="100" height="36" rx="3" fill="#d95050" opacity="0.85"/><text x="50" y="15" text-anchor="middle" fill="#fff" font-size="10">M (count)</text><text x="50" y="28" text-anchor="middle" fill="#ddd" font-size="9">u32 [0:4]</text>
+    <rect x="105" width="200" height="36" rx="3" fill="#d95050" opacity="0.7"/><text x="205" y="15" text-anchor="middle" fill="#fff" font-size="10">diag[0]: root_idx | msg_idx</text><text x="205" y="28" text-anchor="middle" fill="#ddd" font-size="9">2 × u32 = 8 bytes</text>
+    <rect x="310" width="200" height="36" rx="3" fill="#d95050" opacity="0.85"/><text x="410" y="15" text-anchor="middle" fill="#fff" font-size="10">diag[1]: root_idx | msg_idx</text><text x="410" y="28" text-anchor="middle" fill="#ddd" font-size="9">2 × u32 = 8 bytes</text>
+    <text x="525" y="22" fill="#c43e3e" font-size="14"> ...</text>
+    <rect x="555" width="220" height="36" rx="3" fill="#d95050" opacity="0.7"/><text x="665" y="15" text-anchor="middle" fill="#fff" font-size="10">diag[M-1]: root_idx | msg_idx</text><text x="665" y="28" text-anchor="middle" fill="#ddd" font-size="9">2 × u32 = 8 bytes</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- === Section 7: Nodes  y=758  h=215 === -->
+  <!-- ============================================================ -->
+  <rect x="40" y="758" width="840" height="215" rx="6" fill="url(#nd)" opacity="0.15" stroke="#8e6cbf" stroke-width="1.5"/>
+  <text x="55" y="780" font-weight="bold" fill="#7b59ac" font-size="14">7. Nodes (24 bytes/node, flat array, source order)</text>
+
+  <!-- Nil node sentinel -->
+  <g transform="translate(55, 790)">
+    <rect width="810" height="28" rx="3" fill="#8e6cbf" opacity="0.3"/>
+    <text x="405" y="18" text-anchor="middle" fill="#7b59ac" font-size="10">node[0]: all zeros (nil sentinel) — node_index = 0 means "parse failed" or "no child"</text>
+  </g>
+
+  <!-- Node record detail (24 bytes / node) -->
+  <g transform="translate(55, 826)">
+    <rect width="55" height="36" rx="3" fill="#8e6cbf" opacity="0.85"/><text x="27" y="14" text-anchor="middle" fill="#fff" font-size="9">Kind</text><text x="27" y="28" text-anchor="middle" fill="#ddd" font-size="8">u8 [0]</text>
+    <rect x="58" width="80" height="36" rx="3" fill="#8e6cbf" opacity="0.7"/><text x="98" y="14" text-anchor="middle" fill="#fff" font-size="9">CommonData</text><text x="98" y="28" text-anchor="middle" fill="#ddd" font-size="8">u8 [1] (6 bit)</text>
+    <rect x="141" width="60" height="36" rx="3" fill="#8e6cbf" opacity="0.5"/><text x="171" y="14" text-anchor="middle" fill="#fff" font-size="9">padding</text><text x="171" y="28" text-anchor="middle" fill="#ddd" font-size="8">u16 [2:4]</text>
+    <rect x="204" width="120" height="36" rx="3" fill="#8e6cbf" opacity="0.85"/><text x="264" y="14" text-anchor="middle" fill="#fff" font-size="9">Pos (UTF-16)</text><text x="264" y="28" text-anchor="middle" fill="#ddd" font-size="8">u32 [4:8]</text>
+    <rect x="327" width="120" height="36" rx="3" fill="#8e6cbf" opacity="0.7"/><text x="387" y="14" text-anchor="middle" fill="#fff" font-size="9">End (UTF-16)</text><text x="387" y="28" text-anchor="middle" fill="#ddd" font-size="8">u32 [8:12]</text>
+    <rect x="450" width="135" height="36" rx="3" fill="#8e6cbf" opacity="0.85"/><text x="517" y="14" text-anchor="middle" fill="#fff" font-size="9">Node Data</text><text x="517" y="28" text-anchor="middle" fill="#ddd" font-size="8">u32 [12:16]</text>
+    <rect x="588" width="105" height="36" rx="3" fill="#8e6cbf" opacity="0.7"/><text x="640" y="14" text-anchor="middle" fill="#fff" font-size="9">Parent idx</text><text x="640" y="28" text-anchor="middle" fill="#ddd" font-size="8">u32 [16:20]</text>
+    <rect x="696" width="115" height="36" rx="3" fill="#8e6cbf" opacity="0.85"/><text x="753" y="14" text-anchor="middle" fill="#fff" font-size="9">Next Sibling idx</text><text x="753" y="28" text-anchor="middle" fill="#ddd" font-size="8">u32 [20:24]</text>
+  </g>
+
+  <!-- More nodes -->
+  <g transform="translate(55, 870)">
+    <rect width="810" height="28" rx="3" fill="#8e6cbf" opacity="0.3"/>
+    <text x="405" y="18" text-anchor="middle" fill="#7b59ac" font-size="10">node[1] (root) , node[2], node[3], ... node[N]  (same 24-byte layout, source order, first child = node[i+1])</text>
+  </g>
+
+  <!-- Node Data field encoding -->
+  <g transform="translate(55, 906)">
+    <text x="0" y="14" fill="#7b59ac" font-size="11" font-weight="bold">Node Data field encoding (32 bits):</text>
+    <text x="0" y="32" fill="#555" font-size="10">[31:30] type tag — 0b00=Children (30-bit child bitmask) | 0b01=String (30-bit string idx) | 0b10=Extended (30-bit byte offset) | 0b11=reserved</text>
+    <text x="0" y="48" fill="#555" font-size="10">[29:0]  payload (30 bit, type-dependent) — Children bitmask of JsdocBlock/JsdocTag is in Extended Data byte 0 (NOT here, since they are Extended type)</text>
+  </g>
+</svg>

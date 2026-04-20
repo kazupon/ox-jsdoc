@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" font-family="monospace" font-size="13">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="10" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,3 L0,6 Z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <text x="450" y="28" text-anchor="middle" font-size="18" font-weight="bold" fill="#222">Encode / Decode Flow &amp; IPC Usage</text>
+
+  <!-- Encode flow -->
+  <text x="55" y="65" font-weight="bold" fill="#4a90d9" font-size="14">Encoding (Go -> Binary)</text>
+
+  <rect x="40" y="80" width="120" height="50" rx="6" fill="#8e6cbf" opacity="0.2" stroke="#8e6cbf"/>
+  <text x="100" y="100" text-anchor="middle" fill="#7b59ac" font-size="11">AST</text>
+  <text x="100" y="115" text-anchor="middle" fill="#7b59ac" font-size="9">*ast.SourceFile</text>
+
+  <line x1="160" y1="105" x2="195" y2="105" stroke="#555" marker-end="url(#ar)"/>
+
+  <rect x="200" y="75" width="140" height="60" rx="6" fill="#4a90d9" opacity="0.15" stroke="#4a90d9"/>
+  <text x="270" y="97" text-anchor="middle" fill="#357abd" font-size="11">ForEachChild</text>
+  <text x="270" y="112" text-anchor="middle" fill="#357abd" font-size="9">source order walk</text>
+  <text x="270" y="125" text-anchor="middle" fill="#357abd" font-size="9">+ StringTable build</text>
+
+  <line x1="340" y1="105" x2="375" y2="105" stroke="#555" marker-end="url(#ar)"/>
+
+  <rect x="380" y="75" width="140" height="60" rx="6" fill="#50b86c" opacity="0.15" stroke="#50b86c"/>
+  <text x="450" y="97" text-anchor="middle" fill="#3da558" font-size="11">Encode Node</text>
+  <text x="450" y="112" text-anchor="middle" fill="#3da558" font-size="9">7 x uint32 = 28 bytes</text>
+  <text x="450" y="125" text-anchor="middle" fill="#3da558" font-size="9">+ extData, structData</text>
+
+  <line x1="520" y1="105" x2="555" y2="105" stroke="#555" marker-end="url(#ar)"/>
+
+  <rect x="560" y="75" width="140" height="60" rx="6" fill="#e8a838" opacity="0.15" stroke="#e8a838"/>
+  <text x="630" y="97" text-anchor="middle" fill="#d49520" font-size="11">Concat Sections</text>
+  <text x="630" y="112" text-anchor="middle" fill="#d49520" font-size="9">header + strings +</text>
+  <text x="630" y="125" text-anchor="middle" fill="#d49520" font-size="9">ext + struct + nodes</text>
+
+  <line x1="700" y1="105" x2="735" y2="105" stroke="#555" marker-end="url(#ar)"/>
+
+  <rect x="740" y="80" width="110" height="50" rx="6" fill="#d95050" opacity="0.15" stroke="#d95050"/>
+  <text x="795" y="100" text-anchor="middle" fill="#c43e3e" font-size="11">[]byte</text>
+  <text x="795" y="115" text-anchor="middle" fill="#c43e3e" font-size="9">binary output</text>
+
+  <!-- Decode flow -->
+  <text x="55" y="175" font-weight="bold" fill="#50b86c" font-size="14">Decoding (Binary -> AST)</text>
+
+  <rect x="40" y="190" width="110" height="50" rx="6" fill="#d95050" opacity="0.15" stroke="#d95050"/>
+  <text x="95" y="210" text-anchor="middle" fill="#c43e3e" font-size="11">[]byte</text>
+  <text x="95" y="225" text-anchor="middle" fill="#c43e3e" font-size="9">binary input</text>
+
+  <line x1="150" y1="215" x2="185" y2="215" stroke="#555" marker-end="url(#ar)"/>
+
+  <rect x="190" y="185" width="130" height="60" rx="6" fill="#e8a838" opacity="0.15" stroke="#e8a838"/>
+  <text x="255" y="207" text-anchor="middle" fill="#d49520" font-size="11">Parse Header</text>
+  <text x="255" y="222" text-anchor="middle" fill="#d49520" font-size="9">version check</text>
+  <text x="255" y="237" text-anchor="middle" fill="#d49520" font-size="9">section offsets</text>
+
+  <line x1="320" y1="215" x2="355" y2="215" stroke="#555" marker-end="url(#ar)"/>
+
+  <rect x="360" y="185" width="140" height="60" rx="6" fill="#50b86c" opacity="0.15" stroke="#50b86c"/>
+  <text x="430" y="202" text-anchor="middle" fill="#3da558" font-size="11">Build Strings</text>
+  <text x="430" y="217" text-anchor="middle" fill="#3da558" font-size="9">zero-copy substr</text>
+  <text x="430" y="232" text-anchor="middle" fill="#3da558" font-size="9">single Go string</text>
+
+  <line x1="500" y1="215" x2="535" y2="215" stroke="#555" marker-end="url(#ar)"/>
+
+  <rect x="540" y="185" width="150" height="60" rx="6" fill="#4a90d9" opacity="0.15" stroke="#4a90d9"/>
+  <text x="615" y="202" text-anchor="middle" fill="#357abd" font-size="11">Reconstruct Nodes</text>
+  <text x="615" y="217" text-anchor="middle" fill="#357abd" font-size="9">bottom-up pass</text>
+  <text x="615" y="232" text-anchor="middle" fill="#357abd" font-size="9">parent/sibling -> tree</text>
+
+  <line x1="690" y1="215" x2="725" y2="215" stroke="#555" marker-end="url(#ar)"/>
+
+  <rect x="730" y="190" width="120" height="50" rx="6" fill="#8e6cbf" opacity="0.2" stroke="#8e6cbf"/>
+  <text x="790" y="210" text-anchor="middle" fill="#7b59ac" font-size="11">AST</text>
+  <text x="790" y="225" text-anchor="middle" fill="#7b59ac" font-size="9">*ast.SourceFile</text>
+
+  <!-- IPC Usage -->
+  <text x="55" y="290" font-weight="bold" fill="#333" font-size="14">IPC Usage (Language Server API)</text>
+
+  <rect x="40" y="305" width="160" height="90" rx="8" fill="#8e6cbf" opacity="0.1" stroke="#8e6cbf" stroke-width="2"/>
+  <text x="120" y="330" text-anchor="middle" fill="#7b59ac" font-weight="bold" font-size="12">tsgo (Go)</text>
+  <text x="120" y="348" text-anchor="middle" fill="#7b59ac" font-size="10">Language Server</text>
+  <text x="120" y="365" text-anchor="middle" fill="#7b59ac" font-size="10">Parser + Checker</text>
+  <text x="120" y="382" text-anchor="middle" fill="#7b59ac" font-size="9">EncodeSourceFile()</text>
+
+  <line x1="200" y1="350" x2="320" y2="350" stroke="#555" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="260" y="340" text-anchor="middle" fill="#555" font-size="10">binary AST</text>
+
+  <rect x="325" y="305" width="230" height="90" rx="8" fill="#4a90d9" opacity="0.1" stroke="#4a90d9" stroke-width="2"/>
+  <text x="440" y="328" text-anchor="middle" fill="#357abd" font-weight="bold" font-size="12">RPC Transport</text>
+  <text x="440" y="348" text-anchor="middle" fill="#357abd" font-size="10">msgpack: raw binary</text>
+  <text x="440" y="365" text-anchor="middle" fill="#357abd" font-size="10">JSON: base64 encoded</text>
+  <text x="440" y="382" text-anchor="middle" fill="#357abd" font-size="9">GetSourceFile / GetTypeNode</text>
+
+  <line x1="555" y1="350" x2="620" y2="350" stroke="#555" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="590" y="340" text-anchor="middle" fill="#555" font-size="10">transfer</text>
+
+  <rect x="625" y="305" width="230" height="90" rx="8" fill="#50b86c" opacity="0.1" stroke="#50b86c" stroke-width="2"/>
+  <text x="740" y="328" text-anchor="middle" fill="#3da558" font-weight="bold" font-size="12">Client (TypeScript)</text>
+  <text x="740" y="348" text-anchor="middle" fill="#3da558" font-size="10">IDE Extension / API</text>
+  <text x="740" y="365" text-anchor="middle" fill="#3da558" font-size="10">DecodeSourceFile()</text>
+  <text x="740" y="382" text-anchor="middle" fill="#3da558" font-size="9">AST for syntax highlighting etc.</text>
+
+  <!-- Key points -->
+  <rect x="40" y="415" width="820" height="55" rx="6" fill="#f8f8f8" stroke="#ddd"/>
+  <text x="55" y="435" fill="#333" font-weight="bold" font-size="11">Design: </text>
+  <text x="115" y="435" fill="#555" font-size="11">28 bytes/node flat array (source order) + zero-copy string table + msgpack structured data</text>
+  <text x="55" y="455" fill="#333" font-weight="bold" font-size="11">Ref: </text>
+  <text x="85" y="455" fill="#555" font-size="11">marvinh.dev/blog/speeding-up-javascript-ecosystem-part-11/ (flat array AST inspiration)</text>
+</svg>

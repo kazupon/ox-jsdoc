@@ -1,0 +1,416 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 2440" font-family="monospace" font-size="12">
+  <defs>
+    <linearGradient id="hdr" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#4a90d9"/><stop offset="100%" stop-color="#357abd"/></linearGradient>
+    <linearGradient id="str" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#50b86c"/><stop offset="100%" stop-color="#3da558"/></linearGradient>
+    <linearGradient id="ext" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#e8a838"/><stop offset="100%" stop-color="#d49520"/></linearGradient>
+    <linearGradient id="sd"  x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#d95050"/><stop offset="100%" stop-color="#c43e3e"/></linearGradient>
+    <linearGradient id="nd"  x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#8e6cbf"/><stop offset="100%" stop-color="#7b59ac"/></linearGradient>
+  </defs>
+
+  <!-- Title -->
+  <text x="550" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#222">Binary AST Wire Format - Concrete Example</text>
+
+  <!-- Source code  y=50 h=60 -->
+  <rect x="30" y="50" width="1040" height="60" rx="4" fill="#f8f8f8" stroke="#ccc"/>
+  <text x="550" y="72" text-anchor="middle" fill="#999" font-size="9">pos: 0          7  9  12 13       18  20  21       27 28 29 30          36 38 39       42 44 45 46 48 49</text>
+  <text x="550" y="92" text-anchor="middle" fill="#333" font-size="13"><tspan fill="#8e6cbf">import</tspan> { <tspan fill="#4a90d9">add</tspan> } <tspan fill="#8e6cbf">from</tspan> <tspan fill="#d95050">"./math"</tspan>;   <tspan fill="#8e6cbf">const</tspan> <tspan fill="#4a90d9">a</tspan> = <tspan fill="#4a90d9">add</tspan>(<tspan fill="#e8a838">1</tspan>, <tspan fill="#e8a838">2</tspan>);</text>
+  <text x="550" y="105" text-anchor="middle" fill="#aaa" font-size="8">50 characters (with newline between statements)</text>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 1: Header  y=125 h=110 -->
+  <!-- ============================================================ -->
+  <rect x="30" y="125" width="1040" height="110" rx="6" fill="url(#hdr)" opacity="0.12" stroke="#4a90d9" stroke-width="1.5"/>
+  <text x="45" y="146" font-weight="bold" fill="#4a90d9" font-size="14">Section 1: Header (44 bytes)</text>
+  <g transform="translate(45, 156)">
+    <rect width="55" height="34" rx="3" fill="#4a90d9" opacity="0.8"/><text x="27" y="14" text-anchor="middle" fill="#fff" font-size="9">version</text><text x="27" y="28" text-anchor="middle" fill="#ddd" font-size="9">= 5</text>
+    <rect x="60" width="45" height="34" rx="3" fill="#4a90d9" opacity="0.5"/><text x="82" y="20" text-anchor="middle" fill="#fff" font-size="9">rsrvd</text>
+    <rect x="110" width="200" height="34" rx="3" fill="#4a90d9" opacity="0.7"/><text x="210" y="14" text-anchor="middle" fill="#fff" font-size="9">content hash (xxh3)</text><text x="210" y="28" text-anchor="middle" fill="#ddd" font-size="8">16 bytes, LE</text>
+    <rect x="315" width="100" height="34" rx="3" fill="#4a90d9" opacity="0.6"/><text x="365" y="14" text-anchor="middle" fill="#fff" font-size="9">parse options</text><text x="365" y="28" text-anchor="middle" fill="#ddd" font-size="8">= 0x00</text>
+    <rect x="420" width="590" height="34" rx="3" fill="#4a90d9" opacity="0.8"/>
+    <text x="715" y="14" text-anchor="middle" fill="#fff" font-size="9">section offsets: strOff | strData | extData | structData | nodes</text>
+    <text x="715" y="28" text-anchor="middle" fill="#ddd" font-size="8">5 x uint32</text>
+  </g>
+  <text x="45" y="222" fill="#4a90d9" font-size="10">* offsets are illustrative values</text>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 2: String Offsets  y=250 h=100  -->
+  <!-- ============================================================ -->
+  <rect x="30" y="250" width="1040" height="100" rx="6" fill="url(#str)" opacity="0.12" stroke="#50b86c" stroke-width="1.5"/>
+  <text x="45" y="270" font-weight="bold" fill="#3da558" font-size="14">Section 2: String Offsets (8 bytes/string, 5 entries = 40 bytes)</text>
+  <text x="45" y="286" fill="#3da558" font-size="10">Each entry = [start, end] pair of uint32 offsets into String Data</text>
+  <g transform="translate(45, 296)">
+    <rect width="195" height="30" rx="3" fill="#50b86c" opacity="0.6"/><text x="97" y="12" text-anchor="middle" fill="#fff" font-size="8">str[0]: source text</text><text x="97" y="24" text-anchor="middle" fill="#fff" font-size="8">[0, 50]</text>
+    <rect x="200" width="155" height="30" rx="3" fill="#50b86c" opacity="0.7"/><text x="277" y="12" text-anchor="middle" fill="#fff" font-size="8">str[1]: "add"</text><text x="277" y="24" text-anchor="middle" fill="#fff" font-size="8">[9, 12]</text>
+    <rect x="360" width="175" height="30" rx="3" fill="#50b86c" opacity="0.6"/><text x="447" y="12" text-anchor="middle" fill="#fff" font-size="8">str[2]: "./math"</text><text x="447" y="24" text-anchor="middle" fill="#fff" font-size="8">[21, 27]</text>
+    <rect x="540" width="155" height="30" rx="3" fill="#50b86c" opacity="0.7"/><text x="617" y="12" text-anchor="middle" fill="#fff" font-size="8">str[3]: "a"</text><text x="617" y="24" text-anchor="middle" fill="#fff" font-size="8">[36, 37]</text>
+    <rect x="700" width="155" height="30" rx="3" fill="#50b86c" opacity="0.6"/><text x="777" y="12" text-anchor="middle" fill="#fff" font-size="8">str[4]: "add"</text><text x="777" y="24" text-anchor="middle" fill="#fff" font-size="8">[40, 43] (reuse)</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 3: String Data  y=365 h=85 -->
+  <!-- ============================================================ -->
+  <rect x="30" y="365" width="1040" height="85" rx="6" fill="url(#str)" opacity="0.08" stroke="#50b86c" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="45" y="385" font-weight="bold" fill="#3da558" font-size="14">Section 3: String Data (50 bytes = source text only)</text>
+  <g transform="translate(45, 396)">
+    <rect width="1010" height="24" rx="3" fill="#50b86c" opacity="0.4"/>
+    <text x="15" y="16" fill="#fff" font-size="9">i m p o r t   {   a d d   }   f r o m   " . / m a t h " ; \n c o n s t   a   =   a d d ( 1 ,   2 ) ;</text>
+    <text x="990" y="16" text-anchor="end" fill="#fff" font-size="9">50 bytes</text>
+  </g>
+  <text x="45" y="436" fill="#3da558" font-size="9">All identifiers ("add", "a") and string literals ("./math") are substrings of this source text -> zero-copy</text>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 4: Extended Node Data  y=465 h=85 -->
+  <!-- ============================================================ -->
+  <rect x="30" y="465" width="1040" height="85" rx="6" fill="url(#ext)" opacity="0.12" stroke="#e8a838" stroke-width="1.5"/>
+  <text x="45" y="485" font-weight="bold" fill="#d49520" font-size="14">Section 4: Extended Node Data (48 + 8 + 8 + 8 = 72 bytes)</text>
+  <g transform="translate(45, 496)">
+    <rect width="440" height="34" rx="3" fill="#e8a838" opacity="0.6"/><text x="220" y="14" text-anchor="middle" fill="#fff" font-size="9">SourceFile (48 bytes): text, fileName, path, imports offset -> Structured Data</text><text x="220" y="27" text-anchor="middle" fill="#ddd" font-size="8">referencedFiles / typeRefDirs / libRefDirs / moduleAugs / ambientNames = 0xFFFFFFFF</text>
+    <rect x="448" width="180" height="34" rx="3" fill="#e8a838" opacity="0.7"/><text x="538" y="14" text-anchor="middle" fill="#fff" font-size="9">StringLit "./math" (8 bytes)</text><text x="538" y="27" text-anchor="middle" fill="#ddd" font-size="8">textIndex + TokenFlags</text>
+    <rect x="636" width="180" height="34" rx="3" fill="#e8a838" opacity="0.6"/><text x="726" y="14" text-anchor="middle" fill="#fff" font-size="9">NumericLit "1" (8 bytes)</text><text x="726" y="27" text-anchor="middle" fill="#ddd" font-size="8">textIndex + TokenFlags</text>
+    <rect x="824" width="180" height="34" rx="3" fill="#e8a838" opacity="0.7"/><text x="914" y="14" text-anchor="middle" fill="#fff" font-size="9">NumericLit "2" (8 bytes)</text><text x="914" y="27" text-anchor="middle" fill="#ddd" font-size="8">textIndex + TokenFlags</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 5: Structured Data  y=565 h=100 -->
+  <!-- ============================================================ -->
+  <rect x="30" y="565" width="1040" height="100" rx="6" fill="url(#sd)" opacity="0.12" stroke="#d95050" stroke-width="1.5"/>
+  <text x="45" y="585" font-weight="bold" fill="#c43e3e" font-size="14">Section 5: Structured Data (msgpack, ~4 bytes)</text>
+  <text x="45" y="602" fill="#c43e3e" font-size="10">SourceFile Extended Data imports offset points to this section</text>
+  <g transform="translate(45, 614)">
+    <rect width="500" height="34" rx="3" fill="#d95050" opacity="0.25" stroke="#d95050" stroke-width="0.5"/>
+    <text x="250" y="14" text-anchor="middle" fill="#c43e3e" font-size="10">imports: msgpack array [8]</text>
+    <text x="250" y="28" text-anchor="middle" fill="#c43e3e" font-size="8">= node index of Node[8] (StringLiteral "./math"), the moduleSpecifier</text>
+    <rect x="510" width="290" height="34" rx="3" fill="#d95050" opacity="0.12" stroke="#d95050" stroke-width="0.5" stroke-dasharray="3,2"/>
+    <text x="655" y="14" text-anchor="middle" fill="#c43e3e" font-size="10">others: 0xFFFFFFFF (empty)</text>
+    <text x="655" y="28" text-anchor="middle" fill="#999" font-size="8">referencedFiles, typeRefDirs, libRefDirs...</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- SECTION 6: Nodes  y=680 -->
+  <!-- ============================================================ -->
+  <rect x="30" y="680" width="1040" height="1480" rx="6" fill="url(#nd)" opacity="0.10" stroke="#8e6cbf" stroke-width="1.5"/>
+  <text x="45" y="703" font-weight="bold" fill="#7b59ac" font-size="14">Section 6: Nodes (28 bytes/node x 20 nodes = 560 bytes)</text>
+  <text x="45" y="719" fill="#7b59ac" font-size="10">Flat array in source order. Each node = 7 x uint32.</text>
+
+  <!-- Column headers -->
+  <g transform="translate(45, 730)">
+    <rect width="45" height="22" rx="2" fill="#7b59ac" opacity="0.3"/><text x="22" y="15" text-anchor="middle" fill="#7b59ac" font-size="8" font-weight="bold">Idx</text>
+    <rect x="50" width="120" height="22" rx="2" fill="#7b59ac" opacity="0.3"/><text x="110" y="15" text-anchor="middle" fill="#7b59ac" font-size="8" font-weight="bold">Kind</text>
+    <rect x="175" width="45" height="22" rx="2" fill="#7b59ac" opacity="0.3"/><text x="197" y="15" text-anchor="middle" fill="#7b59ac" font-size="8" font-weight="bold">Pos</text>
+    <rect x="225" width="45" height="22" rx="2" fill="#7b59ac" opacity="0.3"/><text x="247" y="15" text-anchor="middle" fill="#7b59ac" font-size="8" font-weight="bold">End</text>
+    <rect x="275" width="45" height="22" rx="2" fill="#7b59ac" opacity="0.3"/><text x="297" y="15" text-anchor="middle" fill="#7b59ac" font-size="8" font-weight="bold">Next</text>
+    <rect x="325" width="50" height="22" rx="2" fill="#7b59ac" opacity="0.3"/><text x="350" y="15" text-anchor="middle" fill="#7b59ac" font-size="8" font-weight="bold">Parent</text>
+    <rect x="380" width="340" height="22" rx="2" fill="#7b59ac" opacity="0.3"/><text x="550" y="15" text-anchor="middle" fill="#7b59ac" font-size="8" font-weight="bold">Node Data (type | 6-bit | payload)</text>
+    <rect x="725" width="40" height="22" rx="2" fill="#7b59ac" opacity="0.3"/><text x="745" y="15" text-anchor="middle" fill="#7b59ac" font-size="8" font-weight="bold">Flg</text>
+    <rect x="770" width="245" height="22" rx="2" fill="#7b59ac" opacity="0.15"/><text x="892" y="15" text-anchor="middle" fill="#7b59ac" font-size="8" font-weight="bold">Description</text>
+  </g>
+
+  <!-- Compact node row macro: y_base=760, row_h=48, gap=0 -->
+  <!-- Node[0]: nil -->
+  <g transform="translate(45, 760)">
+    <rect width="1010" height="36" rx="3" fill="#eee" stroke="#ccc" stroke-width="0.5"/>
+    <text x="22" y="22" text-anchor="middle" fill="#999" font-size="9">[0]</text>
+    <text x="110" y="22" text-anchor="middle" fill="#999" font-size="9">0</text>
+    <text x="197" y="22" text-anchor="middle" fill="#999" font-size="9">0</text>
+    <text x="247" y="22" text-anchor="middle" fill="#999" font-size="9">0</text>
+    <text x="297" y="22" text-anchor="middle" fill="#999" font-size="9">0</text>
+    <text x="350" y="22" text-anchor="middle" fill="#999" font-size="9">0</text>
+    <text x="550" y="22" text-anchor="middle" fill="#999" font-size="9">0x00000000</text>
+    <text x="745" y="22" text-anchor="middle" fill="#999" font-size="9">0</text>
+    <text x="892" y="22" text-anchor="middle" fill="#999" font-size="9">nil sentinel</text>
+  </g>
+
+  <!-- Node[1]: SourceFile 307 -->
+  <g transform="translate(45, 800)">
+    <rect width="1010" height="48" rx="3" fill="#8e6cbf" opacity="0.06" stroke="#8e6cbf" stroke-width="0.5"/>
+    <text x="22" y="18" text-anchor="middle" fill="#7b59ac" font-size="9" font-weight="bold">[1]</text>
+    <text x="110" y="14" text-anchor="middle" fill="#7b59ac" font-size="9">307</text><text x="110" y="28" text-anchor="middle" fill="#7b59ac" font-size="7">(SourceFile)</text>
+    <text x="197" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="247" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">50</text>
+    <text x="297" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="350" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <rect x="380" width="340" height="48" rx="3" fill="#e8a838" opacity="0.1"/><text x="550" y="14" text-anchor="middle" fill="#d49520" font-size="9">0b10 | offset=0</text><text x="550" y="28" text-anchor="middle" fill="#d49520" font-size="7">Extended -> SourceFile 48B</text>
+    <text x="745" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="892" y="14" text-anchor="middle" fill="#7b59ac" font-size="8">Root. parent=0</text><text x="892" y="28" text-anchor="middle" fill="#7b59ac" font-size="8">children: [2],[9]</text>
+  </g>
+
+  <!-- Node[2]: ImportDeclaration 273 -->
+  <g transform="translate(45, 852)">
+    <rect width="1010" height="56" rx="3" fill="#8e6cbf" opacity="0.05" stroke="#8e6cbf" stroke-width="0.5"/>
+    <text x="22" y="22" text-anchor="middle" fill="#7b59ac" font-size="9" font-weight="bold">[2]</text>
+    <text x="110" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">273</text><text x="110" y="32" text-anchor="middle" fill="#7b59ac" font-size="7">(ImportDecl)</text>
+    <text x="197" y="22" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="247" y="22" text-anchor="middle" fill="#7b59ac" font-size="9">29</text>
+    <text x="297" y="22" text-anchor="middle" fill="#7b59ac" font-size="9">9</text>
+    <text x="350" y="22" text-anchor="middle" fill="#7b59ac" font-size="9">1</text>
+    <text x="550" y="14" text-anchor="middle" fill="#7b59ac" font-size="9">0b00 | mask=0x06</text><text x="550" y="28" text-anchor="middle" fill="#7b59ac" font-size="7">bit1=importClause, bit2=moduleSpec</text><text x="550" y="42" text-anchor="middle" fill="#888" font-size="7">mod=0 clause=1 spec=1 attr=0</text>
+    <text x="745" y="22" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="892" y="14" text-anchor="middle" fill="#7b59ac" font-size="8">next=9 (VarStmt)</text><text x="892" y="28" text-anchor="middle" fill="#7b59ac" font-size="8">parent=1</text><text x="892" y="42" text-anchor="middle" fill="#7b59ac" font-size="8">children: [3],[8]</text>
+  </g>
+
+  <!-- Node[3]: ImportClause 274 -->
+  <g transform="translate(45, 912)">
+    <rect width="1010" height="44" rx="3" fill="#8e6cbf" opacity="0.04" stroke="#8e6cbf" stroke-width="0.5"/>
+    <text x="22" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">[3]</text>
+    <text x="110" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">274</text><text x="110" y="32" text-anchor="middle" fill="#7b59ac" font-size="7">(ImportClause)</text>
+    <text x="197" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">7</text>
+    <text x="247" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">14</text>
+    <text x="297" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">8</text>
+    <text x="350" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">2</text>
+    <text x="550" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">0b00 | mask=0x02</text><text x="550" y="32" text-anchor="middle" fill="#7b59ac" font-size="7">bit1=namedBindings</text>
+    <text x="745" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="892" y="26" text-anchor="middle" fill="#7b59ac" font-size="8">next=8, parent=2</text>
+  </g>
+
+  <!-- Node[4]: NamedImports 276 -->
+  <g transform="translate(45, 960)">
+    <rect width="1010" height="44" rx="3" fill="#8e6cbf" opacity="0.04" stroke="#8e6cbf" stroke-width="0.5"/>
+    <text x="22" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">[4]</text>
+    <text x="110" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">276</text><text x="110" y="32" text-anchor="middle" fill="#7b59ac" font-size="7">(NamedImports)</text>
+    <text x="197" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">7</text>
+    <text x="247" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">14</text>
+    <text x="297" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="350" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">3</text>
+    <text x="550" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">0b00 | mask=0x01</text><text x="550" y="32" text-anchor="middle" fill="#7b59ac" font-size="7">bit0=elements</text>
+    <text x="745" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="892" y="26" text-anchor="middle" fill="#7b59ac" font-size="8">parent=3</text>
+  </g>
+
+  <!-- Node[5]: NodeList (specifiers) -->
+  <g transform="translate(45, 1008)">
+    <rect width="1010" height="44" rx="3" fill="#e8a838" opacity="0.06" stroke="#e8a838" stroke-width="0.5"/>
+    <text x="22" y="26" text-anchor="middle" fill="#d49520" font-size="9" font-weight="bold">[5]</text>
+    <text x="110" y="18" text-anchor="middle" fill="#d49520" font-size="9">0xFFFF</text><text x="110" y="32" text-anchor="middle" fill="#d49520" font-size="7">(NodeList)</text>
+    <text x="197" y="26" text-anchor="middle" fill="#d49520" font-size="9">9</text>
+    <text x="247" y="26" text-anchor="middle" fill="#d49520" font-size="9">12</text>
+    <text x="297" y="26" text-anchor="middle" fill="#d49520" font-size="9">0</text>
+    <text x="350" y="26" text-anchor="middle" fill="#d49520" font-size="9">4</text>
+    <text x="550" y="18" text-anchor="middle" fill="#d49520" font-size="9">length = 1</text><text x="550" y="32" text-anchor="middle" fill="#d49520" font-size="7">child count</text>
+    <text x="745" y="26" text-anchor="middle" fill="#d49520" font-size="9">0</text>
+    <text x="892" y="26" text-anchor="middle" fill="#d49520" font-size="8">parent=4, 1 specifier</text>
+  </g>
+
+  <!-- Node[6]: ImportSpecifier 277 -->
+  <g transform="translate(45, 1056)">
+    <rect width="1010" height="44" rx="3" fill="#8e6cbf" opacity="0.04" stroke="#8e6cbf" stroke-width="0.5"/>
+    <text x="22" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">[6]</text>
+    <text x="110" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">277</text><text x="110" y="32" text-anchor="middle" fill="#7b59ac" font-size="7">(ImportSpec)</text>
+    <text x="197" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">9</text>
+    <text x="247" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">12</text>
+    <text x="297" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="350" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">5</text>
+    <text x="550" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">0b00 | mask=0x02</text><text x="550" y="32" text-anchor="middle" fill="#7b59ac" font-size="7">bit1=name</text>
+    <text x="745" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="892" y="26" text-anchor="middle" fill="#7b59ac" font-size="8">parent=5</text>
+  </g>
+
+  <!-- Node[7]: Identifier "add" (import) -->
+  <g transform="translate(45, 1104)">
+    <rect width="1010" height="44" rx="3" fill="#4a90d9" opacity="0.05" stroke="#4a90d9" stroke-width="0.5"/>
+    <text x="22" y="26" text-anchor="middle" fill="#357abd" font-size="9">[7]</text>
+    <text x="110" y="18" text-anchor="middle" fill="#357abd" font-size="9">79</text><text x="110" y="32" text-anchor="middle" fill="#357abd" font-size="7">(Identifier)</text>
+    <text x="197" y="26" text-anchor="middle" fill="#357abd" font-size="9">9</text>
+    <text x="247" y="26" text-anchor="middle" fill="#357abd" font-size="9">12</text>
+    <text x="297" y="26" text-anchor="middle" fill="#357abd" font-size="9">0</text>
+    <text x="350" y="26" text-anchor="middle" fill="#357abd" font-size="9">6</text>
+    <rect x="380" width="340" height="44" rx="3" fill="#50b86c" opacity="0.08"/><text x="550" y="18" text-anchor="middle" fill="#3da558" font-size="9">0b01 | strIdx=1</text><text x="550" y="32" text-anchor="middle" fill="#3da558" font-size="7">String -> "add"</text>
+    <text x="745" y="26" text-anchor="middle" fill="#357abd" font-size="9">0</text>
+    <text x="892" y="26" text-anchor="middle" fill="#357abd" font-size="8">parent=6</text>
+  </g>
+
+  <!-- Node[8]: StringLiteral "./math" -->
+  <g transform="translate(45, 1152)">
+    <rect width="1010" height="44" rx="3" fill="#d95050" opacity="0.05" stroke="#d95050" stroke-width="0.5"/>
+    <text x="22" y="26" text-anchor="middle" fill="#c43e3e" font-size="9" font-weight="bold">[8]</text>
+    <text x="110" y="18" text-anchor="middle" fill="#c43e3e" font-size="9">10</text><text x="110" y="32" text-anchor="middle" fill="#c43e3e" font-size="7">(StringLiteral)</text>
+    <text x="197" y="26" text-anchor="middle" fill="#c43e3e" font-size="9">20</text>
+    <text x="247" y="26" text-anchor="middle" fill="#c43e3e" font-size="9">28</text>
+    <text x="297" y="26" text-anchor="middle" fill="#c43e3e" font-size="9">0</text>
+    <text x="350" y="26" text-anchor="middle" fill="#c43e3e" font-size="9">2</text>
+    <rect x="380" width="340" height="44" rx="3" fill="#e8a838" opacity="0.1"/><text x="550" y="18" text-anchor="middle" fill="#d49520" font-size="9">0b10 | offset=48</text><text x="550" y="32" text-anchor="middle" fill="#d49520" font-size="7">Extended -> "./math" 8B</text>
+    <text x="745" y="26" text-anchor="middle" fill="#c43e3e" font-size="9">0</text>
+    <text x="892" y="18" text-anchor="middle" fill="#c43e3e" font-size="8">"./math" moduleSpec</text><text x="892" y="32" text-anchor="middle" fill="#c43e3e" font-size="8">parent=2, in StructData</text>
+  </g>
+
+  <!-- Node[9]: VariableStatement 244 -->
+  <g transform="translate(45, 1200)">
+    <rect width="1010" height="44" rx="3" fill="#8e6cbf" opacity="0.04" stroke="#8e6cbf" stroke-width="0.5"/>
+    <text x="22" y="26" text-anchor="middle" fill="#7b59ac" font-size="9" font-weight="bold">[9]</text>
+    <text x="110" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">244</text><text x="110" y="32" text-anchor="middle" fill="#7b59ac" font-size="7">(VarStatement)</text>
+    <text x="197" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">30</text>
+    <text x="247" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">50</text>
+    <text x="297" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">19</text>
+    <text x="350" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">1</text>
+    <text x="550" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">0b00 | mask=0x02</text><text x="550" y="32" text-anchor="middle" fill="#7b59ac" font-size="7">bit1=declarationList</text>
+    <text x="745" y="26" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="892" y="18" text-anchor="middle" fill="#7b59ac" font-size="8">next=19 (EOF)</text><text x="892" y="32" text-anchor="middle" fill="#7b59ac" font-size="8">parent=1</text>
+  </g>
+
+  <!-- Node[10]: VariableDeclarationList 262 -->
+  <g transform="translate(45, 1248)">
+    <rect width="1010" height="48" rx="3" fill="#8e6cbf" opacity="0.04" stroke="#8e6cbf" stroke-width="0.5"/>
+    <text x="22" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">[10]</text>
+    <text x="110" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">262</text><text x="110" y="32" text-anchor="middle" fill="#7b59ac" font-size="7">(VarDeclList)</text>
+    <text x="197" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">30</text>
+    <text x="247" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">49</text>
+    <text x="297" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="350" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">9</text>
+    <text x="550" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">0b00 | 6bit: isConst=1</text><text x="550" y="32" text-anchor="middle" fill="#7b59ac" font-size="7">bit1=const, mask=0x01 (decls)</text>
+    <text x="745" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="892" y="28" text-anchor="middle" fill="#7b59ac" font-size="8">parent=9, const</text>
+  </g>
+
+  <!-- Node[11]: NodeList (declarations) -->
+  <g transform="translate(45, 1300)">
+    <rect width="1010" height="40" rx="3" fill="#e8a838" opacity="0.06" stroke="#e8a838" stroke-width="0.5"/>
+    <text x="22" y="24" text-anchor="middle" fill="#d49520" font-size="9">[11]</text>
+    <text x="110" y="16" text-anchor="middle" fill="#d49520" font-size="9">0xFFFF</text><text x="110" y="30" text-anchor="middle" fill="#d49520" font-size="7">(NodeList)</text>
+    <text x="197" y="24" text-anchor="middle" fill="#d49520" font-size="9">36</text>
+    <text x="247" y="24" text-anchor="middle" fill="#d49520" font-size="9">49</text>
+    <text x="297" y="24" text-anchor="middle" fill="#d49520" font-size="9">0</text>
+    <text x="350" y="24" text-anchor="middle" fill="#d49520" font-size="9">10</text>
+    <text x="550" y="24" text-anchor="middle" fill="#d49520" font-size="9">length = 1</text>
+    <text x="745" y="24" text-anchor="middle" fill="#d49520" font-size="9">0</text>
+    <text x="892" y="24" text-anchor="middle" fill="#d49520" font-size="8">parent=10, 1 decl</text>
+  </g>
+
+  <!-- Node[12]: VariableDeclaration 261 -->
+  <g transform="translate(45, 1344)">
+    <rect width="1010" height="48" rx="3" fill="#8e6cbf" opacity="0.04" stroke="#8e6cbf" stroke-width="0.5"/>
+    <text x="22" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">[12]</text>
+    <text x="110" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">261</text><text x="110" y="32" text-anchor="middle" fill="#7b59ac" font-size="7">(VarDecl)</text>
+    <text x="197" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">36</text>
+    <text x="247" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">49</text>
+    <text x="297" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="350" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">11</text>
+    <text x="550" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">0b00 | mask=0x09</text><text x="550" y="32" text-anchor="middle" fill="#7b59ac" font-size="7">bit0=name, bit3=initializer</text>
+    <text x="745" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="892" y="18" text-anchor="middle" fill="#7b59ac" font-size="8">a = add(1, 2)</text><text x="892" y="32" text-anchor="middle" fill="#7b59ac" font-size="8">parent=11</text>
+  </g>
+
+  <!-- Node[13]: Identifier "a" -->
+  <g transform="translate(45, 1396)">
+    <rect width="1010" height="40" rx="3" fill="#4a90d9" opacity="0.05" stroke="#4a90d9" stroke-width="0.5"/>
+    <text x="22" y="24" text-anchor="middle" fill="#357abd" font-size="9">[13]</text>
+    <text x="110" y="16" text-anchor="middle" fill="#357abd" font-size="9">79</text><text x="110" y="30" text-anchor="middle" fill="#357abd" font-size="7">(Identifier)</text>
+    <text x="197" y="24" text-anchor="middle" fill="#357abd" font-size="9">36</text>
+    <text x="247" y="24" text-anchor="middle" fill="#357abd" font-size="9">37</text>
+    <text x="297" y="24" text-anchor="middle" fill="#357abd" font-size="9">14</text>
+    <text x="350" y="24" text-anchor="middle" fill="#357abd" font-size="9">12</text>
+    <rect x="380" width="340" height="40" rx="3" fill="#50b86c" opacity="0.08"/><text x="550" y="16" text-anchor="middle" fill="#3da558" font-size="9">0b01 | strIdx=3</text><text x="550" y="30" text-anchor="middle" fill="#3da558" font-size="7">String -> "a"</text>
+    <text x="745" y="24" text-anchor="middle" fill="#357abd" font-size="9">0</text>
+    <text x="892" y="24" text-anchor="middle" fill="#357abd" font-size="8">next=14, parent=12</text>
+  </g>
+
+  <!-- Node[14]: CallExpression 214 -->
+  <g transform="translate(45, 1440)">
+    <rect width="1010" height="48" rx="3" fill="#8e6cbf" opacity="0.04" stroke="#8e6cbf" stroke-width="0.5"/>
+    <text x="22" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">[14]</text>
+    <text x="110" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">214</text><text x="110" y="32" text-anchor="middle" fill="#7b59ac" font-size="7">(CallExpr)</text>
+    <text x="197" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">40</text>
+    <text x="247" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">49</text>
+    <text x="297" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="350" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">12</text>
+    <text x="550" y="18" text-anchor="middle" fill="#7b59ac" font-size="9">0b00 | mask=0x09</text><text x="550" y="32" text-anchor="middle" fill="#7b59ac" font-size="7">bit0=expression, bit3=arguments</text>
+    <text x="745" y="28" text-anchor="middle" fill="#7b59ac" font-size="9">0</text>
+    <text x="892" y="18" text-anchor="middle" fill="#7b59ac" font-size="8">add(1, 2)</text><text x="892" y="32" text-anchor="middle" fill="#7b59ac" font-size="8">parent=12</text>
+  </g>
+
+  <!-- Node[15]: Identifier "add" (call) -->
+  <g transform="translate(45, 1492)">
+    <rect width="1010" height="40" rx="3" fill="#4a90d9" opacity="0.05" stroke="#4a90d9" stroke-width="0.5"/>
+    <text x="22" y="24" text-anchor="middle" fill="#357abd" font-size="9">[15]</text>
+    <text x="110" y="16" text-anchor="middle" fill="#357abd" font-size="9">79</text><text x="110" y="30" text-anchor="middle" fill="#357abd" font-size="7">(Identifier)</text>
+    <text x="197" y="24" text-anchor="middle" fill="#357abd" font-size="9">40</text>
+    <text x="247" y="24" text-anchor="middle" fill="#357abd" font-size="9">43</text>
+    <text x="297" y="24" text-anchor="middle" fill="#357abd" font-size="9">16</text>
+    <text x="350" y="24" text-anchor="middle" fill="#357abd" font-size="9">14</text>
+    <rect x="380" width="340" height="40" rx="3" fill="#50b86c" opacity="0.08"/><text x="550" y="16" text-anchor="middle" fill="#3da558" font-size="9">0b01 | strIdx=4</text><text x="550" y="30" text-anchor="middle" fill="#3da558" font-size="7">String -> "add"</text>
+    <text x="745" y="24" text-anchor="middle" fill="#357abd" font-size="9">0</text>
+    <text x="892" y="24" text-anchor="middle" fill="#357abd" font-size="8">next=16, parent=14</text>
+  </g>
+
+  <!-- Node[16]: NodeList (arguments) -->
+  <g transform="translate(45, 1536)">
+    <rect width="1010" height="40" rx="3" fill="#e8a838" opacity="0.06" stroke="#e8a838" stroke-width="0.5"/>
+    <text x="22" y="24" text-anchor="middle" fill="#d49520" font-size="9">[16]</text>
+    <text x="110" y="16" text-anchor="middle" fill="#d49520" font-size="9">0xFFFF</text><text x="110" y="30" text-anchor="middle" fill="#d49520" font-size="7">(NodeList)</text>
+    <text x="197" y="24" text-anchor="middle" fill="#d49520" font-size="9">44</text>
+    <text x="247" y="24" text-anchor="middle" fill="#d49520" font-size="9">48</text>
+    <text x="297" y="24" text-anchor="middle" fill="#d49520" font-size="9">0</text>
+    <text x="350" y="24" text-anchor="middle" fill="#d49520" font-size="9">14</text>
+    <text x="550" y="24" text-anchor="middle" fill="#d49520" font-size="9">length = 2</text>
+    <text x="745" y="24" text-anchor="middle" fill="#d49520" font-size="9">0</text>
+    <text x="892" y="24" text-anchor="middle" fill="#d49520" font-size="8">parent=14, 2 args</text>
+  </g>
+
+  <!-- Node[17]: NumericLiteral "1" -->
+  <g transform="translate(45, 1580)">
+    <rect width="1010" height="40" rx="3" fill="#e8a838" opacity="0.04" stroke="#e8a838" stroke-width="0.5"/>
+    <text x="22" y="24" text-anchor="middle" fill="#d49520" font-size="9">[17]</text>
+    <text x="110" y="16" text-anchor="middle" fill="#d49520" font-size="9">8</text><text x="110" y="30" text-anchor="middle" fill="#d49520" font-size="7">(NumericLit)</text>
+    <text x="197" y="24" text-anchor="middle" fill="#d49520" font-size="9">44</text>
+    <text x="247" y="24" text-anchor="middle" fill="#d49520" font-size="9">45</text>
+    <text x="297" y="24" text-anchor="middle" fill="#d49520" font-size="9">18</text>
+    <text x="350" y="24" text-anchor="middle" fill="#d49520" font-size="9">16</text>
+    <rect x="380" width="340" height="40" rx="3" fill="#e8a838" opacity="0.1"/><text x="550" y="16" text-anchor="middle" fill="#d49520" font-size="9">0b10 | offset=56</text><text x="550" y="30" text-anchor="middle" fill="#d49520" font-size="7">Extended -> "1" 8B</text>
+    <text x="745" y="24" text-anchor="middle" fill="#d49520" font-size="9">0</text>
+    <text x="892" y="24" text-anchor="middle" fill="#d49520" font-size="8">next=18, parent=16</text>
+  </g>
+
+  <!-- Node[18]: NumericLiteral "2" -->
+  <g transform="translate(45, 1624)">
+    <rect width="1010" height="40" rx="3" fill="#e8a838" opacity="0.04" stroke="#e8a838" stroke-width="0.5"/>
+    <text x="22" y="24" text-anchor="middle" fill="#d49520" font-size="9">[18]</text>
+    <text x="110" y="16" text-anchor="middle" fill="#d49520" font-size="9">8</text><text x="110" y="30" text-anchor="middle" fill="#d49520" font-size="7">(NumericLit)</text>
+    <text x="197" y="24" text-anchor="middle" fill="#d49520" font-size="9">46</text>
+    <text x="247" y="24" text-anchor="middle" fill="#d49520" font-size="9">47</text>
+    <text x="297" y="24" text-anchor="middle" fill="#d49520" font-size="9">0</text>
+    <text x="350" y="24" text-anchor="middle" fill="#d49520" font-size="9">16</text>
+    <rect x="380" width="340" height="40" rx="3" fill="#e8a838" opacity="0.1"/><text x="550" y="16" text-anchor="middle" fill="#d49520" font-size="9">0b10 | offset=64</text><text x="550" y="30" text-anchor="middle" fill="#d49520" font-size="7">Extended -> "2" 8B</text>
+    <text x="745" y="24" text-anchor="middle" fill="#d49520" font-size="9">0</text>
+    <text x="892" y="24" text-anchor="middle" fill="#d49520" font-size="8">next=0, parent=16</text>
+  </g>
+
+  <!-- Node[19]: EndOfFileToken -->
+  <g transform="translate(45, 1668)">
+    <rect width="1010" height="36" rx="3" fill="#999" opacity="0.05" stroke="#999" stroke-width="0.5"/>
+    <text x="22" y="22" text-anchor="middle" fill="#666" font-size="9">[19]</text>
+    <text x="110" y="14" text-anchor="middle" fill="#666" font-size="9">1</text><text x="110" y="28" text-anchor="middle" fill="#666" font-size="7">(EOF)</text>
+    <text x="197" y="22" text-anchor="middle" fill="#666" font-size="9">50</text>
+    <text x="247" y="22" text-anchor="middle" fill="#666" font-size="9">50</text>
+    <text x="297" y="22" text-anchor="middle" fill="#666" font-size="9">0</text>
+    <text x="350" y="22" text-anchor="middle" fill="#666" font-size="9">1</text>
+    <text x="550" y="22" text-anchor="middle" fill="#666" font-size="9">0b00 | mask=0x00</text>
+    <text x="745" y="22" text-anchor="middle" fill="#666" font-size="9">0</text>
+    <text x="892" y="22" text-anchor="middle" fill="#666" font-size="8">next=0, parent=1</text>
+  </g>
+
+  <!-- Legend -->
+  <g transform="translate(45, 1730)">
+    <rect width="1010" height="110" rx="6" fill="#fafafa" stroke="#ddd"/>
+    <text x="15" y="22" fill="#333" font-weight="bold" font-size="13">Node Data Type Legend</text>
+    <rect x="15" y="36" width="14" height="12" rx="2" fill="#50b86c" opacity="0.3" stroke="#50b86c"/><text x="36" y="46" fill="#555" font-size="10">0b01 String: strIdx -> String Offsets (Identifier)</text>
+    <rect x="15" y="54" width="14" height="12" rx="2" fill="#8e6cbf" opacity="0.2" stroke="#8e6cbf"/><text x="36" y="64" fill="#555" font-size="10">0b00 Children: bitmask of present children in visitor order (most nodes)</text>
+    <rect x="15" y="72" width="14" height="12" rx="2" fill="#e8a838" opacity="0.3" stroke="#e8a838"/><text x="36" y="82" fill="#555" font-size="10">0b10 Extended: offset into Extended Data section (SourceFile, StringLiteral, NumericLiteral)</text>
+    <text x="15" y="100" fill="#888" font-size="10">NodeList (kind=0xFFFFFFFF): data field = child count. Parent adjusted by decoder.</text>
+  </g>
+
+  <!-- Total size -->
+  <g transform="translate(45, 1860)">
+    <rect width="1010" height="75" rx="6" fill="#f0f0f8" stroke="#8e6cbf" stroke-dasharray="4,2"/>
+    <text x="15" y="22" fill="#7b59ac" font-weight="bold" font-size="13">Total Binary Size (approximate)</text>
+    <text x="15" y="44" fill="#555" font-size="10">Header: 44 + StrOff: 5x8=40 + StrData: 50 + ExtData: 72 + StructData: ~4 + Nodes: 20x28=560 = ~770 bytes</text>
+    <text x="15" y="62" fill="#888" font-size="9">* fileName/path strings would add to string table; values shown are illustrative</text>
+  </g>
+
+  <!-- AST tree -->
+  <g transform="translate(45, 1955)">
+    <rect width="1010" height="105" rx="6" fill="#f8f8f8" stroke="#ccc"/>
+    <text x="15" y="22" fill="#333" font-weight="bold" font-size="12">AST Tree (reconstructed from flat array)</text>
+    <text x="15" y="44" fill="#555" font-size="10">SourceFile[1]</text>
+    <text x="15" y="60" fill="#555" font-size="10">  |- ImportDecl[2] -> ImportClause[3] -> NamedImports[4] -> [5] -> ImportSpec[6] -> Ident"add"[7]</text>
+    <text x="15" y="76" fill="#555" font-size="10">  |                   StringLit"./math"[8]  (in StructuredData.imports)</text>
+    <text x="15" y="92" fill="#555" font-size="10">  |- VarStmt[9] -> VarDeclList[10](const) -> [11] -> VarDecl[12] -> Ident"a"[13], CallExpr[14] -> Ident"add"[15], [16] -> Num"1"[17], Num"2"[18]</text>
+  </g>
+</svg>

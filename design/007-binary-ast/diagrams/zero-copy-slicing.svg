@@ -1,0 +1,206 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 540" font-family="monospace" font-size="13">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,3.5 L0,7 Z" fill="#555"/>
+    </marker>
+    <marker id="ar-green" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,3.5 L0,7 Z" fill="#3da558"/>
+    </marker>
+    <marker id="ar-blue" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,3.5 L0,7 Z" fill="#357abd"/>
+    </marker>
+    <marker id="ar-purple" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,3.5 L0,7 Z" fill="#7b59ac"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="460" y="28" text-anchor="middle" font-size="18" font-weight="bold" fill="#222" font-family="-apple-system, system-ui, sans-serif">Zero-copy slicing example</text>
+  <text x="460" y="50" text-anchor="middle" font-size="11" fill="#666" font-family="-apple-system, system-ui, sans-serif">String Offsets entries reference (start, end) byte ranges in sourceText — no string data is duplicated</text>
+
+  <!-- ============================================================ -->
+  <!-- Section 1: sourceText byte breakdown                         -->
+  <!-- ============================================================ -->
+  <text x="46" y="85" font-size="13" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">sourceText[0] = <tspan font-family="monospace" fill="#2d8b48">"/** @param name desc */"</tspan> (23 UTF-8 bytes)</text>
+
+  <!-- Byte index labels (above cells) -->
+  <g transform="translate(46, 105)" fill="#888" font-size="9">
+    <text x="18" y="10" text-anchor="middle">0</text>
+    <text x="54" y="10" text-anchor="middle">1</text>
+    <text x="90" y="10" text-anchor="middle">2</text>
+    <text x="126" y="10" text-anchor="middle">3</text>
+    <text x="162" y="10" text-anchor="middle">4</text>
+    <text x="198" y="10" text-anchor="middle" fill="#3da558" font-weight="bold">5</text>
+    <text x="234" y="10" text-anchor="middle" fill="#3da558" font-weight="bold">6</text>
+    <text x="270" y="10" text-anchor="middle" fill="#3da558" font-weight="bold">7</text>
+    <text x="306" y="10" text-anchor="middle" fill="#3da558" font-weight="bold">8</text>
+    <text x="342" y="10" text-anchor="middle" fill="#3da558" font-weight="bold">9</text>
+    <text x="378" y="10" text-anchor="middle">10</text>
+    <text x="414" y="10" text-anchor="middle" fill="#357abd" font-weight="bold">11</text>
+    <text x="450" y="10" text-anchor="middle" fill="#357abd" font-weight="bold">12</text>
+    <text x="486" y="10" text-anchor="middle" fill="#357abd" font-weight="bold">13</text>
+    <text x="522" y="10" text-anchor="middle" fill="#357abd" font-weight="bold">14</text>
+    <text x="558" y="10" text-anchor="middle">15</text>
+    <text x="594" y="10" text-anchor="middle" fill="#7b59ac" font-weight="bold">16</text>
+    <text x="630" y="10" text-anchor="middle" fill="#7b59ac" font-weight="bold">17</text>
+    <text x="666" y="10" text-anchor="middle" fill="#7b59ac" font-weight="bold">18</text>
+    <text x="702" y="10" text-anchor="middle" fill="#7b59ac" font-weight="bold">19</text>
+    <text x="738" y="10" text-anchor="middle">20</text>
+    <text x="774" y="10" text-anchor="middle">21</text>
+    <text x="810" y="10" text-anchor="middle">22</text>
+  </g>
+
+  <!-- Byte cells -->
+  <g transform="translate(46, 120)">
+    <!-- Row of 23 cells, each 36px wide, 50px tall -->
+
+    <!-- Background highlights for slices (drawn first, behind cells) -->
+    <!-- "param" (bytes 5-9): green, 5 cells × 36 = 180px wide -->
+    <rect x="180" y="0" width="180" height="50" fill="#50b86c" opacity="0.3"/>
+    <!-- "name" (bytes 11-14): blue, 4 cells × 36 = 144px wide -->
+    <rect x="396" y="0" width="144" height="50" fill="#4a90d9" opacity="0.3"/>
+    <!-- "desc" (bytes 16-19): purple, 4 cells × 36 = 144px wide -->
+    <rect x="576" y="0" width="144" height="50" fill="#8e6cbf" opacity="0.3"/>
+
+    <!-- Cells with chars -->
+    <!-- byte 0: '/' -->
+    <rect x="0" y="0" width="36" height="50" fill="white" stroke="#bbb" stroke-width="0.5"/>
+    <text x="18" y="32" text-anchor="middle" font-size="16" fill="#444">/</text>
+
+    <!-- byte 1: '*' -->
+    <rect x="36" y="0" width="36" height="50" fill="white" stroke="#bbb" stroke-width="0.5"/>
+    <text x="54" y="32" text-anchor="middle" font-size="16" fill="#444">*</text>
+
+    <!-- byte 2: '*' -->
+    <rect x="72" y="0" width="36" height="50" fill="white" stroke="#bbb" stroke-width="0.5"/>
+    <text x="90" y="32" text-anchor="middle" font-size="16" fill="#444">*</text>
+
+    <!-- byte 3: ' ' -->
+    <rect x="108" y="0" width="36" height="50" fill="#fafafa" stroke="#bbb" stroke-width="0.5"/>
+    <text x="126" y="35" text-anchor="middle" font-size="14" fill="#bbb">·</text>
+
+    <!-- byte 4: '@' -->
+    <rect x="144" y="0" width="36" height="50" fill="white" stroke="#bbb" stroke-width="0.5"/>
+    <text x="162" y="32" text-anchor="middle" font-size="16" fill="#444">@</text>
+
+    <!-- byte 5-9: 'p' 'a' 'r' 'a' 'm' (PARAM, green highlight) -->
+    <rect x="180" y="0" width="36" height="50" fill="none" stroke="#3da558" stroke-width="0.5"/>
+    <text x="198" y="32" text-anchor="middle" font-size="16" fill="#2d8b48" font-weight="bold">p</text>
+    <rect x="216" y="0" width="36" height="50" fill="none" stroke="#3da558" stroke-width="0.5"/>
+    <text x="234" y="32" text-anchor="middle" font-size="16" fill="#2d8b48" font-weight="bold">a</text>
+    <rect x="252" y="0" width="36" height="50" fill="none" stroke="#3da558" stroke-width="0.5"/>
+    <text x="270" y="32" text-anchor="middle" font-size="16" fill="#2d8b48" font-weight="bold">r</text>
+    <rect x="288" y="0" width="36" height="50" fill="none" stroke="#3da558" stroke-width="0.5"/>
+    <text x="306" y="32" text-anchor="middle" font-size="16" fill="#2d8b48" font-weight="bold">a</text>
+    <rect x="324" y="0" width="36" height="50" fill="none" stroke="#3da558" stroke-width="0.5"/>
+    <text x="342" y="32" text-anchor="middle" font-size="16" fill="#2d8b48" font-weight="bold">m</text>
+
+    <!-- byte 10: ' ' -->
+    <rect x="360" y="0" width="36" height="50" fill="#fafafa" stroke="#bbb" stroke-width="0.5"/>
+    <text x="378" y="35" text-anchor="middle" font-size="14" fill="#bbb">·</text>
+
+    <!-- byte 11-14: 'n' 'a' 'm' 'e' (NAME, blue highlight) -->
+    <rect x="396" y="0" width="36" height="50" fill="none" stroke="#357abd" stroke-width="0.5"/>
+    <text x="414" y="32" text-anchor="middle" font-size="16" fill="#2a5d8d" font-weight="bold">n</text>
+    <rect x="432" y="0" width="36" height="50" fill="none" stroke="#357abd" stroke-width="0.5"/>
+    <text x="450" y="32" text-anchor="middle" font-size="16" fill="#2a5d8d" font-weight="bold">a</text>
+    <rect x="468" y="0" width="36" height="50" fill="none" stroke="#357abd" stroke-width="0.5"/>
+    <text x="486" y="32" text-anchor="middle" font-size="16" fill="#2a5d8d" font-weight="bold">m</text>
+    <rect x="504" y="0" width="36" height="50" fill="none" stroke="#357abd" stroke-width="0.5"/>
+    <text x="522" y="32" text-anchor="middle" font-size="16" fill="#2a5d8d" font-weight="bold">e</text>
+
+    <!-- byte 15: ' ' -->
+    <rect x="540" y="0" width="36" height="50" fill="#fafafa" stroke="#bbb" stroke-width="0.5"/>
+    <text x="558" y="35" text-anchor="middle" font-size="14" fill="#bbb">·</text>
+
+    <!-- byte 16-19: 'd' 'e' 's' 'c' (DESC, purple highlight) -->
+    <rect x="576" y="0" width="36" height="50" fill="none" stroke="#7b59ac" stroke-width="0.5"/>
+    <text x="594" y="32" text-anchor="middle" font-size="16" fill="#5a4585" font-weight="bold">d</text>
+    <rect x="612" y="0" width="36" height="50" fill="none" stroke="#7b59ac" stroke-width="0.5"/>
+    <text x="630" y="32" text-anchor="middle" font-size="16" fill="#5a4585" font-weight="bold">e</text>
+    <rect x="648" y="0" width="36" height="50" fill="none" stroke="#7b59ac" stroke-width="0.5"/>
+    <text x="666" y="32" text-anchor="middle" font-size="16" fill="#5a4585" font-weight="bold">s</text>
+    <rect x="684" y="0" width="36" height="50" fill="none" stroke="#7b59ac" stroke-width="0.5"/>
+    <text x="702" y="32" text-anchor="middle" font-size="16" fill="#5a4585" font-weight="bold">c</text>
+
+    <!-- byte 20: ' ' -->
+    <rect x="720" y="0" width="36" height="50" fill="#fafafa" stroke="#bbb" stroke-width="0.5"/>
+    <text x="738" y="35" text-anchor="middle" font-size="14" fill="#bbb">·</text>
+
+    <!-- byte 21: '*' -->
+    <rect x="756" y="0" width="36" height="50" fill="white" stroke="#bbb" stroke-width="0.5"/>
+    <text x="774" y="32" text-anchor="middle" font-size="16" fill="#444">*</text>
+
+    <!-- byte 22: '/' -->
+    <rect x="792" y="0" width="36" height="50" fill="white" stroke="#bbb" stroke-width="0.5"/>
+    <text x="810" y="32" text-anchor="middle" font-size="16" fill="#444">/</text>
+  </g>
+
+  <!-- Slice range labels under the cells -->
+  <g transform="translate(46, 180)" font-size="10">
+    <!-- "param" range bracket -->
+    <line x1="180" y1="0" x2="360" y2="0" stroke="#3da558" stroke-width="2"/>
+    <line x1="180" y1="-3" x2="180" y2="3" stroke="#3da558" stroke-width="2"/>
+    <line x1="360" y1="-3" x2="360" y2="3" stroke="#3da558" stroke-width="2"/>
+    <text x="270" y="18" text-anchor="middle" fill="#2d8b48" font-weight="bold" font-family="monospace">"param" [5..10)</text>
+
+    <!-- "name" range bracket -->
+    <line x1="396" y1="0" x2="540" y2="0" stroke="#357abd" stroke-width="2"/>
+    <line x1="396" y1="-3" x2="396" y2="3" stroke="#357abd" stroke-width="2"/>
+    <line x1="540" y1="-3" x2="540" y2="3" stroke="#357abd" stroke-width="2"/>
+    <text x="468" y="18" text-anchor="middle" fill="#2a5d8d" font-weight="bold" font-family="monospace">"name" [11..15)</text>
+
+    <!-- "desc" range bracket -->
+    <line x1="576" y1="0" x2="720" y2="0" stroke="#7b59ac" stroke-width="2"/>
+    <line x1="576" y1="-3" x2="576" y2="3" stroke="#7b59ac" stroke-width="2"/>
+    <line x1="720" y1="-3" x2="720" y2="3" stroke="#7b59ac" stroke-width="2"/>
+    <text x="648" y="18" text-anchor="middle" fill="#5a4585" font-weight="bold" font-family="monospace">"desc" [16..20)</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Arrows from slices to offsets entries                        -->
+  <!-- ============================================================ -->
+  <line x1="270" y1="216" x2="170" y2="295" stroke="#3da558" stroke-width="1.5" marker-end="url(#ar-green)"/>
+  <line x1="468" y1="216" x2="460" y2="295" stroke="#357abd" stroke-width="1.5" marker-end="url(#ar-blue)"/>
+  <line x1="650" y1="216" x2="750" y2="295" stroke="#7b59ac" stroke-width="1.5" marker-end="url(#ar-purple)"/>
+
+  <text x="46" y="270" font-size="13" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">String Offsets entries (8 bytes/entry)</text>
+
+  <!-- ============================================================ -->
+  <!-- Offsets entries                                              -->
+  <!-- ============================================================ -->
+  <g transform="translate(46, 300)">
+    <!-- offsets[i] for "param" -->
+    <rect width="248" height="80" rx="6" fill="#50b86c" opacity="0.85" stroke="#3da558" stroke-width="1.5"/>
+    <text x="124" y="22" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">offsets[i]</text>
+    <text x="124" y="42" text-anchor="middle" fill="#e8f5ec" font-size="12" font-family="monospace">start = 5</text>
+    <text x="124" y="58" text-anchor="middle" fill="#e8f5ec" font-size="12" font-family="monospace">end   = 10</text>
+    <text x="124" y="73" text-anchor="middle" fill="#fff" font-size="10" font-style="italic">→ "param"</text>
+
+    <!-- offsets[j] for "name" -->
+    <rect x="290" width="248" height="80" rx="6" fill="#4a90d9" opacity="0.85" stroke="#357abd" stroke-width="1.5"/>
+    <text x="414" y="22" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">offsets[j]</text>
+    <text x="414" y="42" text-anchor="middle" fill="#e6f0fa" font-size="12" font-family="monospace">start = 11</text>
+    <text x="414" y="58" text-anchor="middle" fill="#e6f0fa" font-size="12" font-family="monospace">end   = 15</text>
+    <text x="414" y="73" text-anchor="middle" fill="#fff" font-size="10" font-style="italic">→ "name"</text>
+
+    <!-- offsets[k] for "desc" -->
+    <rect x="580" width="248" height="80" rx="6" fill="#8e6cbf" opacity="0.85" stroke="#7b59ac" stroke-width="1.5"/>
+    <text x="704" y="22" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">offsets[k]</text>
+    <text x="704" y="42" text-anchor="middle" fill="#efeaf5" font-size="12" font-family="monospace">start = 16</text>
+    <text x="704" y="58" text-anchor="middle" fill="#efeaf5" font-size="12" font-family="monospace">end   = 20</text>
+    <text x="704" y="73" text-anchor="middle" fill="#fff" font-size="10" font-style="italic">→ "desc"</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Notes                                                        -->
+  <!-- ============================================================ -->
+  <g transform="translate(46, 410)">
+    <rect width="828" height="115" rx="6" fill="#f8f8f8" stroke="#ccc" stroke-width="1"/>
+    <text x="15" y="22" font-size="12" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">How it works</text>
+    <text x="15" y="45" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• Encoder records (start, end) pairs in <tspan font-weight="bold">String Offsets</tspan> — <tspan font-weight="bold">no new bytes are written</tspan> for slice references</text>
+    <text x="15" y="63" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• Rust side: String Data behaves as <tspan font-family="monospace">&amp;str</tspan> slices into the original sourceText (logically, no copy)</text>
+    <text x="15" y="81" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• JS side: <tspan font-family="monospace">TextDecoder</tspan> decodes String Data once, then <tspan font-family="monospace">String.prototype.substring(start, end)</tspan> is zero-allocation (V8 shares backing storage)</text>
+    <text x="15" y="99" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• Range notation <tspan font-family="monospace">[start..end)</tspan>: half-open interval (Rust slice convention) — <tspan font-family="monospace">end</tspan> is exclusive</text>
+  </g>
+</svg>

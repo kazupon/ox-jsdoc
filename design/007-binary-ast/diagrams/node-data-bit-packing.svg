@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 880" font-family="monospace" font-size="13">
+  <defs>
+    <linearGradient id="gTag" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d95050"/>
+      <stop offset="100%" stop-color="#c43e3e"/>
+    </linearGradient>
+    <linearGradient id="gChildren" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#38b6c8"/>
+      <stop offset="100%" stop-color="#2a8d9c"/>
+    </linearGradient>
+    <linearGradient id="gString" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#50b86c"/>
+      <stop offset="100%" stop-color="#3da558"/>
+    </linearGradient>
+    <linearGradient id="gExt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e8a838"/>
+      <stop offset="100%" stop-color="#d49520"/>
+    </linearGradient>
+    <linearGradient id="gRes" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#aaaaaa"/>
+      <stop offset="100%" stop-color="#888888"/>
+    </linearGradient>
+    <marker id="ar" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,3.5 L0,7 Z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="460" y="28" text-anchor="middle" font-size="18" font-weight="bold" fill="#222" font-family="-apple-system, system-ui, sans-serif">Node Data Bit Packing (32 bit)</text>
+  <text x="460" y="50" text-anchor="middle" font-size="11" fill="#666" font-family="-apple-system, system-ui, sans-serif">2-bit type tag (high bits) + 30-bit payload — payload meaning varies by type tag</text>
+
+  <!-- ============================================================ -->
+  <!-- Section 1: Overall 32-bit layout                             -->
+  <!-- ============================================================ -->
+  <text x="40" y="84" font-size="13" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">(1) Overall layout: 32 bits (1 u32)</text>
+
+  <g transform="translate(40, 100)">
+    <!-- Tag region [31:30] -->
+    <rect width="120" height="80" rx="6" fill="url(#gTag)" stroke="#a83838" stroke-width="1.5"/>
+    <text x="60" y="24" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">Type Tag</text>
+    <text x="60" y="44" text-anchor="middle" fill="#fff" font-size="11">2 bit</text>
+    <text x="60" y="62" text-anchor="middle" fill="#fce8e8" font-size="10">[31:30]</text>
+    <text x="60" y="76" text-anchor="middle" fill="#fce8e8" font-size="9" font-style="italic">high bits</text>
+
+    <!-- Payload region [29:0] -->
+    <rect x="125" width="715" height="80" rx="6" fill="#f0f0f0" stroke="#999" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <text x="482" y="24" text-anchor="middle" fill="#444" font-size="14" font-weight="bold">Payload</text>
+    <text x="482" y="44" text-anchor="middle" fill="#444" font-size="11">30 bit</text>
+    <text x="482" y="62" text-anchor="middle" fill="#666" font-size="10">[29:0]</text>
+    <text x="482" y="76" text-anchor="middle" fill="#888" font-size="9" font-style="italic">meaning depends on Type Tag</text>
+  </g>
+
+  <!-- Bit position ruler -->
+  <g transform="translate(40, 188)">
+    <line x1="0" y1="0" x2="840" y2="0" stroke="#666" stroke-width="1"/>
+    <text x="0" y="14" text-anchor="middle" font-size="9" fill="#666">31</text>
+    <text x="60" y="14" text-anchor="middle" font-size="9" fill="#666">30</text>
+    <text x="125" y="14" text-anchor="middle" font-size="9" fill="#666">29</text>
+    <text x="482" y="14" text-anchor="middle" font-size="9" fill="#666">15</text>
+    <text x="840" y="14" text-anchor="middle" font-size="9" fill="#666">0</text>
+  </g>
+
+  <text x="40" y="222" font-size="11" fill="#666" font-family="-apple-system, system-ui, sans-serif" font-style="italic">Note: Common Data (6-bit) is stored separately in node record byte 1, not here. Node Data carries only Type Tag + Payload.</text>
+
+  <!-- ============================================================ -->
+  <!-- Section 2: 4 variants                                         -->
+  <!-- ============================================================ -->
+  <text x="40" y="258" font-size="13" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">(2) Type Tag variants (2 bit)</text>
+
+  <!-- Variant 0b00: Children -->
+  <g transform="translate(40, 275)">
+    <rect width="100" height="74" rx="5" fill="url(#gTag)" stroke="#a83838" stroke-width="1.5"/>
+    <text x="50" y="22" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">0b00</text>
+    <text x="50" y="42" text-anchor="middle" fill="#fce8e8" font-size="10">Children</text>
+    <text x="50" y="60" text-anchor="middle" fill="#fce8e8" font-size="9">tag</text>
+
+    <rect x="105" width="735" height="74" rx="5" fill="url(#gChildren)" opacity="0.85" stroke="#2a8d9c" stroke-width="1.5"/>
+    <text x="472" y="22" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">Children bitmask (30 bit)</text>
+    <text x="472" y="40" text-anchor="middle" fill="#e6f4f7" font-size="10">bit n = child property at visitor index n is present</text>
+    <text x="472" y="58" text-anchor="middle" fill="#e6f4f7" font-size="10">e.g. TypeFunction: bit0=parameters, bit1=return_type, bit2=type_parameters → mask 0b111</text>
+  </g>
+
+  <!-- Variant 0b01: String -->
+  <g transform="translate(40, 359)">
+    <rect width="100" height="74" rx="5" fill="url(#gTag)" stroke="#a83838" stroke-width="1.5"/>
+    <text x="50" y="22" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">0b01</text>
+    <text x="50" y="42" text-anchor="middle" fill="#fce8e8" font-size="10">String</text>
+    <text x="50" y="60" text-anchor="middle" fill="#fce8e8" font-size="9">tag</text>
+
+    <rect x="105" width="735" height="74" rx="5" fill="url(#gString)" opacity="0.85" stroke="#3da558" stroke-width="1.5"/>
+    <text x="472" y="22" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">String Offsets index (30 bit)</text>
+    <text x="472" y="40" text-anchor="middle" fill="#e6f5ea" font-size="10">index into String Offsets table → resolved to (offset, length) → slice from String Data</text>
+    <text x="472" y="58" text-anchor="middle" fill="#e6f5ea" font-size="10">leaf nodes: JsdocText, JsdocTagName, TypeName, TypeNumber etc. — max 1G entries</text>
+  </g>
+
+  <!-- Variant 0b10: Extended -->
+  <g transform="translate(40, 443)">
+    <rect width="100" height="74" rx="5" fill="url(#gTag)" stroke="#a83838" stroke-width="1.5"/>
+    <text x="50" y="22" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">0b10</text>
+    <text x="50" y="42" text-anchor="middle" fill="#fce8e8" font-size="10">Extended</text>
+    <text x="50" y="60" text-anchor="middle" fill="#fce8e8" font-size="9">tag</text>
+
+    <rect x="105" width="735" height="74" rx="5" fill="url(#gExt)" opacity="0.85" stroke="#d49520" stroke-width="1.5"/>
+    <text x="472" y="22" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">Extended Data byte offset (30 bit)</text>
+    <text x="472" y="40" text-anchor="middle" fill="#fff5e0" font-size="10">byte offset into Extended Data section → variable-size struct (8-byte aligned)</text>
+    <text x="472" y="58" text-anchor="middle" fill="#fff5e0" font-size="10">composite nodes: JsdocBlock, JsdocTag, TypeKeyValue, TypeMappedType etc. — max 1GB</text>
+  </g>
+
+  <!-- Variant 0b11: Reserved -->
+  <g transform="translate(40, 527)">
+    <rect width="100" height="74" rx="5" fill="url(#gTag)" stroke="#a83838" stroke-width="1.5"/>
+    <text x="50" y="22" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">0b11</text>
+    <text x="50" y="42" text-anchor="middle" fill="#fce8e8" font-size="10">Reserved</text>
+    <text x="50" y="60" text-anchor="middle" fill="#fce8e8" font-size="9">tag</text>
+
+    <rect x="105" width="735" height="74" rx="5" fill="url(#gRes)" opacity="0.6" stroke="#777" stroke-width="1.5" stroke-dasharray="5,3"/>
+    <text x="472" y="22" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">Reserved (unused, decoder error)</text>
+    <text x="472" y="40" text-anchor="middle" fill="#f0f0f0" font-size="10">future use: eager-mode flags, inline literal payload (short string / numeric constant), new meta nodes</text>
+    <text x="472" y="58" text-anchor="middle" fill="#f0f0f0" font-size="10">Phase 1: decoder returns "unsupported" error if Type Tag = 0b11</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Section 3: Cross-references (where each variant resolves to)  -->
+  <!-- ============================================================ -->
+  <text x="40" y="640" font-size="13" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">(3) Where each variant resolves to</text>
+
+  <g transform="translate(40, 655)">
+    <!-- Children → child nodes within tree -->
+    <g>
+      <rect width="265" height="100" rx="6" fill="url(#gChildren)" opacity="0.18" stroke="#2a8d9c" stroke-width="1.5"/>
+      <text x="132" y="22" text-anchor="middle" font-size="12" font-weight="bold" fill="#2a8d9c" font-family="-apple-system, system-ui, sans-serif">Children → Tree walk</text>
+      <text x="132" y="44" text-anchor="middle" font-size="10" fill="#444">decoder reads bits left-to-right (visitor order)</text>
+      <text x="132" y="62" text-anchor="middle" font-size="10" fill="#444">each set bit advances next-sibling pointer</text>
+      <text x="132" y="84" text-anchor="middle" font-size="10" fill="#666" font-style="italic">child nodes are stored consecutively in Nodes</text>
+    </g>
+
+    <!-- String → String Offsets / Data -->
+    <g transform="translate(285, 0)">
+      <rect width="265" height="100" rx="6" fill="url(#gString)" opacity="0.18" stroke="#3da558" stroke-width="1.5"/>
+      <text x="132" y="22" text-anchor="middle" font-size="12" font-weight="bold" fill="#3da558" font-family="-apple-system, system-ui, sans-serif">String → String Table</text>
+      <text x="132" y="44" text-anchor="middle" font-size="10" fill="#444">payload[29:0] = index into String Offsets</text>
+      <text x="132" y="62" text-anchor="middle" font-size="10" fill="#444">stringOffsets[idx] → (offset, length)</text>
+      <text x="132" y="84" text-anchor="middle" font-size="10" fill="#666" font-style="italic">UTF-8 slice from String Data (zero-copy)</text>
+    </g>
+
+    <!-- Extended → Extended Data -->
+    <g transform="translate(570, 0)">
+      <rect width="270" height="100" rx="6" fill="url(#gExt)" opacity="0.18" stroke="#d49520" stroke-width="1.5"/>
+      <text x="135" y="22" text-anchor="middle" font-size="12" font-weight="bold" fill="#d49520" font-family="-apple-system, system-ui, sans-serif">Extended → Extended Data</text>
+      <text x="135" y="44" text-anchor="middle" font-size="10" fill="#444">payload[29:0] = byte offset (8-byte aligned)</text>
+      <text x="135" y="62" text-anchor="middle" font-size="10" fill="#444">decoder reads typed struct at that offset</text>
+      <text x="135" y="84" text-anchor="middle" font-size="10" fill="#666" font-style="italic">struct size depends on node Kind</text>
+    </g>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Section 4: Notes                                              -->
+  <!-- ============================================================ -->
+  <g transform="translate(40, 780)">
+    <rect width="840" height="80" rx="6" fill="#f8f8f8" stroke="#ccc" stroke-width="1"/>
+    <text x="15" y="22" font-size="12" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">Notes</text>
+    <text x="15" y="44" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">30-bit payload</tspan>: max 1G entries / 1GB byte offset — handles batch API where many comments share one buffer (avoids 24-bit overflow)</text>
+    <text x="15" y="62" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">Type Tag at high bits</tspan>: enables fast dispatch via <tspan font-family="monospace">(node_data &gt;&gt; 30) &amp; 0b11</tspan> — payload extracted via <tspan font-family="monospace">node_data &amp; 0x3FFFFFFF</tspan></text>
+  </g>
+</svg>

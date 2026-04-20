@@ -1,0 +1,232 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 880" font-family="monospace" font-size="13">
+  <defs>
+    <linearGradient id="gByte" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5fc4d3"/>
+      <stop offset="100%" stop-color="#38b6c8"/>
+    </linearGradient>
+    <linearGradient id="gPad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#cccccc"/>
+      <stop offset="100%" stop-color="#aaaaaa"/>
+    </linearGradient>
+    <linearGradient id="gB1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e8a838"/>
+      <stop offset="100%" stop-color="#d49520"/>
+    </linearGradient>
+    <linearGradient id="gB2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#50b86c"/>
+      <stop offset="100%" stop-color="#3da558"/>
+    </linearGradient>
+    <linearGradient id="gB3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#a87dd8"/>
+      <stop offset="100%" stop-color="#8e6cbf"/>
+    </linearGradient>
+    <linearGradient id="gB4" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d95050"/>
+      <stop offset="100%" stop-color="#c43e3e"/>
+    </linearGradient>
+    <marker id="ar" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,3.5 L0,7 Z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="460" y="28" text-anchor="middle" font-size="18" font-weight="bold" fill="#222" font-family="-apple-system, system-ui, sans-serif">Common Data (6 bit) — node record byte 1</text>
+  <text x="460" y="50" text-anchor="middle" font-size="11" fill="#666" font-family="-apple-system, system-ui, sans-serif">Per-Kind small fixed data (boolean / small enum) — independent of Node Data payload</text>
+
+  <!-- ============================================================ -->
+  <!-- Section 1: byte 1 layout (8 bits total, 6 bits used)         -->
+  <!-- ============================================================ -->
+  <text x="40" y="84" font-size="13" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">(1) byte 1 layout (8 bits total)</text>
+
+  <g transform="translate(40, 100)">
+    <!-- bits[7:6] padding -->
+    <rect width="200" height="80" rx="6" fill="url(#gPad)" opacity="0.7" stroke="#888" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <text x="100" y="24" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">padding / reserved</text>
+    <text x="100" y="44" text-anchor="middle" fill="#fff" font-size="11">2 bit</text>
+    <text x="100" y="62" text-anchor="middle" fill="#f5f5f5" font-size="10">bits[7:6]</text>
+    <text x="100" y="76" text-anchor="middle" fill="#f5f5f5" font-size="9" font-style="italic">unused (zero-fill)</text>
+
+    <!-- bits[5:0] Common Data -->
+    <rect x="205" width="635" height="80" rx="6" fill="url(#gByte)" opacity="0.85" stroke="#2a8d9c" stroke-width="1.5"/>
+    <text x="522" y="24" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">Common Data</text>
+    <text x="522" y="44" text-anchor="middle" fill="#fff" font-size="11">6 bit</text>
+    <text x="522" y="62" text-anchor="middle" fill="#e6f4f7" font-size="10">bits[5:0]</text>
+    <text x="522" y="76" text-anchor="middle" fill="#e6f4f7" font-size="9" font-style="italic">per-Kind layout (1–6 bits used, see below)</text>
+  </g>
+
+  <!-- Bit position ruler -->
+  <g transform="translate(40, 188)">
+    <line x1="0" y1="0" x2="840" y2="0" stroke="#666" stroke-width="1"/>
+    <text x="0" y="14" text-anchor="middle" font-size="9" fill="#666">7</text>
+    <text x="100" y="14" text-anchor="middle" font-size="9" fill="#666">6</text>
+    <text x="205" y="14" text-anchor="middle" font-size="9" fill="#666">5</text>
+    <text x="522" y="14" text-anchor="middle" font-size="9" fill="#666">2</text>
+    <text x="840" y="14" text-anchor="middle" font-size="9" fill="#666">0</text>
+  </g>
+
+  <text x="40" y="222" font-size="11" fill="#666" font-family="-apple-system, system-ui, sans-serif" font-style="italic">Note: decoder reads byte 1 once and dispatches per Kind — no traversal into Node Data / Extended Data needed for these fields.</text>
+
+  <!-- ============================================================ -->
+  <!-- Section 2: 4 example layouts of the 6-bit slot              -->
+  <!-- ============================================================ -->
+  <text x="40" y="258" font-size="13" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">(2) Example layouts of the 6-bit slot (showing 6 cells = bits[5:0])</text>
+
+  <!-- Layout A: 1-bit boolean (e.g. JsdocTag.optional) -->
+  <g transform="translate(40, 275)">
+    <text x="0" y="14" font-size="11" font-weight="bold" fill="#444">A. 1-bit boolean — e.g. JsdocTag, JsdocParameterName: bit0 = optional</text>
+    <g transform="translate(0, 22)">
+      <rect width="60" height="44" rx="4" fill="url(#gB1)" stroke="#a06618" stroke-width="1.5"/>
+      <text x="30" y="20" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">bit0</text>
+      <text x="30" y="36" text-anchor="middle" fill="#fff" font-size="10">optional</text>
+      <rect x="62" width="60" height="44" rx="4" fill="#eee" stroke="#bbb" stroke-width="1"/>
+      <text x="92" y="22" text-anchor="middle" fill="#999" font-size="10">bit1</text>
+      <text x="92" y="36" text-anchor="middle" fill="#bbb" font-size="9">unused</text>
+      <rect x="124" width="60" height="44" rx="4" fill="#eee" stroke="#bbb" stroke-width="1"/>
+      <text x="154" y="22" text-anchor="middle" fill="#999" font-size="10">bit2</text>
+      <text x="154" y="36" text-anchor="middle" fill="#bbb" font-size="9">unused</text>
+      <rect x="186" width="60" height="44" rx="4" fill="#eee" stroke="#bbb" stroke-width="1"/>
+      <text x="216" y="22" text-anchor="middle" fill="#999" font-size="10">bit3</text>
+      <text x="216" y="36" text-anchor="middle" fill="#bbb" font-size="9">unused</text>
+      <rect x="248" width="60" height="44" rx="4" fill="#eee" stroke="#bbb" stroke-width="1"/>
+      <text x="278" y="22" text-anchor="middle" fill="#999" font-size="10">bit4</text>
+      <text x="278" y="36" text-anchor="middle" fill="#bbb" font-size="9">unused</text>
+      <rect x="310" width="60" height="44" rx="4" fill="#eee" stroke="#bbb" stroke-width="1"/>
+      <text x="340" y="22" text-anchor="middle" fill="#999" font-size="10">bit5</text>
+      <text x="340" y="36" text-anchor="middle" fill="#bbb" font-size="9">unused</text>
+    </g>
+    <text x="390" y="50" font-size="10" fill="#666" font-style="italic">→ stored as a single bool, 5 bits free for future extensions</text>
+  </g>
+
+  <!-- Layout B: 2-bit enum (e.g. TypeStringValue.quote) -->
+  <g transform="translate(40, 365)">
+    <text x="0" y="14" font-size="11" font-weight="bold" fill="#444">B. 2-bit enum — e.g. TypeStringValue / TypeProperty: bits[0:1] = quote (3-state)</text>
+    <g transform="translate(0, 22)">
+      <rect width="122" height="44" rx="4" fill="url(#gB2)" stroke="#2c8543" stroke-width="1.5"/>
+      <text x="61" y="20" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">bits[0:1]</text>
+      <text x="61" y="36" text-anchor="middle" fill="#fff" font-size="10">quote</text>
+      <rect x="124" width="60" height="44" rx="4" fill="#eee" stroke="#bbb" stroke-width="1"/>
+      <text x="154" y="22" text-anchor="middle" fill="#999" font-size="10">bit2</text>
+      <text x="154" y="36" text-anchor="middle" fill="#bbb" font-size="9">unused</text>
+      <rect x="186" width="60" height="44" rx="4" fill="#eee" stroke="#bbb" stroke-width="1"/>
+      <text x="216" y="22" text-anchor="middle" fill="#999" font-size="10">bit3</text>
+      <text x="216" y="36" text-anchor="middle" fill="#bbb" font-size="9">unused</text>
+      <rect x="248" width="60" height="44" rx="4" fill="#eee" stroke="#bbb" stroke-width="1"/>
+      <text x="278" y="22" text-anchor="middle" fill="#999" font-size="10">bit4</text>
+      <text x="278" y="36" text-anchor="middle" fill="#bbb" font-size="9">unused</text>
+      <rect x="310" width="60" height="44" rx="4" fill="#eee" stroke="#bbb" stroke-width="1"/>
+      <text x="340" y="22" text-anchor="middle" fill="#999" font-size="10">bit5</text>
+      <text x="340" y="36" text-anchor="middle" fill="#bbb" font-size="9">unused</text>
+    </g>
+    <text x="390" y="50" font-size="10" fill="#666" font-style="italic">→ values: 0=None / 1=Single / 2=Double (Option&lt;QuoteStyle&gt;)</text>
+  </g>
+
+  <!-- Layout C: 3-bit enum (e.g. JsdocInlineTag.format) -->
+  <g transform="translate(40, 455)">
+    <text x="0" y="14" font-size="11" font-weight="bold" fill="#444">C. 3-bit enum — e.g. JsdocInlineTag: bits[0:2] = format (5 variants)</text>
+    <g transform="translate(0, 22)">
+      <rect width="184" height="44" rx="4" fill="url(#gB3)" stroke="#6c4c97" stroke-width="1.5"/>
+      <text x="92" y="20" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">bits[0:2]</text>
+      <text x="92" y="36" text-anchor="middle" fill="#fff" font-size="10">format</text>
+      <rect x="186" width="60" height="44" rx="4" fill="#eee" stroke="#bbb" stroke-width="1"/>
+      <text x="216" y="22" text-anchor="middle" fill="#999" font-size="10">bit3</text>
+      <text x="216" y="36" text-anchor="middle" fill="#bbb" font-size="9">unused</text>
+      <rect x="248" width="60" height="44" rx="4" fill="#eee" stroke="#bbb" stroke-width="1"/>
+      <text x="278" y="22" text-anchor="middle" fill="#999" font-size="10">bit4</text>
+      <text x="278" y="36" text-anchor="middle" fill="#bbb" font-size="9">unused</text>
+      <rect x="310" width="60" height="44" rx="4" fill="#eee" stroke="#bbb" stroke-width="1"/>
+      <text x="340" y="22" text-anchor="middle" fill="#999" font-size="10">bit5</text>
+      <text x="340" y="36" text-anchor="middle" fill="#bbb" font-size="9">unused</text>
+    </g>
+    <text x="390" y="50" font-size="10" fill="#666" font-style="italic">→ values: 0=Plain / 1=Pipe / 2=Space / 3=Prefix / 4=Unknown</text>
+  </g>
+
+  <!-- Layout D: combined fields (e.g. TypeMethodSignature) -->
+  <g transform="translate(40, 545)">
+    <text x="0" y="14" font-size="11" font-weight="bold" fill="#444">D. Combined fields — e.g. TypeMethodSignature: 2-bit quote + 2 booleans</text>
+    <g transform="translate(0, 22)">
+      <rect width="122" height="44" rx="4" fill="url(#gB2)" stroke="#2c8543" stroke-width="1.5"/>
+      <text x="61" y="20" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">bits[0:1]</text>
+      <text x="61" y="36" text-anchor="middle" fill="#fff" font-size="10">quote</text>
+      <rect x="124" width="60" height="44" rx="4" fill="url(#gB1)" stroke="#a06618" stroke-width="1.5"/>
+      <text x="154" y="20" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">bit2</text>
+      <text x="154" y="36" text-anchor="middle" fill="#fff" font-size="9">has_params</text>
+      <rect x="186" width="60" height="44" rx="4" fill="url(#gB4)" stroke="#a83838" stroke-width="1.5"/>
+      <text x="216" y="20" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">bit3</text>
+      <text x="216" y="36" text-anchor="middle" fill="#fff" font-size="9">has_typeP</text>
+      <rect x="248" width="60" height="44" rx="4" fill="#eee" stroke="#bbb" stroke-width="1"/>
+      <text x="278" y="22" text-anchor="middle" fill="#999" font-size="10">bit4</text>
+      <text x="278" y="36" text-anchor="middle" fill="#bbb" font-size="9">unused</text>
+      <rect x="310" width="60" height="44" rx="4" fill="#eee" stroke="#bbb" stroke-width="1"/>
+      <text x="340" y="22" text-anchor="middle" fill="#999" font-size="10">bit5</text>
+      <text x="340" y="36" text-anchor="middle" fill="#bbb" font-size="9">unused</text>
+    </g>
+    <text x="390" y="50" font-size="10" fill="#666" font-style="italic">→ 4 bits used (1 enum + 2 bool); has_* flags compress empty NodeList Option</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Section 3: Node-Kind matrix — selected examples              -->
+  <!-- ============================================================ -->
+  <text x="40" y="650" font-size="13" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">(3) Selected node-Kind usage</text>
+
+  <g transform="translate(40, 665)">
+    <!-- header row -->
+    <rect width="840" height="26" fill="#eaeaea" stroke="#bbb" stroke-width="1"/>
+    <text x="12" y="18" font-size="11" font-weight="bold" fill="#444">Kind</text>
+    <text x="220" y="18" font-size="11" font-weight="bold" fill="#444">bits[0:5] usage</text>
+    <text x="640" y="18" font-size="11" font-weight="bold" fill="#444">bits used</text>
+
+    <!-- row 1 -->
+    <rect y="26" width="840" height="22" fill="#fafafa"/>
+    <text x="12" y="42" font-size="11" fill="#222" font-family="monospace">JsdocTag</text>
+    <text x="220" y="42" font-size="11" fill="#444">bit0 = optional</text>
+    <text x="640" y="42" font-size="11" fill="#666">1 / 6</text>
+
+    <!-- row 2 -->
+    <rect y="48" width="840" height="22" fill="#ffffff"/>
+    <text x="12" y="64" font-size="11" fill="#222" font-family="monospace">JsdocInlineTag</text>
+    <text x="220" y="64" font-size="11" fill="#444">bits[0:2] = format (5 variants)</text>
+    <text x="640" y="64" font-size="11" fill="#666">3 / 6</text>
+
+    <!-- row 3 -->
+    <rect y="70" width="840" height="22" fill="#fafafa"/>
+    <text x="12" y="86" font-size="11" fill="#222" font-family="monospace">TypeFunction</text>
+    <text x="220" y="86" font-size="11" fill="#444">bit0 = constructor, bit1 = arrow, bit2 = parenthesis</text>
+    <text x="640" y="86" font-size="11" fill="#666">3 / 6</text>
+
+    <!-- row 4 -->
+    <rect y="92" width="840" height="22" fill="#ffffff"/>
+    <text x="12" y="108" font-size="11" fill="#222" font-family="monospace">TypeStringValue / TypeProperty</text>
+    <text x="220" y="108" font-size="11" fill="#444">bits[0:1] = quote (None / Single / Double)</text>
+    <text x="640" y="108" font-size="11" fill="#666">2 / 6</text>
+
+    <!-- row 5 -->
+    <rect y="114" width="840" height="22" fill="#fafafa"/>
+    <text x="12" y="130" font-size="11" fill="#222" font-family="monospace">TypeMethodSignature</text>
+    <text x="220" y="130" font-size="11" fill="#444">bits[0:1] = quote, bit2 = has_params, bit3 = has_typeParams</text>
+    <text x="640" y="130" font-size="11" fill="#666">4 / 6</text>
+
+    <!-- row 6 -->
+    <rect y="136" width="840" height="22" fill="#ffffff"/>
+    <text x="12" y="152" font-size="11" fill="#222" font-family="monospace">TypeObjectField</text>
+    <text x="220" y="152" font-size="11" fill="#444">bit0 = optional, bit1 = readonly, bits[2:3] = quote</text>
+    <text x="640" y="152" font-size="11" fill="#666">4 / 6</text>
+
+    <!-- row 7 -->
+    <rect y="158" width="840" height="22" fill="#fafafa"/>
+    <text x="12" y="174" font-size="11" fill="#222" font-family="monospace">TypeSpecialNamePath</text>
+    <text x="220" y="174" font-size="11" fill="#444">bits[0:1] = special_type (3 variants), bits[2:3] = quote</text>
+    <text x="640" y="174" font-size="11" fill="#666">4 / 6</text>
+
+    <text x="12" y="200" font-size="10" fill="#666" font-style="italic">All node-Kind usage table is in the "Node catalog matrix" section.</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Section 4: Notes                                              -->
+  <!-- ============================================================ -->
+  <g transform="translate(40, 800)">
+    <rect width="840" height="68" rx="6" fill="#f8f8f8" stroke="#ccc" stroke-width="1"/>
+    <text x="15" y="22" font-size="12" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">Notes</text>
+    <text x="15" y="44" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">Independent of Node Data</tspan>: decoder can read these flags without parsing the Children bitmask or Extended Data</text>
+    <text x="15" y="62" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">No NodeFlags equivalent</tspan>: tsgo/oxc-style global flag word is not used — per-Kind layout keeps the design small &amp; explicit</text>
+  </g>
+</svg>
