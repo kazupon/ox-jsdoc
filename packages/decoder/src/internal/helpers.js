@@ -1,0 +1,250 @@
+/**
+ * Low-level helpers shared by every Remote* class.
+ *
+ * Mirrors `crates/ox_jsdoc_binary/src/decoder/helpers.rs`.
+ *
+ * @author kazuya kawaguchi (a.k.a. kazupon)
+ * @license MIT
+ */
+
+// @ts-check
+
+import {
+  END_OFFSET,
+  NEXT_SIBLING_OFFSET,
+  NODE_DATA_OFFSET,
+  NODE_RECORD_SIZE,
+  PAYLOAD_MASK,
+  POS_OFFSET,
+  STRING_PAYLOAD_NONE_SENTINEL,
+  TYPE_TAG_EXTENDED,
+  TYPE_TAG_SHIFT,
+  U16_NONE_SENTINEL
+} from './constants.js'
+
+/**
+ * @typedef {object} RemoteInternal
+ * @property {DataView} view
+ * @property {number} byteIndex     Byte offset of this node record (= nodesOffset + index*24).
+ * @property {number} index         Node index (0 = sentinel).
+ * @property {number} rootIndex     Index of the root this node belongs to (used for absolute range).
+ * @property {object | null} parent The parent Remote* instance (null for roots).
+ * @property {import('./source-file.js').RemoteSourceFile} sourceFile
+ */
+
+/**
+ * Resolve the Extended Data byte offset for a node.
+ *
+ * Throws if the node's TypeTag is not `Extended` (matches the Rust
+ * `debug_assert!`). Used by classes whose Extended Data carries the
+ * Children bitmask + per-kind fields.
+ *
+ * @param {RemoteInternal} internal
+ * @returns {number}
+ */
+export function extOffsetOf(internal) {
+  const { view, byteIndex, sourceFile } = internal
+  const nodeData = view.getUint32(byteIndex + NODE_DATA_OFFSET, true)
+  const typeTag = (nodeData >>> TYPE_TAG_SHIFT) & 0b11
+  if (typeTag !== TYPE_TAG_EXTENDED) {
+    throw new Error(
+      `Node at index ${internal.index} is not Extended type (got tag 0b${typeTag.toString(2)})`
+    )
+  }
+  return sourceFile.extendedDataOffset + (nodeData & PAYLOAD_MASK)
+}
+
+/**
+ * Read the 30-bit String payload of a String-type node, returning the
+ * resolved string or `null` if the writer used the None sentinel.
+ *
+ * @param {RemoteInternal} internal
+ * @returns {string | null}
+ */
+export function stringPayloadOf(internal) {
+  const { view, byteIndex, sourceFile } = internal
+  const nodeData = view.getUint32(byteIndex + NODE_DATA_OFFSET, true)
+  const payload = nodeData & PAYLOAD_MASK
+  if (payload === STRING_PAYLOAD_NONE_SENTINEL) {
+    return null
+  }
+  return sourceFile.getString(payload)
+}
+
+/**
+ * Read the 30-bit Children bitmask payload of a Children-type node.
+ *
+ * @param {RemoteInternal} internal
+ * @returns {number}
+ */
+export function childrenBitmaskPayloadOf(internal) {
+  const { view, byteIndex } = internal
+  return view.getUint32(byteIndex + NODE_DATA_OFFSET, true) & PAYLOAD_MASK
+}
+
+/**
+ * Read the `next_sibling` field for the given node index.
+ *
+ * @param {import('./source-file.js').RemoteSourceFile} sourceFile
+ * @param {number} nodeIndex
+ * @returns {number}
+ */
+export function readNextSibling(sourceFile, nodeIndex) {
+  const off = sourceFile.nodesOffset + nodeIndex * NODE_RECORD_SIZE + NEXT_SIBLING_OFFSET
+  return sourceFile.view.getUint32(off, true)
+}
+
+/**
+ * Return the first child of the parent at `parentIndex` (= `parentIndex + 1`
+ * if its `parent_index` field equals `parentIndex`). Returns `0` when the
+ * parent has no child.
+ *
+ * @param {import('./source-file.js').RemoteSourceFile} sourceFile
+ * @param {number} parentIndex
+ * @returns {number}
+ */
+export function firstChildIndex(sourceFile, parentIndex) {
+  const candidate = parentIndex + 1
+  if (candidate >= sourceFile.nodeCount) {
+    return 0
+  }
+  const off = sourceFile.nodesOffset + candidate * NODE_RECORD_SIZE + /* PARENT_INDEX_OFFSET */ 16
+  if (sourceFile.view.getUint32(off, true) !== parentIndex) {
+    return 0
+  }
+  return candidate
+}
+
+/**
+ * Find the `visitorIndex`-th set bit in `bitmask` and return the
+ * corresponding child node index. Returns `0` when the slot is unset
+ * or the sibling chain is truncated.
+ *
+ * @param {RemoteInternal} internal
+ * @param {number} bitmask     The Children bitmask (8 bits).
+ * @param {number} visitorIndex
+ * @returns {number}
+ */
+export function childIndexAtVisitorIndex(internal, bitmask, visitorIndex) {
+  if ((bitmask & (1 << visitorIndex)) === 0) {
+    return 0
+  }
+  const maskBelow = (1 << visitorIndex) - 1
+  const skip = popcount(bitmask & maskBelow)
+
+  let child = internal.index + 1
+  for (let i = 0; i < skip; i++) {
+    const next = readNextSibling(internal.sourceFile, child)
+    if (next === 0) {
+      return 0
+    }
+    child = next
+  }
+  return child
+}
+
+/**
+ * Build a Remote* instance for the child at `visitorIndex` under the parent
+ * described by `internal`. Reads the parent's bitmask from Extended Data
+ * (so the parent must be Extended type).
+ *
+ * @template T
+ * @param {RemoteInternal} internal
+ * @param {number} visitorIndex
+ * @returns {object | null}
+ */
+export function childNodeAtVisitorIndex(internal, visitorIndex) {
+  const bitmask = internal.view.getUint8(extOffsetOf(internal))
+  const childIdx = childIndexAtVisitorIndex(internal, bitmask, visitorIndex)
+  if (childIdx === 0) {
+    return null
+  }
+  return internal.sourceFile.getNode(childIdx, /* parent */ thisNode(internal), internal.rootIndex)
+}
+
+/**
+ * Same as `childNodeAtVisitorIndex` but reads the bitmask from the 30-bit
+ * Node Data payload (Children-type parents).
+ *
+ * @param {RemoteInternal} internal
+ * @param {number} visitorIndex
+ * @returns {object | null}
+ */
+export function childNodeAtVisitorIndexChildren(internal, visitorIndex) {
+  const bitmask = childrenBitmaskPayloadOf(internal) & 0xff
+  const childIdx = childIndexAtVisitorIndex(internal, bitmask, visitorIndex)
+  if (childIdx === 0) {
+    return null
+  }
+  return internal.sourceFile.getNode(childIdx, thisNode(internal), internal.rootIndex)
+}
+
+/**
+ * Resolve a u16 string slot inside Extended Data (`null` when 0xFFFF).
+ *
+ * @param {RemoteInternal} internal
+ * @param {number} fieldOffset Byte offset within the Extended Data record.
+ * @returns {string | null}
+ */
+export function extU16String(internal, fieldOffset) {
+  const idx = internal.view.getUint16(extOffsetOf(internal) + fieldOffset, true)
+  if (idx === U16_NONE_SENTINEL) {
+    return null
+  }
+  return internal.sourceFile.getString(idx)
+}
+
+/**
+ * Resolve a required u16 string slot inside Extended Data (empty string when 0xFFFF).
+ *
+ * @param {RemoteInternal} internal
+ * @param {number} fieldOffset
+ * @returns {string}
+ */
+export function extU16StringRequired(internal, fieldOffset) {
+  const idx = internal.view.getUint16(extOffsetOf(internal) + fieldOffset, true)
+  if (idx === U16_NONE_SENTINEL) {
+    return ''
+  }
+  return internal.sourceFile.getString(idx) ?? ''
+}
+
+/**
+ * Compute the absolute `[start, end]` range of a node by adding the root's
+ * `base_offset` to the relative Pos/End fields.
+ *
+ * @param {RemoteInternal} internal
+ * @returns {[number, number]}
+ */
+export function absoluteRange(internal) {
+  const { view, byteIndex, rootIndex, sourceFile } = internal
+  const pos = view.getUint32(byteIndex + POS_OFFSET, true)
+  const end = view.getUint32(byteIndex + END_OFFSET, true)
+  const baseOffset = sourceFile.getRootBaseOffset(rootIndex)
+  return [baseOffset + pos, baseOffset + end]
+}
+
+/**
+ * Look up the lazy node instance described by `internal` (used as the
+ * `parent` argument when constructing children). Goes through the
+ * sourceFile's nodeCache to keep instances stable.
+ *
+ * @param {RemoteInternal} internal
+ * @returns {object}
+ */
+export function thisNode(internal) {
+  return internal.sourceFile.getNode(internal.index, internal.parent, internal.rootIndex)
+}
+
+/**
+ * Population count for a u8.
+ *
+ * @param {number} byte
+ * @returns {number}
+ */
+function popcount(byte) {
+  let n = byte & 0xff
+  n -= (n >> 1) & 0x55
+  n = (n & 0x33) + ((n >> 2) & 0x33)
+  return (n + (n >> 4)) & 0x0f
+}
