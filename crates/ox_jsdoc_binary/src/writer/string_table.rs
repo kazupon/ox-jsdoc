@@ -13,6 +13,7 @@
 
 use core::num::NonZeroU32;
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use oxc_allocator::{Allocator, Vec as ArenaVec};
 
@@ -95,14 +96,173 @@ pub struct StringTableBuilder<'arena> {
     dedup: HashMap<&'arena str, StringIndex>,
 }
 
+/// Number of common strings pre-interned by [`StringTableBuilder::new`].
+/// Useful for tests that assert against the post-construction state.
+pub const COMMON_STRING_COUNT: u32 = COMMON_STRINGS.len() as u32;
+
+/// Strings that the writer pre-interns at construction so the common case
+/// (delimiters, whitespace, well-known tag names) skips the HashMap entirely.
+///
+/// Each entry's array index is its predetermined `StringIndex`. The
+/// length-bucketed `lookup_common` helper below MUST stay in sync — adding
+/// or reordering entries here without updating it will cause the fast path
+/// to return wrong indices.
+const COMMON_STRINGS: &[&str] = &[
+    // 0..=4: source-preserving leaves
+    "",
+    " ",
+    "*",
+    "*/",
+    "\n",
+    // 5..=7: less common whitespace
+    "\t",
+    "\r\n",
+    "/**",
+    // 8..=27: most common JSDoc tag names (eslint-plugin-jsdoc usage data)
+    "param",
+    "returns",
+    "return",
+    "throws",
+    "type",
+    "see",
+    "example",
+    "deprecated",
+    "since",
+    "default",
+    "author",
+    "internal",
+    "private",
+    "public",
+    "protected",
+    "static",
+    "this",
+    "override",
+    "readonly",
+    "yields",
+];
+
+/// Length-bucketed perfect-hash style match for [`COMMON_STRINGS`]. Returns
+/// the predetermined index when `value` is a common string, otherwise `None`.
+///
+/// The `match value.len()` arm lets the compiler skip whole comparison
+/// chains for non-matching lengths in one branch, which is what makes this
+/// path cheaper than the generic `HashMap::get`.
+#[inline]
+fn lookup_common(value: &str) -> Option<u32> {
+    match value.len() {
+        0 => Some(0), // ""
+        1 => match value.as_bytes()[0] {
+            b' ' => Some(1),
+            b'*' => Some(2),
+            b'\n' => Some(4),
+            b'\t' => Some(5),
+            _ => None,
+        },
+        2 => match value {
+            "*/" => Some(3),
+            "\r\n" => Some(6),
+            _ => None,
+        },
+        3 => match value {
+            "/**" => Some(7),
+            "see" => Some(13),
+            _ => None,
+        },
+        4 => match value {
+            "type" => Some(12),
+            "this" => Some(24),
+            _ => None,
+        },
+        5 => match value {
+            "param" => Some(8),
+            "since" => Some(16),
+            _ => None,
+        },
+        6 => match value {
+            "return" => Some(10),
+            "throws" => Some(11),
+            "author" => Some(18),
+            "public" => Some(21),
+            "static" => Some(23),
+            "yields" => Some(27),
+            _ => None,
+        },
+        7 => match value {
+            "returns" => Some(9),
+            "example" => Some(14),
+            "default" => Some(17),
+            "private" => Some(20),
+            _ => None,
+        },
+        8 => match value {
+            "internal" => Some(19),
+            "readonly" => Some(26),
+            "override" => Some(25),
+            _ => None,
+        },
+        9 => match value {
+            "protected" => Some(22),
+            _ => None,
+        },
+        10 => match value {
+            "deprecated" => Some(15),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Pre-computed `(start, end)` u32-LE pairs for [`COMMON_STRINGS`], cached
+/// on first use so every [`StringTableBuilder::new`] is just two memcpys
+/// rather than 28 individual HashMap inserts and arena `alloc_str` calls.
+fn prelude_offsets() -> &'static [u8] {
+    static CACHE: OnceLock<Vec<u8>> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        let mut buf = Vec::with_capacity(COMMON_STRINGS.len() * 8);
+        let mut pos = 0u32;
+        for s in COMMON_STRINGS {
+            let start = pos;
+            pos += s.len() as u32;
+            let end = pos;
+            buf.extend_from_slice(&start.to_le_bytes());
+            buf.extend_from_slice(&end.to_le_bytes());
+        }
+        buf
+    })
+}
+
+/// Pre-computed concatenated bytes for [`COMMON_STRINGS`] — same caching
+/// rationale as [`prelude_offsets`].
+fn prelude_data() -> &'static [u8] {
+    static CACHE: OnceLock<Vec<u8>> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        let mut buf = Vec::new();
+        for s in COMMON_STRINGS {
+            buf.extend_from_slice(s.as_bytes());
+        }
+        buf
+    })
+}
+
 impl<'arena> StringTableBuilder<'arena> {
-    /// Create an empty builder backed by the supplied arena.
+    /// Create a builder seeded with [`COMMON_STRINGS`] at fixed indices.
+    ///
+    /// The seeding is two cheap memcpys (offsets + data); the dedup
+    /// HashMap stays empty so common strings never enter it — the fast
+    /// path in [`Self::intern`] returns early via [`lookup_common`]
+    /// before consulting the map.
     #[must_use]
     pub fn new(arena: &'arena Allocator) -> Self {
+        let mut offsets_buffer = ArenaVec::new_in(arena);
+        offsets_buffer.extend_from_slice(prelude_offsets());
+
+        let mut data_buffer = ArenaVec::new_in(arena);
+        data_buffer.extend_from_slice(prelude_data());
+
         StringTableBuilder {
-            offsets_buffer: ArenaVec::new_in(arena),
-            data_buffer: ArenaVec::new_in(arena),
-            count: 0,
+            offsets_buffer,
+            data_buffer,
+            count: COMMON_STRING_COUNT,
             arena,
             dedup: HashMap::new(),
         }
@@ -110,13 +270,28 @@ impl<'arena> StringTableBuilder<'arena> {
 
     /// Intern `value` and return its [`StringIndex`].
     ///
-    /// Reuses the existing index when the same string was previously
-    /// interned. Otherwise appends `(start, end)` to the offsets buffer and
-    /// the bytes of `value` to the data buffer.
+    /// Fast path: [`lookup_common`] returns the predetermined index for
+    /// the well-known strings pre-seeded by [`Self::new`], avoiding the
+    /// HashMap lookup entirely.
+    ///
+    /// Slow path: regular HashMap dedup, falling back to a fresh entry.
     pub fn intern(&mut self, value: &str) -> StringIndex {
+        if let Some(idx) = lookup_common(value) {
+            // SAFETY: `idx` < COMMON_STRINGS.len() < u32::MAX, so
+            // `from_u32` always succeeds.
+            return StringIndex::from_u32(idx).expect("common index in range");
+        }
         if let Some(&existing) = self.dedup.get(value) {
             return existing;
         }
+        self.intern_uncached(value)
+    }
+
+    /// Internal: append a fresh entry without consulting the fast path or
+    /// the dedup map. Used by [`Self::new`] to seed the common strings
+    /// (the fast path is not yet usable until they have been written) and
+    /// by [`Self::intern`] for the genuine cache-miss case.
+    fn intern_uncached(&mut self, value: &str) -> StringIndex {
         let start = self.data_buffer.len() as u32;
         self.data_buffer.extend_from_slice(value.as_bytes());
         let end = self.data_buffer.len() as u32;
@@ -193,31 +368,71 @@ mod tests {
     fn intern_dedups_repeated_values() {
         let arena = Allocator::default();
         let mut builder = StringTableBuilder::new(&arena);
-        let a = builder.intern("param");
-        let b = builder.intern("returns");
-        let a_again = builder.intern("param");
+        // Use names that are NOT in COMMON_STRINGS so we exercise the
+        // HashMap dedup path rather than the fast-path lookup.
+        let a = builder.intern("custom_alpha");
+        let b = builder.intern("custom_beta");
+        let a_again = builder.intern("custom_alpha");
         assert_eq!(a, a_again, "intern must dedup identical strings");
         assert_ne!(a, b);
-        assert_eq!(builder.len(), 2, "exactly 2 unique entries");
+        assert_eq!(
+            builder.len(),
+            COMMON_STRING_COUNT + 2,
+            "two unique entries beyond the common prelude"
+        );
     }
 
     #[test]
     fn intern_appends_to_offsets_and_data_buffers() {
         let arena = Allocator::default();
         let mut builder = StringTableBuilder::new(&arena);
+        let common_offsets_bytes = builder.offsets_buffer.len();
+        let common_data_bytes = builder.data_buffer.len();
         let _ = builder.intern("ab");
         let _ = builder.intern("cd");
-        assert_eq!(builder.offsets_buffer.len(), 16, "two 8-byte entries");
-        assert_eq!(builder.data_buffer.len(), 4, "concatenated bytes");
+        assert_eq!(
+            builder.offsets_buffer.len() - common_offsets_bytes,
+            16,
+            "two new 8-byte entries beyond the common prelude"
+        );
+        assert_eq!(
+            builder.data_buffer.len() - common_data_bytes,
+            4,
+            "two new strings appended (2 bytes each)"
+        );
     }
 
     #[test]
     fn append_source_text_does_not_register_an_index() {
         let arena = Allocator::default();
         let mut builder = StringTableBuilder::new(&arena);
+        let common_data_bytes = builder.data_buffer.len() as u32;
         let off = builder.append_source_text("/** @x */");
-        assert_eq!(off, 0, "first source text starts at byte 0");
-        assert_eq!(builder.len(), 0, "source text does not count as an interned entry");
-        assert_eq!(builder.data_buffer.len(), "/** @x */".len());
+        assert_eq!(
+            off, common_data_bytes,
+            "source text starts immediately after the common-string prelude"
+        );
+        assert_eq!(
+            builder.len(),
+            COMMON_STRING_COUNT,
+            "source text does not count as an interned entry"
+        );
+        assert_eq!(
+            builder.data_buffer.len(),
+            common_data_bytes as usize + "/** @x */".len()
+        );
+    }
+
+    #[test]
+    fn intern_common_string_returns_predetermined_index() {
+        let arena = Allocator::default();
+        let mut builder = StringTableBuilder::new(&arena);
+        // "param" is COMMON_STRINGS[8].
+        assert_eq!(builder.intern("param").as_u32(), 8);
+        // Repeating the same string returns the same index without
+        // bumping the count.
+        let pre_count = builder.len();
+        assert_eq!(builder.intern("param").as_u32(), 8);
+        assert_eq!(builder.len(), pre_count, "fast path must not append");
     }
 }

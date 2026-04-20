@@ -177,14 +177,18 @@ pub fn parse<'arena>(
     if options.compat_mode {
         writer.set_compat_mode(true);
     }
-    let _ = writer.append_source_text(source);
+    // Source text is appended after the writer's pre-interned common
+    // strings (`StringTableBuilder::new`); the returned offset is what
+    // `push_root` needs to record so the decoder can locate the source
+    // span via `root[i].source_offset_in_data`.
+    let source_offset = writer.append_source_text(source);
 
     let root_node_index = if parsed.is_failure() {
         0
     } else {
         context::emit_block(&mut writer, &parsed).unwrap_or(0)
     };
-    writer.push_root(root_node_index, 0, options.base_offset);
+    writer.push_root(root_node_index, source_offset, options.base_offset);
 
     // Diagnostics: writer interns the message and records (root_index=0).
     for diag in parsed.diagnostics() {
@@ -247,14 +251,14 @@ pub fn parse_to_bytes(source: &str, options: ParseOptions) -> ParseBytesResult {
     if options.compat_mode {
         writer.set_compat_mode(true);
     }
-    let _ = writer.append_source_text(source);
+    let source_offset = writer.append_source_text(source);
 
     let root_node_index = if parsed.is_failure() {
         0
     } else {
         context::emit_block(&mut writer, &parsed).unwrap_or(0)
     };
-    writer.push_root(root_node_index, 0, options.base_offset);
+    writer.push_root(root_node_index, source_offset, options.base_offset);
 
     for diag in parsed.diagnostics() {
         writer.push_diagnostic(0, diag.message());

@@ -3,6 +3,9 @@
  * sequential parse() calls. Also includes comment-parser / jsdoccomment
  * baselines for context.
  *
+ * Uses `lib/measure.mjs` for variance-resistant aggregation; see the NAPI
+ * bench script for the rationale.
+ *
  * @author kazuya kawaguchi (a.k.a. kazupon)
  * @license MIT
  */
@@ -11,7 +14,6 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { bench, group, run } from 'mitata'
 import { parseSync } from 'oxc-parser'
 import { parse as commentParserParse } from 'comment-parser'
 import { parseComment as jsdoccommentParse } from '@es-joy/jsdoccomment'
@@ -25,6 +27,8 @@ import {
   parse as parseBinaryWasm,
   parseBatch as parseBatchBinaryWasm
 } from '@ox-jsdoc/wasm-binary'
+
+import { compareRobust, fmtDuration } from './lib/measure.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../../..')
@@ -45,123 +49,101 @@ console.log(`Loaded ${allComments.length} JSDoc comments from typescript-checker
 console.log(`Batch 100 cumulative length: ${batch100.reduce((a, c) => a + c.length, 0)} bytes`)
 console.log('')
 
-group('Batch 100', () => {
-  bench('B100: comment-parser (loop)', () => {
-    for (const c of batch100) void commentParserParse(c)
-  })
-  bench('B100: jsdoccomment (loop)', () => {
-    for (const c of batch100) {
-      try {
-        void jsdoccommentParse(c)
-      } catch {}
-    }
-  })
-  bench('B100: ox-jsdoc typed NAPI (loop)', () => {
-    for (const c of batch100) void parseTypedNapi(c).ast
-  })
-  bench('B100: ox-jsdoc-binary NAPI (loop)', () => {
-    for (const c of batch100) void parseBinaryNapi(c).ast
-  })
-  bench('B100: ox-jsdoc-binary NAPI (parseBatch)', () => {
-    void parseBatchBinaryNapi(batch100Items).asts
-  })
-  bench('B100: ox-jsdoc-binary WASM (loop)', () => {
-    for (const c of batch100) {
-      const r = parseBinaryWasm(c)
-      void r.ast
-      r.free()
-    }
-  })
-  bench('B100: ox-jsdoc-binary WASM (parseBatch)', () => {
-    const r = parseBatchBinaryWasm(batch100Items)
-    void r.asts
-    r.free()
-  })
-})
+const groups = [
+  {
+    title: 'Batch 100',
+    n: 100,
+    benches: [
+      ['comment-parser (loop)', () => { for (const c of batch100) void commentParserParse(c) }],
+      ['jsdoccomment (loop)', () => {
+        for (const c of batch100) {
+          try { void jsdoccommentParse(c) } catch {}
+        }
+      }],
+      ['ox-jsdoc typed NAPI (loop)', () => { for (const c of batch100) void parseTypedNapi(c).ast }],
+      ['ox-jsdoc-binary NAPI (loop)', () => { for (const c of batch100) void parseBinaryNapi(c).ast }],
+      ['ox-jsdoc-binary NAPI (parseBatch)', () => { void parseBatchBinaryNapi(batch100Items).asts }],
+      ['ox-jsdoc-binary WASM (loop)', () => {
+        for (const c of batch100) {
+          const r = parseBinaryWasm(c)
+          void r.ast
+          r.free()
+        }
+      }],
+      ['ox-jsdoc-binary WASM (parseBatch)', () => {
+        const r = parseBatchBinaryWasm(batch100Items)
+        void r.asts
+        r.free()
+      }]
+    ]
+  },
+  {
+    title: `Full file (${allComments.length} comments)`,
+    n: allComments.length,
+    benches: [
+      ['comment-parser (loop)', () => { for (const c of allComments) void commentParserParse(c) }],
+      ['jsdoccomment (loop)', () => {
+        for (const c of allComments) {
+          try { void jsdoccommentParse(c) } catch {}
+        }
+      }],
+      ['ox-jsdoc typed NAPI (loop)', () => { for (const c of allComments) void parseTypedNapi(c).ast }],
+      ['ox-jsdoc-binary NAPI (loop)', () => { for (const c of allComments) void parseBinaryNapi(c).ast }],
+      ['ox-jsdoc-binary NAPI (parseBatch)', () => { void parseBatchBinaryNapi(allItems).asts }],
+      ['ox-jsdoc-binary WASM (loop)', () => {
+        for (const c of allComments) {
+          const r = parseBinaryWasm(c)
+          void r.ast
+          r.free()
+        }
+      }],
+      ['ox-jsdoc-binary WASM (parseBatch)', () => {
+        const r = parseBatchBinaryWasm(allItems)
+        void r.asts
+        r.free()
+      }]
+    ]
+  }
+]
 
-group('Full file', () => {
-  bench('FF: comment-parser (loop)', () => {
-    for (const c of allComments) void commentParserParse(c)
-  })
-  bench('FF: jsdoccomment (loop)', () => {
-    for (const c of allComments) {
-      try {
-        void jsdoccommentParse(c)
-      } catch {}
-    }
-  })
-  bench('FF: ox-jsdoc typed NAPI (loop)', () => {
-    for (const c of allComments) void parseTypedNapi(c).ast
-  })
-  bench('FF: ox-jsdoc-binary NAPI (loop)', () => {
-    for (const c of allComments) void parseBinaryNapi(c).ast
-  })
-  bench('FF: ox-jsdoc-binary NAPI (parseBatch)', () => {
-    void parseBatchBinaryNapi(allItems).asts
-  })
-  bench('FF: ox-jsdoc-binary WASM (loop)', () => {
-    for (const c of allComments) {
-      const r = parseBinaryWasm(c)
-      void r.ast
-      r.free()
-    }
-  })
-  bench('FF: ox-jsdoc-binary WASM (parseBatch)', () => {
-    const r = parseBatchBinaryWasm(allItems)
-    void r.asts
-    r.free()
-  })
-})
+for (const g of groups) {
+  const benches = g.benches.map(([name, fn]) => ({ name: `${g.title} | ${name}`, fn }))
+  const results = await compareRobust(benches)
+  printGroup(g.title, results, g.n, `${g.title} | ox-jsdoc-binary NAPI (parseBatch)`)
+  console.log('')
+}
 
-const result = await run({ format: 'quiet', print: () => {}, colors: false, throw: true })
-const rows = result.benchmarks.flatMap(b =>
-  b.runs.map(r => ({ name: r.name, avgNs: r.stats.avg }))
-)
-
-console.log('')
-printGroup(
-  'Batch 100',
-  rows.filter(r => r.name.startsWith('B100:')).map(r => ({ ...r, name: r.name.slice(6) })),
-  100,
-  'B100: ox-jsdoc-binary NAPI (parseBatch)'.slice(6)
-)
-console.log('')
-printGroup(
-  `Full file (${allComments.length})`,
-  rows.filter(r => r.name.startsWith('FF:')).map(r => ({ ...r, name: r.name.slice(4) })),
-  allComments.length,
-  'FF: ox-jsdoc-binary NAPI (parseBatch)'.slice(4)
-)
-
-// Size comparison
-const single = parseBatchBinaryNapi([{ sourceText: '/**\n * @param {string} id\n */', baseOffset: 0 }])
+// Size comparison via parseBatch — string dedup engaged.
+const single = parseBatchBinaryNapi([
+  { sourceText: '/**\n * @param {string} id\n */', baseOffset: 0 }
+])
 const singleSize = single.sourceFile.view.byteLength
-const dup50Items = Array.from({ length: 50 }, () => ({ sourceText: '/**\n * @param {string} id\n */', baseOffset: 0 }))
-const dup50 = parseBatchBinaryNapi(dup50Items)
+const dup50 = parseBatchBinaryNapi(
+  Array.from({ length: 50 }, () => ({ sourceText: '/**\n * @param {string} id\n */', baseOffset: 0 }))
+)
 const dup50Size = dup50.sourceFile.view.byteLength
 
-console.log('')
 console.log('### String dedup effect (50x identical comments)')
 console.log('')
-console.log(`| Mode | Bytes | Per item |`)
+console.log('| Mode | Bytes | Per item |')
 console.log('|---|---:|---:|')
 console.log(`| 50x parse() | ${(singleSize * 50).toLocaleString()} | ${singleSize.toLocaleString()} |`)
 console.log(`| 1x parseBatch x50 | ${dup50Size.toLocaleString()} | ${(dup50Size / 50).toFixed(1)} |`)
 console.log(`| Reduction | ${((1 - dup50Size / (singleSize * 50)) * 100).toFixed(1)}% smaller | |`)
 
-function printGroup(title, groupRows, n, referenceName) {
+function printGroup(title, results, n, referenceName) {
   console.log(`### ${title} — sorted (fastest first)`)
   console.log('')
-  console.log('| Parser | Total | Per comment | vs parseBatch |')
+  console.log('| Parser | Total (spread) | Per comment | vs parseBatch |')
   console.log('|---|---:|---:|---:|')
-  const refRow = groupRows.find(r => r.name === referenceName)
-  const reference = refRow ? refRow.avgNs : groupRows[0].avgNs
-  const sorted = [...groupRows].sort((a, b) => a.avgNs - b.avgNs)
+  const refRow = results.find(r => r.name === referenceName) ?? results[0]
+  const sorted = [...results].sort((a, b) => a.p50 - b.p50)
   for (const row of sorted) {
-    const total = fmt(row.avgNs)
-    const per = fmt(row.avgNs / n)
-    const ratio = (row.avgNs / reference).toFixed(2)
-    console.log(`| ${row.name} | ${total} | ${per} | **${ratio}x** |`)
+    const display = row.name.includes(' | ') ? row.name.split(' | ').slice(1).join(' | ') : row.name
+    const total = `${fmtDuration(row.p50)} (±${row.spread_pct.toFixed(1)}%)`
+    const per = fmtDuration(row.p50 / n)
+    const ratio = (row.p50 / refRow.p50).toFixed(2)
+    console.log(`| ${display} | ${total} | ${per} | **${ratio}x** |`)
   }
 }
 
@@ -170,10 +152,4 @@ function extractJsdocComments(filePath, source) {
   return result.comments
     .filter(c => c.type === 'Block' && c.value.startsWith('*'))
     .map(c => source.slice(c.start, c.end))
-}
-
-function fmt(v) {
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(3)} ms`
-  if (v >= 1_000) return `${(v / 1_000).toFixed(3)} µs`
-  return `${v.toFixed(3)} ns`
 }

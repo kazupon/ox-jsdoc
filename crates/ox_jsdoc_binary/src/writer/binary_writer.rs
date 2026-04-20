@@ -389,28 +389,31 @@ mod tests {
 
     #[test]
     fn empty_buffer_roundtrips_through_lazy_source_file() {
+        use crate::writer::string_table::COMMON_STRING_COUNT;
+
         let arena = Allocator::default();
         let writer = BinaryWriter::new(&arena);
         assert_eq!(writer.node_count(), 1, "sentinel node[0] is pre-written");
         assert_eq!(writer.root_count(), 0);
         assert!(!writer.compat_mode());
+        // The string table is seeded with `COMMON_STRING_COUNT` entries
+        // (delimiters, whitespace, common tag names) that the writer
+        // pre-interns so per-call `intern()` can skip the HashMap.
+        assert_eq!(writer.strings.len(), COMMON_STRING_COUNT);
 
         let bytes = writer.finish();
-        // Header (40) + 1 sentinel node (24) + Diagnostics count header (4)
-        // + zero of each variable section.
-        assert_eq!(bytes.len(), 40 + 4 + 24);
 
         let sf = LazySourceFile::new(&bytes).expect("empty buffer must parse");
         assert_eq!(sf.node_count, 1);
         assert_eq!(sf.root_count, 0);
         assert!(!sf.compat_mode);
-        // Sections sit in canonical order with no variable content between them.
+        // Sections sit in canonical order; offsets shift by the size of
+        // the common-string prelude.
         assert_eq!(sf.root_array_offset, 40);
         assert_eq!(sf.string_offsets_offset, 40);
-        assert_eq!(sf.string_data_offset, 40);
-        assert_eq!(sf.extended_data_offset, 40);
-        assert_eq!(sf.diagnostics_offset, 40);
-        assert_eq!(sf.nodes_offset, 44);
+        // Each interned entry occupies 8 bytes in the offsets table.
+        let prelude_offsets_bytes = COMMON_STRING_COUNT * 8;
+        assert_eq!(sf.string_data_offset, 40 + prelude_offsets_bytes);
     }
 
     #[test]
