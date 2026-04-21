@@ -262,6 +262,15 @@ impl<'arena> BinaryWriter<'arena> {
         self.strings.intern(value)
     }
 
+    /// Skip-dedup variant of [`Self::intern_string`] for callers who know
+    /// their string is dominated by per-call unique content (description
+    /// text, raw type source). Trades a small amount of binary growth
+    /// (duplicate content stored twice) for the FxHash + lookup work the
+    /// dedup map would otherwise perform on every call.
+    pub fn intern_string_unique(&mut self, value: &str) -> StringIndex {
+        self.strings.intern_unique(value)
+    }
+
     /// Convenience: append a sourceText prefix and remember its byte length
     /// so [`Header.source_text_length`] is set correctly at [`Self::finish`].
     pub fn append_source_text(&mut self, value: &str) -> u32 {

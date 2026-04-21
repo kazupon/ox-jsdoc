@@ -1235,7 +1235,11 @@ fn emit_description_line(
     parent_index: u32,
     _compat: bool,
 ) {
-    let desc_idx = intern(writer, line.description);
+    // Description text is dominated by per-line unique content (a few
+    // thousand calls per full-file batch with low repeat rate). Skip the
+    // FxHash + dedup lookup and accept a few extra duplicate bytes when
+    // the same line text genuinely recurs.
+    let desc_idx = writer.intern_string_unique(line.description);
     let delim = opt_string(writer, non_empty_str(line.delimiter));
     let pdelim = opt_string(writer, non_empty_str(line.post_delimiter));
     let init = opt_string(writer, non_empty_str(line.initial));

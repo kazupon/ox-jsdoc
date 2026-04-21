@@ -313,6 +313,29 @@ impl<'arena> StringTableBuilder<'arena> {
         idx
     }
 
+    /// Append `value` as a fresh entry with neither the [`lookup_common`]
+    /// fast path nor the dedup HashMap consulted. Use this for strings
+    /// the caller knows are dominated by unique-per-call values
+    /// (description-line text, raw `{type}` source, etc.) where paying
+    /// the FxHash + lookup work and the arena `alloc_str` for a key that
+    /// will never be revisited is pure overhead.
+    ///
+    /// Trade-off: identical content called twice produces two distinct
+    /// `StringIndex` values (so two offsets entries + two data copies).
+    /// The decoder reads either one as the same string, so correctness
+    /// is unaffected; only the binary grows by ~8 bytes per duplicate.
+    pub fn intern_unique(&mut self, value: &str) -> StringIndex {
+        let start = self.data_buffer.len() as u32;
+        self.data_buffer.extend_from_slice(value.as_bytes());
+        let end = self.data_buffer.len() as u32;
+        self.offsets_buffer.extend_from_slice(&start.to_le_bytes());
+        self.offsets_buffer.extend_from_slice(&end.to_le_bytes());
+
+        let idx = StringIndex::from_u32(self.count).expect("string index overflow");
+        self.count = self.count.checked_add(1).expect("string table overflow");
+        idx
+    }
+
     /// Append a sourceText prefix without registering it in the offsets
     /// table.
     ///
