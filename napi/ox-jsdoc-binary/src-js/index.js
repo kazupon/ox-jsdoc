@@ -16,13 +16,6 @@ import {
 // `parseBatch` repeatedly (lint loops, watch mode).
 const utf8Encoder = new TextEncoder()
 
-// `Buffer.byteLength` is a Node global; its types live in `@types/node`
-// which is not wired into this file's `@ts-check` pass. Capture it once
-// behind a typed cast so the rest of the file stays strictly typed.
-const utf8ByteLength = /** @type {(s: string, e: 'utf8') => number} */ (
-  /** @type {any} */ (globalThis).Buffer.byteLength
-)
-
 /**
  * Parse a complete `/** ... *​/` JSDoc block comment.
  *
@@ -93,36 +86,24 @@ export function parse(sourceText, options) {
  * }}
  */
 export function parseBatch(items, options) {
-  const bindingOptions = {}
-  if (options) {
-    if (options.fenceAware !== undefined) {
-      bindingOptions.fenceAware = options.fenceAware
-    }
-    if (options.parseTypes !== undefined) {
-      bindingOptions.parseTypes = options.parseTypes
-    }
-    if (options.typeParseMode !== undefined) {
-      bindingOptions.typeParseMode = options.typeParseMode
-    }
-    if (options.compatMode !== undefined) {
-      bindingOptions.compatMode = options.compatMode
-    }
-  }
   // Concatenate every `source_text` into a single UTF-8 buffer + offsets
   // table. The native binding's `parse_jsdoc_batch_raw` then sees three
   // typed-array handles instead of an N-element `Vec<JsBatchItem>` (which
   // before this change was the call's hot path at ~213 µs / 30 %).
   //
-  // Two-pass: `Buffer.byteLength` (V8 internal UTF-8 sizing, no
-  // allocation) computes the exact concat length first so we can hand
-  // `encodeInto` the final buffer and avoid the 226 intermediate
-  // `Uint8Array` allocations a per-item `encoder.encode` would create.
+  // Single-pass: over-allocate the concat buffer to the worst-case UTF-8
+  // size (3 bytes per UTF-16 unit covers BMP, and 2 surrogate units
+  // contribute 4 bytes ≤ 2 × 3) so we can skip the `Buffer.byteLength`
+  // pre-pass and hand `encodeInto` the final buffer in one loop. The
+  // wasted tail (up to 2× total chars on ASCII-heavy input) is freed
+  // when both the concat and the `subarray` view we hand to NAPI are
+  // collected — never larger than ~3 × total source bytes per call.
   const n = items.length
-  let totalBytes = 0
+  let totalChars = 0
   for (let i = 0; i < n; i++) {
-    totalBytes += utf8ByteLength(items[i].sourceText, 'utf8')
+    totalChars += items[i].sourceText.length
   }
-  const concat = new Uint8Array(totalBytes)
+  const concat = new Uint8Array(totalChars * 3)
   const offsets = new Uint32Array(n + 1)
   const baseOffsets = new Uint32Array(n)
   let pos = 0
@@ -132,7 +113,12 @@ export function parseBatch(items, options) {
     offsets[i + 1] = pos
     baseOffsets[i] = items[i].baseOffset ?? 0
   }
-  const result = parseJsdocBatchRawBinding(concat, offsets, baseOffsets, bindingOptions)
+  const result = parseJsdocBatchRawBinding(
+    concat.subarray(0, pos),
+    offsets,
+    baseOffsets,
+    options ?? {}
+  )
   const sourceFile = new RemoteSourceFile(result.buffer)
   const asts = /** @type {Array<import('@ox-jsdoc/decoder').RemoteJsdocBlock | null>} */ (
     sourceFile.asts
