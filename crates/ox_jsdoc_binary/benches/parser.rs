@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 use ox_jsdoc_binary::parser::{
     context::{emit_block, parse_block_into_data},
-    parse_batch_to_bytes, parse_to_bytes, BatchItem, ParseOptions,
+    parse, parse_batch_to_bytes, parse_to_bytes, BatchItem, ParseOptions,
 };
 use ox_jsdoc_binary::writer::BinaryWriter;
 use oxc_allocator::Allocator;
@@ -69,6 +69,25 @@ fn bench_parse_to_bytes_full(c: &mut Criterion) {
             for src in &blocks {
                 let _ = black_box(parse_to_bytes(src.as_str(), ParseOptions::default()));
             }
+        });
+    });
+}
+
+/// Arena-backed `parse()` loop (single shared arena) — the entry point that
+/// returns a [`ParseResult`] with the lazy decoder root attached. Mirrors
+/// the canonical Rust-side usage where one arena is reused across the file
+/// and dropped at the end. Differs from `parse_to_bytes` in that it
+/// preserves the `&'arena [u8]` view + lazy `LazyJsdocBlock` handle instead
+/// of returning an owned `Vec<u8>`.
+fn bench_parse_full(c: &mut Criterion) {
+    let blocks = load_fixture();
+    c.bench_function("parse (loop, full file, shared arena)", |b| {
+        b.iter(|| {
+            let arena = Allocator::default();
+            for src in &blocks {
+                let _ = black_box(parse(&arena, src.as_str(), ParseOptions::default()));
+            }
+            black_box(arena);
         });
     });
 }
@@ -189,6 +208,7 @@ fn bench_batch_parse_plus_emit(c: &mut Criterion) {
 criterion_group!(
     benches,
     bench_parse_to_bytes_full,
+    bench_parse_full,
     bench_parse_batch_to_bytes,
     bench_parse_block_into_data,
     bench_parse_plus_emit,
