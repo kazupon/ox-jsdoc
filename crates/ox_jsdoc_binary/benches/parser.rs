@@ -131,11 +131,68 @@ fn bench_parse_plus_emit(c: &mut Criterion) {
     });
 }
 
+/// Batch-mode Phase 1 only: parses every block into `ParsedBlock` data,
+/// no writer touched. Subtract this from `parse_batch_to_bytes` to bound
+/// the emit + finish portion.
+fn bench_batch_parse_only(c: &mut Criterion) {
+    let blocks = load_fixture();
+    c.bench_function("batch phase 1 — parse_block_into_data only (full file)", |b| {
+        b.iter(|| {
+            for src in &blocks {
+                let _ = black_box(parse_block_into_data(
+                    src.as_str(),
+                    0,
+                    ParseOptions::default(),
+                ));
+            }
+        });
+    });
+}
+
+/// Batch-mode Phase 1+2: same loop body as `parse_batch_to_bytes` minus
+/// the final `writer.finish()`. Reuses one arena + writer across all
+/// items, matching the batch path exactly except for the trailing concat.
+fn bench_batch_parse_plus_emit(c: &mut Criterion) {
+    let blocks = load_fixture();
+    let items: Vec<BatchItem<'_>> = blocks
+        .iter()
+        .map(|s| BatchItem {
+            source_text: s.as_str(),
+            base_offset: 0,
+        })
+        .collect();
+    c.bench_function("batch phase 1+2 — parse + emit (no finish, full file)", |b| {
+        b.iter(|| {
+            let arena = Allocator::default();
+            let mut writer = BinaryWriter::new(&arena);
+            for (index, item) in items.iter().enumerate() {
+                let source_offset = writer.append_source_text(item.source_text);
+                let parsed =
+                    parse_block_into_data(item.source_text, 0, ParseOptions::default());
+                let root_node_index = if parsed.is_failure() {
+                    0
+                } else {
+                    emit_block(&mut writer, &parsed).unwrap_or(0)
+                };
+                writer.push_root(root_node_index, source_offset, item.base_offset);
+                for diag in parsed.diagnostics() {
+                    writer.push_diagnostic(index as u32, diag.message());
+                }
+            }
+            // Drop without finish() to exclude the final concat cost.
+            drop(writer);
+            black_box(arena);
+        });
+    });
+}
+
 criterion_group!(
     benches,
     bench_parse_to_bytes_full,
     bench_parse_batch_to_bytes,
     bench_parse_block_into_data,
     bench_parse_plus_emit,
+    bench_batch_parse_only,
+    bench_batch_parse_plus_emit,
 );
 criterion_main!(benches);
