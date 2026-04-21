@@ -30,6 +30,10 @@ function packNodeData(typeTag, payload) {
   return ((typeTag & 0b11) << 30) | (payload & 0x3fff_ffff)
 }
 
+function align4(value) {
+  return (value + 3) & ~3
+}
+
 export class FixtureBuilder {
   constructor() {
     /** @type {boolean} */
@@ -231,21 +235,24 @@ export class FixtureBuilder {
    * @returns {Uint8Array}
    */
   build() {
+    // Section boundaries are padded to 4-byte alignment so the decoder's
+    // `Uint32Array` view can read u32 fields with a single MOV. Mirrors
+    // `crates/ox_jsdoc_binary/src/writer/binary_writer.rs`'s `align_up_4`
+    // calls.
     const rootArraySize = this.rootEntries.length * 12
     const stringOffsetsSize = this.stringOffsets.length * 8
     const stringDataSize = this.stringData.length
     const extendedDataSize = this.extendedData.length
     const diagnosticsSize = 4 + this.diagnostics.length * 8
-    const nodesSize = this.nodes.length * NODE_RECORD_SIZE
 
-    const total =
-      HEADER_SIZE +
-      rootArraySize +
-      stringOffsetsSize +
-      stringDataSize +
-      extendedDataSize +
-      diagnosticsSize +
-      nodesSize
+    const rootArrayOffset = HEADER_SIZE
+    const stringOffsetsOffset = rootArrayOffset + rootArraySize
+    const stringDataOffset = stringOffsetsOffset + stringOffsetsSize
+    const extendedDataOffset = align4(stringDataOffset + stringDataSize)
+    const diagnosticsOffset = align4(extendedDataOffset + extendedDataSize)
+    const nodesOffset = align4(diagnosticsOffset + diagnosticsSize)
+    const nodesSize = this.nodes.length * NODE_RECORD_SIZE
+    const total = nodesOffset + nodesSize
 
     const out = new Uint8Array(total)
     const view = new DataView(out.buffer)
@@ -253,12 +260,6 @@ export class FixtureBuilder {
     // Header (40 bytes)
     view.setUint8(0, 0x10) // version 1.0
     view.setUint8(1, this.compatMode ? 0x01 : 0)
-    const rootArrayOffset = HEADER_SIZE
-    const stringOffsetsOffset = rootArrayOffset + rootArraySize
-    const stringDataOffset = stringOffsetsOffset + stringOffsetsSize
-    const extendedDataOffset = stringDataOffset + stringDataSize
-    const diagnosticsOffset = extendedDataOffset + extendedDataSize
-    const nodesOffset = diagnosticsOffset + diagnosticsSize
     view.setUint32(4, rootArrayOffset, true)
     view.setUint32(8, stringOffsetsOffset, true)
     view.setUint32(12, stringDataOffset, true)
@@ -286,13 +287,13 @@ export class FixtureBuilder {
       cursor += 8
     }
 
-    // String data
+    // String data + alignment pad
     out.set(this.stringData, cursor)
-    cursor += stringDataSize
+    cursor = extendedDataOffset
 
-    // Extended data
+    // Extended data + alignment pad
     out.set(this.extendedData, cursor)
-    cursor += extendedDataSize
+    cursor = diagnosticsOffset
 
     // Diagnostics
     view.setUint32(cursor, this.diagnostics.length, true)
@@ -303,7 +304,8 @@ export class FixtureBuilder {
       cursor += 8
     }
 
-    // Nodes
+    // Nodes (preceded by alignment pad to nodesOffset)
+    cursor = nodesOffset
     for (const node of this.nodes) {
       out.set(node, cursor)
       cursor += NODE_RECORD_SIZE
