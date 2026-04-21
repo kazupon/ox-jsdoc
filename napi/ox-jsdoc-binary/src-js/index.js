@@ -12,9 +12,16 @@ import {
   parseJsdocBatchRaw as parseJsdocBatchRawBinding
 } from './bindings.js'
 
-// Reused encoder + parallel-array buffers cut allocation churn when the
-// same caller fires `parseBatch` repeatedly (lint loops, watch mode).
+// Reused encoder cuts allocation churn when the same caller fires
+// `parseBatch` repeatedly (lint loops, watch mode).
 const utf8Encoder = new TextEncoder()
+
+// `Buffer.byteLength` is a Node global; its types live in `@types/node`
+// which is not wired into this file's `@ts-check` pass. Capture it once
+// behind a typed cast so the rest of the file stays strictly typed.
+const utf8ByteLength = /** @type {(s: string, e: 'utf8') => number} */ (
+  /** @type {any} */ (globalThis).Buffer.byteLength
+)
 
 /**
  * Parse a complete `/** ... *​/` JSDoc block comment.
@@ -103,24 +110,25 @@ export function parseBatch(items, options) {
   }
   // Concatenate every `source_text` into a single UTF-8 buffer + offsets
   // table. The native binding's `parse_jsdoc_batch_raw` then sees three
-  // typed-array handles instead of an N-element `Vec<JsBatchItem>`, which
-  // is the input-marshalling hot path (~213 µs / 30 % of the call before
-  // this change for a 226-comment fixture).
+  // typed-array handles instead of an N-element `Vec<JsBatchItem>` (which
+  // before this change was the call's hot path at ~213 µs / 30 %).
+  //
+  // Two-pass: `Buffer.byteLength` (V8 internal UTF-8 sizing, no
+  // allocation) computes the exact concat length first so we can hand
+  // `encodeInto` the final buffer and avoid the 226 intermediate
+  // `Uint8Array` allocations a per-item `encoder.encode` would create.
   const n = items.length
-  const encoded = new Array(n)
   let totalBytes = 0
   for (let i = 0; i < n; i++) {
-    const bytes = utf8Encoder.encode(items[i].sourceText)
-    encoded[i] = bytes
-    totalBytes += bytes.length
+    totalBytes += utf8ByteLength(items[i].sourceText, 'utf8')
   }
   const concat = new Uint8Array(totalBytes)
   const offsets = new Uint32Array(n + 1)
   const baseOffsets = new Uint32Array(n)
   let pos = 0
   for (let i = 0; i < n; i++) {
-    concat.set(encoded[i], pos)
-    pos += encoded[i].length
+    const { written } = utf8Encoder.encodeInto(items[i].sourceText, concat.subarray(pos))
+    pos += written
     offsets[i + 1] = pos
     baseOffsets[i] = items[i].baseOffset ?? 0
   }

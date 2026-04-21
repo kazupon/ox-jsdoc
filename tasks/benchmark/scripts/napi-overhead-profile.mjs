@@ -25,6 +25,7 @@
  * @license MIT
  */
 
+import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -32,6 +33,7 @@ import { fileURLToPath } from 'node:url'
 import { parseSync } from 'oxc-parser'
 import {
   parseJsdocBatch as napiCall,
+  parseJsdocBatchRaw as napiRawCall,
   napiMarshallingInOnly,
   napiMarshallingOutOnly
 } from 'ox-jsdoc-binary/src-js/bindings.js'
@@ -53,6 +55,25 @@ console.log(`Loaded ${allComments.length} JSDoc comments from typescript-checker
 const probeBuffer = napiCall(items, opts).buffer
 console.log(`Buffer size for full file: ${probeBuffer.byteLength.toLocaleString()} bytes`)
 console.log('')
+
+// Pre-built typed-array inputs reused by phases F/G/H so they measure the
+// NAPI/raw cost in isolation (no per-iteration TextEncoder + concat work).
+const utf8Encoder = new TextEncoder()
+const _encoded = items.map(it => utf8Encoder.encode(it.sourceText))
+let _totalBytes = 0
+for (const e of _encoded) _totalBytes += e.length
+const preConcat = new Uint8Array(_totalBytes)
+const preOffsets = new Uint32Array(items.length + 1)
+const preBaseOffsets = new Uint32Array(items.length)
+{
+  let pos = 0
+  for (let i = 0; i < items.length; i++) {
+    preConcat.set(_encoded[i], pos)
+    pos += _encoded[i].length
+    preOffsets[i + 1] = pos
+    preBaseOffsets[i] = items[i].baseOffset ?? 0
+  }
+}
 
 const benches = [
   {
@@ -105,6 +126,61 @@ const benches = [
     fn: () => {
       napiMarshallingOutOnly(probeBuffer.byteLength)
     }
+  },
+  {
+    name: 'F. JS encoding only (Buffer.byteLength + encodeInto, current)',
+    fn: () => {
+      const n = items.length
+      let totalBytes = 0
+      for (let i = 0; i < n; i++) {
+        totalBytes += Buffer.byteLength(items[i].sourceText, 'utf8')
+      }
+      const concat = new Uint8Array(totalBytes)
+      const offsets = new Uint32Array(n + 1)
+      const baseOffsets = new Uint32Array(n)
+      let pos = 0
+      for (let i = 0; i < n; i++) {
+        const { written } = utf8Encoder.encodeInto(items[i].sourceText, concat.subarray(pos))
+        pos += written
+        offsets[i + 1] = pos
+        baseOffsets[i] = items[i].baseOffset ?? 0
+      }
+      void concat
+      void offsets
+      void baseOffsets
+    }
+  },
+  {
+    name: 'F2. JS encoding (OLD encode + concat, reference)',
+    fn: () => {
+      const n = items.length
+      const encoded = new Array(n)
+      let totalBytes = 0
+      for (let i = 0; i < n; i++) {
+        const bytes = utf8Encoder.encode(items[i].sourceText)
+        encoded[i] = bytes
+        totalBytes += bytes.length
+      }
+      const concat = new Uint8Array(totalBytes)
+      const offsets = new Uint32Array(n + 1)
+      const baseOffsets = new Uint32Array(n)
+      let pos = 0
+      for (let i = 0; i < n; i++) {
+        concat.set(encoded[i], pos)
+        pos += encoded[i].length
+        offsets[i + 1] = pos
+        baseOffsets[i] = items[i].baseOffset ?? 0
+      }
+      void concat
+      void offsets
+      void baseOffsets
+    }
+  },
+  {
+    name: 'G. parseJsdocBatchRaw only (pre-encoded inputs)',
+    fn: () => {
+      napiRawCall(preConcat, preOffsets, preBaseOffsets, opts)
+    }
   }
 ]
 
@@ -144,6 +220,9 @@ const e = results[4].p50
 const x = results[5].p50
 const p = results[6].p50
 const q = results[7].p50
+const f = results[8].p50
+const f2 = results[9].p50
+const g = results[10].p50
 console.log(`- Pure NAPI call (rust + marshalling): **${fmtDuration(a)}** (${(a / allComments.length).toFixed(0)} ns/comment)`)
 console.log(`- new RemoteSourceFile (header + alloc): **${fmtDuration(b - a)}** (B - A)`)
 console.log(`- .asts root materialization: **${fmtDuration(c - b)}** (C - B)`)
@@ -156,9 +235,25 @@ console.log('')
 console.log(`- **Input marshalling only** (Vec<JsBatchItem>): ${fmtDuration(p)} (${(p / allComments.length).toFixed(0)} ns/comment)`)
 console.log(`- **Output marshalling only** (220KB Uint8Array): ${fmtDuration(q)}`)
 console.log(`- Sum (P + Q): ${fmtDuration(p + q)}`)
-console.log(`- Total NAPI call (A): ${fmtDuration(a)}`)
+console.log(`- Total OLD NAPI call (A): ${fmtDuration(a)}`)
 console.log(`- Implied **Rust parse work**: ${fmtDuration(a - p - q)} (A - P - Q)`)
 console.log(`- Compare to Rust criterion bench (parse_batch_to_bytes single batch): ~448 µs`)
+console.log('')
+console.log('### Option D path decomposition (parseJsdocBatchRaw)')
+console.log('')
+console.log(`- **JS encoding (current: Buffer.byteLength + encodeInto)**: **${fmtDuration(f)}** (${(f / allComments.length).toFixed(0)} ns/comment)`)
+console.log(`- JS encoding (OLD: encode + concat, reference): ${fmtDuration(f2)} (Δ ${fmtDuration(f - f2)} vs current)`)
+console.log(`- **parseJsdocBatchRaw only** (pre-encoded inputs): **${fmtDuration(g)}**`)
+console.log(`- F + G (sum): ${fmtDuration(f + g)}`)
+console.log(`- Wrapper D (full path): ${fmtDuration(d)}`)
+console.log(`- Wrapper extra over F + G: ${fmtDuration(d - f - g)} (alloc + bookkeeping)`)
+console.log('')
+console.log('### OLD vs NEW comparison')
+console.log('')
+console.log(`- OLD path: A (${fmtDuration(a)}) — pure parseJsdocBatch`)
+console.log(`- NEW path: F + G (${fmtDuration(f + g)}) — TextEncoder + parseJsdocBatchRaw`)
+console.log(`- Δ (NEW - OLD): ${fmtDuration(f + g - a)} ${(f + g - a) < 0 ? '(NEW faster)' : '(OLD faster)'}`)
+console.log(`- NAPI raw alone (G): ${fmtDuration(g)} vs OLD A ${fmtDuration(a)}, Δ ${fmtDuration(g - a)} ${(g - a) < 0 ? '(NAPI marshalling savings)' : ''}`)
 
 function extractJsdocComments(filePath, source) {
   const result = parseSync(filePath, source)
