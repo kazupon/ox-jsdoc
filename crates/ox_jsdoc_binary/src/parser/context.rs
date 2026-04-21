@@ -807,6 +807,19 @@ impl<'a> ParserContext<'a> {
             initial: "",
         });
 
+        // Fast path: most descriptions contain no `{@…}` inline tag at
+        // all, but the original `find("{@")` loop still pays a Boyer-Moore
+        // scan over the entire text. A single byte search for `@` is
+        // SIMD-fused on modern targets and lets us skip the scan loop
+        // entirely when the description has no `@` to anchor on.
+        if !text.as_bytes().contains(&b'@') {
+            return ParsedDescription {
+                text: Some(text),
+                lines,
+                inline_tags,
+            };
+        }
+
         let mut cursor = 0usize;
         while let Some(rel_start) = text[cursor..].find("{@") {
             let inline_start = cursor + rel_start;
