@@ -59,20 +59,32 @@ pub fn write_jsdoc_block(
 ) -> NodeIndex {
     let basic_size = 18;
     let total_size = if writer.compat_mode() { 40 } else { basic_size };
-    let off = writer.extended.reserve(total_size);
-    {
-        let dst = writer.extended.slice_mut(off, basic_size);
-        dst[0] = children_bitmask;
-        dst[1] = 0; // padding
-        write_u16(dst, 2, opt_string_index(description));
-        write_u16(dst, 4, delimiter.as_u16());
-        write_u16(dst, 6, post_delimiter.as_u16());
-        write_u16(dst, 8, terminal.as_u16());
-        write_u16(dst, 10, line_end.as_u16());
-        write_u16(dst, 12, initial.as_u16());
-        write_u16(dst, 14, delimiter_line_break.as_u16());
-        write_u16(dst, 16, preterminal_line_break.as_u16());
-    }
+    // Build the 18-byte basic record on the stack so the buffer write is
+    // a single 18-byte memcpy instead of nine `write_u16` dispatches +
+    // their per-call slice bounds checks. The compat tail (bytes 18..40)
+    // is left as the zero fill `reserve_mut` already laid down; the
+    // `_compat_tail` helper patches it later.
+    let desc = opt_string_index(description).to_le_bytes();
+    let delim = delimiter.as_u16().to_le_bytes();
+    let pdelim = post_delimiter.as_u16().to_le_bytes();
+    let term = terminal.as_u16().to_le_bytes();
+    let le = line_end.as_u16().to_le_bytes();
+    let init = initial.as_u16().to_le_bytes();
+    let dlb = delimiter_line_break.as_u16().to_le_bytes();
+    let plb = preterminal_line_break.as_u16().to_le_bytes();
+    let record: [u8; 18] = [
+        children_bitmask, 0,
+        desc[0], desc[1],
+        delim[0], delim[1],
+        pdelim[0], pdelim[1],
+        term[0], term[1],
+        le[0], le[1],
+        init[0], init[1],
+        dlb[0], dlb[1],
+        plb[0], plb[1],
+    ];
+    let (off, dst) = writer.extended.reserve_mut(total_size);
+    dst[..basic_size].copy_from_slice(&record);
     writer.emit_extended_node(parent_index, Kind::JsdocBlock, 0, span, off)
 }
 
@@ -126,12 +138,13 @@ pub fn write_jsdoc_description_line(
 ) -> NodeIndex {
     if writer.compat_mode() {
         // Extended Data: byte 0-1 description, 2-3 delimiter, 4-5 post_delimiter, 6-7 initial
-        let off = writer.extended.reserve(8);
-        let dst = writer.extended.slice_mut(off, 8);
-        write_u16(dst, 0, description.as_u16());
-        write_u16(dst, 2, opt_string_index(delimiter));
-        write_u16(dst, 4, opt_string_index(post_delimiter));
-        write_u16(dst, 6, opt_string_index(initial));
+        let d = description.as_u16().to_le_bytes();
+        let dl = opt_string_index(delimiter).to_le_bytes();
+        let pd = opt_string_index(post_delimiter).to_le_bytes();
+        let init = opt_string_index(initial).to_le_bytes();
+        let record: [u8; 8] = [d[0], d[1], dl[0], dl[1], pd[0], pd[1], init[0], init[1]];
+        let (off, dst) = writer.extended.reserve_mut(8);
+        dst.copy_from_slice(&record);
         writer.emit_extended_node(parent_index, Kind::JsdocDescriptionLine, 0, span, off)
     } else {
         writer.emit_string_node(parent_index, Kind::JsdocDescriptionLine, 0, span, description)
@@ -169,15 +182,17 @@ pub fn write_jsdoc_tag(
 ) -> NodeIndex {
     let basic_size = 8;
     let total_size = if writer.compat_mode() { 22 } else { basic_size };
-    let off = writer.extended.reserve(total_size);
-    {
-        let dst = writer.extended.slice_mut(off, basic_size);
-        dst[0] = children_bitmask;
-        dst[1] = 0;
-        write_u16(dst, 2, opt_string_index(default_value));
-        write_u16(dst, 4, opt_string_index(description));
-        write_u16(dst, 6, opt_string_index(raw_body));
-    }
+    let dv = opt_string_index(default_value).to_le_bytes();
+    let desc = opt_string_index(description).to_le_bytes();
+    let rb = opt_string_index(raw_body).to_le_bytes();
+    let record: [u8; 8] = [
+        children_bitmask, 0,
+        dv[0], dv[1],
+        desc[0], desc[1],
+        rb[0], rb[1],
+    ];
+    let (off, dst) = writer.extended.reserve_mut(total_size);
+    dst[..basic_size].copy_from_slice(&record);
     writer.emit_extended_node(parent_index, Kind::JsdocTag, optional as u8, span, off)
 }
 

@@ -78,8 +78,11 @@ impl<'arena> ExtendedDataBuilder<'arena> {
     /// in place by the caller using indexing.
     pub fn reserve(&mut self, size: usize) -> ExtOffset {
         let aligned_offset = self.next_aligned_offset();
-        let padding = aligned_offset - self.buffer.len();
-        self.buffer.extend(core::iter::repeat_n(0u8, padding + size));
+        let new_len = aligned_offset + size;
+        // `Vec::resize(len, 0)` lowers to `memset` for `Vec<u8>`, which is
+        // measurably tighter than `extend(repeat_n(...))` because the
+        // latter retains the iterator dispatch.
+        self.buffer.resize(new_len, 0);
         ExtOffset::from_u32(aligned_offset as u32).expect("Extended Data offset overflow")
     }
 
@@ -90,6 +93,21 @@ impl<'arena> ExtendedDataBuilder<'arena> {
     pub fn slice_mut(&mut self, offset: ExtOffset, len: usize) -> &mut [u8] {
         let start = offset.as_u32() as usize;
         &mut self.buffer[start..start + len]
+    }
+
+    /// Combined [`Self::reserve`] + [`Self::slice_mut`]: reserve `size`
+    /// bytes and return both the resulting offset and a mutable slice
+    /// pointing at the just-allocated zone. Saves one bounds check + one
+    /// arithmetic round-trip on the per-Kind `write_*` hot path.
+    #[inline]
+    pub fn reserve_mut(&mut self, size: usize) -> (ExtOffset, &mut [u8]) {
+        let aligned_offset = self.next_aligned_offset();
+        let new_len = aligned_offset + size;
+        self.buffer.resize(new_len, 0);
+        let off = ExtOffset::from_u32(aligned_offset as u32)
+            .expect("Extended Data offset overflow");
+        let slice = &mut self.buffer[aligned_offset..new_len];
+        (off, slice)
     }
 
     /// Total Extended Data section size in bytes (includes padding).
@@ -107,11 +125,15 @@ impl<'arena> ExtendedDataBuilder<'arena> {
     }
 
     /// Round the current buffer length up to the next 8-byte boundary.
+    /// Equivalent to `unaligned.div_ceil(8) * 8`, but the bitwise form
+    /// compiles to two instructions vs the more involved div+mul lowering
+    /// the generic version produces (rustc 1.x doesn't reliably constant
+    /// fold the `align = 8` for the helper here even though it does at
+    /// the call site).
     #[inline]
     fn next_aligned_offset(&self) -> usize {
-        let unaligned = self.buffer.len();
-        let align = EXTENDED_DATA_ALIGNMENT;
-        unaligned.div_ceil(align) * align
+        const _: () = assert!(EXTENDED_DATA_ALIGNMENT == 8);
+        (self.buffer.len() + 7) & !7
     }
 }
 
