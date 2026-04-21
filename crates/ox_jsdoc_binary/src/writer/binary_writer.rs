@@ -324,20 +324,38 @@ impl<'arena> BinaryWriter<'arena> {
         let nodes_size = self.nodes_buffer.len();
 
         // -- 3. compute absolute section offsets ----------------------------
+        //
+        // Padding requirement: every section that contains u32 reads must
+        // start at a 4-byte aligned offset so the JS-side decoder can use
+        // `Uint32Array[idx]` (5-10× faster than `DataView.getUint32`)
+        // instead of going through DataView. The `string_data` section
+        // contains arbitrary UTF-8 byte lengths, so the boundary right
+        // after it (Extended Data start) and every later boundary need
+        // to round up.
         let root_array_offset = HEADER_SIZE as u32;
         let string_offsets_offset = root_array_offset + root_array_size as u32;
         let string_data_offset = string_offsets_offset + string_offsets_size as u32;
-        let extended_data_offset = string_data_offset + string_data_size as u32;
-        let diagnostics_offset = extended_data_offset + extended_data_size as u32;
-        let nodes_offset = diagnostics_offset + diagnostics_size as u32;
+        // Pad after String Data so Extended Data starts 4-byte aligned.
+        let extended_data_offset = align_up_4(string_data_offset + string_data_size as u32);
+        let string_data_padding = (extended_data_offset - (string_data_offset + string_data_size as u32)) as usize;
+        // Pad after Extended Data so Diagnostics starts 4-byte aligned.
+        let diagnostics_offset = align_up_4(extended_data_offset + extended_data_size as u32);
+        let extended_data_padding = (diagnostics_offset - (extended_data_offset + extended_data_size as u32)) as usize;
+        // diagnostics_size is `4 + 8M` (always 4-aligned), so the next
+        // boundary is automatically 4-aligned. Compute defensively anyway.
+        let nodes_offset = align_up_4(diagnostics_offset + diagnostics_size as u32);
+        let diagnostics_padding = (nodes_offset - (diagnostics_offset + diagnostics_size as u32)) as usize;
 
         // -- 4. build the output buffer -------------------------------------
         let total_size = HEADER_SIZE
             + root_array_size
             + string_offsets_size
             + string_data_size
+            + string_data_padding
             + extended_data_size
+            + extended_data_padding
             + diagnostics_size
+            + diagnostics_padding
             + nodes_size;
         let mut out: Vec<u8> = Vec::with_capacity(total_size);
         out.resize(HEADER_SIZE, 0);
@@ -363,9 +381,16 @@ impl<'arena> BinaryWriter<'arena> {
         // -- 4c. String Offsets / Data --------------------------------------
         out.extend_from_slice(&self.strings.offsets_buffer);
         out.extend_from_slice(&self.strings.data_buffer);
+        // Pad String Data so Extended Data starts 4-byte aligned.
+        if string_data_padding > 0 {
+            out.resize(out.len() + string_data_padding, 0);
+        }
 
         // -- 4d. Extended Data ----------------------------------------------
         out.extend_from_slice(&self.extended.buffer);
+        if extended_data_padding > 0 {
+            out.resize(out.len() + extended_data_padding, 0);
+        }
 
         // -- 4e. Diagnostics: count header + entries ------------------------
         out.extend_from_slice(&diagnostic_count.to_le_bytes());
@@ -373,13 +398,25 @@ impl<'arena> BinaryWriter<'arena> {
             out.extend_from_slice(&root_index.to_le_bytes());
             out.extend_from_slice(&message_index.to_le_bytes());
         }
+        if diagnostics_padding > 0 {
+            out.resize(out.len() + diagnostics_padding, 0);
+        }
 
         // -- 4f. Nodes ------------------------------------------------------
         out.extend_from_slice(&self.nodes_buffer);
 
         debug_assert_eq!(total_size, out.len(), "section sizes must match capacity");
+        debug_assert_eq!(extended_data_offset & 3, 0, "Extended Data must be 4-aligned");
+        debug_assert_eq!(diagnostics_offset & 3, 0, "Diagnostics must be 4-aligned");
+        debug_assert_eq!(nodes_offset & 3, 0, "Nodes must be 4-aligned");
         out
     }
+}
+
+/// Round `value` up to the next multiple of 4.
+#[inline]
+fn align_up_4(value: u32) -> u32 {
+    (value + 3) & !3
 }
 
 /// Write a little-endian u32 at the given byte offset.

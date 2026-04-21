@@ -82,21 +82,38 @@ export class RemoteSourceFile {
         `incompatible Binary AST major version: buffer=${major}, decoder=${SUPPORTED_MAJOR}`
       )
     }
+    // `Uint32Array[idx]` is 5–10× faster than `DataView.getUint32` in
+    // V8 hot paths because the typed-array element load compiles down to
+    // a single MOV instruction rather than a runtime stub call. The
+    // writer pads every section that contains u32 reads to a 4-byte
+    // boundary, so we can use the typed view across the whole buffer.
+    //
+    // Both NAPI's `Uint8Array::from(Vec<u8>)` and WASM's
+    // `Box<[u8]>::as_ptr()` produce 4-byte aligned `byteOffset`s in
+    // practice; the assertion below catches the (very unlikely) day
+    // someone wraps a misaligned slice manually.
+    if ((view.byteOffset & 3) !== 0) {
+      throw new Error(
+        `Binary AST buffer must be 4-byte aligned (byteOffset=${view.byteOffset})`
+      )
+    }
+    const uint32View = new Uint32Array(view.buffer, view.byteOffset, view.byteLength >>> 2)
     const flags = view.getUint8(FLAGS_OFFSET)
-    const nodeCount = view.getUint32(NODE_COUNT_FIELD, true)
+    const nodeCount = uint32View[NODE_COUNT_FIELD >>> 2]
     this.#internal = {
       view,
+      uint32View,
       version: versionByte,
       compatMode: (flags & COMPAT_MODE_BIT) !== 0,
-      rootArrayOffset: view.getUint32(ROOT_ARRAY_OFFSET_FIELD, true),
-      stringOffsetsOffset: view.getUint32(STRING_OFFSETS_OFFSET_FIELD, true),
-      stringDataOffset: view.getUint32(STRING_DATA_OFFSET_FIELD, true),
-      extendedDataOffset: view.getUint32(EXTENDED_DATA_OFFSET_FIELD, true),
-      diagnosticsOffset: view.getUint32(DIAGNOSTICS_OFFSET_FIELD, true),
-      nodesOffset: view.getUint32(NODES_OFFSET_FIELD, true),
+      rootArrayOffset: uint32View[ROOT_ARRAY_OFFSET_FIELD >>> 2],
+      stringOffsetsOffset: uint32View[STRING_OFFSETS_OFFSET_FIELD >>> 2],
+      stringDataOffset: uint32View[STRING_DATA_OFFSET_FIELD >>> 2],
+      extendedDataOffset: uint32View[EXTENDED_DATA_OFFSET_FIELD >>> 2],
+      diagnosticsOffset: uint32View[DIAGNOSTICS_OFFSET_FIELD >>> 2],
+      nodesOffset: uint32View[NODES_OFFSET_FIELD >>> 2],
       nodeCount,
-      sourceTextLength: view.getUint32(SOURCE_TEXT_LENGTH_FIELD, true),
-      rootCount: view.getUint32(ROOT_COUNT_FIELD, true),
+      sourceTextLength: uint32View[SOURCE_TEXT_LENGTH_FIELD >>> 2],
+      rootCount: uint32View[ROOT_COUNT_FIELD >>> 2],
       stringCache: new Map(),
       nodeCache: new Array(nodeCount),
       $asts: undefined
@@ -106,6 +123,14 @@ export class RemoteSourceFile {
   /** Underlying DataView. */
   get view() {
     return this.#internal.view
+  }
+  /**
+   * Underlying typed `Uint32Array` view aligned to the buffer start.
+   * Index by `byteOffset >>> 2` for any 4-byte aligned u32 read; this is
+   * 5–10× faster than `DataView.getUint32` in V8 hot paths.
+   */
+  get uint32View() {
+    return this.#internal.uint32View
   }
   /** Whether the buffer's `compat_mode` flag bit is set. */
   get compatMode() {
@@ -143,9 +168,13 @@ export class RemoteSourceFile {
     if (cached !== undefined) {
       return cached
     }
-    const { view, stringOffsetsOffset, stringDataOffset } = this.#internal
-    const start = view.getUint32(stringOffsetsOffset + idx * STRING_OFFSET_ENTRY_SIZE, true)
-    const end = view.getUint32(stringOffsetsOffset + idx * STRING_OFFSET_ENTRY_SIZE + 4, true)
+    const { view, uint32View, stringOffsetsOffset, stringDataOffset } = this.#internal
+    // String Offsets section is 4-byte aligned (sections preceding it
+    // are 4-byte multiples), and entries are 8 bytes each (`(start, end)`),
+    // so both reads land on 4-byte boundaries — safe for Uint32Array.
+    const entryWordIndex = (stringOffsetsOffset + idx * STRING_OFFSET_ENTRY_SIZE) >>> 2
+    const start = uint32View[entryWordIndex]
+    const end = uint32View[entryWordIndex + 1]
     const bytes = new Uint8Array(
       view.buffer,
       view.byteOffset + stringDataOffset + start,
@@ -163,9 +192,12 @@ export class RemoteSourceFile {
    * @returns {number}
    */
   getRootBaseOffset(rootIndex) {
+    // Root index array is 4-byte aligned (starts at HEADER_SIZE = 40)
+    // and each entry is 12 bytes (3 × u32) so every field lands on a
+    // 4-byte boundary — safe for `Uint32Array[idx]`.
     const off =
       this.#internal.rootArrayOffset + rootIndex * ROOT_INDEX_ENTRY_SIZE + BASE_OFFSET_FIELD
-    return this.#internal.view.getUint32(off, true)
+    return this.#internal.uint32View[off >>> 2]
   }
 
   /**
