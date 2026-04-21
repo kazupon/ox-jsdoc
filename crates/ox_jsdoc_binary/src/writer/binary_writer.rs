@@ -120,15 +120,21 @@ impl<'arena> BinaryWriter<'arena> {
         let new_index = self.node_count();
         let new_byte_offset = self.nodes_buffer.len() as u32;
 
-        // Write the 24-byte record (next_sibling temporarily 0).
-        self.nodes_buffer.push(kind.as_u8());
-        self.nodes_buffer.push(common_data & COMMON_DATA_MASK);
-        self.nodes_buffer.extend_from_slice(&[0u8, 0u8]); // padding (byte 2-3)
-        self.nodes_buffer.extend_from_slice(&span.start.to_le_bytes());
-        self.nodes_buffer.extend_from_slice(&span.end.to_le_bytes());
-        self.nodes_buffer.extend_from_slice(&node_data.to_le_bytes());
-        self.nodes_buffer.extend_from_slice(&parent_index.to_le_bytes());
-        self.nodes_buffer.extend_from_slice(&0u32.to_le_bytes());
+        // Build the 24-byte record on the stack, then push to the buffer
+        // in one `extend_from_slice`. Doing this with 8 separate `push` /
+        // `extend_from_slice` calls (one per field) costs an extra 7
+        // capacity checks + potential growth events per node, which is
+        // measurable across the ~3000 nodes per typical fixture file.
+        // Bytes 2-3 (padding) and 20-23 (next_sibling) are pre-zeroed by
+        // the array initializer.
+        let mut record = [0u8; NODE_RECORD_SIZE];
+        record[0] = kind.as_u8();
+        record[1] = common_data & COMMON_DATA_MASK;
+        record[4..8].copy_from_slice(&span.start.to_le_bytes());
+        record[8..12].copy_from_slice(&span.end.to_le_bytes());
+        record[12..16].copy_from_slice(&node_data.to_le_bytes());
+        record[16..20].copy_from_slice(&parent_index.to_le_bytes());
+        self.nodes_buffer.extend_from_slice(&record);
 
         // Backpatch the previous sibling's `next_sibling` to this node, if
         // any.
