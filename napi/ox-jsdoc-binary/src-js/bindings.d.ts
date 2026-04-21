@@ -58,6 +58,19 @@ export interface JsParseResult {
   diagnostics: Array<JsDiagnostic>
 }
 
+/**
+ * Diagnostic: pay only the input-side marshalling cost (Vec<JsBatchItem>
+ * auto-conversion). Returns the item count so the call cannot be DCE'd.
+ */
+export declare function napiMarshallingInOnly(items: Array<JsBatchItem>): number
+
+/**
+ * Diagnostic: pay only the output-side marshalling cost (Vec<u8> →
+ * `Uint8Array` ownership transfer). Allocates a zero-filled buffer of
+ * `size` bytes and hands it to NAPI.
+ */
+export declare function napiMarshallingOutOnly(size: number): Uint8Array
+
 /** Parse a complete `/** ... *\/` JSDoc block and return the Binary AST. */
 export declare function parseJsdoc(
   sourceText: string,
@@ -73,5 +86,30 @@ export declare function parseJsdoc(
  */
 export declare function parseJsdocBatch(
   items: Array<JsBatchItem>,
+  options?: JsParseOptions | undefined | null
+): JsBatchParseResult
+
+/**
+ * Parse N JSDoc block comments where the JS-side has already concatenated
+ * every `source_text` into a single UTF-8 byte buffer.
+ *
+ * This avoids the per-item `Vec<JsBatchItem>` auto-conversion that
+ * dominates the [`parse_jsdoc_batch`] NAPI call (~213 µs / ~30% of the
+ * full call for the 226-comment fixture). Three NAPI handles replace
+ * 226 × {object, string, number} conversions:
+ *
+ * - `concat`: every `source_text` UTF-8 byte concatenated, no separators.
+ * - `offsets`: length `N + 1`. `concat[offsets[i]..offsets[i+1]]` is the
+ *   bytes for input item `i`.
+ * - `base_offsets`: length `N`. Per-item `base_offset`.
+ *
+ * The JS wrapper (`parseBatch` in `index.js`) builds those views via
+ * `TextEncoder`. Callers who need the original ergonomic API can keep
+ * using [`parse_jsdoc_batch`].
+ */
+export declare function parseJsdocBatchRaw(
+  concat: Uint8Array,
+  offsets: Uint32Array,
+  baseOffsets: Uint32Array,
   options?: JsParseOptions | undefined | null
 ): JsBatchParseResult

@@ -764,6 +764,15 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { parseJsdoc, parseJsdocBatch } = nativeBinding
+const {
+  napiMarshallingInOnly,
+  napiMarshallingOutOnly,
+  parseJsdoc,
+  parseJsdocBatch,
+  parseJsdocBatchRaw
+} = nativeBinding
+export { napiMarshallingInOnly }
+export { napiMarshallingOutOnly }
 export { parseJsdoc }
 export { parseJsdocBatch }
+export { parseJsdocBatchRaw }
