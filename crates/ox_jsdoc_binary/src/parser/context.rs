@@ -26,8 +26,15 @@
 //! `parser/type_parse.rs` lands.
 
 use oxc_span::Span;
+use smallvec::SmallVec;
 
 use crate::format::string_table::U16_NONE_SENTINEL;
+
+/// Inline cap for `inline_tags`: most JSDoc tags carry zero or one
+/// `{@link ...}` style inline tag. Inline-storing up to 2 keeps that
+/// case heap-allocation-free at the cost of `2 * size_of::<InlineTagData>()`
+/// (~160 bytes) of inline storage on every `TagData` / `BlockData`.
+type InlineTagsVec<'a> = SmallVec<[InlineTagData<'a>; 2]>;
 use crate::writer::nodes::comment_ast::{
     write_jsdoc_block, write_jsdoc_block_compat_tail, write_jsdoc_description_line,
     write_jsdoc_generic_tag_body, write_jsdoc_identifier, write_jsdoc_inline_tag,
@@ -178,7 +185,7 @@ struct TagData<'a> {
     body: Option<TagBodyData<'a>>,
     description_lines: Vec<DescriptionLineData<'a>>,
     type_lines: Vec<TypeLineData<'a>>,
-    inline_tags: Vec<InlineTagData<'a>>,
+    inline_tags: InlineTagsVec<'a>,
     header_initial: &'a str,
     header_delimiter: &'a str,
     header_post_delimiter: &'a str,
@@ -196,7 +203,7 @@ struct BlockData<'a> {
     span: Span,
     description: Option<&'a str>,
     description_lines: Vec<DescriptionLineData<'a>>,
-    inline_tags: Vec<InlineTagData<'a>>,
+    inline_tags: InlineTagsVec<'a>,
     tags: Vec<TagData<'a>>,
     line_end: &'a str,
     delimiter_line_break: &'a str,
@@ -473,7 +480,7 @@ struct TagSection<'a> {
 struct ParsedDescription<'a> {
     text: Option<&'a str>,
     lines: Vec<DescriptionLineData<'a>>,
-    inline_tags: Vec<InlineTagData<'a>>,
+    inline_tags: InlineTagsVec<'a>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -492,7 +499,7 @@ struct ParsedTagBody<'a> {
     description: Option<&'a str>,
     type_lines: Vec<TypeLineData<'a>>,
     description_lines: Vec<DescriptionLineData<'a>>,
-    inline_tags: Vec<InlineTagData<'a>>,
+    inline_tags: InlineTagsVec<'a>,
     body: GenericTagBodyData<'a>,
 }
 
@@ -615,7 +622,7 @@ impl<'a> ParserContext<'a> {
                 None,
                 Vec::new(),
                 Vec::new(),
-                Vec::new(),
+                InlineTagsVec::new(),
                 None,
                 None,
             )
@@ -769,7 +776,7 @@ impl<'a> ParserContext<'a> {
             return ParsedDescription {
                 text: None,
                 lines: description_lines,
-                inline_tags: Vec::new(),
+                inline_tags: InlineTagsVec::new(),
             };
         };
         let mut description = self.parse_description_text(normalized.text, normalized.span);
@@ -779,7 +786,7 @@ impl<'a> ParserContext<'a> {
 
     fn parse_description_text(&mut self, text: &'a str, span: Span) -> ParsedDescription<'a> {
         let mut lines = Vec::new();
-        let mut inline_tags = Vec::new();
+        let mut inline_tags = InlineTagsVec::new();
 
         if text
             .bytes()
