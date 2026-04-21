@@ -50,17 +50,44 @@ const INLINE_TAG_FORMATS = ['plain', 'pipe', 'space', 'prefix', 'unknown']
 
 /**
  * `JsdocBlock` (Kind 0x01) — root of every parsed `/** ... *​/` comment.
+ *
+ * Getters self-cache into `#internal.$field` slots. The slots are
+ * pre-allocated in the constructor so the V8 hidden class is fixed before
+ * any getter writes; repeated access (toJSON, multi-pass visitors) returns
+ * the cached value with one property read.
  */
 export class RemoteJsdocBlock {
   type = 'JsdocBlock'
   #internal
 
   constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
-    this.#internal = { view, byteIndex, index, rootIndex, parent, sourceFile }
+    this.#internal = {
+      view,
+      byteIndex,
+      index,
+      rootIndex,
+      parent,
+      sourceFile,
+      $range: undefined,
+      $description: undefined,
+      $delimiter: undefined,
+      $postDelimiter: undefined,
+      $terminal: undefined,
+      $lineEnd: undefined,
+      $initial: undefined,
+      $delimiterLineBreak: undefined,
+      $preterminalLineBreak: undefined,
+      $descriptionLines: undefined,
+      $tags: undefined,
+      $inlineTags: undefined
+    }
   }
 
   get range() {
-    return absoluteRange(this.#internal)
+    const internal = this.#internal
+    return internal.$range !== undefined
+      ? internal.$range
+      : (internal.$range = absoluteRange(internal))
   }
   get parent() {
     return this.#internal.parent
@@ -68,48 +95,81 @@ export class RemoteJsdocBlock {
 
   /** Top-level description string (`null` when absent). */
   get description() {
-    return extU16String(this.#internal, 2)
+    const internal = this.#internal
+    const cached = internal.$description
+    if (cached !== undefined) return cached
+    return (internal.$description = extU16String(internal, 2))
   }
   /** Source-preserving `*` line-prefix delimiter. */
   get delimiter() {
-    return extU16StringRequired(this.#internal, 4)
+    const internal = this.#internal
+    const cached = internal.$delimiter
+    if (cached !== undefined) return cached
+    return (internal.$delimiter = extU16StringRequired(internal, 4))
   }
   /** Source-preserving space after `*`. */
   get postDelimiter() {
-    return extU16StringRequired(this.#internal, 6)
+    const internal = this.#internal
+    const cached = internal.$postDelimiter
+    if (cached !== undefined) return cached
+    return (internal.$postDelimiter = extU16StringRequired(internal, 6))
   }
   /** Source-preserving `*​/` terminal. */
   get terminal() {
-    return extU16StringRequired(this.#internal, 8)
+    const internal = this.#internal
+    const cached = internal.$terminal
+    if (cached !== undefined) return cached
+    return (internal.$terminal = extU16StringRequired(internal, 8))
   }
   /** Source-preserving line-end characters. */
   get lineEnd() {
-    return extU16StringRequired(this.#internal, 10)
+    const internal = this.#internal
+    const cached = internal.$lineEnd
+    if (cached !== undefined) return cached
+    return (internal.$lineEnd = extU16StringRequired(internal, 10))
   }
   /** Indentation before the leading `*`. */
   get initial() {
-    return extU16StringRequired(this.#internal, 12)
+    const internal = this.#internal
+    const cached = internal.$initial
+    if (cached !== undefined) return cached
+    return (internal.$initial = extU16StringRequired(internal, 12))
   }
   /** Line-break right after `/**`. */
   get delimiterLineBreak() {
-    return extU16StringRequired(this.#internal, 14)
+    const internal = this.#internal
+    const cached = internal.$delimiterLineBreak
+    if (cached !== undefined) return cached
+    return (internal.$delimiterLineBreak = extU16StringRequired(internal, 14))
   }
   /** Line-break right before `*​/`. */
   get preterminalLineBreak() {
-    return extU16StringRequired(this.#internal, 16)
+    const internal = this.#internal
+    const cached = internal.$preterminalLineBreak
+    if (cached !== undefined) return cached
+    return (internal.$preterminalLineBreak = extU16StringRequired(internal, 16))
   }
 
   /** Top-level description lines. */
   get descriptionLines() {
-    return nodeListAtVisitorIndexExtended(this.#internal, 0)
+    const internal = this.#internal
+    const cached = internal.$descriptionLines
+    if (cached !== undefined) return cached
+    return (internal.$descriptionLines = nodeListAtVisitorIndexExtended(internal, 0))
   }
   /** Block tags. */
   get tags() {
-    return nodeListAtVisitorIndexExtended(this.#internal, 1)
+    const internal = this.#internal
+    const cached = internal.$tags
+    if (cached !== undefined) return cached
+    return (internal.$tags = nodeListAtVisitorIndexExtended(internal, 1))
   }
   /** Inline tags found inside the top-level description. */
   get inlineTags() {
-    return nodeListAtVisitorIndexExtended(this.#internal, 2)
+    const internal = this.#internal
+    const cached = internal.$inlineTags
+    if (cached !== undefined) return cached
+    return (internal.$inlineTags = nodeListAtVisitorIndexExtended(internal, 2))
   }
 
   toJSON() {
@@ -149,11 +209,23 @@ export class RemoteJsdocDescriptionLine {
   #internal
 
   constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
-    this.#internal = { view, byteIndex, index, rootIndex, parent, sourceFile }
+    this.#internal = {
+      view,
+      byteIndex,
+      index,
+      rootIndex,
+      parent,
+      sourceFile,
+      $range: undefined,
+      $description: undefined
+    }
   }
 
   get range() {
-    return absoluteRange(this.#internal)
+    const internal = this.#internal
+    return internal.$range !== undefined
+      ? internal.$range
+      : (internal.$range = absoluteRange(internal))
   }
   get parent() {
     return this.#internal.parent
@@ -161,10 +233,13 @@ export class RemoteJsdocDescriptionLine {
 
   /** Description content. */
   get description() {
-    if (this.#internal.sourceFile.compatMode) {
-      return extU16StringRequired(this.#internal, 0)
-    }
-    return stringPayloadOf(this.#internal) ?? ''
+    const internal = this.#internal
+    const cached = internal.$description
+    if (cached !== undefined) return cached
+    const value = internal.sourceFile.compatMode
+      ? extU16StringRequired(internal, 0)
+      : (stringPayloadOf(internal) ?? '')
+    return (internal.$description = value)
   }
 
   toJSON() {
@@ -180,18 +255,42 @@ export class RemoteJsdocDescriptionLine {
 // ===========================================================================
 
 /**
- * `JsdocTag` (Kind 0x03) — one block tag (e.g. `@param`).
+ * `JsdocTag` (Kind 0x03) — one block tag (e.g. `@param`). Self-caches
+ * structural fields; cheap bit checks like {@link RemoteJsdocTag.optional}
+ * stay uncached because the cache check would cost more than recomputing.
  */
 export class RemoteJsdocTag {
   type = 'JsdocTag'
   #internal
 
   constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
-    this.#internal = { view, byteIndex, index, rootIndex, parent, sourceFile }
+    this.#internal = {
+      view,
+      byteIndex,
+      index,
+      rootIndex,
+      parent,
+      sourceFile,
+      $range: undefined,
+      $defaultValue: undefined,
+      $description: undefined,
+      $rawBody: undefined,
+      $tag: undefined,
+      $rawType: undefined,
+      $name: undefined,
+      $parsedType: undefined,
+      $body: undefined,
+      $typeLines: undefined,
+      $descriptionLines: undefined,
+      $inlineTags: undefined
+    }
   }
 
   get range() {
-    return absoluteRange(this.#internal)
+    const internal = this.#internal
+    return internal.$range !== undefined
+      ? internal.$range
+      : (internal.$range = absoluteRange(internal))
   }
   get parent() {
     return this.#internal.parent
@@ -203,48 +302,81 @@ export class RemoteJsdocTag {
   }
   /** Default value parsed from `[id=foo]` syntax. */
   get defaultValue() {
-    return extU16String(this.#internal, 2)
+    const internal = this.#internal
+    const cached = internal.$defaultValue
+    if (cached !== undefined) return cached
+    return (internal.$defaultValue = extU16String(internal, 2))
   }
   /** Joined description text. */
   get description() {
-    return extU16String(this.#internal, 4)
+    const internal = this.#internal
+    const cached = internal.$description
+    if (cached !== undefined) return cached
+    return (internal.$description = extU16String(internal, 4))
   }
   /** Raw body when the tag uses the `Raw` body variant. */
   get rawBody() {
-    return extU16String(this.#internal, 6)
+    const internal = this.#internal
+    const cached = internal.$rawBody
+    if (cached !== undefined) return cached
+    return (internal.$rawBody = extU16String(internal, 6))
   }
 
   /** Mandatory tag-name child (visitor index 0 — the `@name` token). */
   get tag() {
-    return childNodeAtVisitorIndex(this.#internal, 0)
+    const internal = this.#internal
+    const cached = internal.$tag
+    if (cached !== undefined) return cached
+    return (internal.$tag = childNodeAtVisitorIndex(internal, 0))
   }
   /** Raw `{...}` type source (visitor index 1). */
   get rawType() {
-    return childNodeAtVisitorIndex(this.#internal, 1)
+    const internal = this.#internal
+    const cached = internal.$rawType
+    if (cached !== undefined) return cached
+    return (internal.$rawType = childNodeAtVisitorIndex(internal, 1))
   }
   /** Tag-name value (visitor index 2). */
   get name() {
-    return childNodeAtVisitorIndex(this.#internal, 2)
+    const internal = this.#internal
+    const cached = internal.$name
+    if (cached !== undefined) return cached
+    return (internal.$name = childNodeAtVisitorIndex(internal, 2))
   }
   /** `parsedType` child (visitor index 3) — any TypeNode variant. */
   get parsedType() {
-    return childNodeAtVisitorIndex(this.#internal, 3)
+    const internal = this.#internal
+    const cached = internal.$parsedType
+    if (cached !== undefined) return cached
+    return (internal.$parsedType = childNodeAtVisitorIndex(internal, 3))
   }
   /** Body child (visitor index 4) — Generic / Borrows / Raw variant. */
   get body() {
-    return childNodeAtVisitorIndex(this.#internal, 4)
+    const internal = this.#internal
+    const cached = internal.$body
+    if (cached !== undefined) return cached
+    return (internal.$body = childNodeAtVisitorIndex(internal, 4))
   }
   /** Source-preserving type lines (visitor index 5). */
   get typeLines() {
-    return nodeListAtVisitorIndexExtended(this.#internal, 5)
+    const internal = this.#internal
+    const cached = internal.$typeLines
+    if (cached !== undefined) return cached
+    return (internal.$typeLines = nodeListAtVisitorIndexExtended(internal, 5))
   }
   /** Source-preserving description lines (visitor index 6). */
   get descriptionLines() {
-    return nodeListAtVisitorIndexExtended(this.#internal, 6)
+    const internal = this.#internal
+    const cached = internal.$descriptionLines
+    if (cached !== undefined) return cached
+    return (internal.$descriptionLines = nodeListAtVisitorIndexExtended(internal, 6))
   }
   /** Inline tags found in this tag's description (visitor index 7). */
   get inlineTags() {
-    return nodeListAtVisitorIndexExtended(this.#internal, 7)
+    const internal = this.#internal
+    const cached = internal.$inlineTags
+    if (cached !== undefined) return cached
+    return (internal.$inlineTags = nodeListAtVisitorIndexExtended(internal, 7))
   }
 
   toJSON() {
@@ -285,16 +417,31 @@ function defineStringLeaf(typeName, accessorName) {
   return class {
     constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
       Object.defineProperty(this, 'type', { value: typeName, enumerable: true })
-      this._internal = { view, byteIndex, index, rootIndex, parent, sourceFile }
+      this._internal = {
+        view,
+        byteIndex,
+        index,
+        rootIndex,
+        parent,
+        sourceFile,
+        $range: undefined,
+        $value: undefined
+      }
     }
     get range() {
-      return absoluteRange(this._internal)
+      const internal = this._internal
+      return internal.$range !== undefined
+        ? internal.$range
+        : (internal.$range = absoluteRange(internal))
     }
     get parent() {
       return this._internal.parent
     }
     get [accessorName]() {
-      return stringPayloadOf(this._internal) ?? ''
+      const internal = this._internal
+      const cached = internal.$value
+      if (cached !== undefined) return cached
+      return (internal.$value = stringPayloadOf(internal) ?? '')
     }
     toJSON() {
       return {
@@ -337,11 +484,23 @@ export class RemoteJsdocTypeLine {
   #internal
 
   constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
-    this.#internal = { view, byteIndex, index, rootIndex, parent, sourceFile }
+    this.#internal = {
+      view,
+      byteIndex,
+      index,
+      rootIndex,
+      parent,
+      sourceFile,
+      $range: undefined,
+      $rawType: undefined
+    }
   }
 
   get range() {
-    return absoluteRange(this.#internal)
+    const internal = this.#internal
+    return internal.$range !== undefined
+      ? internal.$range
+      : (internal.$range = absoluteRange(internal))
   }
   get parent() {
     return this.#internal.parent
@@ -349,10 +508,13 @@ export class RemoteJsdocTypeLine {
 
   /** Raw `{...}` line content. */
   get rawType() {
-    if (this.#internal.sourceFile.compatMode) {
-      return extU16StringRequired(this.#internal, 0)
-    }
-    return stringPayloadOf(this.#internal) ?? ''
+    const internal = this.#internal
+    const cached = internal.$rawType
+    if (cached !== undefined) return cached
+    const value = internal.sourceFile.compatMode
+      ? extU16StringRequired(internal, 0)
+      : (stringPayloadOf(internal) ?? '')
+    return (internal.$rawType = value)
   }
 
   toJSON() {
@@ -375,11 +537,25 @@ export class RemoteJsdocInlineTag {
   #internal
 
   constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
-    this.#internal = { view, byteIndex, index, rootIndex, parent, sourceFile }
+    this.#internal = {
+      view,
+      byteIndex,
+      index,
+      rootIndex,
+      parent,
+      sourceFile,
+      $range: undefined,
+      $namepathOrURL: undefined,
+      $text: undefined,
+      $rawBody: undefined
+    }
   }
 
   get range() {
-    return absoluteRange(this.#internal)
+    const internal = this.#internal
+    return internal.$range !== undefined
+      ? internal.$range
+      : (internal.$range = absoluteRange(internal))
   }
   get parent() {
     return this.#internal.parent
@@ -391,15 +567,24 @@ export class RemoteJsdocInlineTag {
   }
   /** Optional name path or URL portion. */
   get namepathOrURL() {
-    return extU16String(this.#internal, 0)
+    const internal = this.#internal
+    const cached = internal.$namepathOrURL
+    if (cached !== undefined) return cached
+    return (internal.$namepathOrURL = extU16String(internal, 0))
   }
   /** Optional display text portion. */
   get text() {
-    return extU16String(this.#internal, 2)
+    const internal = this.#internal
+    const cached = internal.$text
+    if (cached !== undefined) return cached
+    return (internal.$text = extU16String(internal, 2))
   }
   /** Raw body text fallback. */
   get rawBody() {
-    return extU16String(this.#internal, 4)
+    const internal = this.#internal
+    const cached = internal.$rawBody
+    if (cached !== undefined) return cached
+    return (internal.$rawBody = extU16String(internal, 4))
   }
 
   toJSON() {
