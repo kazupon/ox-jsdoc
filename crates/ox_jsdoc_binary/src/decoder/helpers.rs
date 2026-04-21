@@ -94,7 +94,7 @@ pub fn first_child(sf: &LazySourceFile<'_>, parent_index: u32) -> Option<u32> {
 
 /// Resolve the 30-bit String payload of a String-type node into its
 /// underlying string. `None` when the writer used the
-/// [`crate::format::node_record::STRING_PAYLOD_NONE_SENTINEL`] sentinel.
+/// [`crate::format::node_record::STRING_PAYLOAD_NONE_SENTINEL`] sentinel.
 #[inline]
 #[must_use]
 pub fn string_payload<'a>(sf: &LazySourceFile<'a>, node_index: u32) -> Option<&'a str> {

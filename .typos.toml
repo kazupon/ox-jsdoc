@@ -5,3 +5,9 @@ extend-exclude = [
   "design/syntax.ebnf",
   "fixtures/**"
 ]
+
+[default.extend-words]
+# `nd` is a deliberate local-variable shorthand for `node_data` in
+# ox_jsdoc_binary tests; the global function `node_data(...)` already
+# uses the long form.
+nd = "nd"
