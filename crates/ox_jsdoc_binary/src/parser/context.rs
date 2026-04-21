@@ -906,11 +906,14 @@ impl<'a> ParserContext<'a> {
 
 fn parse_tag_header(line: &str, line_start: u32) -> Option<(&str, u32, Option<(&str, u32)>)> {
     let stripped = line.strip_prefix('@')?;
+    // Tag-name characters are ASCII-only by spec, so byte position search
+    // beats `chars().take_while().sum::<len_utf8>()` (no UTF-8 decoding,
+    // single-byte is_ascii_alphanumeric LUT).
     let name_len = stripped
-        .chars()
-        .take_while(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '!'))
-        .map(char::len_utf8)
-        .sum::<usize>();
+        .as_bytes()
+        .iter()
+        .position(|&b| !(b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'!')))
+        .unwrap_or(stripped.len());
     if name_len == 0 {
         return None;
     }
@@ -928,10 +931,10 @@ fn parse_tag_header(line: &str, line_start: u32) -> Option<(&str, u32, Option<(&
 fn parse_inline_tag_header(inside: &str) -> Option<(&str, &str)> {
     let trimmed = inside.trim();
     let name_len = trimmed
-        .chars()
-        .take_while(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '!'))
-        .map(char::len_utf8)
-        .sum::<usize>();
+        .as_bytes()
+        .iter()
+        .position(|&b| !(b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'!')))
+        .unwrap_or(trimmed.len());
     if name_len == 0 {
         return None;
     }
@@ -975,16 +978,26 @@ fn leading_whitespace_len(value: &str) -> usize {
 }
 
 fn find_matching_type_end(text: &str, start: usize) -> Option<usize> {
+    // `{` and `}` are single-byte ASCII chars and unambiguous within UTF-8
+    // (continuation bytes never collide with ASCII), so byte iteration is
+    // both correct and avoids per-step UTF-8 decoding. The previous
+    // `char_indices().skip(start)` was also semantically wrong because
+    // `start` is a byte offset but `.skip(N)` skips N chars.
+    let bytes = text.as_bytes();
     let mut depth = 0usize;
-    for (index, ch) in text.char_indices().skip(start) {
-        if ch == '{' {
-            depth += 1;
-        } else if ch == '}' {
-            depth -= 1;
-            if depth == 0 {
-                return Some(index);
+    let mut i = start;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
             }
+            _ => {}
         }
+        i += 1;
     }
     None
 }
@@ -995,22 +1008,44 @@ fn find_value_end(text: &str, start: usize) -> usize {
         return start;
     }
     if bytes[start] == b'[' {
+        // Bracket-depth scan: `[` and `]` are single-byte ASCII so byte loop
+        // suffices.
         let mut depth = 0usize;
-        for (index, ch) in text[start..].char_indices() {
-            if ch == '[' {
-                depth += 1;
-            } else if ch == ']' {
-                depth -= 1;
-                if depth == 0 {
-                    return start + index + 1;
+        let mut i = start;
+        while i < bytes.len() {
+            match bytes[i] {
+                b'[' => depth += 1,
+                b']' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return i + 1;
+                    }
                 }
+                _ => {}
             }
+            i += 1;
         }
         return text.len();
     }
-    for (index, ch) in text[start..].char_indices() {
-        if ch.is_whitespace() {
-            return start + index;
+    // Tag value tokens terminate at any whitespace. ASCII bytes are checked
+    // inline (LUT, no UTF-8 decode); the moment a non-ASCII byte appears we
+    // fall back to char_indices to preserve the original Unicode-whitespace
+    // semantics.
+    let mut i = start;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b < 0x80 {
+            if (b as char).is_whitespace() {
+                return i;
+            }
+            i += 1;
+        } else {
+            for (idx, ch) in text[i..].char_indices() {
+                if ch.is_whitespace() {
+                    return i + idx;
+                }
+            }
+            return text.len();
         }
     }
     text.len()

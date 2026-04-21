@@ -78,8 +78,15 @@ pub fn logical_lines(source_text: &str, base_offset: u32) -> ScanResult<'_> {
     };
 
     let body = &source_text[body_start..body_end];
-    let mut lines = Vec::new();
-    let mut margins = Vec::new();
+    // Estimate line count from newline density. Most JSDoc bodies follow the
+    // canonical "leading `*` per line" layout, so a simple newline count
+    // gives a tight upper bound and lets us skip Vec doubling growth for
+    // every comment in the batch (1500+ comments × 2 vecs each on a typical
+    // typescript-checker.ts run). The byte-iter filter compiles to a
+    // SIMD-friendly loop on modern targets.
+    let estimated_lines = body.as_bytes().iter().filter(|&&b| b == b'\n').count() + 1;
+    let mut lines = Vec::with_capacity(estimated_lines);
+    let mut margins = Vec::with_capacity(estimated_lines);
     let mut cursor = 0usize;
 
     while cursor <= body.len() {
