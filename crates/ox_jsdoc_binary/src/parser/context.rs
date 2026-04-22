@@ -1449,16 +1449,17 @@ fn emit_tag(
 
     let tag_parent = tag_idx.as_u32();
 
-    // Mandatory tag-name child (visitor index 0).
-    let tn_str = intern(writer, tag.tag_name);
+    // Mandatory tag-name child (visitor index 0). Common tag names hit
+    // COMMON_STRINGS via the helper; uncommon ones zero-copy off the source.
+    let tn_str = writer.intern_source_or_string(tag.tag_name, tag.tag_name_span);
     let _ = write_jsdoc_tag_name(writer, tag.tag_name_span, tag_parent, tn_str);
 
     if let Some(rt) = tag.raw_type.as_ref() {
-        let raw_idx = intern(writer, rt.raw);
+        let raw_idx = writer.intern_source_or_string(rt.raw, rt.span);
         let _ = write_jsdoc_type_source(writer, rt.span, tag_parent, raw_idx);
     }
     if let Some(name) = tag.name.as_ref() {
-        let raw_idx = intern(writer, name.raw);
+        let raw_idx = writer.intern_source_or_string(name.raw, name.span);
         let _ = write_jsdoc_tag_name_value(writer, name.span, tag_parent, raw_idx);
     }
     if let Some(pt) = parsed_type {
@@ -1476,7 +1477,7 @@ fn emit_tag(
             tag.type_lines.len() as u32,
         );
         for tl in &tag.type_lines {
-            let raw_idx = intern(writer, tl.raw_type);
+            let raw_idx = writer.intern_source_or_string(tl.raw_type, tl.span);
             let delim = opt_string(writer, non_empty_str(tl.delimiter));
             let pdelim = opt_string(writer, non_empty_str(tl.post_delimiter));
             let init = opt_string(writer, non_empty_str(tl.initial));
@@ -1538,7 +1539,7 @@ fn emit_tag_body(writer: &mut BinaryWriter<'_>, body: &TagBodyData<'_>, parent_i
             let body_parent = body_idx.as_u32();
 
             if let Some(ts) = g.type_source.as_ref() {
-                let raw_idx = intern(writer, ts.raw);
+                let raw_idx = writer.intern_source_or_string(ts.raw, ts.span);
                 let _ = write_jsdoc_type_source(writer, ts.span, body_parent, raw_idx);
             }
             if let Some(v) = g.value.as_ref() {
@@ -1556,7 +1557,7 @@ fn emit_tag_value(writer: &mut BinaryWriter<'_>, value: &TagValueData<'_>, paren
             optional,
             default_value,
         } => {
-            let path_idx = intern(writer, path);
+            let path_idx = writer.intern_source_or_string(path, *span);
             let dv_idx = opt_string(writer, *default_value);
             let _ = write_jsdoc_parameter_name(
                 writer,
@@ -1568,15 +1569,15 @@ fn emit_tag_value(writer: &mut BinaryWriter<'_>, value: &TagValueData<'_>, paren
             );
         }
         TagValueData::Namepath { span, raw } => {
-            let raw_idx = intern(writer, raw);
+            let raw_idx = writer.intern_source_or_string(raw, *span);
             let _ = write_jsdoc_namepath_source(writer, *span, parent_index, raw_idx);
         }
         TagValueData::Identifier { span, name } => {
-            let name_idx = intern(writer, name);
+            let name_idx = writer.intern_source_or_string(name, *span);
             let _ = write_jsdoc_identifier(writer, *span, parent_index, name_idx);
         }
         TagValueData::Raw { span, value } => {
-            let val_idx = intern(writer, value);
+            let val_idx = writer.intern_source_or_string(value, *span);
             let _ = write_jsdoc_text(writer, *span, parent_index, val_idx);
         }
     }
