@@ -27,10 +27,15 @@ harness = false
 name = "type_parser"
 harness = false
 
+[[bench]]
+name = "oxc_jsdoc"
+harness = false
+
 [dependencies]
 criterion2 = { version = "3.0.2", default-features = false }
 oxc_allocator.workspace = true
 oxc_ast.workspace = true
+oxc_jsdoc = "=0.123.0"
 oxc_parser.workspace = true
 oxc_span.workspace = true
 ox_jsdoc = { path = "../../crates/ox_jsdoc" }
