@@ -31,11 +31,11 @@ use smallvec::SmallVec;
 
 use crate::format::string_table::U16_NONE_SENTINEL;
 
-/// Inline cap for `inline_tags`: most JSDoc tags carry zero or one
-/// `{@link ...}` style inline tag. Inline-storing up to 2 keeps that
-/// case heap-allocation-free at the cost of `2 * size_of::<InlineTagData>()`
-/// (~160 bytes) of inline storage on every `TagData` / `BlockData`.
-type InlineTagsVec<'a> = SmallVec<[InlineTagData<'a>; 2]>;
+/// Path C-2: arena-allocated inline-tag list. Was `SmallVec<[_; 2]>` but
+/// SmallVec implements `Drop` (for the spilled-heap case), which prevents
+/// the surrounding `TagData` from itself being placed in `ArenaVec`. The
+/// `InlineTagData` payload is `Copy`, so `ArenaVec` is the cleanest fit.
+type InlineTagsVec<'arena, 'a> = ArenaVec<'arena, InlineTagData<'a>>;
 use crate::writer::nodes::comment_ast::{
     write_jsdoc_block, write_jsdoc_block_compat_tail, write_jsdoc_description_line,
     write_jsdoc_generic_tag_body, write_jsdoc_identifier, write_jsdoc_inline_tag,
@@ -182,12 +182,15 @@ struct TagData<'arena, 'a> {
     raw_body: Option<&'a str>,
     raw_type: Option<TypeSourceData<'a>>,
     name: Option<TagNameValueData<'a>>,
-    parsed_type: Option<Box<TypeNodeData<'a>>>,
+    /// Path C-2: `true` when this tag has a parsed type expression.
+    /// The actual `TypeNodeData` lives in [`BlockData::tags_parsed_types`]
+    /// (a side table) so `TagData` can stay non-Drop and live in `ArenaVec`.
+    has_parsed_type: bool,
     body: Option<TagBodyData<'a>>,
     /// Path C: arena-allocated. Walked once during emit, no need for std heap.
     description_lines: ArenaVec<'arena, DescriptionLineData<'a>>,
     type_lines: ArenaVec<'arena, TypeLineData<'a>>,
-    inline_tags: InlineTagsVec<'a>,
+    inline_tags: InlineTagsVec<'arena, 'a>,
     header_initial: &'a str,
     header_delimiter: &'a str,
     header_post_delimiter: &'a str,
@@ -205,12 +208,15 @@ struct BlockData<'arena, 'a> {
     span: Span,
     description: Option<&'a str>,
     description_lines: ArenaVec<'arena, DescriptionLineData<'a>>,
-    inline_tags: InlineTagsVec<'a>,
-    /// `tags` stays on the std heap because `TagData` carries a
-    /// `Box<TypeNodeData>` (a Drop type that `ArenaVec` rejects under
-    /// bumpalo's no-drop constraint). The per-tag inner Vecs are still
-    /// arena-allocated.
-    tags: Vec<TagData<'arena, 'a>>,
+    inline_tags: InlineTagsVec<'arena, 'a>,
+    /// Path C-2: arena-allocated. `TagData` is now non-Drop (parsed_type
+    /// moved to side table below) so `ArenaVec` accepts it.
+    tags: ArenaVec<'arena, TagData<'arena, 'a>>,
+    /// Side table: `(tag_index, parsed_type)` pairs for tags with
+    /// `has_parsed_type = true`. Sorted by `tag_index` ascending. Empty
+    /// when `parse_types: false` (the default), which keeps the emit
+    /// loop's lookup branch fully predictable.
+    tags_parsed_types: Vec<(u32, Box<TypeNodeData<'a>>)>,
     line_end: &'a str,
     delimiter_line_break: &'a str,
     preterminal_line_break: &'a str,
@@ -401,7 +407,7 @@ pub fn parse_block_into_data<'arena, 'a>(
     let desc_lines_slice = &scan.lines[desc_range.start..desc_range.end];
     let desc_margins_slice = &scan.margins[desc_range.start..desc_range.end];
     let parsed_desc = ctx.parse_description_lines(desc_lines_slice, desc_margins_slice);
-    let tags = ctx.parse_tag_sections(&tag_sections);
+    let (tags, tags_parsed_types) = ctx.parse_tag_sections(&tag_sections);
 
     let line_count = scan.lines.len() as u32;
     let end_line = if line_count > 0 { line_count - 1 } else { 0 };
@@ -455,6 +461,7 @@ pub fn parse_block_into_data<'arena, 'a>(
         description_lines: parsed_desc.lines,
         inline_tags: parsed_desc.inline_tags,
         tags,
+        tags_parsed_types,
         line_end: block_line_end,
         delimiter_line_break,
         preterminal_line_break,
@@ -500,7 +507,7 @@ struct TagSection<'a> {
 struct ParsedDescription<'arena, 'a> {
     text: Option<&'a str>,
     lines: ArenaVec<'arena, DescriptionLineData<'a>>,
-    inline_tags: InlineTagsVec<'a>,
+    inline_tags: InlineTagsVec<'arena, 'a>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -519,7 +526,7 @@ struct ParsedTagBody<'arena, 'a> {
     description: Option<&'a str>,
     type_lines: ArenaVec<'arena, TypeLineData<'a>>,
     description_lines: ArenaVec<'arena, DescriptionLineData<'a>>,
-    inline_tags: InlineTagsVec<'a>,
+    inline_tags: InlineTagsVec<'arena, 'a>,
     body: GenericTagBodyData<'a>,
 }
 
@@ -597,15 +604,31 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         )
     }
 
-    fn parse_tag_sections(&mut self, sections: &[TagSection<'a>]) -> Vec<TagData<'arena, 'a>> {
-        let mut tags = Vec::with_capacity(sections.len());
-        for section in sections {
-            tags.push(self.parse_jsdoc_tag(section));
+    fn parse_tag_sections(
+        &mut self,
+        sections: &[TagSection<'a>],
+    ) -> (
+        ArenaVec<'arena, TagData<'arena, 'a>>,
+        Vec<(u32, Box<TypeNodeData<'a>>)>,
+    ) {
+        let mut tags = ArenaVec::with_capacity_in(sections.len(), self.arena);
+        // Side table: stays empty when parse_types is off (the default), so
+        // emit-loop's lookup branch is a single `peek().is_none()` predict.
+        let mut parsed_types: Vec<(u32, Box<TypeNodeData<'a>>)> = Vec::new();
+        for (i, section) in sections.iter().enumerate() {
+            let (tag, opt_pt) = self.parse_jsdoc_tag(section);
+            if let Some(pt) = opt_pt {
+                parsed_types.push((i as u32, pt));
+            }
+            tags.push(tag);
         }
-        tags
+        (tags, parsed_types)
     }
 
-    fn parse_jsdoc_tag(&mut self, section: &TagSection<'a>) -> TagData<'arena, 'a> {
+    fn parse_jsdoc_tag(
+        &mut self,
+        section: &TagSection<'a>,
+    ) -> (TagData<'arena, 'a>, Option<Box<TypeNodeData<'a>>>) {
         let normalized = self.normalize_lines(&section.body_lines);
         let parsed_body = normalized.map(|n| self.parse_generic_tag_body(n));
 
@@ -642,7 +665,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 None,
                 ArenaVec::new_in(self.arena),
                 ArenaVec::new_in(self.arena),
-                InlineTagsVec::new(),
+                InlineTagsVec::new_in(self.arena),
                 None,
                 None,
             )
@@ -658,7 +681,8 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             None
         };
 
-        TagData {
+        let has_parsed_type = parsed_type.is_some();
+        let tag = TagData {
             span: Span::new(section.tag_name_start, section.end),
             tag_name_span: Span::new(section.tag_name_start, section.tag_name_end),
             tag_name: section.tag_name,
@@ -668,7 +692,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             raw_body,
             raw_type,
             name,
-            parsed_type,
+            has_parsed_type,
             body,
             description_lines,
             type_lines,
@@ -680,7 +704,8 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             post_tag: " ",
             post_type: " ",
             post_name: " ",
-        }
+        };
+        (tag, parsed_type)
     }
 
     fn parse_generic_tag_body(&mut self, normalized: NormalizedText<'a>) -> ParsedTagBody<'arena, 'a> {
@@ -796,7 +821,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             return ParsedDescription {
                 text: None,
                 lines: description_lines,
-                inline_tags: InlineTagsVec::new(),
+                inline_tags: InlineTagsVec::new_in(self.arena),
             };
         };
         let mut description = self.parse_description_text(normalized.text, normalized.span);
@@ -806,7 +831,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
 
     fn parse_description_text(&mut self, text: &'a str, span: Span) -> ParsedDescription<'arena, 'a> {
         let mut lines: ArenaVec<'arena, DescriptionLineData<'a>> = ArenaVec::new_in(self.arena);
-        let mut inline_tags = InlineTagsVec::new();
+        let mut inline_tags = InlineTagsVec::new_in(self.arena);
 
         if text
             .bytes()
@@ -1274,8 +1299,19 @@ fn emit_block_inner<'arena>(
             block_parent,
             block.tags.len() as u32,
         );
-        for tag in &block.tags {
-            emit_tag(writer, tag, list.as_u32(), compat);
+        // Path C-2: side-table walk for parsed_type. Both `tags` and
+        // `tags_parsed_types` are emitted in tag-index order, so a single
+        // peekable iterator avoids the per-tag linear search.
+        let mut pt_iter = block.tags_parsed_types.iter().peekable();
+        for (i, tag) in block.tags.iter().enumerate() {
+            let parsed_type: Option<&TypeNodeData<'_>> = match pt_iter.peek() {
+                Some((idx, _)) if (*idx as usize) == i => {
+                    let (_, pt) = pt_iter.next().unwrap();
+                    Some(pt.as_ref())
+                }
+                _ => None,
+            };
+            emit_tag(writer, tag, list.as_u32(), compat, parsed_type);
         }
     }
     if !block.inline_tags.is_empty() {
@@ -1342,6 +1378,7 @@ fn emit_tag(
     tag: &TagData<'_, '_>,
     parent_index: u32,
     compat: bool,
+    parsed_type: Option<&TypeNodeData<'_>>,
 ) {
     let default_idx = opt_string(writer, tag.default_value);
     let desc_idx = opt_string(writer, tag.description);
@@ -1354,7 +1391,7 @@ fn emit_tag(
     if tag.name.is_some() {
         bitmask |= 0b0000_0100;
     }
-    if tag.parsed_type.is_some() {
+    if tag.has_parsed_type {
         bitmask |= 0b0000_1000;
     }
     if tag.body.is_some() {
@@ -1424,7 +1461,7 @@ fn emit_tag(
         let raw_idx = intern(writer, name.raw);
         let _ = write_jsdoc_tag_name_value(writer, name.span, tag_parent, raw_idx);
     }
-    if let Some(pt) = tag.parsed_type.as_ref() {
+    if let Some(pt) = parsed_type {
         super::type_emit::emit_type_node(writer, pt, tag_parent);
     }
 
