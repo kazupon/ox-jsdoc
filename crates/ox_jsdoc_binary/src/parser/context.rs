@@ -1206,6 +1206,16 @@ fn opt_string(writer: &mut BinaryWriter<'_>, value: Option<&str>) -> Option<Stri
     value.map(|s| writer.intern_string(s))
 }
 
+/// `Option<&str>` variant of [`BinaryWriter::intern_source_slice_or_string`]
+/// for fields the parser surfaces as borrowed slices (description text,
+/// raw body, default value, inline-tag content). Pointer-arithmetic
+/// identification picks the zero-copy path automatically; multi-line
+/// `normalize_lines` joins (separate allocation) fall through to the
+/// unique-string path with no per-call branching at the call site.
+fn opt_source_string(writer: &mut BinaryWriter<'_>, value: Option<&str>) -> Option<StringIndex> {
+    value.map(|s| writer.intern_source_slice_or_string(s))
+}
+
 fn empty_string(writer: &mut BinaryWriter<'_>) -> StringIndex {
     writer.intern_string("")
 }
@@ -1219,7 +1229,7 @@ fn emit_block_inner<'arena>(
     block: &BlockData<'_, '_>,
     compat: bool,
 ) -> u32 {
-    let description_idx = opt_string(writer, block.description);
+    let description_idx = opt_source_string(writer, block.description);
 
     // Pre-intern all source-preserving strings.
     let post_delim_str = if block.delimiter_line_break.is_empty() && !is_empty_block(block) {
@@ -1380,9 +1390,9 @@ fn emit_tag(
     compat: bool,
     parsed_type: Option<&TypeNodeData<'_>>,
 ) {
-    let default_idx = opt_string(writer, tag.default_value);
-    let desc_idx = opt_string(writer, tag.description);
-    let raw_body_idx = opt_string(writer, tag.raw_body);
+    let default_idx = opt_source_string(writer, tag.default_value);
+    let desc_idx = opt_source_string(writer, tag.description);
+    let raw_body_idx = opt_source_string(writer, tag.raw_body);
 
     let mut bitmask: u8 = 0b0000_0001; // bit0 = tag (mandatory)
     if tag.raw_type.is_some() {
@@ -1519,7 +1529,7 @@ fn emit_tag(
 fn emit_tag_body(writer: &mut BinaryWriter<'_>, body: &TagBodyData<'_>, parent_index: u32) {
     match body {
         TagBodyData::Generic(g) => {
-            let desc_idx = opt_string(writer, g.description);
+            let desc_idx = opt_source_string(writer, g.description);
             // Children bitmask: bit0 = type_source, bit1 = value.
             let mut bm: u8 = 0;
             if g.type_source.is_some() {
@@ -1558,7 +1568,7 @@ fn emit_tag_value(writer: &mut BinaryWriter<'_>, value: &TagValueData<'_>, paren
             default_value,
         } => {
             let path_idx = writer.intern_source_or_string(path, *span);
-            let dv_idx = opt_string(writer, *default_value);
+            let dv_idx = opt_source_string(writer, *default_value);
             let _ = write_jsdoc_parameter_name(
                 writer,
                 *span,
@@ -1588,9 +1598,9 @@ fn emit_inline_tag(
     inline: &InlineTagData<'_>,
     parent_index: u32,
 ) {
-    let np_idx = opt_string(writer, inline.namepath_or_url);
-    let text_idx = opt_string(writer, inline.text);
-    let raw_idx = opt_string(writer, inline.raw_body);
+    let np_idx = opt_source_string(writer, inline.namepath_or_url);
+    let text_idx = opt_source_string(writer, inline.text);
+    let raw_idx = opt_source_string(writer, inline.raw_body);
     let format = inline.format as u8;
     let _ = write_jsdoc_inline_tag(
         writer,

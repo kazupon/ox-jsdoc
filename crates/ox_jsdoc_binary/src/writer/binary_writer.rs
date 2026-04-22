@@ -74,6 +74,17 @@ pub struct BinaryWriter<'arena> {
     /// byte range that [`Self::intern_source_slice`] callers must keep
     /// their span within.
     pub(crate) current_source_length: u32,
+    /// Raw start pointer of the most recently appended source text, stored
+    /// as `usize` to avoid lifetime tracking on the writer.
+    ///
+    /// Used by [`Self::intern_source_slice_or_string`] to detect whether a
+    /// borrowed `&str` value is a sub-slice of the appended source via
+    /// pointer arithmetic. The pointer is only ever compared (never
+    /// dereferenced through this field), and its underlying allocation is
+    /// guaranteed to outlive every emit call within the same
+    /// `parse_*_to_bytes` iteration that registered the source via
+    /// [`Self::append_source_text`].
+    pub(crate) current_source_ptr: usize,
     /// Per-parent backpatch table: `next_sibling_patch[parent_index]`
     /// stores the byte offset of the most recent child of `parent_index`
     /// (so the next call to [`Self::emit_node_record`] can patch its
@@ -111,6 +122,7 @@ impl<'arena> BinaryWriter<'arena> {
             source_text_length: 0,
             current_source_data_offset: 0,
             current_source_length: 0,
+            current_source_ptr: 0,
             next_sibling_patch: ArenaVec::new_in(arena),
             arena,
         }
@@ -304,6 +316,12 @@ impl<'arena> BinaryWriter<'arena> {
             .saturating_add(value.len() as u32);
         self.current_source_data_offset = offset;
         self.current_source_length = value.len() as u32;
+        // Stash the source's start address as a usize so subsequent
+        // `intern_source_slice_or_string` calls can detect borrowed sub-slices
+        // via pointer arithmetic (no dereference). The pointer is valid for
+        // the remainder of the current `parse_*_to_bytes` iteration; we never
+        // store one across iterations.
+        self.current_source_ptr = value.as_ptr() as usize;
         offset
     }
 
@@ -365,6 +383,41 @@ impl<'arena> BinaryWriter<'arena> {
         let span_len = span.end.saturating_sub(span.start);
         if span_len as usize == value.len() && span.end <= self.current_source_length {
             return self.intern_source_slice(span.start, span.end);
+        }
+        self.strings.intern_unique(value)
+    }
+
+    /// Span-less sibling of [`Self::intern_source_or_string`] for callers that
+    /// hold an `&str` without an explicit byte range (e.g. fields surfaced
+    /// by `Option<&str>` getters where the parser merged or normalized the
+    /// underlying source bytes).
+    ///
+    /// Detection is via pointer arithmetic against the most recently
+    /// appended source text — when `value` lies inside that buffer's
+    /// allocation, register an offsets-only entry pointing at it; otherwise
+    /// fall through to the common-string fast path or a unique fresh entry.
+    /// The pointer comparison never dereferences either pointer, so the
+    /// check is safe even when the source allocation has since been
+    /// mutated (it cannot have moved while we still hold the borrow).
+    ///
+    /// Pointer-arithmetic identification handles the synthesized vs
+    /// source-slice ambiguity in `normalize_lines` results: single-line
+    /// descriptions remain a sub-slice of the source and take path 2;
+    /// multi-line joins live in the parser's scratch String (separate
+    /// allocation) and fall through to path 3.
+    pub fn intern_source_slice_or_string(&mut self, value: &str) -> StringIndex {
+        if let Some(idx) = lookup_common(value) {
+            return StringIndex::from_u32(idx).expect("common index in range");
+        }
+        let value_ptr = value.as_ptr() as usize;
+        let source_start = self.current_source_ptr;
+        if source_start != 0 {
+            let source_end = source_start.saturating_add(self.current_source_length as usize);
+            let value_end = value_ptr.saturating_add(value.len());
+            if value_ptr >= source_start && value_end <= source_end {
+                let offset = (value_ptr - source_start) as u32;
+                return self.intern_source_slice(offset, offset + value.len() as u32);
+            }
         }
         self.strings.intern_unique(value)
     }
