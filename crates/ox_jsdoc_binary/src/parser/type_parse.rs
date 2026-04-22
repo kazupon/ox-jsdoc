@@ -17,7 +17,7 @@ use super::precedence::Precedence;
 use super::token::TokenKind;
 use super::type_data::*;
 
-impl<'a> ParserContext<'a> {
+impl<'arena, 'a> ParserContext<'arena, 'a> {
     /// Parse `{type}` text into a [`TypeNodeData`] expression.
     pub(crate) fn parse_type_expression(
         &mut self,

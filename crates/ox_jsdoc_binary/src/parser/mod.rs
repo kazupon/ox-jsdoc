@@ -171,7 +171,7 @@ pub fn parse<'arena>(
         base_offset: 0,
         ..options
     };
-    let parsed = context::parse_block_into_data(source, 0, parser_options);
+    let parsed = context::parse_block_into_data(arena, source, 0, parser_options);
 
     let mut writer = BinaryWriter::new(arena);
     if options.compat_mode {
@@ -245,7 +245,7 @@ pub fn parse_to_bytes(source: &str, options: ParseOptions) -> ParseBytesResult {
         base_offset: 0,
         ..options
     };
-    let parsed = context::parse_block_into_data(source, 0, parser_options);
+    let parsed = context::parse_block_into_data(&arena, source, 0, parser_options);
 
     let mut writer = BinaryWriter::new(&arena);
     if options.compat_mode {
@@ -385,7 +385,7 @@ pub fn parse_batch<'arena>(
         let root_index = index as u32;
         let source_offset_in_data = writer.append_source_text(item.source_text);
 
-        let parsed = context::parse_block_into_data(item.source_text, 0, parser_options);
+        let parsed = context::parse_block_into_data(arena, item.source_text, 0, parser_options);
 
         let root_node_index = if parsed.is_failure() {
             0
@@ -454,7 +454,7 @@ pub fn parse_batch_to_bytes(
         let root_index = index as u32;
         let source_offset_in_data = writer.append_source_text(item.source_text);
 
-        let parsed = context::parse_block_into_data(item.source_text, 0, parser_options);
+        let parsed = context::parse_block_into_data(&arena, item.source_text, 0, parser_options);
 
         let root_node_index = if parsed.is_failure() {
             0

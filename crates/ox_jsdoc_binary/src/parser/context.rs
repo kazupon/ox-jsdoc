@@ -25,6 +25,7 @@
 //! Phase 1.2a-cont will add the `parsed_type` emission once
 //! `parser/type_parse.rs` lands.
 
+use oxc_allocator::{Allocator, Vec as ArenaVec};
 use oxc_span::Span;
 use smallvec::SmallVec;
 
@@ -171,7 +172,7 @@ enum TagBodyData<'a> {
 }
 
 #[derive(Debug)]
-struct TagData<'a> {
+struct TagData<'arena, 'a> {
     span: Span,
     tag_name_span: Span,
     tag_name: &'a str,
@@ -183,8 +184,9 @@ struct TagData<'a> {
     name: Option<TagNameValueData<'a>>,
     parsed_type: Option<Box<TypeNodeData<'a>>>,
     body: Option<TagBodyData<'a>>,
-    description_lines: Vec<DescriptionLineData<'a>>,
-    type_lines: Vec<TypeLineData<'a>>,
+    /// Path C: arena-allocated. Walked once during emit, no need for std heap.
+    description_lines: ArenaVec<'arena, DescriptionLineData<'a>>,
+    type_lines: ArenaVec<'arena, TypeLineData<'a>>,
     inline_tags: InlineTagsVec<'a>,
     header_initial: &'a str,
     header_delimiter: &'a str,
@@ -199,12 +201,16 @@ struct TagData<'a> {
 }
 
 #[derive(Debug)]
-struct BlockData<'a> {
+struct BlockData<'arena, 'a> {
     span: Span,
     description: Option<&'a str>,
-    description_lines: Vec<DescriptionLineData<'a>>,
+    description_lines: ArenaVec<'arena, DescriptionLineData<'a>>,
     inline_tags: InlineTagsVec<'a>,
-    tags: Vec<TagData<'a>>,
+    /// `tags` stays on the std heap because `TagData` carries a
+    /// `Box<TypeNodeData>` (a Drop type that `ArenaVec` rejects under
+    /// bumpalo's no-drop constraint). The per-tag inner Vecs are still
+    /// arena-allocated.
+    tags: Vec<TagData<'arena, 'a>>,
     line_end: &'a str,
     delimiter_line_break: &'a str,
     preterminal_line_break: &'a str,
@@ -228,7 +234,12 @@ struct BlockData<'a> {
 /// quote/fence state) but stores diagnostics as plain
 /// [`ParsedDiagnostic`] so the binary parser does not depend on
 /// `oxc_diagnostics`.
-pub struct ParserContext<'a> {
+pub struct ParserContext<'arena, 'a> {
+    /// Path C: arena reference for allocating intermediate parse data
+    /// (description_lines, tags, etc.) into the bump allocator instead of
+    /// the std heap. The arena is the same one the writer uses; allocations
+    /// here live until the writer drops it.
+    pub(crate) arena: &'arena Allocator,
     /// Complete source slice for one JSDoc block.
     pub(crate) source_text: &'a str,
     /// Absolute byte offset of `source_text` in the original file.
@@ -254,11 +265,12 @@ pub struct ParserContext<'a> {
     scratch: String,
 }
 
-impl<'a> ParserContext<'a> {
+impl<'arena, 'a> ParserContext<'arena, 'a> {
     /// Create a parser context for one complete comment block.
     #[must_use]
-    pub fn new(source_text: &'a str, base_offset: u32, options: ParseOptions) -> Self {
+    pub fn new(arena: &'arena Allocator, source_text: &'a str, base_offset: u32, options: ParseOptions) -> Self {
         Self {
+            arena,
             source_text,
             base_offset,
             offset: 0,
@@ -323,12 +335,12 @@ impl<'a> ParserContext<'a> {
 /// or just diagnostics when the input could not be parsed at all (not a
 /// JSDoc block, unclosed, span overflow).
 #[derive(Debug)]
-pub struct ParsedBlock<'a> {
-    block: Option<BlockData<'a>>,
+pub struct ParsedBlock<'arena, 'a> {
+    block: Option<BlockData<'arena, 'a>>,
     diagnostics: Vec<ParsedDiagnostic>,
 }
 
-impl<'a> ParsedBlock<'a> {
+impl<'arena, 'a> ParsedBlock<'arena, 'a> {
     /// Diagnostics produced during parsing.
     #[must_use]
     pub fn diagnostics(&self) -> &[ParsedDiagnostic] {
@@ -344,12 +356,20 @@ impl<'a> ParsedBlock<'a> {
 
 /// Parse one JSDoc block into intermediate data. Use [`emit_block`] to
 /// flush the result into a [`BinaryWriter`].
-pub fn parse_block_into_data<'a>(
+///
+/// Path C: takes the writer's arena so intermediate data structures
+/// (`description_lines`, `tags`, etc.) bump-allocate from the same arena
+/// instead of the std heap. The result `ParsedBlock<'arena, 'a>` borrows
+/// from both the source text (`'a`) and the arena (`'arena`); typical
+/// callers pass `&parse_to_bytes`'s arena or `&parse`'s caller-supplied
+/// arena.
+pub fn parse_block_into_data<'arena, 'a>(
+    arena: &'arena Allocator,
     source_text: &'a str,
     base_offset: u32,
     options: ParseOptions,
-) -> ParsedBlock<'a> {
-    let mut ctx = ParserContext::new(source_text, base_offset, options);
+) -> ParsedBlock<'arena, 'a> {
+    let mut ctx = ParserContext::new(arena, source_text, base_offset, options);
     if ctx.absolute_end().is_none() {
         ctx.diag(ParserDiagnosticKind::SpanOverflow);
         return ParsedBlock {
@@ -477,9 +497,9 @@ struct TagSection<'a> {
 }
 
 #[derive(Debug)]
-struct ParsedDescription<'a> {
+struct ParsedDescription<'arena, 'a> {
     text: Option<&'a str>,
-    lines: Vec<DescriptionLineData<'a>>,
+    lines: ArenaVec<'arena, DescriptionLineData<'a>>,
     inline_tags: InlineTagsVec<'a>,
 }
 
@@ -490,20 +510,20 @@ struct NormalizedText<'a> {
 }
 
 #[derive(Debug)]
-struct ParsedTagBody<'a> {
+struct ParsedTagBody<'arena, 'a> {
     raw_body: &'a str,
     raw_type: Option<TypeSourceData<'a>>,
     name: Option<TagNameValueData<'a>>,
     optional: bool,
     default_value: Option<&'a str>,
     description: Option<&'a str>,
-    type_lines: Vec<TypeLineData<'a>>,
-    description_lines: Vec<DescriptionLineData<'a>>,
+    type_lines: ArenaVec<'arena, TypeLineData<'a>>,
+    description_lines: ArenaVec<'arena, DescriptionLineData<'a>>,
     inline_tags: InlineTagsVec<'a>,
     body: GenericTagBodyData<'a>,
 }
 
-impl<'a> ParserContext<'a> {
+impl<'arena, 'a> ParserContext<'arena, 'a> {
     fn partition_sections(
         &self,
         scan: &scanner::ScanResult<'a>,
@@ -577,7 +597,7 @@ impl<'a> ParserContext<'a> {
         )
     }
 
-    fn parse_tag_sections(&mut self, sections: &[TagSection<'a>]) -> Vec<TagData<'a>> {
+    fn parse_tag_sections(&mut self, sections: &[TagSection<'a>]) -> Vec<TagData<'arena, 'a>> {
         let mut tags = Vec::with_capacity(sections.len());
         for section in sections {
             tags.push(self.parse_jsdoc_tag(section));
@@ -585,7 +605,7 @@ impl<'a> ParserContext<'a> {
         tags
     }
 
-    fn parse_jsdoc_tag(&mut self, section: &TagSection<'a>) -> TagData<'a> {
+    fn parse_jsdoc_tag(&mut self, section: &TagSection<'a>) -> TagData<'arena, 'a> {
         let normalized = self.normalize_lines(&section.body_lines);
         let parsed_body = normalized.map(|n| self.parse_generic_tag_body(n));
 
@@ -620,8 +640,8 @@ impl<'a> ParserContext<'a> {
                 false,
                 None,
                 None,
-                Vec::new(),
-                Vec::new(),
+                ArenaVec::new_in(self.arena),
+                ArenaVec::new_in(self.arena),
                 InlineTagsVec::new(),
                 None,
                 None,
@@ -663,7 +683,7 @@ impl<'a> ParserContext<'a> {
         }
     }
 
-    fn parse_generic_tag_body(&mut self, normalized: NormalizedText<'a>) -> ParsedTagBody<'a> {
+    fn parse_generic_tag_body(&mut self, normalized: NormalizedText<'a>) -> ParsedTagBody<'arena, 'a> {
         let mut cursor = 0usize;
         let bytes = normalized.text.as_bytes();
         while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
@@ -687,7 +707,7 @@ impl<'a> ParserContext<'a> {
             None
         };
 
-        let mut type_lines = Vec::new();
+        let mut type_lines: ArenaVec<'arena, TypeLineData<'a>> = ArenaVec::new_in(self.arena);
         if let Some(ts) = type_source {
             type_lines.push(TypeLineData {
                 span: ts.span,
@@ -757,8 +777,8 @@ impl<'a> ParserContext<'a> {
         &mut self,
         lines: &[scanner::LogicalLine<'a>],
         margins: &[scanner::MarginInfo<'a>],
-    ) -> ParsedDescription<'a> {
-        let mut description_lines = Vec::new();
+    ) -> ParsedDescription<'arena, 'a> {
+        let mut description_lines: ArenaVec<'arena, DescriptionLineData<'a>> = ArenaVec::new_in(self.arena);
         for (line, margin) in lines.iter().zip(margins.iter()) {
             if margin.is_content_empty {
                 continue;
@@ -784,8 +804,8 @@ impl<'a> ParserContext<'a> {
         description
     }
 
-    fn parse_description_text(&mut self, text: &'a str, span: Span) -> ParsedDescription<'a> {
-        let mut lines = Vec::new();
+    fn parse_description_text(&mut self, text: &'a str, span: Span) -> ParsedDescription<'arena, 'a> {
+        let mut lines: ArenaVec<'arena, DescriptionLineData<'a>> = ArenaVec::new_in(self.arena);
         let mut inline_tags = InlineTagsVec::new();
 
         if text
@@ -1150,7 +1170,7 @@ fn relative_span(base: Span, relative_start: u32, relative_end: u32) -> Span {
 /// to the Root index array via [`BinaryWriter::push_root`].
 pub fn emit_block<'arena>(
     writer: &mut BinaryWriter<'arena>,
-    parsed: &ParsedBlock<'_>,
+    parsed: &ParsedBlock<'_, '_>,
 ) -> Option<u32> {
     let block = parsed.block.as_ref()?;
     let compat = writer.compat_mode();
@@ -1171,7 +1191,7 @@ fn intern(writer: &mut BinaryWriter<'_>, value: &str) -> StringIndex {
 
 fn emit_block_inner<'arena>(
     writer: &mut BinaryWriter<'arena>,
-    block: &BlockData<'_>,
+    block: &BlockData<'_, '_>,
     compat: bool,
 ) -> u32 {
     let description_idx = opt_string(writer, block.description);
@@ -1273,7 +1293,7 @@ fn emit_block_inner<'arena>(
     block_parent
 }
 
-fn is_empty_block(block: &BlockData<'_>) -> bool {
+fn is_empty_block(block: &BlockData<'_, '_>) -> bool {
     block.description_lines.is_empty() && block.tags.is_empty() && block.inline_tags.is_empty()
 }
 
@@ -1319,7 +1339,7 @@ fn non_empty_str(s: &str) -> Option<&str> {
 
 fn emit_tag(
     writer: &mut BinaryWriter<'_>,
-    tag: &TagData<'_>,
+    tag: &TagData<'_, '_>,
     parent_index: u32,
     compat: bool,
 ) {
@@ -1562,7 +1582,8 @@ mod tests {
 
     #[test]
     fn parse_block_returns_none_for_non_jsdoc() {
-        let parsed = parse_block_into_data("/* plain */", 0, opts());
+        let arena = oxc_allocator::Allocator::default();
+        let parsed = parse_block_into_data(&arena, "/* plain */", 0, opts());
         assert!(parsed.is_failure());
         assert!(matches!(
             parsed.diagnostics()[0].kind,
@@ -1572,7 +1593,8 @@ mod tests {
 
     #[test]
     fn parse_block_returns_none_for_unclosed() {
-        let parsed = parse_block_into_data("/** unclosed", 0, opts());
+        let arena = oxc_allocator::Allocator::default();
+        let parsed = parse_block_into_data(&arena, "/** unclosed", 0, opts());
         assert!(parsed.is_failure());
         assert!(matches!(
             parsed.diagnostics()[0].kind,
@@ -1582,7 +1604,8 @@ mod tests {
 
     #[test]
     fn parses_top_level_description() {
-        let parsed = parse_block_into_data("/** ok */", 10, opts());
+        let arena = oxc_allocator::Allocator::default();
+        let parsed = parse_block_into_data(&arena, "/** ok */", 10, opts());
         assert!(!parsed.is_failure());
         let block = parsed.block.as_ref().unwrap();
         assert_eq!(block.description, Some("ok"));
@@ -1591,7 +1614,9 @@ mod tests {
 
     #[test]
     fn parses_param_tag_with_type_value_and_description() {
+        let arena = oxc_allocator::Allocator::default();
         let parsed = parse_block_into_data(
+            &arena,
             "/**\n * @param {string} id - The user ID\n */",
             0,
             opts(),

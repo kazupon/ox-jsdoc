@@ -113,13 +113,16 @@ fn bench_parse_block_into_data(c: &mut Criterion) {
     let blocks = load_fixture();
     c.bench_function("phase 1 — parse_block_into_data only (full file)", |b| {
         b.iter(|| {
+            let arena = Allocator::default();
             for src in &blocks {
                 let _ = black_box(parse_block_into_data(
+                    &arena,
                     src.as_str(),
                     0,
                     ParseOptions::default(),
                 ));
             }
+            black_box(arena);
         });
     });
 }
@@ -136,7 +139,7 @@ fn bench_parse_plus_emit(c: &mut Criterion) {
             let arena = Allocator::default();
             for src in &blocks {
                 let parsed =
-                    parse_block_into_data(src.as_str(), 0, ParseOptions::default());
+                    parse_block_into_data(&arena, src.as_str(), 0, ParseOptions::default());
                 let mut writer = BinaryWriter::new(&arena);
                 let _ = writer.append_source_text(src.as_str());
                 let _ = black_box(emit_block(&mut writer, &parsed));
@@ -157,13 +160,16 @@ fn bench_batch_parse_only(c: &mut Criterion) {
     let blocks = load_fixture();
     c.bench_function("batch phase 1 — parse_block_into_data only (full file)", |b| {
         b.iter(|| {
+            let arena = Allocator::default();
             for src in &blocks {
                 let _ = black_box(parse_block_into_data(
+                    &arena,
                     src.as_str(),
                     0,
                     ParseOptions::default(),
                 ));
             }
+            black_box(arena);
         });
     });
 }
@@ -187,7 +193,7 @@ fn bench_batch_parse_plus_emit(c: &mut Criterion) {
             for (index, item) in items.iter().enumerate() {
                 let source_offset = writer.append_source_text(item.source_text);
                 let parsed =
-                    parse_block_into_data(item.source_text, 0, ParseOptions::default());
+                    parse_block_into_data(&arena, item.source_text, 0, ParseOptions::default());
                 let root_node_index = if parsed.is_failure() {
                     0
                 } else {
