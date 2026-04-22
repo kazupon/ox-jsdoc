@@ -23,10 +23,11 @@ use ox_jsdoc_binary::decoder::visitor::LazyJsdocVisitor;
 use ox_jsdoc_binary::format::kind::Kind;
 use ox_jsdoc_binary::writer::nodes::comment_ast::{
     write_jsdoc_block, write_jsdoc_description_line, write_jsdoc_tag, write_jsdoc_tag_name,
-    write_jsdoc_tag_name_value, write_node_list,
+    write_jsdoc_tag_name_value, JSDOC_BLOCK_DESC_LINES_SLOT, JSDOC_BLOCK_TAGS_SLOT,
 };
 use ox_jsdoc_binary::writer::nodes::type_node::{
     write_type_function, write_type_name, write_type_number, write_type_parameter_list,
+    TYPE_LIST_PARENT_SLOT,
 };
 use ox_jsdoc_binary::writer::BinaryWriter;
 use oxc_allocator::Allocator;
@@ -115,7 +116,7 @@ fn build_fixture(arena: &Allocator) -> Vec<u8> {
     let number_lit = w.intern_string_index("number");
 
     // JsdocBlock with bit0 (descriptionLines) + bit1 (tags) = 0b011.
-    let block = write_jsdoc_block(
+    let (block_idx, block_ext) = write_jsdoc_block(
         &mut w,
         Span::new(0, 60),
         0,
@@ -123,54 +124,56 @@ fn build_fixture(arena: &Allocator) -> Vec<u8> {
         star, space, close, nl, empty, nl, empty,
         0b011,
     );
+    let block = block_idx.as_u32();
 
-    // descriptionLines NodeList (1 entry).
-    let desc_list = write_node_list(&mut w, Span::new(4, 15), block.as_u32(), 1);
-    let _ = write_jsdoc_description_line(
-        &mut w,
-        Span::new(4, 15),
-        desc_list.as_u32(),
-        desc_str,
-    );
+    // descriptionLines list (1 entry, direct child of block).
+    let mut desc_list = w.begin_node_list_at(block_ext, JSDOC_BLOCK_DESC_LINES_SLOT);
+    let dl = write_jsdoc_description_line(&mut w, Span::new(4, 15), block, desc_str);
+    w.record_list_child(&mut desc_list, dl.as_u32());
+    w.finalize_node_list(desc_list);
 
-    // tags NodeList (1 entry).
-    let tags_list = write_node_list(&mut w, Span::new(18, 56), block.as_u32(), 1);
+    // tags list (1 entry, direct child of block).
+    let mut tags_list = w.begin_node_list_at(block_ext, JSDOC_BLOCK_TAGS_SLOT);
 
     // JsdocTag: bit0 (tag) + bit2 (name) + bit3 (parsedType) = 0b1101.
-    let tag = write_jsdoc_tag(
+    let (tag_idx, _tag_ext) = write_jsdoc_tag(
         &mut w,
         Span::new(18, 56),
-        tags_list.as_u32(),
+        block,
         false,
         None,
         None,
         None,
         0b0000_1101,
     );
+    let tag = tag_idx.as_u32();
+    w.record_list_child(&mut tags_list, tag);
+    w.finalize_node_list(tags_list);
     // tag name "@returns" → JsdocTagName
-    let _ = write_jsdoc_tag_name(&mut w, Span::new(19, 26), tag.as_u32(), returns_str);
+    let _ = write_jsdoc_tag_name(&mut w, Span::new(19, 26), tag, returns_str);
     // tag name value "ok" → JsdocTagNameValue
-    let _ = write_jsdoc_tag_name_value(&mut w, Span::new(54, 56), tag.as_u32(), ok_str);
+    let _ = write_jsdoc_tag_name_value(&mut w, Span::new(54, 56), tag, ok_str);
     // parsedType = TypeFunction with parameters + return.
-    // TypeFunction common data: arrow flag bit1 = 1, bitmask = 0b101 (parameters + type_parameters?
-    // Actually: bit0 = parameters, bit1 = return_type. For our fixture we have both,
-    // so children_bitmask = 0b011.
+    // children_bitmask = 0b011 (bit0=parameters, bit1=return_type).
     let func = write_type_function(
         &mut w,
         Span::new(28, 51),
-        tag.as_u32(),
+        tag,
         false, false, true, // constructor=false, arrow=false, parenthesis=true
         0b011,
     );
     // parameters: TypeParameterList containing 1 TypeName "string".
-    let params = write_type_parameter_list(&mut w, Span::new(37, 43), func.as_u32(), 0b1);
-    let params_inner =
-        write_node_list(&mut w, Span::new(37, 43), params.as_u32(), 1);
-    let _ = write_type_name(&mut w, Span::new(37, 43), params_inner.as_u32(), string_str);
+    let (params_idx, params_ext) =
+        write_type_parameter_list(&mut w, Span::new(37, 43), func.as_u32());
+    let params = params_idx.as_u32();
+    let mut plist = w.begin_node_list_at(params_ext, TYPE_LIST_PARENT_SLOT);
+    let pn = write_type_name(&mut w, Span::new(37, 43), params, string_str);
+    w.record_list_child(&mut plist, pn.as_u32());
+    w.finalize_node_list(plist);
     // return_type: TypeNumber "number".
     let _ = write_type_number(&mut w, Span::new(46, 52), func.as_u32(), number_lit);
 
-    w.push_root(block.as_u32(), 0, 0);
+    w.push_root(block, 0, 0);
     w.finish()
 }
 

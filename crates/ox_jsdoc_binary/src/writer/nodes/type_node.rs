@@ -18,12 +18,22 @@
 
 use oxc_span::Span;
 
+use crate::format::extended_data::LIST_METADATA_SIZE;
 use crate::format::kind::Kind;
 use crate::format::node_record::{TypeTag, pack_node_data};
 use crate::format::string_field::{STRING_FIELD_SIZE, StringField};
 
-use super::super::{BinaryWriter, StringIndex};
+use super::super::{BinaryWriter, ExtOffset, StringIndex};
 use super::NodeIndex;
+
+/// Single per-list metadata slot offset for TypeNode parents that own
+/// exactly one variable-length child list (TypeUnion, TypeIntersection,
+/// TypeTuple, TypeObject, TypeGeneric, TypeTypeParameter, TypeParameterList).
+pub const TYPE_LIST_PARENT_SLOT: usize = 0;
+/// Extended Data size for TypeNode parents above: 6-byte list metadata
+/// padded to the 8-byte alignment boundary so the next ED record can sit at
+/// a 8-byte boundary without extra padding.
+const TYPE_LIST_PARENT_SIZE: usize = LIST_METADATA_SIZE + 2;
 
 // ===========================================================================
 // Pattern 1: String only (5 kinds, payload = StringIndex)
@@ -90,44 +100,57 @@ pub fn write_type_special_name_path(
 // Pattern 2: Children only (29 kinds, payload = Children bitmask)
 // ===========================================================================
 
-/// `TypeUnion` (Kind `0x87`, Pattern 2; child = NodeList).
+/// `TypeUnion` (Kind `0x87`, Pattern 3; ED holds list metadata).
+///
+/// Returns `(NodeIndex, ExtOffset)` so the caller can patch the elements
+/// list head/count via [`BinaryWriter::begin_node_list_at`] /
+/// [`BinaryWriter::finalize_node_list`] at byte
+/// [`TYPE_LIST_PARENT_SLOT`] of the returned ED block.
 pub fn write_type_union(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    children_bitmask: u32,
-) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeUnion, 0, span, children_bitmask)
+) -> (NodeIndex, ExtOffset) {
+    let (off, _dst) = writer.extended.reserve_mut(TYPE_LIST_PARENT_SIZE);
+    let idx = writer.emit_extended_node(parent_index, Kind::TypeUnion, 0, span, off);
+    (idx, off)
 }
 
-/// `TypeIntersection` (Kind `0x88`, Pattern 2; child = NodeList).
+/// `TypeIntersection` (Kind `0x88`, Pattern 3; ED holds list metadata).
 pub fn write_type_intersection(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    children_bitmask: u32,
-) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeIntersection, 0, span, children_bitmask)
+) -> (NodeIndex, ExtOffset) {
+    let (off, _dst) = writer.extended.reserve_mut(TYPE_LIST_PARENT_SIZE);
+    let idx = writer.emit_extended_node(parent_index, Kind::TypeIntersection, 0, span, off);
+    (idx, off)
 }
 
-/// `TypeGeneric` (Kind `0x89`, Pattern 2).
+/// `TypeGeneric` (Kind `0x89`, Pattern 3).
 ///
-/// Common Data: `bit0 = brackets`, `bit1 = dot`. Children: 1 + NodeList.
+/// Common Data: `bit0 = brackets`, `bit1 = dot`. ED holds the elements list
+/// metadata; the `left` child is the parent's first direct child (no
+/// Children bitmask).
 pub fn write_type_generic(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
     brackets: u8,
     dot: bool,
-    children_bitmask: u32,
-) -> NodeIndex {
+) -> (NodeIndex, ExtOffset) {
     let common = (brackets & 1) | ((dot as u8) << 1);
-    writer.emit_children_node(parent_index, Kind::TypeGeneric, common, span, children_bitmask)
+    let (off, _dst) = writer.extended.reserve_mut(TYPE_LIST_PARENT_SIZE);
+    let idx = writer.emit_extended_node(parent_index, Kind::TypeGeneric, common, span, off);
+    (idx, off)
 }
 
 /// `TypeFunction` (Kind `0x8A`, Pattern 2).
 ///
-/// Common Data: `bit0=constructor`, `bit1=arrow`, `bit2=parenthesis`.
+/// Common Data: `bit0=constructor`, `bit1=arrow`, `bit2=parenthesis`. The
+/// fixed children (parameters, return, type_parameters) remain a Children
+/// bitmask; only the inner `TypeParameterList` children moved their list
+/// metadata into Extended Data.
 pub fn write_type_function(
     writer: &mut BinaryWriter<'_>,
     span: Span,
@@ -141,27 +164,29 @@ pub fn write_type_function(
     writer.emit_children_node(parent_index, Kind::TypeFunction, common, span, children_bitmask)
 }
 
-/// `TypeObject` (Kind `0x8B`, Pattern 2).
+/// `TypeObject` (Kind `0x8B`, Pattern 3).
 ///
-/// Common Data: `bits[0:2] = separator`. Child = NodeList.
+/// Common Data: `bits[0:2] = separator`. ED holds the elements list metadata.
 pub fn write_type_object(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
     separator: u8,
-    children_bitmask: u32,
-) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeObject, separator & 0b111, span, children_bitmask)
+) -> (NodeIndex, ExtOffset) {
+    let (off, _dst) = writer.extended.reserve_mut(TYPE_LIST_PARENT_SIZE);
+    let idx = writer.emit_extended_node(parent_index, Kind::TypeObject, separator & 0b111, span, off);
+    (idx, off)
 }
 
-/// `TypeTuple` (Kind `0x8C`, Pattern 2; child = NodeList).
+/// `TypeTuple` (Kind `0x8C`, Pattern 3; ED holds list metadata).
 pub fn write_type_tuple(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    children_bitmask: u32,
-) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeTuple, 0, span, children_bitmask)
+) -> (NodeIndex, ExtOffset) {
+    let (off, _dst) = writer.extended.reserve_mut(TYPE_LIST_PARENT_SIZE);
+    let idx = writer.emit_extended_node(parent_index, Kind::TypeTuple, 0, span, off);
+    (idx, off)
 }
 
 /// `TypeParenthesis` (Kind `0x8D`, Pattern 2; 1 child).
@@ -379,24 +404,26 @@ pub fn write_type_constructor_signature(
     writer.emit_children_node(parent_index, Kind::TypeConstructorSignature, 0, span, children_bitmask)
 }
 
-/// `TypeTypeParameter` (Kind `0xA6`, Pattern 2; variable children).
+/// `TypeTypeParameter` (Kind `0xA6`, Pattern 3; ED holds list metadata).
 pub fn write_type_type_parameter(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    children_bitmask: u32,
-) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeTypeParameter, 0, span, children_bitmask)
+) -> (NodeIndex, ExtOffset) {
+    let (off, _dst) = writer.extended.reserve_mut(TYPE_LIST_PARENT_SIZE);
+    let idx = writer.emit_extended_node(parent_index, Kind::TypeTypeParameter, 0, span, off);
+    (idx, off)
 }
 
-/// `TypeParameterList` (Kind `0xAB`, Pattern 2; child = NodeList).
+/// `TypeParameterList` (Kind `0xAB`, Pattern 3; ED holds list metadata).
 pub fn write_type_parameter_list(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    children_bitmask: u32,
-) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeParameterList, 0, span, children_bitmask)
+) -> (NodeIndex, ExtOffset) {
+    let (off, _dst) = writer.extended.reserve_mut(TYPE_LIST_PARENT_SIZE);
+    let idx = writer.emit_extended_node(parent_index, Kind::TypeParameterList, 0, span, off);
+    (idx, off)
 }
 
 /// `TypeReadonlyProperty` (Kind `0xAC`, Pattern 2; 1 child).

@@ -40,7 +40,7 @@ use crate::writer::nodes::comment_ast::{
     write_jsdoc_inline_tag, write_jsdoc_namepath_source, write_jsdoc_parameter_name,
     write_jsdoc_tag, write_jsdoc_tag_compat_tail, write_jsdoc_tag_name,
     write_jsdoc_tag_name_value, write_jsdoc_text, write_jsdoc_type_line,
-    write_jsdoc_type_line_compat, write_jsdoc_type_source, write_node_list,
+    write_jsdoc_type_line_compat, write_jsdoc_type_source,
 };
 use crate::writer::{BinaryWriter, StringField};
 
@@ -1251,7 +1251,7 @@ fn emit_block_inner<'arena>(
         | (((!block.tags.is_empty()) as u8) << 1)
         | (((!block.inline_tags.is_empty()) as u8) << 2);
 
-    let block_idx = write_jsdoc_block(
+    let (block_idx, block_ext) = write_jsdoc_block(
         writer,
         block.span,
         0,
@@ -1267,14 +1267,9 @@ fn emit_block_inner<'arena>(
     );
 
     if compat {
-        // Compat tail: write to ext offset 0 for the just-emitted block.
-        // Since this is the first Extended Data record, its offset is 0;
-        // for subsequent comments this would need to be the recorded offset.
-        // For Phase 1 (single-comment), we know it lands at offset 0.
-        let off = crate::writer::ExtOffset::from_u32(0).expect("first ext record");
         write_jsdoc_block_compat_tail(
             writer,
-            off,
+            block_ext,
             block.end_line,
             block.description_start_line,
             block.description_end_line,
@@ -1286,50 +1281,49 @@ fn emit_block_inner<'arena>(
 
     let block_parent = block_idx.as_u32();
 
-    if !block.description_lines.is_empty() {
-        let list = write_node_list(
-            writer,
-            block.span,
-            block_parent,
-            block.description_lines.len() as u32,
-        );
-        for line in &block.description_lines {
-            emit_description_line(writer, line, list.as_u32(), compat);
-        }
+    // description_lines list — children are emitted directly under the
+    // block (no NodeList wrapper); the writer patches (head, count) into
+    // the parent ED slot when the list closes.
+    let mut desc_list = writer.begin_node_list_at(
+        block_ext,
+        crate::writer::nodes::comment_ast::JSDOC_BLOCK_DESC_LINES_SLOT,
+    );
+    for line in &block.description_lines {
+        let child_idx = emit_description_line(writer, line, block_parent, compat);
+        writer.record_list_child(&mut desc_list, child_idx);
     }
-    if !block.tags.is_empty() {
-        let list = write_node_list(
-            writer,
-            block.span,
-            block_parent,
-            block.tags.len() as u32,
-        );
-        // Path C-2: side-table walk for parsed_type. Both `tags` and
-        // `tags_parsed_types` are emitted in tag-index order, so a single
-        // peekable iterator avoids the per-tag linear search.
-        let mut pt_iter = block.tags_parsed_types.iter().peekable();
-        for (i, tag) in block.tags.iter().enumerate() {
-            let parsed_type: Option<&TypeNodeData<'_>> = match pt_iter.peek() {
-                Some((idx, _)) if (*idx as usize) == i => {
-                    let (_, pt) = pt_iter.next().unwrap();
-                    Some(pt.as_ref())
-                }
-                _ => None,
-            };
-            emit_tag(writer, tag, list.as_u32(), compat, parsed_type);
-        }
+    writer.finalize_node_list(desc_list);
+
+    let mut tag_list = writer.begin_node_list_at(
+        block_ext,
+        crate::writer::nodes::comment_ast::JSDOC_BLOCK_TAGS_SLOT,
+    );
+    // Path C-2: side-table walk for parsed_type. Both `tags` and
+    // `tags_parsed_types` are emitted in tag-index order, so a single
+    // peekable iterator avoids the per-tag linear search.
+    let mut pt_iter = block.tags_parsed_types.iter().peekable();
+    for (i, tag) in block.tags.iter().enumerate() {
+        let parsed_type: Option<&TypeNodeData<'_>> = match pt_iter.peek() {
+            Some((idx, _)) if (*idx as usize) == i => {
+                let (_, pt) = pt_iter.next().unwrap();
+                Some(pt.as_ref())
+            }
+            _ => None,
+        };
+        let child_idx = emit_tag(writer, tag, block_parent, compat, parsed_type);
+        writer.record_list_child(&mut tag_list, child_idx);
     }
-    if !block.inline_tags.is_empty() {
-        let list = write_node_list(
-            writer,
-            block.span,
-            block_parent,
-            block.inline_tags.len() as u32,
-        );
-        for inline in &block.inline_tags {
-            emit_inline_tag(writer, inline, list.as_u32());
-        }
+    writer.finalize_node_list(tag_list);
+
+    let mut inline_list = writer.begin_node_list_at(
+        block_ext,
+        crate::writer::nodes::comment_ast::JSDOC_BLOCK_INLINE_TAGS_SLOT,
+    );
+    for inline in &block.inline_tags {
+        let child_idx = emit_inline_tag(writer, inline, block_parent);
+        writer.record_list_child(&mut inline_list, child_idx);
     }
+    writer.finalize_node_list(inline_list);
 
     block_parent
 }
@@ -1343,7 +1337,7 @@ fn emit_description_line(
     line: &DescriptionLineData<'_>,
     parent_index: u32,
     compat: bool,
-) {
+) -> u32 {
     // Path A: `line.description` is `line.content.trim_end()`, i.e. a
     // sub-slice of the source text that was just appended to `data_buffer`
     // via `append_source_text`. Use the zero-copy intern paths so we
@@ -1360,7 +1354,7 @@ fn emit_description_line(
         let delim = opt_string(writer, non_empty_str(line.delimiter));
         let pdelim = opt_string(writer, non_empty_str(line.post_delimiter));
         let init = opt_string(writer, non_empty_str(line.initial));
-        let _ = write_jsdoc_description_line_compat(
+        write_jsdoc_description_line_compat(
             writer,
             line.span,
             parent_index,
@@ -1368,10 +1362,11 @@ fn emit_description_line(
             delim,
             pdelim,
             init,
-        );
+        )
+        .as_u32()
     } else {
         let desc_idx = writer.intern_source_slice_for_leaf(line.span.start, desc_byte_end);
-        let _ = write_jsdoc_description_line(writer, line.span, parent_index, desc_idx);
+        write_jsdoc_description_line(writer, line.span, parent_index, desc_idx).as_u32()
     }
 }
 
@@ -1389,7 +1384,7 @@ fn emit_tag(
     parent_index: u32,
     compat: bool,
     parsed_type: Option<&TypeNodeData<'_>>,
-) {
+) -> u32 {
     let default_idx = opt_source_string(writer, tag.default_value);
     let desc_idx = opt_source_string(writer, tag.description);
     let raw_body_idx = opt_source_string(writer, tag.raw_body);
@@ -1404,7 +1399,7 @@ fn emit_tag(
         | (((!tag.description_lines.is_empty()) as u8) << 6)
         | (((!tag.inline_tags.is_empty()) as u8) << 7);
 
-    let tag_idx = write_jsdoc_tag(
+    let (tag_idx, tag_ext) = write_jsdoc_tag(
         writer,
         tag.span,
         parent_index,
@@ -1416,12 +1411,8 @@ fn emit_tag(
     );
 
     if compat {
-        // Compat tail: locate the ext offset of this tag. We can compute
-        // it from the writer's extended data length minus the basic 8
-        // bytes (the tag's record was just appended). Cleaner: re-fetch
-        // via a helper in the writer.
-        // For Phase 1.2a, default the post_* / line_end to single-space /
-        // empty — matching ox_jsdoc's typed parser convention.
+        // Per-tag compat tail (delimiter strings). Defaults match
+        // ox_jsdoc's typed parser convention.
         let post_tag_str = intern(writer, tag.post_tag);
         let post_type_str = intern(writer, tag.post_type);
         let post_name_str = intern(writer, tag.post_name);
@@ -1429,16 +1420,17 @@ fn emit_tag(
         let line_end = intern(writer, tag.header_line_end);
         let delim = intern(writer, tag.header_delimiter);
         let pdelim = intern(writer, tag.header_post_delimiter);
-        // Look up the ext offset just emitted: for Phase 1 we don't track
-        // it precisely. The compat tail bytes are appended via the writer's
-        // public helper using the offset returned by reserveExtended()
-        // inside write_jsdoc_tag — but that helper doesn't return it. To
-        // keep this Phase scope manageable we omit the per-tag compat
-        // tail; the BlockData level still emits its own compat tail above.
-        // TODO: extend writer to surface ext_offset of the latest emit so
-        // we can complete the per-tag compat tail.
-        let _ = (delim, pdelim, post_tag_str, post_type_str, post_name_str, initial, line_end);
-        let _ = write_jsdoc_tag_compat_tail; // suppress unused-import warning
+        write_jsdoc_tag_compat_tail(
+            writer,
+            tag_ext,
+            delim,
+            pdelim,
+            post_tag_str,
+            post_type_str,
+            post_name_str,
+            initial,
+            line_end,
+        );
     }
 
     let tag_parent = tag_idx.as_u32();
@@ -1463,56 +1455,56 @@ fn emit_tag(
     if let Some(body) = tag.body.as_ref() {
         emit_tag_body(writer, body, tag_parent);
     }
-    if !tag.type_lines.is_empty() {
-        let list = write_node_list(
-            writer,
-            tag.span,
-            tag_parent,
-            tag.type_lines.len() as u32,
-        );
-        for tl in &tag.type_lines {
-            if compat {
-                let raw_field = writer.intern_source_or_string(tl.raw_type, tl.span);
-                let delim = opt_string(writer, non_empty_str(tl.delimiter));
-                let pdelim = opt_string(writer, non_empty_str(tl.post_delimiter));
-                let init = opt_string(writer, non_empty_str(tl.initial));
-                let _ = write_jsdoc_type_line_compat(
-                    writer,
-                    tl.span,
-                    list.as_u32(),
-                    raw_field,
-                    delim,
-                    pdelim,
-                    init,
-                );
-            } else {
-                let raw_idx = writer.intern_source_or_string_for_leaf(tl.raw_type, tl.span);
-                let _ = write_jsdoc_type_line(writer, tl.span, list.as_u32(), raw_idx);
-            }
-        }
+
+    let mut type_list = writer.begin_node_list_at(
+        tag_ext,
+        crate::writer::nodes::comment_ast::JSDOC_TAG_TYPE_LINES_SLOT,
+    );
+    for tl in &tag.type_lines {
+        let child_idx = if compat {
+            let raw_field = writer.intern_source_or_string(tl.raw_type, tl.span);
+            let delim = opt_string(writer, non_empty_str(tl.delimiter));
+            let pdelim = opt_string(writer, non_empty_str(tl.post_delimiter));
+            let init = opt_string(writer, non_empty_str(tl.initial));
+            write_jsdoc_type_line_compat(
+                writer,
+                tl.span,
+                tag_parent,
+                raw_field,
+                delim,
+                pdelim,
+                init,
+            )
+            .as_u32()
+        } else {
+            let raw_idx = writer.intern_source_or_string_for_leaf(tl.raw_type, tl.span);
+            write_jsdoc_type_line(writer, tl.span, tag_parent, raw_idx).as_u32()
+        };
+        writer.record_list_child(&mut type_list, child_idx);
     }
-    if !tag.description_lines.is_empty() {
-        let list = write_node_list(
-            writer,
-            tag.span,
-            tag_parent,
-            tag.description_lines.len() as u32,
-        );
-        for line in &tag.description_lines {
-            emit_description_line(writer, line, list.as_u32(), compat);
-        }
+    writer.finalize_node_list(type_list);
+
+    let mut desc_list = writer.begin_node_list_at(
+        tag_ext,
+        crate::writer::nodes::comment_ast::JSDOC_TAG_DESC_LINES_SLOT,
+    );
+    for line in &tag.description_lines {
+        let child_idx = emit_description_line(writer, line, tag_parent, compat);
+        writer.record_list_child(&mut desc_list, child_idx);
     }
-    if !tag.inline_tags.is_empty() {
-        let list = write_node_list(
-            writer,
-            tag.span,
-            tag_parent,
-            tag.inline_tags.len() as u32,
-        );
-        for inline in &tag.inline_tags {
-            emit_inline_tag(writer, inline, list.as_u32());
-        }
+    writer.finalize_node_list(desc_list);
+
+    let mut inline_list = writer.begin_node_list_at(
+        tag_ext,
+        crate::writer::nodes::comment_ast::JSDOC_TAG_INLINE_TAGS_SLOT,
+    );
+    for inline in &tag.inline_tags {
+        let child_idx = emit_inline_tag(writer, inline, tag_parent);
+        writer.record_list_child(&mut inline_list, child_idx);
     }
+    writer.finalize_node_list(inline_list);
+
+    tag_idx.as_u32()
 }
 
 fn emit_tag_body(writer: &mut BinaryWriter<'_>, body: &TagBodyData<'_>, parent_index: u32) {
@@ -1581,12 +1573,12 @@ fn emit_inline_tag(
     writer: &mut BinaryWriter<'_>,
     inline: &InlineTagData<'_>,
     parent_index: u32,
-) {
+) -> u32 {
     let np_idx = opt_source_string(writer, inline.namepath_or_url);
     let text_idx = opt_source_string(writer, inline.text);
     let raw_idx = opt_source_string(writer, inline.raw_body);
     let format = inline.format as u8;
-    let _ = write_jsdoc_inline_tag(
+    let idx = write_jsdoc_inline_tag(
         writer,
         inline.span,
         parent_index,
@@ -1601,6 +1593,7 @@ fn emit_inline_tag(
     // decoder's surface.
     let _ = inline.tag_name_span;
     let _ = inline.tag_name;
+    idx.as_u32()
 }
 
 #[cfg(test)]

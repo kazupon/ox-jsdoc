@@ -27,7 +27,7 @@ use ox_jsdoc_binary::format::node_record::{
     NODE_RECORD_SIZE, PARENT_INDEX_OFFSET, PAYLOAD_MASK, POS_OFFSET, TYPE_TAG_SHIFT, TypeTag,
 };
 use ox_jsdoc_binary::writer::nodes::comment_ast::{
-    write_jsdoc_block, write_jsdoc_block_compat_tail, write_jsdoc_text, write_node_list,
+    write_jsdoc_block, write_jsdoc_block_compat_tail, write_jsdoc_text,
 };
 use ox_jsdoc_binary::writer::nodes::type_node::{write_type_function, write_type_name, write_type_null};
 use ox_jsdoc_binary::writer::BinaryWriter;
@@ -199,7 +199,8 @@ fn write_jsdoc_block_basic_extended_data_layout() {
         lbreak,
         pre_lbreak,
         0b000, // bitmask: no children
-    );
+    )
+    .0;
 
     let bytes = writer.finish();
     let sf = LazySourceFile::new(&bytes).unwrap();
@@ -229,7 +230,7 @@ fn compat_mode_emits_jsdoc_block_tail() {
     writer.set_compat_mode(true);
 
     let s = writer.intern_string("");
-    let _ = write_jsdoc_block(
+    let (_block_idx, block_ext) = write_jsdoc_block(
         &mut writer,
         Span::new(0, 3),
         0,
@@ -238,28 +239,26 @@ fn compat_mode_emits_jsdoc_block_tail() {
         0,
     );
 
-    // Apply compat tail to the same record (offset 0 of Extended Data).
-    use ox_jsdoc_binary::writer::ExtOffset;
-    let off = ExtOffset::from_u32(0).unwrap();
-    write_jsdoc_block_compat_tail(&mut writer, off, 12, Some(0), Some(2), Some(2), 1, None);
+    // Apply compat tail to the same record using its returned ExtOffset.
+    write_jsdoc_block_compat_tail(&mut writer, block_ext, 12, Some(0), Some(2), Some(2), 1, None);
 
     let bytes = writer.finish();
     let sf = LazySourceFile::new(&bytes).unwrap();
     assert!(sf.compat_mode);
 
     let ext = sf.extended_data_offset as usize;
-    // basic = 50 bytes; tail starts at byte 50.
-    // bytes 50-51: padding (zero)
-    // end_line at byte 52 = 12
-    assert_eq!(read_u32(sf.bytes(), ext + 52), 12);
-    // description_start_line at byte 56 = 0
-    assert_eq!(read_u32(sf.bytes(), ext + 56), 0);
-    // last_description_line at byte 64 = 2
-    assert_eq!(read_u32(sf.bytes(), ext + 64), 2);
-    // has_preterminal_description = 1 (byte 68)
-    assert_eq!(sf.bytes()[ext + 68], 1);
-    // has_preterminal_tag_description = None → 0xFF sentinel (byte 69)
-    assert_eq!(sf.bytes()[ext + 69], 0xFF);
+    // basic = 68 bytes; tail starts at byte 68.
+    // bytes 68-69: padding (zero)
+    // end_line at byte 70 = 12
+    assert_eq!(read_u32(sf.bytes(), ext + 70), 12);
+    // description_start_line at byte 74 = 0
+    assert_eq!(read_u32(sf.bytes(), ext + 74), 0);
+    // last_description_line at byte 82 = 2
+    assert_eq!(read_u32(sf.bytes(), ext + 82), 2);
+    // has_preterminal_description = 1 (byte 86)
+    assert_eq!(sf.bytes()[ext + 86], 1);
+    // has_preterminal_tag_description = None → 0xFF sentinel (byte 87)
+    assert_eq!(sf.bytes()[ext + 87], 0xFF);
 }
 
 #[test]
@@ -269,14 +268,15 @@ fn next_sibling_backpatch_links_two_children() {
 
     // Parent: a TypeUnion at index 1.
     use ox_jsdoc_binary::writer::nodes::type_node::write_type_union;
-    let parent = write_type_union(&mut writer, Span::new(0, 20), 0, 0b1);
-    assert_eq!(parent.as_u32(), 1);
+    let (parent_idx, _parent_ext) = write_type_union(&mut writer, Span::new(0, 20), 0);
+    let parent = parent_idx.as_u32();
+    assert_eq!(parent, 1);
 
     // Two children of `parent` (parent_index = 1).
     let v1 = writer.intern_string_index("string");
     let v2 = writer.intern_string_index("number");
-    let c1 = write_type_name(&mut writer, Span::new(0, 6), parent.as_u32(), v1);
-    let c2 = write_type_name(&mut writer, Span::new(7, 13), parent.as_u32(), v2);
+    let c1 = write_type_name(&mut writer, Span::new(0, 6), parent, v1);
+    let c2 = write_type_name(&mut writer, Span::new(7, 13), parent, v2);
     assert_eq!(c1.as_u32(), 2);
     assert_eq!(c2.as_u32(), 3);
 
@@ -290,20 +290,6 @@ fn next_sibling_backpatch_links_two_children() {
     // Both children share parent_index = 1.
     assert_eq!(node_parent(&sf, 2), 1);
     assert_eq!(node_parent(&sf, 3), 1);
-}
-
-#[test]
-fn node_list_wrapper_payload_counts_elements() {
-    let arena = Allocator::default();
-    let mut writer = BinaryWriter::new(&arena);
-    let _ = write_node_list(&mut writer, Span::new(0, 0), 0, 7);
-
-    let bytes = writer.finish();
-    let sf = LazySourceFile::new(&bytes).unwrap();
-    assert_eq!(node_kind(&sf, 1), Kind::NodeList.as_u8());
-    let nd = node_data(&sf, 1);
-    assert_eq!(type_tag(nd), TypeTag::Children);
-    assert_eq!(payload(nd), 7);
 }
 
 #[test]
@@ -338,7 +324,7 @@ fn lazy_decoder_walks_jsdoc_block_via_asts_iterator() {
 
     let desc = writer.intern_string("hi");
     let s = writer.intern_string("");
-    let block = write_jsdoc_block(
+    let (block_idx, _block_ext) = write_jsdoc_block(
         &mut writer,
         Span::new(0, 12),
         0,
@@ -346,7 +332,7 @@ fn lazy_decoder_walks_jsdoc_block_via_asts_iterator() {
         s, s, s, s, s, s, s,
         0, // no children
     );
-    writer.push_root(block.as_u32(), 0, 50);
+    writer.push_root(block_idx.as_u32(), 0, 50);
 
     let bytes = writer.finish();
     let sf = LazySourceFile::new(&bytes).unwrap();
@@ -373,27 +359,28 @@ fn lazy_decoder_tag_with_parsed_type_dispatches_correctly() {
 
     // JsdocTag with bit0 (tag) + bit3 (parsedType) bitmask.
     let bitmask = 0b0000_1001u8;
-    let tag = ox_jsdoc_binary::writer::nodes::comment_ast::write_jsdoc_tag(
+    let (tag_idx, _tag_ext) = ox_jsdoc_binary::writer::nodes::comment_ast::write_jsdoc_tag(
         &mut writer,
         Span::new(0, 20),
         0,
         false, None, None, None,
         bitmask,
     );
+    let tag = tag_idx.as_u32();
     let _ = ox_jsdoc_binary::writer::nodes::comment_ast::write_jsdoc_tag_name(
         &mut writer,
         Span::new(1, 6),
-        tag.as_u32(),
+        tag,
         tag_name_str,
     );
     let _ = ox_jsdoc_binary::writer::nodes::type_node::write_type_name(
         &mut writer,
         Span::new(8, 14),
-        tag.as_u32(),
+        tag,
         type_str,
     );
 
-    writer.push_root(tag.as_u32(), 0, 0);
+    writer.push_root(tag, 0, 0);
 
     let bytes = writer.finish();
     let sf = LazySourceFile::new(&bytes).unwrap();
@@ -401,7 +388,7 @@ fn lazy_decoder_tag_with_parsed_type_dispatches_correctly() {
     // We pushed JsdocTag as the root for testing convenience; access it directly.
     use ox_jsdoc_binary::decoder::nodes::LazyNode;
     use ox_jsdoc_binary::decoder::nodes::comment_ast::LazyJsdocTag;
-    let lazy_tag = LazyJsdocTag::from_index(&sf, tag.as_u32(), 0);
+    let lazy_tag = LazyJsdocTag::from_index(&sf, tag, 0);
     assert!(!lazy_tag.optional());
     assert_eq!(lazy_tag.tag().value(), "param");
     let parsed = lazy_tag.parsed_type().expect("parsedType present");

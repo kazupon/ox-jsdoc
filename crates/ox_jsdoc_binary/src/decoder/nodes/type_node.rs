@@ -14,10 +14,11 @@
 
 use crate::format::kind::Kind;
 use crate::format::string_field::STRING_FIELD_SIZE;
+use crate::writer::nodes::type_node::TYPE_LIST_PARENT_SLOT;
 
 use super::super::helpers::{
     child_at_visitor_index, children_bitmask_payload, ext_offset, ext_string_leaf, first_child,
-    read_next_sibling, read_string_field, read_u16, string_payload,
+    read_list_metadata, read_next_sibling, read_string_field, read_u16, string_payload,
 };
 use super::super::source_file::LazySourceFile;
 use super::LazyNode;
@@ -145,26 +146,37 @@ impl<'a> LazyTypeSpecialNamePath<'a> {
 ///
 /// Separate from the generic [`NodeListIter`] because `LazyTypeNode` is a
 /// sum type and can't implement [`LazyNode`] (each variant has its own
-/// `Kind`).
+/// `Kind`). Carries an explicit `remaining` count read from the parent's
+/// Extended Data list-metadata slot.
 #[derive(Debug, Clone, Copy)]
 pub struct LazyTypeNodeListIter<'a> {
     source_file: &'a LazySourceFile<'a>,
     current_index: u32,
+    remaining: u32,
     root_index: u32,
 }
 
 impl<'a> LazyTypeNodeListIter<'a> {
-    /// Create a fresh iterator that starts at `head_index` (`0` = empty).
+    /// Create a fresh iterator over `count` elements starting at
+    /// `head_index`. Either `head_index = 0` or `count = 0` produces an
+    /// immediately-empty iterator.
     #[inline]
     #[must_use]
     pub const fn new(
         source_file: &'a LazySourceFile<'a>,
         head_index: u32,
+        count: u32,
         root_index: u32,
     ) -> Self {
+        let (current, remaining) = if head_index == 0 || count == 0 {
+            (0, 0)
+        } else {
+            (head_index, count)
+        };
         LazyTypeNodeListIter {
             source_file,
-            current_index: head_index,
+            current_index: current,
+            remaining,
             root_index,
         }
     }
@@ -173,7 +185,14 @@ impl<'a> LazyTypeNodeListIter<'a> {
     #[inline]
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.current_index == 0
+        self.remaining == 0
+    }
+
+    /// Number of elements still to yield.
+    #[inline]
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.remaining as usize
     }
 }
 
@@ -181,13 +200,14 @@ impl<'a> Iterator for LazyTypeNodeListIter<'a> {
     type Item = LazyTypeNode<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while self.current_index != 0 {
+        while self.remaining > 0 {
             let item = LazyTypeNode::from_index(
                 self.source_file,
                 self.current_index,
                 self.root_index,
             );
             self.current_index = read_next_sibling(self.source_file, self.current_index);
+            self.remaining -= 1;
             if let Some(node) = item {
                 return Some(node);
             }
@@ -195,25 +215,25 @@ impl<'a> Iterator for LazyTypeNodeListIter<'a> {
         }
         None
     }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let n = self.remaining as usize;
+        (n, Some(n))
+    }
 }
 
-/// Helper: build a [`LazyTypeNodeListIter`] over the elements wrapped in
-/// a NodeList child at `visitor_index` of the parent's Children bitmask.
+/// Helper: build a [`LazyTypeNodeListIter`] over the elements registered in
+/// the parent's Extended Data list-metadata slot at
+/// [`TYPE_LIST_PARENT_SLOT`].
 fn nodelist_at<'a>(
     sf: &'a LazySourceFile<'a>,
     parent_index: u32,
-    visitor_index: u8,
     root_index: u32,
 ) -> LazyTypeNodeListIter<'a> {
-    let bitmask = children_bitmask_payload(sf, parent_index) as u8;
-    if let Some(node_list_index) =
-        child_at_visitor_index(sf, parent_index, bitmask, visitor_index)
-    {
-        let head = first_child(sf, node_list_index).unwrap_or(0);
-        LazyTypeNodeListIter::new(sf, head, root_index)
-    } else {
-        LazyTypeNodeListIter::new(sf, 0, root_index)
-    }
+    let ext = ext_offset(sf, parent_index) as usize;
+    let (head, count) = read_list_metadata(sf, ext, TYPE_LIST_PARENT_SLOT);
+    LazyTypeNodeListIter::new(sf, head, count, root_index)
 }
 
 /// Helper: get the n-th direct child as a TypeNode.
@@ -232,7 +252,7 @@ define_lazy_type_node!(LazyTypeUnion, Kind::TypeUnion, "Lazy view of `TypeUnion`
 impl<'a> LazyTypeUnion<'a> {
     /// Union elements.
     pub fn elements(&self) -> LazyTypeNodeListIter<'a> {
-        nodelist_at(self.source_file, self.node_index, 0, self.root_index)
+        nodelist_at(self.source_file, self.node_index, self.root_index)
     }
 }
 
@@ -244,7 +264,7 @@ define_lazy_type_node!(
 impl<'a> LazyTypeIntersection<'a> {
     /// Intersection elements.
     pub fn elements(&self) -> LazyTypeNodeListIter<'a> {
-        nodelist_at(self.source_file, self.node_index, 0, self.root_index)
+        nodelist_at(self.source_file, self.node_index, self.root_index)
     }
 }
 
@@ -256,13 +276,14 @@ impl<'a> LazyTypeGeneric<'a> {
     /// Whether the generic was written with a leading `.` (Closure form).
     #[inline]
     pub fn dot(&self) -> bool { (self.common_data() & 0b10) != 0 }
-    /// Left-hand side type.
+    /// Left-hand side type (the parent's first direct child).
     pub fn left(&self) -> Option<LazyTypeNode<'a>> {
-        child_type_node(self.source_file, self.node_index, 0, self.root_index)
+        let idx = first_child(self.source_file, self.node_index)?;
+        LazyTypeNode::from_index(self.source_file, idx, self.root_index)
     }
-    /// Generic argument elements.
+    /// Generic argument elements (registered in the parent's ED block).
     pub fn elements(&self) -> LazyTypeNodeListIter<'a> {
-        nodelist_at(self.source_file, self.node_index, 1, self.root_index)
+        nodelist_at(self.source_file, self.node_index, self.root_index)
     }
 }
 
@@ -302,7 +323,7 @@ impl<'a> LazyTypeObject<'a> {
     pub fn separator(&self) -> u8 { self.common_data() & 0b111 }
     /// Field elements.
     pub fn elements(&self) -> LazyTypeNodeListIter<'a> {
-        nodelist_at(self.source_file, self.node_index, 0, self.root_index)
+        nodelist_at(self.source_file, self.node_index, self.root_index)
     }
 }
 
@@ -310,7 +331,7 @@ define_lazy_type_node!(LazyTypeTuple, Kind::TypeTuple, "Lazy view of `TypeTuple`
 impl<'a> LazyTypeTuple<'a> {
     /// Tuple elements.
     pub fn elements(&self) -> LazyTypeNodeListIter<'a> {
-        nodelist_at(self.source_file, self.node_index, 0, self.root_index)
+        nodelist_at(self.source_file, self.node_index, self.root_index)
     }
 }
 
@@ -515,7 +536,7 @@ define_lazy_type_node!(
 impl<'a> LazyTypeTypeParameter<'a> {
     /// Type-parameter children.
     pub fn elements(&self) -> LazyTypeNodeListIter<'a> {
-        nodelist_at(self.source_file, self.node_index, 0, self.root_index)
+        nodelist_at(self.source_file, self.node_index, self.root_index)
     }
 }
 
@@ -527,7 +548,7 @@ define_lazy_type_node!(
 impl<'a> LazyTypeParameterList<'a> {
     /// Parameter elements.
     pub fn elements(&self) -> LazyTypeNodeListIter<'a> {
-        nodelist_at(self.source_file, self.node_index, 0, self.root_index)
+        nodelist_at(self.source_file, self.node_index, self.root_index)
     }
 }
 

@@ -22,6 +22,18 @@ pub const EXTENDED_DATA_ALIGNMENT: usize = 8;
 /// [`super::node_record::PAYLOAD_MAX`].
 pub const EXTENDED_DATA_MAX_OFFSET: u32 = (1u32 << 30) - 1;
 
+/// Size of one **NodeList metadata** slot stored inline inside a parent's
+/// Extended Data block. Layout: `head_index: u32` followed by `count: u16`.
+///
+/// Parents with one or more variable-length child lists (`JsdocBlock.tags`,
+/// `TypeUnion.elements`, …) reserve `LIST_METADATA_SIZE` bytes per list at
+/// known per-Kind offsets. The writer patches `(head_index, count)` after
+/// the last child of each list is emitted; the decoder reads the head and
+/// walks `next_sibling` exactly `count` times. This replaces the Kind 0x7F
+/// `NodeList` wrapper that previously sat between the parent and its
+/// children.
+pub const LIST_METADATA_SIZE: usize = 4 + 2;
+
 #[cfg(test)]
 mod tests {
     use super::*;

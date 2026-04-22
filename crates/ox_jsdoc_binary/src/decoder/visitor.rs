@@ -672,8 +672,9 @@ mod tests {
     use crate::format::kind::Kind;
     use crate::writer::nodes::comment_ast::{
         write_jsdoc_block, write_jsdoc_tag, write_jsdoc_tag_name, write_jsdoc_tag_name_value,
-        write_node_list,
+        JSDOC_BLOCK_TAGS_SLOT,
     };
+    use crate::writer::nodes::type_node::TYPE_LIST_PARENT_SLOT;
     use crate::writer::nodes::type_node::write_type_name;
     use crate::writer::BinaryWriter;
     use oxc_allocator::Allocator;
@@ -711,10 +712,10 @@ mod tests {
         }
     }
 
-    /// Build a `/** @param {string} id */` buffer with the proper hierarchy
-    /// (block → NodeList → tag → tag-name + parsedType + tag-name-value).
-    /// The block's `tags()` accessor expects a NodeList wrapper child, so
-    /// the structure mirrors what the parser is supposed to emit.
+    /// Build a `/** @param {string} id */` buffer with the new no-NodeList
+    /// hierarchy: block → tag (direct child) → tag-name + parsedType +
+    /// tag-name-value. The block's `tags` list metadata slot is patched to
+    /// `(head=tag_index, count=1)` once the tag has been emitted.
     fn build_single_tag_buffer<'a>(arena: &'a Allocator) -> Vec<u8> {
         let mut writer = BinaryWriter::new(arena);
         let _ = writer.append_source_text("/** @param {string} id */");
@@ -724,12 +725,11 @@ mod tests {
         let space = writer.intern_string(" ");
         let close = writer.intern_string("*/");
         let nl = writer.intern_string("\n");
-        // String-leaf nodes need a StringIndex (TypeTag::String payload).
         let tag_name_str = writer.intern_string_index("param");
         let type_name_str = writer.intern_string_index("string");
         let param_name_str = writer.intern_string_index("id");
 
-        let block = write_jsdoc_block(
+        let (block, block_ext) = write_jsdoc_block(
             &mut writer,
             Span::new(0, 25),
             0,
@@ -737,19 +737,20 @@ mod tests {
             star, space, close, nl, empty, nl, empty,
             0b010, // bit1 = tags
         );
-        // tags NodeList wrapper (parent = block, element_count = 1).
-        let tags_list = write_node_list(&mut writer, Span::new(4, 23), block.as_u32(), 1);
+        let mut tags_list = writer.begin_node_list_at(block_ext, JSDOC_BLOCK_TAGS_SLOT);
         // Tag children bitmask: bit0 (tag) + bit2 (name) + bit3 (parsedType) = 0b1101.
-        let tag = write_jsdoc_tag(
+        let (tag, _tag_ext) = write_jsdoc_tag(
             &mut writer,
             Span::new(4, 23),
-            tags_list.as_u32(),
+            block.as_u32(),
             false,
             None,
             None,
             None,
             0b0000_1101,
         );
+        writer.record_list_child(&mut tags_list, tag.as_u32());
+        writer.finalize_node_list(tags_list);
         // Children of tag are emitted in visitor-bit order:
         // bit0 (JsdocTagName), then bit2 (JsdocTagNameValue), then bit3 (TypeName).
         let _ = write_jsdoc_tag_name(&mut writer, Span::new(4, 9), tag.as_u32(), tag_name_str);
@@ -815,14 +816,19 @@ mod tests {
         let arena = Allocator::default();
         let mut writer = BinaryWriter::new(&arena);
         let s = writer.intern_string_index("Foo");
-        // Build a TypeUnion → NodeList → 2 TypeName children. Pattern-2
-        // accessors expect a NodeList wrapper just like JsdocBlock.tags().
+        // Build a TypeUnion with 2 TypeName children. Elements are direct
+        // children of the union; their (head, count) is patched into the
+        // union's ED list-metadata slot.
         use crate::writer::nodes::type_node::{write_type_name, write_type_union};
-        let union = write_type_union(&mut writer, Span::new(0, 10), 0, 0b1);
-        let list = write_node_list(&mut writer, Span::new(0, 10), union.as_u32(), 2);
-        let _ = write_type_name(&mut writer, Span::new(0, 3), list.as_u32(), s);
-        let _ = write_type_name(&mut writer, Span::new(4, 7), list.as_u32(), s);
-        writer.push_root(union.as_u32(), 0, 0);
+        let (union_idx, union_ext) = write_type_union(&mut writer, Span::new(0, 10), 0);
+        let union = union_idx.as_u32();
+        let mut list = writer.begin_node_list_at(union_ext, TYPE_LIST_PARENT_SLOT);
+        let n1 = write_type_name(&mut writer, Span::new(0, 3), union, s);
+        writer.record_list_child(&mut list, n1.as_u32());
+        let n2 = write_type_name(&mut writer, Span::new(4, 7), union, s);
+        writer.record_list_child(&mut list, n2.as_u32());
+        writer.finalize_node_list(list);
+        writer.push_root(union, 0, 0);
 
         let bytes = writer.finish();
         let sf = LazySourceFile::new(&bytes).unwrap();
@@ -845,7 +851,7 @@ mod tests {
             saw_union: false,
             type_name_count: 0,
         };
-        let root = LazyTypeNode::from_index(&sf, union.as_u32(), 0).expect("union root");
+        let root = LazyTypeNode::from_index(&sf, union, 0).expect("union root");
         v.visit_type_node(root);
 
         assert!(v.saw_union);

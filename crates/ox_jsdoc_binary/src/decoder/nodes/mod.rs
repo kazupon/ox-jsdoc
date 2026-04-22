@@ -116,30 +116,49 @@ pub trait LazyNode<'a>: Copy + Clone + Sized {
 /// Stored as a tiny value-type struct so that calling `.tags()` on a parent
 /// allocates nothing — the iterator itself sits on the stack and walks
 /// `next_sibling` links on each `next()` call.
+///
+/// As of the NodeList-elimination format change, the iterator carries an
+/// explicit `remaining` count read from the parent's Extended Data block
+/// (slot layout: `head: u32` + `count: u16`). The Kind 0x7F wrapper that
+/// previously delimited each list is no longer emitted; the iterator stops
+/// once `remaining` reaches zero.
 #[derive(Debug, Clone, Copy)]
 pub struct NodeListIter<'a, T> {
     source_file: &'a LazySourceFile<'a>,
-    /// Current position in the Nodes section. `0` means "end of list"
-    /// because the sentinel `node[0]` is reused as the no-link marker.
+    /// Current position in the Nodes section. `0` indicates an empty or
+    /// fully-consumed iterator.
     current_index: u32,
+    /// Number of elements left to yield. Decremented on every `next()`;
+    /// reaching zero ends iteration even if `current_index` still points at
+    /// a sibling chain (which it can, when the parent has multiple lists
+    /// laid out back-to-back).
+    remaining: u32,
     /// Root index propagated to every yielded child.
     root_index: u32,
     _marker: PhantomData<T>,
 }
 
 impl<'a, T: LazyNode<'a>> NodeListIter<'a, T> {
-    /// Create a new iterator that starts at `head_index`. `head_index = 0`
-    /// produces an immediately-empty iterator.
+    /// Create a new iterator over `count` elements starting at `head_index`.
+    /// Either `head_index = 0` or `count = 0` produces an immediately-empty
+    /// iterator.
     #[inline]
     #[must_use]
     pub const fn new(
         source_file: &'a LazySourceFile<'a>,
         head_index: u32,
+        count: u32,
         root_index: u32,
     ) -> Self {
+        let (current, remaining) = if head_index == 0 || count == 0 {
+            (0, 0)
+        } else {
+            (head_index, count)
+        };
         NodeListIter {
             source_file,
-            current_index: head_index,
+            current_index: current,
+            remaining,
             root_index,
             _marker: PhantomData,
         }
@@ -149,7 +168,14 @@ impl<'a, T: LazyNode<'a>> NodeListIter<'a, T> {
     #[inline]
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.current_index == 0
+        self.remaining == 0
+    }
+
+    /// Number of elements still to yield.
+    #[inline]
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.remaining as usize
     }
 }
 
@@ -157,14 +183,23 @@ impl<'a, T: LazyNode<'a>> Iterator for NodeListIter<'a, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_index == 0 {
+        if self.remaining == 0 {
             return None;
         }
         let item = T::from_index(self.source_file, self.current_index, self.root_index);
         self.current_index = super::helpers::read_next_sibling(self.source_file, self.current_index);
+        self.remaining -= 1;
         Some(item)
     }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let n = self.remaining as usize;
+        (n, Some(n))
+    }
 }
+
+impl<'a, T: LazyNode<'a>> ExactSizeIterator for NodeListIter<'a, T> {}
 
 #[cfg(test)]
 mod tests {

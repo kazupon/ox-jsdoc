@@ -102,6 +102,25 @@ pub fn read_string_field(bytes: &[u8], offset: usize) -> StringField {
     StringField::read_le(&bytes[offset..offset + STRING_FIELD_SIZE])
 }
 
+/// Read NodeList metadata `(head_index: u32, count: u16)` from a parent's
+/// Extended Data block, returning `(head, count_as_u32)`.
+///
+/// `ext_byte_offset` is the absolute byte offset of the parent's ED record
+/// in the buffer (resolved via [`ext_offset`]). `slot_offset` is the per-Kind
+/// byte offset of the list slot inside the ED block.
+#[inline]
+#[must_use]
+pub fn read_list_metadata(
+    sf: &LazySourceFile<'_>,
+    ext_byte_offset: usize,
+    slot_offset: usize,
+) -> (u32, u32) {
+    let bytes = sf.bytes();
+    let head = read_u32(bytes, ext_byte_offset + slot_offset);
+    let count = read_u16(bytes, ext_byte_offset + slot_offset + 4) as u32;
+    (head, count)
+}
+
 /// Resolve the 30-bit String payload of a String-type node into its
 /// underlying string. `None` when the writer used the
 /// [`crate::format::node_record::STRING_PAYLOAD_NONE_SENTINEL`] sentinel.

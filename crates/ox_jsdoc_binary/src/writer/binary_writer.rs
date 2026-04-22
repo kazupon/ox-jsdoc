@@ -26,6 +26,23 @@ use super::extended_data::{ExtOffset, ExtendedDataBuilder};
 use super::nodes::NodeIndex;
 use super::string_table::{common_string_field, lookup_common, StringIndex, StringTableBuilder};
 
+/// Tracks one in-progress NodeList — the head index and element count that
+/// will be patched into the owning parent's Extended Data block when the
+/// list closes.
+///
+/// Constructed by [`BinaryWriter::begin_node_list_at`], updated by
+/// [`BinaryWriter::record_list_child`], and consumed by
+/// [`BinaryWriter::finalize_node_list`]. The struct intentionally has no
+/// `Default` impl: an unfinished list must be wired up to an Extended Data
+/// slot or it has no place to land.
+#[derive(Debug)]
+pub struct ListInProgress {
+    parent_ext: ExtOffset,
+    slot_offset: usize,
+    head_index: u32,
+    count: u16,
+}
+
 /// Top-level writer that owns one buffer per Binary AST section.
 ///
 /// Construction: [`BinaryWriter::new`] pre-writes the 24-byte sentinel
@@ -552,6 +569,54 @@ impl<'arena> BinaryWriter<'arena> {
     #[must_use]
     pub fn node_count(&self) -> u32 {
         (self.nodes_buffer.len() / NODE_RECORD_SIZE) as u32
+    }
+
+    /// Open a NodeList cursor at `(parent_ext + slot_offset)`.
+    ///
+    /// Pattern (per parent that owns one or more lists):
+    /// 1. Emit the parent via `write_*` helper. The helper now returns
+    ///    `(NodeIndex, ExtOffset)` so the caller can address the ED block.
+    /// 2. `begin_node_list_at(ext, slot_offset)` opens a cursor for one list.
+    /// 3. After each child emit, [`Self::record_list_child`] updates the
+    ///    cursor's head/count.
+    /// 4. [`Self::finalize_node_list`] patches `(head: u32, count: u16)` into
+    ///    the parent's ED block at the recorded slot.
+    #[inline]
+    #[must_use]
+    pub fn begin_node_list_at(
+        &self,
+        parent_ext: ExtOffset,
+        slot_offset: usize,
+    ) -> ListInProgress {
+        ListInProgress {
+            parent_ext,
+            slot_offset,
+            head_index: 0,
+            count: 0,
+        }
+    }
+
+    /// Record one child added to the in-progress list. `child_index` is the
+    /// `u32` returned by the per-child `write_*` helper (or `emit_type_node`).
+    #[inline]
+    pub fn record_list_child(&mut self, list: &mut ListInProgress, child_index: u32) {
+        if list.count == 0 {
+            list.head_index = child_index;
+        }
+        list.count = list
+            .count
+            .checked_add(1)
+            .expect("NodeList exceeds u16::MAX elements");
+    }
+
+    /// Patch `(head_index: u32, count: u16)` into the parent's Extended Data
+    /// block at `(parent_ext + slot_offset)`. Must be called exactly once per
+    /// list opened via [`Self::begin_node_list_at`].
+    pub fn finalize_node_list(&mut self, list: ListInProgress) {
+        let base = list.parent_ext.as_u32() as usize + list.slot_offset;
+        let buf = &mut self.extended.buffer[base..base + 6];
+        buf[0..4].copy_from_slice(&list.head_index.to_le_bytes());
+        buf[4..6].copy_from_slice(&list.count.to_le_bytes());
     }
 
     /// Number of roots currently in the Root Index Array.

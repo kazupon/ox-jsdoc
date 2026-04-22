@@ -72,6 +72,14 @@ pub enum Kind {
 
     // -- Special list wrapper ---------------------------------------------
     /// Special wrapper for variable-length child arrays.
+    ///
+    /// **Deprecated** as of the NodeList-elimination format change. Lists
+    /// are now stored as direct children of the parent, with
+    /// `(head_index: u32, count: u16)` metadata embedded inline in the
+    /// parent's Extended Data block (see
+    /// [`crate::format::extended_data::LIST_METADATA_SIZE`]). The discriminant
+    /// `0x7F` remains reserved so legacy buffers still parse, but encoders
+    /// no longer emit nodes of this Kind.
     NodeList = 0x7F,
 
     // -- TypeNode (45 kinds, 0x80 - 0xAC) ---------------------------------

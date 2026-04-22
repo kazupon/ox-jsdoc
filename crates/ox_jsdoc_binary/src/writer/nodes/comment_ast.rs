@@ -24,8 +24,8 @@
 
 use oxc_span::Span;
 
+use crate::format::extended_data::LIST_METADATA_SIZE;
 use crate::format::kind::Kind;
-use crate::format::node_record::{TypeTag, pack_node_data};
 use crate::format::string_field::{STRING_FIELD_SIZE, StringField};
 
 use super::super::{BinaryWriter, ExtOffset, StringIndex};
@@ -35,20 +35,37 @@ use super::NodeIndex;
 // 0x01 JsdocBlock (Extended, root)
 // ---------------------------------------------------------------------------
 
+/// Number of NodeList slots embedded in a `JsdocBlock` Extended Data block:
+/// description_lines, tags, inline_tags.
+const JSDOC_BLOCK_LIST_COUNT: usize = 3;
+/// Byte offset where the per-list metadata region begins inside a
+/// `JsdocBlock` Extended Data block (right after the 8 inline StringFields).
+pub(crate) const JSDOC_BLOCK_LISTS_BASE: usize = 1 + 1 + 8 * STRING_FIELD_SIZE;
+/// `description_lines` list metadata slot offset (basic-mode ED).
+pub const JSDOC_BLOCK_DESC_LINES_SLOT: usize = JSDOC_BLOCK_LISTS_BASE;
+/// `tags` list metadata slot offset (basic-mode ED).
+pub const JSDOC_BLOCK_TAGS_SLOT: usize = JSDOC_BLOCK_LISTS_BASE + LIST_METADATA_SIZE;
+/// `inline_tags` list metadata slot offset (basic-mode ED).
+pub const JSDOC_BLOCK_INLINE_TAGS_SLOT: usize = JSDOC_BLOCK_LISTS_BASE + 2 * LIST_METADATA_SIZE;
+
 /// Basic-mode Extended Data size for [`JsdocBlock`]:
-/// `1 + 1 + 8 × StringField = 50` bytes.
-const JSDOC_BLOCK_BASIC_SIZE: usize = 1 + 1 + 8 * STRING_FIELD_SIZE;
+/// `1 + 1 + 8 × StringField + 3 × ListMetadata = 68` bytes.
+const JSDOC_BLOCK_BASIC_SIZE: usize =
+    JSDOC_BLOCK_LISTS_BASE + JSDOC_BLOCK_LIST_COUNT * LIST_METADATA_SIZE;
 /// Compat-mode Extended Data size for [`JsdocBlock`]: basic + `22` bytes
-/// of compat tail (line indices, has_preterminal_* flags).
+/// of compat tail (line indices, has_preterminal_* flags) starting at the
+/// end of the basic region.
 const JSDOC_BLOCK_COMPAT_SIZE: usize = JSDOC_BLOCK_BASIC_SIZE + 22;
+/// Compat tail base offset (start of the compat-only region).
+const JSDOC_BLOCK_COMPAT_TAIL_BASE: usize = JSDOC_BLOCK_BASIC_SIZE;
 
 /// Write a `JsdocBlock` (Kind `0x01`, Extended type).
 ///
-/// Extended Data layout (basic 50 bytes; compat extends to 72 bytes via
+/// Extended Data layout (basic 68 bytes; compat extends to 90 bytes via
 /// [`write_jsdoc_block_compat_tail`]):
 ///
 /// ```text
-/// byte 0      : Children bitmask (u8)
+/// byte 0      : Children bitmask (u8, retained for visitor framework)
 /// byte 1      : padding (u8)
 /// byte 2-7    : description     (StringField, NONE if absent)
 /// byte 8-13   : delimiter
@@ -58,7 +75,15 @@ const JSDOC_BLOCK_COMPAT_SIZE: usize = JSDOC_BLOCK_BASIC_SIZE + 22;
 /// byte 32-37  : initial
 /// byte 38-43  : delimiter_line_break
 /// byte 44-49  : preterminal_line_break
+/// byte 50-55  : description_lines list metadata (head: u32, count: u16)
+/// byte 56-61  : tags list metadata
+/// byte 62-67  : inline_tags list metadata
 /// ```
+///
+/// Returns `(NodeIndex, ExtOffset)` so the caller can patch the per-list
+/// metadata via [`BinaryWriter::begin_node_list_at`] /
+/// [`BinaryWriter::finalize_node_list`] once all children of each list have
+/// been emitted.
 #[allow(clippy::too_many_arguments)]
 pub fn write_jsdoc_block(
     writer: &mut BinaryWriter<'_>,
@@ -73,7 +98,7 @@ pub fn write_jsdoc_block(
     delimiter_line_break: StringField,
     preterminal_line_break: StringField,
     children_bitmask: u8,
-) -> NodeIndex {
+) -> (NodeIndex, ExtOffset) {
     let total_size = if writer.compat_mode() {
         JSDOC_BLOCK_COMPAT_SIZE
     } else {
@@ -90,24 +115,27 @@ pub fn write_jsdoc_block(
     write_string_field(dst, 32, initial);
     write_string_field(dst, 38, delimiter_line_break);
     write_string_field(dst, 44, preterminal_line_break);
-    writer.emit_extended_node(parent_index, Kind::JsdocBlock, 0, span, off)
+    // List metadata bytes 50..68 are zeroed by reserve_mut and patched later
+    // via begin_node_list_at / finalize_node_list.
+    let idx = writer.emit_extended_node(parent_index, Kind::JsdocBlock, 0, span, off);
+    (idx, off)
 }
 
-/// Patch the compat-mode tail (`bytes 50..=71`) on a previously written
-/// `JsdocBlock` Extended Data record. Only call this when
-/// [`BinaryWriter::compat_mode`] is `true` (the basic write helper already
-/// reserved the extra bytes).
+/// Patch the compat-mode tail on a previously written `JsdocBlock` Extended
+/// Data record. Only call this when [`BinaryWriter::compat_mode`] is `true`
+/// (the basic write helper already reserved the extra bytes).
 ///
-/// Tail layout:
+/// Tail layout (offsets relative to the parent's Extended Data start; the
+/// region begins at byte 68 = `JSDOC_BLOCK_COMPAT_TAIL_BASE`):
 /// ```text
-/// byte 50-51 : padding (u16, zero-fill)
-/// byte 52-55 : end_line (u32)
-/// byte 56-59 : description_start_line (u32, 0xFFFF_FFFF = None)
-/// byte 60-63 : description_end_line   (u32, 0xFFFF_FFFF = None)
-/// byte 64-67 : last_description_line  (u32, 0xFFFF_FFFF = None)
-/// byte 68    : has_preterminal_description (u8)
-/// byte 69    : has_preterminal_tag_description (u8, 0xFF = None)
-/// byte 70-71 : padding (u16, zero-fill)
+/// byte 68-69 : padding (u16, zero-fill)
+/// byte 70-73 : end_line (u32)
+/// byte 74-77 : description_start_line (u32, 0xFFFF_FFFF = None)
+/// byte 78-81 : description_end_line   (u32, 0xFFFF_FFFF = None)
+/// byte 82-85 : last_description_line  (u32, 0xFFFF_FFFF = None)
+/// byte 86    : has_preterminal_description (u8)
+/// byte 87    : has_preterminal_tag_description (u8, 0xFF = None)
+/// byte 88-89 : padding (u16, zero-fill)
 /// ```
 pub fn write_jsdoc_block_compat_tail(
     writer: &mut BinaryWriter<'_>,
@@ -124,14 +152,18 @@ pub fn write_jsdoc_block_compat_tail(
         "write_jsdoc_block_compat_tail called but compat_mode is off"
     );
     let dst = writer.extended.slice_mut(ext_offset, JSDOC_BLOCK_COMPAT_SIZE);
-    // bytes 50-51 are u32 alignment padding (already zero from reserve_mut)
-    dst[52..56].copy_from_slice(&end_line.to_le_bytes());
-    dst[56..60].copy_from_slice(&opt_u32_sentinel(description_start_line).to_le_bytes());
-    dst[60..64].copy_from_slice(&opt_u32_sentinel(description_end_line).to_le_bytes());
-    dst[64..68].copy_from_slice(&opt_u32_sentinel(last_description_line).to_le_bytes());
-    dst[68] = has_preterminal_description;
-    dst[69] = has_preterminal_tag_description.unwrap_or(0xFF);
-    // bytes 70-71 trailing alignment (already zero)
+    let base = JSDOC_BLOCK_COMPAT_TAIL_BASE;
+    // bytes [base..base+2] are u32 alignment padding (already zero)
+    dst[base + 2..base + 6].copy_from_slice(&end_line.to_le_bytes());
+    dst[base + 6..base + 10]
+        .copy_from_slice(&opt_u32_sentinel(description_start_line).to_le_bytes());
+    dst[base + 10..base + 14]
+        .copy_from_slice(&opt_u32_sentinel(description_end_line).to_le_bytes());
+    dst[base + 14..base + 18]
+        .copy_from_slice(&opt_u32_sentinel(last_description_line).to_le_bytes());
+    dst[base + 18] = has_preterminal_description;
+    dst[base + 19] = has_preterminal_tag_description.unwrap_or(0xFF);
+    // bytes [base+20..base+22] trailing alignment (already zero)
 }
 
 // ---------------------------------------------------------------------------
@@ -184,27 +216,50 @@ pub fn write_jsdoc_description_line_compat(
 // 0x03 JsdocTag (Extended)
 // ---------------------------------------------------------------------------
 
+/// Number of NodeList slots embedded in a `JsdocTag` Extended Data block:
+/// type_lines, description_lines, inline_tags.
+const JSDOC_TAG_LIST_COUNT: usize = 3;
+/// Byte offset where the per-list metadata region begins inside a
+/// `JsdocTag` Extended Data block (right after the 3 inline StringFields).
+pub(crate) const JSDOC_TAG_LISTS_BASE: usize = 1 + 1 + 3 * STRING_FIELD_SIZE;
+/// `type_lines` list metadata slot offset.
+pub const JSDOC_TAG_TYPE_LINES_SLOT: usize = JSDOC_TAG_LISTS_BASE;
+/// `description_lines` list metadata slot offset.
+pub const JSDOC_TAG_DESC_LINES_SLOT: usize = JSDOC_TAG_LISTS_BASE + LIST_METADATA_SIZE;
+/// `inline_tags` list metadata slot offset.
+pub const JSDOC_TAG_INLINE_TAGS_SLOT: usize = JSDOC_TAG_LISTS_BASE + 2 * LIST_METADATA_SIZE;
+
 /// Basic-mode Extended Data size for [`JsdocTag`]:
-/// `1 + 1 + 3 × StringField = 20` bytes.
-const JSDOC_TAG_BASIC_SIZE: usize = 1 + 1 + 3 * STRING_FIELD_SIZE;
+/// `1 + 1 + 3 × StringField + 3 × ListMetadata = 38` bytes.
+const JSDOC_TAG_BASIC_SIZE: usize =
+    JSDOC_TAG_LISTS_BASE + JSDOC_TAG_LIST_COUNT * LIST_METADATA_SIZE;
 /// Compat-mode Extended Data size for [`JsdocTag`]: basic + 7 × StringField
-/// of compat tail.
+/// of compat tail (42 bytes).
 const JSDOC_TAG_COMPAT_SIZE: usize = JSDOC_TAG_BASIC_SIZE + 7 * STRING_FIELD_SIZE;
+/// Compat tail base offset (start of the compat-only region).
+const JSDOC_TAG_COMPAT_TAIL_BASE: usize = JSDOC_TAG_BASIC_SIZE;
 
 /// Write a `JsdocTag` (Kind `0x03`, Extended type).
 ///
-/// Common Data: `bit0 = optional`. Extended Data layout (basic 20 bytes):
+/// Common Data: `bit0 = optional`. Extended Data layout (basic 38 bytes):
 ///
 /// ```text
-/// byte 0      : Children bitmask (u8)
+/// byte 0      : Children bitmask (u8, retained for visitor framework)
 /// byte 1      : padding (u8)
 /// byte 2-7    : default_value (StringField, NONE if absent)
 /// byte 8-13   : description    (StringField, NONE if absent)
 /// byte 14-19  : raw_body       (StringField, NONE if absent)
+/// byte 20-25  : type_lines       list metadata (head: u32, count: u16)
+/// byte 26-31  : description_lines list metadata
+/// byte 32-37  : inline_tags      list metadata
 /// ```
 ///
-/// In compat mode the 7 delimiter StringFields follow at byte 20..=61
-/// (total 62 bytes); use [`write_jsdoc_tag_compat_tail`] to patch them.
+/// In compat mode the 7 delimiter StringFields follow at byte 38..=79
+/// (total 80 bytes); use [`write_jsdoc_tag_compat_tail`] to patch them.
+///
+/// Returns `(NodeIndex, ExtOffset)` so the caller can patch the per-list
+/// metadata via [`BinaryWriter::begin_node_list_at`] /
+/// [`BinaryWriter::finalize_node_list`].
 #[allow(clippy::too_many_arguments)]
 pub fn write_jsdoc_tag(
     writer: &mut BinaryWriter<'_>,
@@ -215,7 +270,7 @@ pub fn write_jsdoc_tag(
     description: Option<StringField>,
     raw_body: Option<StringField>,
     children_bitmask: u8,
-) -> NodeIndex {
+) -> (NodeIndex, ExtOffset) {
     let total_size = if writer.compat_mode() {
         JSDOC_TAG_COMPAT_SIZE
     } else {
@@ -227,7 +282,10 @@ pub fn write_jsdoc_tag(
     write_opt_string_field(dst, 2, default_value);
     write_opt_string_field(dst, 8, description);
     write_opt_string_field(dst, 14, raw_body);
-    writer.emit_extended_node(parent_index, Kind::JsdocTag, optional as u8, span, off)
+    // List metadata bytes 20..38 are zeroed by reserve_mut and patched
+    // later via begin_node_list_at / finalize_node_list.
+    let idx = writer.emit_extended_node(parent_index, Kind::JsdocTag, optional as u8, span, off);
+    (idx, off)
 }
 
 /// Write the 7 delimiter [`StringField`]s (42 bytes) at the compat tail of a
@@ -246,13 +304,14 @@ pub fn write_jsdoc_tag_compat_tail(
 ) {
     debug_assert!(writer.compat_mode());
     let dst = writer.extended.slice_mut(ext_offset, JSDOC_TAG_COMPAT_SIZE);
-    write_string_field(dst, 20, delimiter);
-    write_string_field(dst, 26, post_delimiter);
-    write_string_field(dst, 32, post_tag);
-    write_string_field(dst, 38, post_type);
-    write_string_field(dst, 44, post_name);
-    write_string_field(dst, 50, initial);
-    write_string_field(dst, 56, line_end);
+    let base = JSDOC_TAG_COMPAT_TAIL_BASE;
+    write_string_field(dst, base, delimiter);
+    write_string_field(dst, base + STRING_FIELD_SIZE, post_delimiter);
+    write_string_field(dst, base + 2 * STRING_FIELD_SIZE, post_tag);
+    write_string_field(dst, base + 3 * STRING_FIELD_SIZE, post_type);
+    write_string_field(dst, base + 4 * STRING_FIELD_SIZE, post_name);
+    write_string_field(dst, base + 5 * STRING_FIELD_SIZE, initial);
+    write_string_field(dst, base + 6 * STRING_FIELD_SIZE, line_end);
 }
 
 // ---------------------------------------------------------------------------
@@ -514,24 +573,6 @@ pub fn write_jsdoc_text(
     value: StringIndex,
 ) -> NodeIndex {
     writer.emit_string_node(parent_index, Kind::JsdocText, 0, span, value)
-}
-
-// ---------------------------------------------------------------------------
-// 0x7F NodeList wrapper
-// ---------------------------------------------------------------------------
-
-/// Write a `NodeList` wrapper (Kind `0x7F`).
-///
-/// Per `format.md` "Special nodes", the 30-bit Node Data payload stores the
-/// element count. Children follow the wrapper in DFS pre-order.
-pub fn write_node_list(
-    writer: &mut BinaryWriter<'_>,
-    span: Span,
-    parent_index: u32,
-    element_count: u32,
-) -> NodeIndex {
-    let node_data = pack_node_data(TypeTag::Children, element_count);
-    writer.emit_node_record(parent_index, Kind::NodeList, 0, span, node_data)
 }
 
 // ---------------------------------------------------------------------------

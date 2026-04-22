@@ -11,14 +11,15 @@
 //! Mirrors the layout assumed by `crates/ox_jsdoc_binary/src/decoder/nodes/type_node.rs`:
 //! - Single children (`element`, `left`, `right`, etc.) are direct children
 //!   of the parent at the matching visitor-bit slot.
-//! - Variable-length `elements` lists are wrapped in a NodeList (Kind 0x7F)
-//!   placed at visitor-bit 0 (or appropriate slot) of the parent.
+//! - Variable-length `elements` lists are emitted as direct children of the
+//!   parent with `(head_index, count)` patched into the parent's Extended
+//!   Data block at [`TYPE_LIST_PARENT_SLOT`]. The Kind 0x7F NodeList wrapper
+//!   that previously sat between parent and elements is no longer emitted.
 //! - Pattern 3 mixed nodes (`TypeKeyValue` etc.) place the optional child
 //!   directly after the parent without a Children bitmask.
 
-use crate::writer::nodes::comment_ast::write_node_list;
 use crate::writer::nodes::type_node::*;
-use crate::writer::BinaryWriter;
+use crate::writer::{BinaryWriter, ExtOffset, NodeIndex};
 
 use super::type_data::*;
 
@@ -60,14 +61,14 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
         TypeNodeData::Unknown(n) => write_type_unknown(writer, n.span, parent_index).as_u32(),
         TypeNodeData::UniqueSymbol(n) => write_type_unique_symbol(writer, n.span, parent_index).as_u32(),
 
-        TypeNodeData::Union(n) => emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p, b| {
-            write_type_union(w, s, p, b).as_u32()
+        TypeNodeData::Union(n) => emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p| {
+            write_type_union(w, s, p)
         }),
-        TypeNodeData::Intersection(n) => emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p, b| {
-            write_type_intersection(w, s, p, b).as_u32()
+        TypeNodeData::Intersection(n) => emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p| {
+            write_type_intersection(w, s, p)
         }),
-        TypeNodeData::Tuple(n) => emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p, b| {
-            write_type_tuple(w, s, p, b).as_u32()
+        TypeNodeData::Tuple(n) => emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p| {
+            write_type_tuple(w, s, p)
         }),
         TypeNodeData::TypeParameter(n) => {
             // TypeTypeParameter wraps name + optional constraint + optional default
@@ -80,12 +81,12 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
             if let Some(d) = n.default_value.as_ref() {
                 wrapped.push(d);
             }
-            emit_borrowed_elements(writer, parent_index, n.span, &wrapped, |w, s, p, b| {
-                write_type_type_parameter(w, s, p, b).as_u32()
+            emit_borrowed_elements(writer, parent_index, n.span, &wrapped, |w, s, p| {
+                write_type_type_parameter(w, s, p)
             })
         }
-        TypeNodeData::ParameterList(n) => emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p, b| {
-            write_type_parameter_list(w, s, p, b).as_u32()
+        TypeNodeData::ParameterList(n) => emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p| {
+            write_type_parameter_list(w, s, p)
         }),
 
         TypeNodeData::Object(n) => {
@@ -97,20 +98,16 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
                 Some(ObjectSeparator::SemicolonAndLinebreak) => 5,
                 None => 0,
             };
-            let bitmask = if n.elements.is_empty() { 0 } else { 0b1 };
-            let parent = write_type_object(writer, n.span, parent_index, sep, bitmask).as_u32();
+            let (idx, ext) = write_type_object(writer, n.span, parent_index, sep);
+            let parent = idx.as_u32();
             if !n.elements.is_empty() {
-                emit_node_list(writer, parent, n.span, &n.elements);
+                emit_node_list_into_parent(writer, ext, parent, &n.elements);
             }
             parent
         }
 
         TypeNodeData::Generic(n) => {
-            let mut bitmask = 0b1; // bit0 = left
-            if !n.elements.is_empty() {
-                bitmask |= 0b10;
-            }
-            let parent = write_type_generic(
+            let (idx, ext) = write_type_generic(
                 writer,
                 n.span,
                 parent_index,
@@ -119,12 +116,11 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
                     GenericBrackets::Square => 1,
                 },
                 n.dot,
-                bitmask,
-            )
-            .as_u32();
+            );
+            let parent = idx.as_u32();
             emit_type_node(writer, &n.left, parent);
             if !n.elements.is_empty() {
-                emit_node_list(writer, parent, n.span, &n.elements);
+                emit_node_list_into_parent(writer, ext, parent, &n.elements);
             }
             parent
         }
@@ -360,28 +356,35 @@ fn quote_to_u8(quote: Option<QuoteStyle>) -> u8 {
     }
 }
 
-fn emit_node_list(
+/// Emit `elements` as direct children of `parent_index` and patch the
+/// `(head, count)` metadata into the parent's Extended Data block at
+/// [`TYPE_LIST_PARENT_SLOT`].
+fn emit_node_list_into_parent(
     writer: &mut BinaryWriter<'_>,
+    parent_ext: ExtOffset,
     parent_index: u32,
-    span: oxc_span::Span,
     elements: &[Box<TypeNodeData<'_>>],
 ) {
-    let list = write_node_list(writer, span, parent_index, elements.len() as u32).as_u32();
+    let mut list = writer.begin_node_list_at(parent_ext, TYPE_LIST_PARENT_SLOT);
     for el in elements {
-        emit_type_node(writer, el, list);
+        let child_idx = emit_type_node(writer, el, parent_index);
+        writer.record_list_child(&mut list, child_idx);
     }
+    writer.finalize_node_list(list);
 }
 
-fn emit_borrowed_node_list(
+fn emit_borrowed_node_list_into_parent(
     writer: &mut BinaryWriter<'_>,
+    parent_ext: ExtOffset,
     parent_index: u32,
-    span: oxc_span::Span,
     elements: &[&TypeNodeData<'_>],
 ) {
-    let list = write_node_list(writer, span, parent_index, elements.len() as u32).as_u32();
+    let mut list = writer.begin_node_list_at(parent_ext, TYPE_LIST_PARENT_SLOT);
     for el in elements {
-        emit_type_node(writer, el, list);
+        let child_idx = emit_type_node(writer, el, parent_index);
+        writer.record_list_child(&mut list, child_idx);
     }
+    writer.finalize_node_list(list);
 }
 
 fn emit_elements_only<F>(
@@ -392,12 +395,12 @@ fn emit_elements_only<F>(
     write_parent: F,
 ) -> u32
 where
-    F: FnOnce(&mut BinaryWriter<'_>, oxc_span::Span, u32, u32) -> u32,
+    F: FnOnce(&mut BinaryWriter<'_>, oxc_span::Span, u32) -> (NodeIndex, ExtOffset),
 {
-    let bitmask = if elements.is_empty() { 0 } else { 0b1 };
-    let parent = write_parent(writer, span, parent_index, bitmask);
+    let (idx, ext) = write_parent(writer, span, parent_index);
+    let parent = idx.as_u32();
     if !elements.is_empty() {
-        emit_node_list(writer, parent, span, elements);
+        emit_node_list_into_parent(writer, ext, parent, elements);
     }
     parent
 }
@@ -410,12 +413,12 @@ fn emit_borrowed_elements<F>(
     write_parent: F,
 ) -> u32
 where
-    F: FnOnce(&mut BinaryWriter<'_>, oxc_span::Span, u32, u32) -> u32,
+    F: FnOnce(&mut BinaryWriter<'_>, oxc_span::Span, u32) -> (NodeIndex, ExtOffset),
 {
-    let bitmask = if elements.is_empty() { 0 } else { 0b1 };
-    let parent = write_parent(writer, span, parent_index, bitmask);
+    let (idx, ext) = write_parent(writer, span, parent_index);
+    let parent = idx.as_u32();
     if !elements.is_empty() {
-        emit_borrowed_node_list(writer, parent, span, elements);
+        emit_borrowed_node_list_into_parent(writer, ext, parent, elements);
     }
     parent
 }
@@ -497,16 +500,17 @@ where
     let parent = write_parent(writer, span, parent_index, bitmask);
 
     if !parameters.is_empty() {
-        // parameters child is itself a TypeParameterList (bitmask + NodeList).
-        let plist = write_type_parameter_list(writer, span, parent, 0b1).as_u32();
-        emit_node_list(writer, plist, span, parameters);
+        // parameters child is itself a TypeParameterList that owns the
+        // elements list metadata in its own Extended Data block.
+        let (plist_idx, plist_ext) = write_type_parameter_list(writer, span, parent);
+        emit_node_list_into_parent(writer, plist_ext, plist_idx.as_u32(), parameters);
     }
     if let Some(rt) = return_type {
         emit_type_node(writer, rt, parent);
     }
     if !type_parameters.is_empty() {
-        let tplist = write_type_parameter_list(writer, span, parent, 0b1).as_u32();
-        emit_node_list(writer, tplist, span, type_parameters);
+        let (tplist_idx, tplist_ext) = write_type_parameter_list(writer, span, parent);
+        emit_node_list_into_parent(writer, tplist_ext, tplist_idx.as_u32(), type_parameters);
     }
     parent
 }

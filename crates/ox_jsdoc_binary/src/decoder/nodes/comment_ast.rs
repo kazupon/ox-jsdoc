@@ -13,9 +13,13 @@
 use crate::format::kind::Kind;
 use crate::format::node_record::{KIND_OFFSET, NODE_RECORD_SIZE};
 use crate::format::string_field::STRING_FIELD_SIZE;
+use crate::writer::nodes::comment_ast::{
+    JSDOC_BLOCK_DESC_LINES_SLOT, JSDOC_BLOCK_INLINE_TAGS_SLOT, JSDOC_BLOCK_TAGS_SLOT,
+    JSDOC_TAG_DESC_LINES_SLOT, JSDOC_TAG_INLINE_TAGS_SLOT, JSDOC_TAG_TYPE_LINES_SLOT,
+};
 
 use super::super::helpers::{
-    child_at_visitor_index, ext_offset, first_child, read_string_field, string_payload,
+    child_at_visitor_index, ext_offset, read_list_metadata, read_string_field, string_payload,
 };
 use super::super::source_file::LazySourceFile;
 use super::type_node::LazyTypeNode;
@@ -100,7 +104,11 @@ define_lazy_comment_node!(
 
 impl<'a> LazyJsdocBlock<'a> {
     /// Children bitmask (`bit0=descLines`, `bit1=tags`, `bit2=inlineTags`).
+    /// Retained in Extended Data byte 0 for the visitor framework even
+    /// though the lazy decoder now reads list head/count from the per-list
+    /// metadata slots (bytes 50-67).
     #[inline]
+    #[allow(dead_code)]
     fn children_bitmask(&self) -> u8 {
         let ext = ext_offset(self.source_file, self.node_index) as usize;
         self.source_file.bytes()[ext]
@@ -141,20 +149,20 @@ impl<'a> LazyJsdocBlock<'a> {
         ext_string(self.source_file, self.node_index, 44)
     }
 
-    /// Top-level description lines (visitor index 0).
+    /// Top-level description lines.
     pub fn description_lines(&self) -> NodeListIter<'a, LazyJsdocDescriptionLine<'a>> {
-        self.children_node_list(0)
+        self.list_at(JSDOC_BLOCK_DESC_LINES_SLOT)
     }
-    /// Block tags (visitor index 1).
+    /// Block tags.
     pub fn tags(&self) -> NodeListIter<'a, LazyJsdocTag<'a>> {
-        self.children_node_list(1)
+        self.list_at(JSDOC_BLOCK_TAGS_SLOT)
     }
-    /// Inline tags found in the top-level description (visitor index 2).
+    /// Inline tags found in the top-level description.
     pub fn inline_tags(&self) -> NodeListIter<'a, LazyJsdocInlineTag<'a>> {
-        self.children_node_list(2)
+        self.list_at(JSDOC_BLOCK_INLINE_TAGS_SLOT)
     }
 
-    // -- compat-mode-only line metadata (Extended Data byte 52+) ------------
+    // -- compat-mode-only line metadata (Extended Data byte 70+) ------------
 
     /// 0-based line index of the closing `*/` line. Returns `None` when the
     /// buffer was not written in compat mode.
@@ -163,25 +171,21 @@ impl<'a> LazyJsdocBlock<'a> {
             return None;
         }
         let ext = ext_offset(self.source_file, self.node_index) as usize;
+        // Compat tail starts at byte 68 (basic ED size). end_line is the
+        // first u32 after a 2-byte alignment padding → byte 70.
         Some(super::super::helpers::read_u32(
             self.source_file.bytes(),
-            ext + 52,
+            ext + 70,
         ))
     }
 
-    /// Helper: build a NodeListIter for visitor index `i` of this block.
-    fn children_node_list<T: LazyNode<'a>>(&self, visitor_index: u8) -> NodeListIter<'a, T> {
-        let bitmask = self.children_bitmask();
-        if let Some(node_list_index) =
-            child_at_visitor_index(self.source_file, self.node_index, bitmask, visitor_index)
-        {
-            // The slot is always wrapped in a NodeList (Kind 0x7F); the
-            // children of that NodeList are the actual elements.
-            let head = first_child(self.source_file, node_list_index).unwrap_or(0);
-            NodeListIter::new(self.source_file, head, self.root_index)
-        } else {
-            NodeListIter::new(self.source_file, 0, self.root_index)
-        }
+    /// Helper: read the per-list `(head, count)` metadata at `slot_offset`
+    /// inside this block's Extended Data record and produce an iterator.
+    #[inline]
+    fn list_at<T: LazyNode<'a>>(&self, slot_offset: usize) -> NodeListIter<'a, T> {
+        let ext = ext_offset(self.source_file, self.node_index) as usize;
+        let (head, count) = read_list_metadata(self.source_file, ext, slot_offset);
+        NodeListIter::new(self.source_file, head, count, self.root_index)
     }
 }
 
@@ -296,29 +300,24 @@ impl<'a> LazyJsdocTag<'a> {
         }
     }
 
-    /// Source-preserving description lines (visitor index 6, NodeList).
+    /// Source-preserving description lines.
     pub fn description_lines(&self) -> NodeListIter<'a, LazyJsdocDescriptionLine<'a>> {
-        self.children_node_list(6)
+        self.list_at(JSDOC_TAG_DESC_LINES_SLOT)
     }
-    /// Source-preserving type lines (visitor index 5, NodeList).
+    /// Source-preserving type lines.
     pub fn type_lines(&self) -> NodeListIter<'a, LazyJsdocTypeLine<'a>> {
-        self.children_node_list(5)
+        self.list_at(JSDOC_TAG_TYPE_LINES_SLOT)
     }
-    /// Inline tags found in this tag's description (visitor index 7, NodeList).
+    /// Inline tags found in this tag's description.
     pub fn inline_tags(&self) -> NodeListIter<'a, LazyJsdocInlineTag<'a>> {
-        self.children_node_list(7)
+        self.list_at(JSDOC_TAG_INLINE_TAGS_SLOT)
     }
 
-    fn children_node_list<T: LazyNode<'a>>(&self, visitor_index: u8) -> NodeListIter<'a, T> {
-        let bitmask = self.children_bitmask();
-        if let Some(node_list_index) =
-            child_at_visitor_index(self.source_file, self.node_index, bitmask, visitor_index)
-        {
-            let head = first_child(self.source_file, node_list_index).unwrap_or(0);
-            NodeListIter::new(self.source_file, head, self.root_index)
-        } else {
-            NodeListIter::new(self.source_file, 0, self.root_index)
-        }
+    #[inline]
+    fn list_at<T: LazyNode<'a>>(&self, slot_offset: usize) -> NodeListIter<'a, T> {
+        let ext = ext_offset(self.source_file, self.node_index) as usize;
+        let (head, count) = read_list_metadata(self.source_file, ext, slot_offset);
+        NodeListIter::new(self.source_file, head, count, self.root_index)
     }
 }
 
