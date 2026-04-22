@@ -23,7 +23,7 @@ use crate::format::root_index::ROOT_INDEX_ENTRY_SIZE;
 
 use super::extended_data::{ExtOffset, ExtendedDataBuilder};
 use super::nodes::NodeIndex;
-use super::string_table::{StringIndex, StringTableBuilder};
+use super::string_table::{lookup_common, StringIndex, StringTableBuilder};
 
 /// Top-level writer that owns one buffer per Binary AST section.
 ///
@@ -334,6 +334,39 @@ impl<'arena> BinaryWriter<'arena> {
         let absolute_start = self.current_source_data_offset.saturating_add(source_byte_start);
         let absolute_end = self.current_source_data_offset.saturating_add(source_byte_end);
         self.strings.intern_at_offset(absolute_start, absolute_end)
+    }
+
+    /// Intern `value` choosing the cheapest of three paths automatically,
+    /// using the supplied `span` as a hint for the zero-copy case.
+    ///
+    /// 1. **Common-string fast path** — when `value` is a pre-seeded
+    ///    common string (`*`, `*/`, `param`, …), return its predetermined
+    ///    index with no state mutation. Same cost as
+    ///    [`Self::intern_string`] on a hit.
+    /// 2. **Zero-copy source slice** — when `value.len()` equals the span
+    ///    length and the span fits inside the most recently appended source
+    ///    text, register an offsets-only entry pointing at those source
+    ///    bytes (no `data_buffer` copy, no HashMap probe). Equivalent to
+    ///    [`Self::intern_source_slice`] but autoguarded.
+    /// 3. **Unique fresh entry** — otherwise (synthesized strings,
+    ///    quote-stripped variants whose lengths differ from the span,
+    ///    parent-spanning aggregates whose span covers more than just
+    ///    `value`), append `value` bytes via [`Self::intern_string_unique`].
+    ///
+    /// The length-equality check is what makes path 2 safe even when the
+    /// caller doesn't know up-front whether `value` is a true sub-slice of
+    /// the source (e.g. `TypeProperty.value` may have its outer quotes
+    /// stripped while its span still includes them). See
+    /// `.notes/binary-ast-emit-intern-audit.md` for the per-caller analysis.
+    pub fn intern_source_or_string(&mut self, value: &str, span: Span) -> StringIndex {
+        if let Some(idx) = lookup_common(value) {
+            return StringIndex::from_u32(idx).expect("common index in range");
+        }
+        let span_len = span.end.saturating_sub(span.start);
+        if span_len as usize == value.len() && span.end <= self.current_source_length {
+            return self.intern_source_slice(span.start, span.end);
+        }
+        self.strings.intern_unique(value)
     }
 
     /// Number of node records currently in the Nodes section (including the

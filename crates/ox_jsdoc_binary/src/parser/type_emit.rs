@@ -26,23 +26,27 @@ use super::type_data::*;
 pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, parent_index: u32) -> u32 {
     match node {
         TypeNodeData::Name(n) => {
-            let v = writer.intern_string(n.value);
+            let v = writer.intern_source_or_string(n.value, n.span);
             write_type_name(writer, n.span, parent_index, v).as_u32()
         }
         TypeNodeData::Number(n) => {
-            let v = writer.intern_string(n.value);
+            let v = writer.intern_source_or_string(n.value, n.span);
             write_type_number(writer, n.span, parent_index, v).as_u32()
         }
         TypeNodeData::StringValue(n) => {
-            let v = writer.intern_string(n.value);
+            let v = writer.intern_source_or_string(n.value, n.span);
             write_type_string_value(writer, n.span, parent_index, quote_to_u8(Some(n.quote)), v).as_u32()
         }
         TypeNodeData::Property(n) => {
-            let v = writer.intern_string(n.value);
+            // length-mismatch fallback handles the unquoted-property case
+            // (`"foo"` → value `foo`, span `"foo"`).
+            let v = writer.intern_source_or_string(n.value, n.span);
             write_type_property(writer, n.span, parent_index, quote_to_u8(n.quote), v).as_u32()
         }
         TypeNodeData::SpecialNamePath(n) => {
-            let v = writer.intern_string(n.value);
+            // Span here covers `module:foo` while value is just `foo` →
+            // length-mismatch fallback.
+            let v = writer.intern_source_or_string(n.value, n.span);
             let st = match n.special_type {
                 SpecialPathType::Module => 0,
                 SpecialPathType::Event => 1,
@@ -267,7 +271,9 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
 
         // Pattern 3: Mixed (Extended Data + optional first child).
         TypeNodeData::KeyValue(n) => {
-            let key = writer.intern_string(n.key);
+            // Span covers `key: value` (or `...key: value`); length-mismatch
+            // fallback when `key` is just the leading identifier.
+            let key = writer.intern_source_or_string(n.key, n.span);
             let parent = write_type_key_value(writer, n.span, parent_index, n.optional, n.variadic, key).as_u32();
             if let Some(r) = n.right.as_ref() {
                 emit_type_node(writer, r, parent);
@@ -275,19 +281,24 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
             parent
         }
         TypeNodeData::IndexSignature(n) => {
-            let key = writer.intern_string(n.key);
+            // Span covers `[key: K]: V`; key is just the leading identifier
+            // → length-mismatch fallback.
+            let key = writer.intern_source_or_string(n.key, n.span);
             let parent = write_type_index_signature(writer, n.span, parent_index, key).as_u32();
             emit_type_node(writer, &n.right, parent);
             parent
         }
         TypeNodeData::MappedType(n) => {
-            let key = writer.intern_string(n.key);
+            // Same parent-spanning shape as IndexSignature.
+            let key = writer.intern_source_or_string(n.key, n.span);
             let parent = write_type_mapped_type(writer, n.span, parent_index, key).as_u32();
             emit_type_node(writer, &n.right, parent);
             parent
         }
         TypeNodeData::MethodSignature(n) => {
-            let name = writer.intern_string(n.name);
+            // Span covers the entire method signature; name is just the
+            // leading identifier → length-mismatch fallback.
+            let name = writer.intern_source_or_string(n.name, n.span);
             let has_params = !n.parameters.is_empty();
             let has_tparams = !n.type_parameters.is_empty();
             let parent = write_type_method_signature(
@@ -325,7 +336,9 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
             parent
         }
         TypeNodeData::Symbol(n) => {
-            let value = writer.intern_string(n.value);
+            // Span covers `Symbol(...)` while value is the leading name →
+            // length-mismatch fallback.
+            let value = writer.intern_source_or_string(n.value, n.span);
             let parent = write_type_symbol(writer, n.span, parent_index, n.element.is_some(), value).as_u32();
             if let Some(el) = n.element.as_ref() {
                 emit_type_node(writer, el, parent);

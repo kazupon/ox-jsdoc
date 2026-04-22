@@ -153,7 +153,7 @@ const COMMON_STRINGS: &[&str] = &[
 /// chains for non-matching lengths in one branch, which is what makes this
 /// path cheaper than the generic `HashMap::get`.
 #[inline]
-fn lookup_common(value: &str) -> Option<u32> {
+pub(crate) fn lookup_common(value: &str) -> Option<u32> {
     match value.len() {
         0 => Some(0), // ""
         1 => match value.as_bytes()[0] {
