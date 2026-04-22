@@ -13,10 +13,11 @@
 //! receive a TypeNode of unknown variant.
 
 use crate::format::kind::Kind;
+use crate::format::string_field::STRING_FIELD_SIZE;
 
 use super::super::helpers::{
-    child_at_visitor_index, children_bitmask_payload, ext_offset, first_child, read_next_sibling,
-    read_u16, string_payload,
+    child_at_visitor_index, children_bitmask_payload, ext_offset, ext_string_leaf, first_child,
+    read_next_sibling, read_string_field, read_u16, string_payload,
 };
 use super::super::source_file::LazySourceFile;
 use super::LazyNode;
@@ -542,11 +543,9 @@ impl<'a> LazyTypeKeyValue<'a> {
     /// `...` variadic flag.
     #[inline]
     pub fn variadic(&self) -> bool { (self.common_data() & 0b10) != 0 }
-    /// Key string from Extended Data byte 0-1.
+    /// Key string from Extended Data byte 0-5.
     pub fn key(&self) -> &'a str {
-        let ext = ext_offset(self.source_file, self.node_index) as usize;
-        let idx = read_u16(self.source_file.bytes(), ext);
-        self.source_file.get_string(idx as u32).unwrap_or("")
+        ext_string_leaf(self.source_file, self.node_index)
     }
     /// Value type (first child if present).
     pub fn right(&self) -> Option<LazyTypeNode<'a>> {
@@ -565,9 +564,7 @@ define_lazy_type_node!(
 impl<'a> LazyTypeIndexSignature<'a> {
     /// Key string.
     pub fn key(&self) -> &'a str {
-        let ext = ext_offset(self.source_file, self.node_index) as usize;
-        let idx = read_u16(self.source_file.bytes(), ext);
-        self.source_file.get_string(idx as u32).unwrap_or("")
+        ext_string_leaf(self.source_file, self.node_index)
     }
     /// Value type (`right`).
     pub fn right(&self) -> Option<LazyTypeNode<'a>> {
@@ -584,9 +581,7 @@ define_lazy_type_node!(
 impl<'a> LazyTypeMappedType<'a> {
     /// Key string.
     pub fn key(&self) -> &'a str {
-        let ext = ext_offset(self.source_file, self.node_index) as usize;
-        let idx = read_u16(self.source_file.bytes(), ext);
-        self.source_file.get_string(idx as u32).unwrap_or("")
+        ext_string_leaf(self.source_file, self.node_index)
     }
     /// Value type (`right`).
     pub fn right(&self) -> Option<LazyTypeNode<'a>> {
@@ -612,9 +607,7 @@ impl<'a> LazyTypeMethodSignature<'a> {
     pub fn has_type_parameters(&self) -> bool { (self.common_data() & 0b1000) != 0 }
     /// Method name string.
     pub fn name(&self) -> &'a str {
-        let ext = ext_offset(self.source_file, self.node_index) as usize;
-        let idx = read_u16(self.source_file.bytes(), ext);
-        self.source_file.get_string(idx as u32).unwrap_or("")
+        ext_string_leaf(self.source_file, self.node_index)
     }
 }
 
@@ -632,8 +625,11 @@ impl<'a> LazyTypeTemplateLiteral<'a> {
     /// Get the n-th literal segment (panics when `index >= literal_count`).
     pub fn literal(&self, index: u16) -> &'a str {
         let ext = ext_offset(self.source_file, self.node_index) as usize;
-        let idx = read_u16(self.source_file.bytes(), ext + 2 + index as usize * 2);
-        self.source_file.get_string(idx as u32).unwrap_or("")
+        let field = read_string_field(
+            self.source_file.bytes(),
+            ext + 2 + index as usize * STRING_FIELD_SIZE,
+        );
+        self.source_file.get_string_by_field(field).unwrap_or("")
     }
 }
 
@@ -644,9 +640,7 @@ impl<'a> LazyTypeSymbol<'a> {
     pub fn has_element(&self) -> bool { (self.common_data() & 1) != 0 }
     /// `Symbol(...)` callee text.
     pub fn value(&self) -> &'a str {
-        let ext = ext_offset(self.source_file, self.node_index) as usize;
-        let idx = read_u16(self.source_file.bytes(), ext);
-        self.source_file.get_string(idx as u32).unwrap_or("")
+        ext_string_leaf(self.source_file, self.node_index)
     }
     /// Element argument when `has_element` is `true`.
     pub fn element(&self) -> Option<LazyTypeNode<'a>> {

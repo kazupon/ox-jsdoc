@@ -18,7 +18,7 @@
 //! - NodeList wrapper: payload count
 //! - Sibling backpatch: two children of the same parent
 
-use ox_jsdoc_binary::decoder::helpers::{ext_offset, read_u16, read_u32};
+use ox_jsdoc_binary::decoder::helpers::{ext_offset, read_string_field, read_u32};
 use ox_jsdoc_binary::decoder::source_file::LazySourceFile;
 use ox_jsdoc_binary::format::header::SUPPORTED_VERSION_BYTE;
 use ox_jsdoc_binary::format::kind::Kind;
@@ -103,7 +103,7 @@ fn header_carries_version_and_section_offsets() {
 fn write_jsdoc_text_leaf_roundtrips() {
     let arena = Allocator::default();
     let mut writer = BinaryWriter::new(&arena);
-    let value = writer.intern_string("hello");
+    let value = writer.intern_string_index("hello");
     let node = write_jsdoc_text(&mut writer, Span::new(0, 5), 0, value);
     assert_eq!(node.as_u32(), 1, "first non-sentinel node lands at index 1");
 
@@ -127,7 +127,7 @@ fn write_jsdoc_text_leaf_roundtrips() {
 fn write_type_name_string_payload_round_trips() {
     let arena = Allocator::default();
     let mut writer = BinaryWriter::new(&arena);
-    let value = writer.intern_string("Foo");
+    let value = writer.intern_string_index("Foo");
     let _ = write_type_name(&mut writer, Span::new(0, 3), 0, value);
 
     let bytes = writer.finish();
@@ -214,16 +214,16 @@ fn write_jsdoc_block_basic_extended_data_layout() {
 
     // Children bitmask byte 0 = 0
     assert_eq!(sf.bytes()[ext_off as usize], 0);
-    // description string index byte 2-3 = desc.as_u16()
-    let desc_idx = read_u16(sf.bytes(), ext_off as usize + 2);
-    assert_eq!(sf.get_string(desc_idx as u32), Some("hello"));
-    // delimiter byte 4-5
-    let delim_idx = read_u16(sf.bytes(), ext_off as usize + 4);
-    assert_eq!(sf.get_string(delim_idx as u32), Some("*"));
+    // description StringField at byte 2-7 (6 bytes)
+    let desc_field = read_string_field(sf.bytes(), ext_off as usize + 2);
+    assert_eq!(sf.get_string_by_field(desc_field), Some("hello"));
+    // delimiter StringField at byte 8-13
+    let delim_field = read_string_field(sf.bytes(), ext_off as usize + 8);
+    assert_eq!(sf.get_string_by_field(delim_field), Some("*"));
 }
 
 #[test]
-fn compat_mode_emits_22_byte_jsdoc_block_tail() {
+fn compat_mode_emits_jsdoc_block_tail() {
     let arena = Allocator::default();
     let mut writer = BinaryWriter::new(&arena);
     writer.set_compat_mode(true);
@@ -248,16 +248,18 @@ fn compat_mode_emits_22_byte_jsdoc_block_tail() {
     assert!(sf.compat_mode);
 
     let ext = sf.extended_data_offset as usize;
-    // end_line at byte 20 = 12
-    assert_eq!(read_u32(sf.bytes(), ext + 20), 12);
-    // description_start_line at byte 24 = 0
-    assert_eq!(read_u32(sf.bytes(), ext + 24), 0);
-    // last_description_line at byte 32 = 2
-    assert_eq!(read_u32(sf.bytes(), ext + 32), 2);
-    // has_preterminal_description = 1
-    assert_eq!(sf.bytes()[ext + 36], 1);
-    // has_preterminal_tag_description = None → 0xFF sentinel
-    assert_eq!(sf.bytes()[ext + 37], 0xFF);
+    // basic = 50 bytes; tail starts at byte 50.
+    // bytes 50-51: padding (zero)
+    // end_line at byte 52 = 12
+    assert_eq!(read_u32(sf.bytes(), ext + 52), 12);
+    // description_start_line at byte 56 = 0
+    assert_eq!(read_u32(sf.bytes(), ext + 56), 0);
+    // last_description_line at byte 64 = 2
+    assert_eq!(read_u32(sf.bytes(), ext + 64), 2);
+    // has_preterminal_description = 1 (byte 68)
+    assert_eq!(sf.bytes()[ext + 68], 1);
+    // has_preterminal_tag_description = None → 0xFF sentinel (byte 69)
+    assert_eq!(sf.bytes()[ext + 69], 0xFF);
 }
 
 #[test]
@@ -271,8 +273,8 @@ fn next_sibling_backpatch_links_two_children() {
     assert_eq!(parent.as_u32(), 1);
 
     // Two children of `parent` (parent_index = 1).
-    let v1 = writer.intern_string("string");
-    let v2 = writer.intern_string("number");
+    let v1 = writer.intern_string_index("string");
+    let v2 = writer.intern_string_index("number");
     let c1 = write_type_name(&mut writer, Span::new(0, 6), parent.as_u32(), v1);
     let c2 = write_type_name(&mut writer, Span::new(7, 13), parent.as_u32(), v2);
     assert_eq!(c1.as_u32(), 2);
@@ -311,7 +313,7 @@ fn lazy_decoder_reads_jsdoc_text_value() {
 
     let arena = Allocator::default();
     let mut writer = BinaryWriter::new(&arena);
-    let value = writer.intern_string("hello world");
+    let value = writer.intern_string_index("hello world");
     let _ = write_jsdoc_text(&mut writer, Span::new(0, 11), 0, value);
     writer.push_root(1, 0, 100);
 
@@ -366,8 +368,8 @@ fn lazy_decoder_tag_with_parsed_type_dispatches_correctly() {
     let arena = Allocator::default();
     let mut writer = BinaryWriter::new(&arena);
 
-    let tag_name_str = writer.intern_string("param");
-    let type_str = writer.intern_string("string");
+    let tag_name_str = writer.intern_string_index("param");
+    let type_str = writer.intern_string_index("string");
 
     // JsdocTag with bit0 (tag) + bit3 (parsedType) bitmask.
     let bitmask = 0b0000_1001u8;
@@ -410,15 +412,24 @@ fn lazy_decoder_tag_with_parsed_type_dispatches_correctly() {
 }
 
 #[test]
-fn dedup_intern_returns_same_index() {
+fn dedup_intern_returns_same_field() {
     let arena = Allocator::default();
     let mut writer = BinaryWriter::new(&arena);
-    let a = writer.intern_string("param");
-    let b = writer.intern_string("param");
-    assert_eq!(a, b);
-    // Encoded buffer must contain only one offsets entry for "param".
+    // Use a name that is NOT in COMMON_STRINGS to exercise the HashMap
+    // dedup path rather than the fast-path lookup.
+    let a = writer.intern_string("custom_xyz");
+    let b = writer.intern_string("custom_xyz");
+    assert_eq!(a, b, "intern dedups identical strings to the same StringField");
+    // The String Data section must contain `"custom_xyz"` only once.
     let bytes = writer.finish();
     let sf = LazySourceFile::new(&bytes).unwrap();
-    let offsets_size = sf.string_data_offset - sf.string_offsets_offset;
-    assert_eq!(offsets_size, 8, "exactly one (start,end) entry");
+    let sd_start = sf.string_data_offset as usize;
+    let ed_start = sf.extended_data_offset as usize;
+    let data_section = &bytes[sd_start..ed_start];
+    let needle = b"custom_xyz";
+    let occurrences = data_section
+        .windows(needle.len())
+        .filter(|w| *w == needle)
+        .count();
+    assert_eq!(occurrences, 1, "dedup must store the unique string only once");
 }

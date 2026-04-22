@@ -701,48 +701,59 @@ Examples of stored information:
 
 Data stored in Extended Data is composed of **5 field types + padding**:
 
-| Type                           | Size      | Usage                                                   | Applies to                                      | None sentinel |
-| ------------------------------ | --------- | ------------------------------------------------------- | ----------------------------------------------- | ------------- |
-| **u16 string index**           | 2 bytes   | Reference to the String Offsets section (the main role) | Almost all Extended Data nodes                  | `0xFFFF`      |
-| **u8 Children bitmask**        | 1 byte    | Bitmask for child node presence (visitor order)         | `JsdocBlock`, `JsdocTag`, `JsdocGenericTagBody` | -             |
-| **u16 metadata**               | 2 bytes   | Element counts etc.                                     | `TypeTemplateLiteral` (literal count)           | -             |
-| **u32 line index** ★exception  | 4 bytes   | Line number in the original file                        | `JsdocBlock` (**compat only**)                  | `0xFFFFFFFF`  |
-| **u8 boolean flag** ★exception | 1 byte    | `bool` or `Option<u8>`                                  | `JsdocBlock` (**compat only**)                  | `0xFF`        |
-| (padding)                      | 1-6 bytes | Type-boundary alignment (u16 / u32)                     | Many                                            | -             |
+| Type                           | Size      | Usage                                                                      | Applies to                                      | None sentinel                        |
+| ------------------------------ | --------- | -------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------ |
+| **`StringField`**              | 6 bytes   | Inline `(offset: u32, length: u16)` reference into the String Data section | Almost all Extended Data nodes                  | `(offset = 0xFFFF_FFFF, length = 0)` |
+| **u8 Children bitmask**        | 1 byte    | Bitmask for child node presence (visitor order)                            | `JsdocBlock`, `JsdocTag`, `JsdocGenericTagBody` | -                                    |
+| **u16 metadata**               | 2 bytes   | Element counts etc.                                                        | `TypeTemplateLiteral` (literal count)           | -                                    |
+| **u32 line index** ★exception  | 4 bytes   | Line number in the original file                                           | `JsdocBlock` (**compat only**)                  | `0xFFFFFFFF`                         |
+| **u8 boolean flag** ★exception | 1 byte    | `bool` or `Option<u8>`                                                     | `JsdocBlock` (**compat only**)                  | `0xFF`                               |
+| (padding)                      | 1-6 bytes | Type-boundary alignment (u16 / u32 / 8-byte record boundary)               | Many                                            | -                                    |
 
-**The main role is the u16 string index**; the others are auxiliary or exceptional. In particular, **the use of u32 / u8 is localized to the compat extension portion of `JsdocBlock`**.
+**The main role is the `StringField`**; the others are auxiliary or exceptional. In particular, **the use of u32 / u8 is localized to the compat extension portion of `JsdocBlock`**.
+
+A `StringField` carries `(offset, length)` directly so the reader slices
+String Data without going through the offsets table — see the
+`### Extended Data StringField slot (6 bytes)` subsection below for the
+on-wire encoding. String-leaf nodes (Comment AST `JsdocText` / `JsdocTagName`
+/ … and TypeNode Pattern 1 `TypeName` / `TypeNumber` / …) keep using a
+30-bit `StringIndex` packed into Node Data and do **not** allocate an
+Extended Data record at all.
 
 ### Critical decoder conventions
 
 #### Fix the type layout per node kind
 
-A decoder reading Extended Data **must hold a layout schema per node kind (Kind)**. There is **no generic reader** that "reads the entire Extended Data as a u16 array":
+A decoder reading Extended Data **must hold a layout schema per node kind (Kind)**. There is **no generic reader** that "reads the entire Extended Data as a typed array":
 
 ```rust
 // Correct implementation (Kind-aware, JsdocBlock-specific decoder)
 impl<'a> LazyJsdocBlock<'a> {
     pub fn description(&self) -> Option<&'a str> {
         let ext = self.ext_offset();
-        let idx = self.bytes.read_u16_le(ext + 2);   // Read bytes 2-3 as a u16
-        if idx == 0xFFFF { None } else { self.source_file.get_string(idx) }
+        // Read 6-byte StringField at bytes 2-7 (offset: u32, length: u16)
+        let field = read_string_field(self.bytes, ext + 2);
+        self.source_file.get_string_by_field(field)
     }
 
     pub fn end_line(&self) -> Option<u32> {
         if !self.source_file.compat_mode() { return None; }
         let ext = self.ext_offset();
-        let v = self.bytes.read_u32_le(ext + 20);    // Read bytes 20-23 as a u32
+        let v = self.bytes.read_u32_le(ext + 52);    // compat u32 at byte 52
         if v == 0xFFFFFFFF { None } else { Some(v) }
     }
 
     pub fn has_preterminal_description(&self) -> u8 {
         let ext = self.ext_offset();
-        self.bytes.read_u8(ext + 36)                  // Read byte 36 as a u8
+        self.bytes.read_u8(ext + 68)                  // compat u8 at byte 68
     }
 }
 
-// Incorrect implementation (generic u16 reader, never write this)
-fn bad_read_extended_data_as_u16_array(ext_data: &[u8]) -> Vec<u16> {
-    // This implementation incorrectly reads the JsdocBlock-compat u32 line index as two u16s
+// Incorrect implementation (generic reader, never write this)
+fn bad_read_extended_data_as_array(ext_data: &[u8]) -> Vec<u16> {
+    // This implementation cannot distinguish a StringField (6 bytes) from
+    // adjacent u8/u32 fields, nor handle the JsdocBlock compat u32 line
+    // indices.
     ext_data.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect()
 }
 ```
@@ -758,12 +769,12 @@ Reasons:
 
 When `compat_mode = ON`, some nodes get an extra portion appended to their Extended Data:
 
-| Node                   |    basic |                       compat extension | compat total |
-| ---------------------- | -------: | -------------------------------------: | -----------: |
-| `JsdocBlock`           | 18 bytes |    + 22 bytes (u32×4 + u8×2 + padding) |     40 bytes |
-| `JsdocTag`             |  8 bytes |          + 14 bytes (u16×7 delimiters) |     22 bytes |
-| `JsdocDescriptionLine` |  0 bytes | (switches to Extended type, + 8 bytes) |      8 bytes |
-| `JsdocTypeLine`        |  0 bytes | (switches to Extended type, + 8 bytes) |      8 bytes |
+| Node                   |    basic |                                        compat extension | compat total |
+| ---------------------- | -------: | ------------------------------------------------------: | -----------: |
+| `JsdocBlock`           | 50 bytes |                     + 22 bytes (u32×4 + u8×2 + padding) |     72 bytes |
+| `JsdocTag`             | 20 bytes |                + 42 bytes (StringField×7 = 7 × 6 bytes) |     62 bytes |
+| `JsdocDescriptionLine` |  0 bytes | (switches to Extended type, + 24 bytes = 4×StringField) |     24 bytes |
+| `JsdocTypeLine`        |  0 bytes | (switches to Extended type, + 24 bytes = 4×StringField) |     24 bytes |
 
 The decoder reads Header bit0 to branch (each node references it via a `compat` getter through the sourceFile).
 
@@ -784,55 +795,88 @@ To meet boundaries, **insert padding (zero-fill) as needed**.
 Concrete example (text format):
 
 ```text
-JsdocBlock compat boundary adjustment (basic 18 bytes → compat 40 bytes)
+JsdocBlock compat boundary adjustment (basic 50 bytes → compat 72 bytes)
 
-[Basic portion, only u8 + u8 + u16]
+[Basic portion, u8 bitmask + 8 × StringField]
 byte 0     : Children bitmask  (u8)
-byte 1     : padding            (u8)         ← Aligns byte 2 to u16 boundary
-byte 2-3   : description        (u16)
-byte 4-17  : delimiters × 7     (u16 × 7)
-                                              ← End of basic (byte 18)
+byte 1     : padding            (u8)         ← Pads to byte 2 (StringField start)
+byte 2-7   : description        (StringField, 6 B = u32 offset + u16 length)
+byte 8-13  : delimiter          (StringField)
+byte 14-19 : post_delimiter     (StringField)
+byte 20-25 : terminal           (StringField)
+byte 26-31 : line_end           (StringField)
+byte 32-37 : initial            (StringField)
+byte 38-43 : delimiter_line_break       (StringField)
+byte 44-49 : preterminal_line_break     (StringField)
+                                              ← End of basic (byte 50)
 [Compat extension; u32s mixed in, so alignment padding is needed]
-byte 18-19 : padding            (u16 = 2 B)  ← Aligns byte 20 to u32 boundary
-byte 20-23 : end_line                (u32)   ← u32 starts here
-byte 24-27 : description_start_line  (u32)
-byte 28-31 : description_end_line    (u32)
-byte 32-35 : last_description_line   (u32)
-byte 36    : has_preterminal_description     (u8)
-byte 37    : has_preterminal_tag_description (u8)
-byte 38-39 : padding (u16 = 2 B)             ← trailing alignment
-                                              ← End of compat (byte 40)
+byte 50-51 : padding            (u16 = 2 B)  ← Aligns byte 52 to u32 boundary
+byte 52-55 : end_line                (u32)   ← u32 starts here
+byte 56-59 : description_start_line  (u32)
+byte 60-63 : description_end_line    (u32)
+byte 64-67 : last_description_line   (u32)
+byte 68    : has_preterminal_description     (u8)
+byte 69    : has_preterminal_tag_description (u8)
+byte 70-71 : padding (u16 = 2 B)             ← trailing alignment
+                                              ← End of compat (byte 72)
 ```
 
 See the tables and subsections that follow for the concrete layout of each node.
 
-### String index is u16 (2 bytes)
+### Extended Data StringField slot (6 bytes)
 
-The string index inside Extended Data is stored as a **u16 (2 bytes)**. Reasons:
+Every string reference inside Extended Data is stored as a **6-byte
+`StringField`** holding `(offset: u32, length: u16)` directly. Readers
+slice String Data without going through the offsets table, so the per-slot
+read collapses to a single `from_le_bytes` plus one bounded `Uint8Array`
+view.
 
-- Measurement (typescript-checker.ts: 3 MB / 54K lines / 226 JSDoc comments) estimates string indices around ~1,800 (**2.8%** of the u16 limit); typical oxlint scenarios fit comfortably
-- Compared to u32, **Extended Data size is reduced to less than half** (e.g., JsdocTag: 48 → 8 bytes; span-bearing fields are turned into child nodes)
-- `DataView.getUint16(offset, true)` reads in a single instruction
-- Natural 2-byte alignment
-- Room for SIMD optimization (future encoder optimizations could process 8x16 in parallel)
+```text
+StringField (6 bytes, little-endian, NOT naturally aligned)
 
-**Limit and handling**:
+  byte 0-3 : offset (u32)   ← byte offset within String Data
+  byte 4-5 : length (u16)   ← UTF-8 byte length
+```
 
-- Maximum **65,535 unique strings** per buffer (u16 max)
-- On overflow, the encoder returns a `STRING_TABLE_OVERFLOW` error (silent failure is forbidden)
-- Workaround: the caller splits the batch and retries (no helper API is provided, only documented examples)
+Reasons:
 
-Nodes that hold Extended Data within the comment AST (the 6 TypeNode Extended Data variants are covered in the next section "TypeNode Extended Data layout (pattern 3 details)"):
+- **One hop instead of two**: Extended Data slots used to store a u16
+  index that the decoder dereferenced through the String Offsets table
+  (`(start, end)` pair) and then sliced String Data. The `StringField`
+  encoding fuses the two reads into one.
+- **No offsets-table churn for ED-only strings**: when a string never
+  appears as a string-leaf node, its `(start, end)` pair is never
+  written to the offsets table at all (the encoder allocates an offsets
+  entry lazily on first leaf use).
+- **`Uint32Array[idx] + Uint16Array[idx]` decode pattern in the JS
+  decoder still wins over `DataView.getUint16` thanks to the surrounding
+  Extended Data 8-byte alignment of the record start.**
 
-| Node                   | Size                          | Data content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ---------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `JsdocBlock`           | 18 bytes (40 bytes in compat) | Basic portion: Children bitmask (u8) + reserved (u8, alignment) + `description` string index (u16) + 7 delimiters (u16x7=14) = **18 bytes**. In `compat_mode`, the following is appended **after** the basic portion: reserved 2 bytes (u32 alignment) + `end_line` (u32) + `description_start_line` (u32, `0xFFFFFFFF` for None) + `description_end_line` (u32, ditto) + `last_description_line` (u32, ditto) + `has_preterminal_description` (u8) + `has_preterminal_tag_description` (u8, `0xFF` for None) + reserved 2 bytes (trailing alignment) = **22 bytes** added |
-| `JsdocTag`             | 8 bytes (22 bytes in compat)  | Basic portion: Children bitmask (u8) + reserved (u8) + `default_value` string index (u16) + `description` string index (u16) + `raw_body` string index (u16) = **8 bytes**. `tag` (JsdocTagName), `raw_type` (JsdocTypeSource), `name` (JsdocTagNameValue), `parsed_type` (TypeNode), and `body` (JsdocTagBody) are **placed as child nodes** (since they are span-bearing structs). `optional` is stored in Common Data bit0. In compat, 7 delimiters (u16x7=14) are appended after                                                                                       |
-| `JsdocInlineTag`       | 6 bytes                       | `namepath_or_url` (u16) + `text` (u16) + `raw_body` (u16). `tag` is placed as a child node (`JsdocTagName`) (it is not included in Extended Data; Option is None when string index = `0xFFFF`)                                                                                                                                                                                                                                                                                                                                                                             |
-| `JsdocParameterName`   | 4 bytes                       | `path` string index (u16) + `default_value` string index (u16, `0xFFFF` = None). `optional` is stored in Common Data bit0                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `JsdocGenericTagBody`  | 4 bytes                       | Children bitmask (u8, bit0=typeSource, bit1=value) + reserved (u8, alignment) + `description` string index (u16, `0xFFFF` = None) = **4 bytes**. `type_source` (JsdocTypeSource) and `value` (JsdocTagValue) are **placed as child nodes** (since they are span-bearing structs). `separator` is stored in Common Data bit0 (has_dash_separator)                                                                                                                                                                                                                           |
-| `JsdocDescriptionLine` | 8 bytes (compat only)         | `description` string index (u16) + 3 delimiters (`delimiter`, `post_delimiter`, `initial`) string indices (u16x3) = 4 × u16 = **8 bytes**. **No Extended Data outside compat** (Node Data is set to String type 0b01 and `description` is stored directly in the 30-bit string index). In compat, Node Data switches to Extended type 0b10 and the 4 string fields including `description` move to Extended Data                                                                                                                                                           |
-| `JsdocTypeLine`        | 8 bytes (compat only)         | `raw_type` string index (u16) + 3 delimiters (`delimiter`, `post_delimiter`, `initial`) string indices (u16x3) = 4 × u16 = **8 bytes**. **No Extended Data outside compat** (Node Data is set to String type 0b01 and `raw_type` is stored directly in the 30-bit string index). In compat, Node Data switches to Extended type 0b10 and the 4 string fields including `raw_type` move to Extended Data                                                                                                                                                                    |
+**Limits**:
+
+- `offset` is u32 → up to **4 GiB** of String Data (well above the
+  30-bit Extended Data offset cap of ~1 GiB).
+- `length` is u16 → up to **65,535 bytes** per individual string
+  (covers any realistic JSDoc description / tag-name / type source).
+
+**None sentinel**: `(offset = 0xFFFF_FFFF, length = 0)` (`StringField::NONE`).
+The combined comparison never collides with any valid empty-string slot
+because real `(0, 0)` references the leading prelude entry (the empty
+string itself).
+
+Nodes that hold Extended Data within the comment AST (the 6 TypeNode
+Extended Data variants are covered in the next section "TypeNode
+Extended Data layout (pattern 3 details)"):
+
+| Node                   | Size                          | Data content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `JsdocBlock`           | 50 bytes (72 bytes in compat) | Basic portion: Children bitmask (u8) + reserved (u8, alignment) + `description` `StringField` (6) + 7 delimiters (`StringField`×7 = 42) = **50 bytes**. In `compat_mode`, the following is appended **after** the basic portion: reserved 2 bytes (u32 alignment) + `end_line` (u32) + `description_start_line` (u32, `0xFFFFFFFF` for None) + `description_end_line` (u32, ditto) + `last_description_line` (u32, ditto) + `has_preterminal_description` (u8) + `has_preterminal_tag_description` (u8, `0xFF` for None) + reserved 2 bytes (trailing alignment) = **22 bytes** added |
+| `JsdocTag`             | 20 bytes (62 bytes in compat) | Basic portion: Children bitmask (u8) + reserved (u8) + `default_value` `StringField` (6) + `description` `StringField` (6) + `raw_body` `StringField` (6) = **20 bytes**. `tag` (JsdocTagName), `raw_type` (JsdocTypeSource), `name` (JsdocTagNameValue), `parsed_type` (TypeNode), and `body` (JsdocTagBody) are **placed as child nodes** (since they are span-bearing structs). `optional` is stored in Common Data bit0. In compat, 7 delimiters (`StringField`×7 = 42 bytes) are appended after                                                                                  |
+| `JsdocInlineTag`       | 18 bytes                      | `namepath_or_url` `StringField` (6) + `text` `StringField` (6) + `raw_body` `StringField` (6) = **18 bytes**. `tag` is placed as a child node (`JsdocTagName`); each Optional uses `StringField::NONE` as the absent marker                                                                                                                                                                                                                                                                                                                                                           |
+| `JsdocParameterName`   | 12 bytes                      | `path` `StringField` (6, required) + `default_value` `StringField` (6, `StringField::NONE` = None). `optional` is stored in Common Data bit0                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `JsdocGenericTagBody`  | 8 bytes                       | Children bitmask (u8, bit0=typeSource, bit1=value) + reserved (u8, alignment) + `description` `StringField` (6, `StringField::NONE` = None) = **8 bytes**. `type_source` (JsdocTypeSource) and `value` (JsdocTagValue) are **placed as child nodes** (since they are span-bearing structs). `separator` is stored in Common Data bit0 (has_dash_separator)                                                                                                                                                                                                                            |
+| `JsdocDescriptionLine` | 24 bytes (compat only)        | `description` `StringField` (6, required) + 3 delimiters (`delimiter`, `post_delimiter`, `initial`) `StringField`×3 = 4 × `StringField` = **24 bytes**. **No Extended Data outside compat** (Node Data is set to String type 0b01 and `description` is stored directly in the 30-bit string index). In compat, Node Data switches to Extended type 0b10 and the 4 string fields including `description` move to Extended Data                                                                                                                                                         |
+| `JsdocTypeLine`        | 24 bytes (compat only)        | `raw_type` `StringField` (6, required) + 3 delimiters (`delimiter`, `post_delimiter`, `initial`) `StringField`×3 = 4 × `StringField` = **24 bytes**. **No Extended Data outside compat** (Node Data is set to String type 0b01 and `raw_type` is stored directly in the 30-bit string index). In compat, Node Data switches to Extended type 0b10 and the 4 string fields including `raw_type` move to Extended Data                                                                                                                                                                  |
 
 The decoder branches on the `compat_mode` flag (Header bit0) per node kind because the size differs.
 
@@ -876,33 +920,63 @@ JsdocBlock Extended Data byte 0 (Children bitmask, 3 bits used):
 
 Child nodes are written in DFS pre-order in visitor order (descriptionLines → tags → inlineTags). The continued layout of `JsdocBlock` Extended Data:
 
-![JsdocBlock Extended Data complete field layout (basic 18 + compat 22 = 40 bytes)](./diagrams/jsdocblock-extended-data-layout.svg)
+![JsdocBlock Extended Data complete field layout (basic 50 + compat 22 = 72 bytes)](./diagrams/jsdocblock-extended-data-layout.svg)
 
 Byte-level layout (text format):
 
 ```text
 byte 0:    Children bitmask (u8)
-byte 1:    reserved (u8, for u16 alignment)
-byte 2-3:  description string index (u16)
-byte 4-5:  delimiter (u16)
-byte 6-7:  post_delimiter (u16)
-byte 8-9:  terminal (u16)
-byte 10-11: line_end (u16)
-byte 12-13: initial (u16)
-byte 14-15: delimiter_line_break (u16)
-byte 16-17: preterminal_line_break (u16)
-                                    ← End of basic (18 bytes)
+byte 1:    reserved (u8, for StringField start at byte 2)
+byte 2-7:  description           (StringField, 6 bytes)
+byte 8-13: delimiter             (StringField)
+byte 14-19: post_delimiter       (StringField)
+byte 20-25: terminal             (StringField)
+byte 26-31: line_end             (StringField)
+byte 32-37: initial              (StringField)
+byte 38-43: delimiter_line_break (StringField)
+byte 44-49: preterminal_line_break (StringField)
+                                    ← End of basic (50 bytes)
 
 [Continues only when compat_mode = ON]
-byte 18-19: reserved (u16, for u32 alignment)
-byte 20-23: end_line (u32)
-byte 24-27: description_start_line (u32, 0xFFFFFFFF for None)
-byte 28-31: description_end_line (u32, ditto)
-byte 32-35: last_description_line (u32, ditto)
-byte 36:    has_preterminal_description (u8)
-byte 37:    has_preterminal_tag_description (u8, 0xFF for None)
-byte 38-39: reserved (u16, trailing alignment)
-                                    ← End of compat (40 bytes total)
+byte 50-51: reserved (u16, for u32 alignment)
+byte 52-55: end_line (u32)
+byte 56-59: description_start_line (u32, 0xFFFFFFFF for None)
+byte 60-63: description_end_line (u32, ditto)
+byte 64-67: last_description_line (u32, ditto)
+byte 68:    has_preterminal_description (u8)
+byte 69:    has_preterminal_tag_description (u8, 0xFF for None)
+byte 70-71: reserved (u16, trailing alignment)
+                                    ← End of compat (72 bytes total)
+```
+
+### JsdocTag complete byte-level layout (basic 20 + compat 42 = 62 bytes)
+
+The compat tail of `JsdocTag` is 7 consecutive `StringField` slots
+preserving the source-level whitespace around the tag header (matching
+jsdoccomment's per-tag delimiter fields). All slots are required (the
+compat mode by design always emits them), so `StringField::NONE` is not
+used here — empty source whitespace is interned as a 0-length slice into
+the COMMON_STRINGS prelude entry for `""`.
+
+Byte-level layout (text format):
+
+```text
+byte 0:    Children bitmask (u8)
+byte 1:    reserved (u8, for StringField start at byte 2)
+byte 2-7:  default_value (StringField, NONE if absent)
+byte 8-13: description   (StringField, NONE if absent)
+byte 14-19: raw_body     (StringField, NONE if absent)
+                                    ← End of basic (20 bytes)
+
+[Continues only when compat_mode = ON]
+byte 20-25: delimiter      (StringField)
+byte 26-31: post_delimiter (StringField)
+byte 32-37: post_tag       (StringField)
+byte 38-43: post_type      (StringField)
+byte 44-49: post_name      (StringField)
+byte 50-55: initial        (StringField)
+byte 56-61: line_end       (StringField)
+                                    ← End of compat (62 bytes total)
 ```
 
 ### Pos/End and Extended Data offset stay u32
@@ -994,13 +1068,19 @@ Key design goals:
 
 ### Common conventions
 
-All the string indices below are **u16** (per the convention in the `### String index is u16 (2 bytes)` subsection of the prior `### Extended Data section`). Metadata such as literal counts is also unified as **u16** (no measured case exceeds the u16 limit: of 226 JSDoc comments in typescript-checker.ts, TypeTemplateLiteral count is 0, and a JSDoc template literal with 65K segments is physically impossible).
+All the string slots below are **6-byte `StringField`** (per the
+convention in the `### Extended Data StringField slot (6 bytes)`
+subsection of the prior `### Extended Data section`). Metadata such as
+literal counts is unified as **u16** (no measured case exceeds the u16
+limit: of 226 JSDoc comments in typescript-checker.ts,
+`TypeTemplateLiteral` count is 0, and a JSDoc template literal with
+65K segments is physically impossible).
 
-### `TypeKeyValue` (Extended Data 2 bytes)
+### `TypeKeyValue` (Extended Data 6 bytes)
 
 ```text
 Extended Data:
-  byte 0-1: key string index (u16)
+  byte 0-5: key StringField (offset u32 + length u16)
 
 Common Data:
   bit0 = optional
@@ -1010,29 +1090,29 @@ Children: 1 (TypeNode) only when right is Some
   → Presence is reconstructed via the parent index (a child exists if node[i+1].parent == i)
 ```
 
-### `TypeIndexSignature` (Extended Data 2 bytes)
+### `TypeIndexSignature` (Extended Data 6 bytes)
 
 ```text
 Extended Data:
-  byte 0-1: key string index (u16)
+  byte 0-5: key StringField
 
 Children: right (TypeNode, mandatory) 1
 ```
 
-### `TypeMappedType` (Extended Data 2 bytes)
+### `TypeMappedType` (Extended Data 6 bytes)
 
 ```text
 Extended Data:
-  byte 0-1: key string index (u16)
+  byte 0-5: key StringField
 
 Children: right (TypeNode, mandatory) 1
 ```
 
-### `TypeMethodSignature` (Extended Data 2 bytes)
+### `TypeMethodSignature` (Extended Data 6 bytes)
 
 ```text
 Extended Data:
-  byte 0-1: name string index (u16)
+  byte 0-5: name StringField
 
 Common Data (6 bits):
   bits[0:1] = quote (3-state: 0=None / 1=Single / 2=Double)
@@ -1048,19 +1128,19 @@ Children:
 Order: parameters NodeList (if any) → return_type → type_parameters NodeList (if any)
 
 Note: Instead of holding a separate bitmask in Extended Data, we consolidate
-in the remaining 4 bits of Common Data. This keeps Extended Data at 2 bytes
-(avoids breaking alignment).
+in the remaining 4 bits of Common Data. This keeps Extended Data at 6 bytes
+(no extra metadata slot beyond the StringField).
 ```
 
-### `TypeTemplateLiteral` (Extended Data 2 + 2N bytes)
+### `TypeTemplateLiteral` (Extended Data 2 + 6N bytes)
 
 ```text
 Extended Data:
   byte 0-1: literal count N (u16)
-  byte 2-3: literal[0] string index (u16)
-  byte 4-5: literal[1] string index (u16)
+  byte 2-7: literal[0] StringField (6 bytes)
+  byte 8-13: literal[1] StringField
   ...
-  byte (2+2*(N-1))-(2+2N-1): literal[N-1] string index (u16)
+  byte (2 + 6*(N-1)) – (2 + 6N - 1): literal[N-1] StringField
 
 Children: 1 NodeList
   containing interpolations (Vec<TypeNode>) in order
@@ -1068,16 +1148,16 @@ Children: 1 NodeList
 Example: `text${e1}middle${e2}tail`
   → literals = ["text", "middle", "tail"] (N=3)
   → interpolations NodeList = [e1, e2] (2 elements)
-  → Extended Data: 2 + 2×3 = 8 bytes
+  → Extended Data: 2 + 6×3 = 20 bytes
 ```
 
-### `TypeSymbol` (Extended Data 2 bytes)
+### `TypeSymbol` (Extended Data 6 bytes)
 
 A call-style type expression like `Symbol(MyClass)` or `MyClass(2)`. Structure of `value: &str` (function-name-equivalent) + `element: Option<TypeNode>` (argument-equivalent):
 
 ```text
 Extended Data:
-  byte 0-1: value string index (u16)
+  byte 0-5: value StringField
 
 Common Data:
   bit0 = has_element (Some/None for Option<TypeNode>)
@@ -1096,17 +1176,17 @@ Examples:
 
 | Node kind             |               Extended Data |      Common Data (used bits) | Child count                    |
 | --------------------- | --------------------------: | ---------------------------: | ------------------------------ |
-| `TypeKeyValue`        |                 **2 bytes** |  2 bits (optional, variadic) | 0 or 1 (TypeNode)              |
-| `TypeIndexSignature`  |                 **2 bytes** |                       0 bits | 1 (TypeNode required)          |
-| `TypeMappedType`      |                 **2 bytes** |                       0 bits | 1 (TypeNode required)          |
-| `TypeMethodSignature` |                 **2 bytes** | 4 bits (quote + has\_\* × 2) | 1-3 (params/return/typeParams) |
-| `TypeTemplateLiteral` | **2 + 2N bytes** (variable) |                       0 bits | 1 (NodeList, interpolations)   |
-| `TypeSymbol`          |                 **2 bytes** |          1 bit (has_element) | 0 or 1 (TypeNode)              |
+| `TypeKeyValue`        |                 **6 bytes** |  2 bits (optional, variadic) | 0 or 1 (TypeNode)              |
+| `TypeIndexSignature`  |                 **6 bytes** |                       0 bits | 1 (TypeNode required)          |
+| `TypeMappedType`      |                 **6 bytes** |                       0 bits | 1 (TypeNode required)          |
+| `TypeMethodSignature` |                 **6 bytes** | 4 bits (quote + has\_\* × 2) | 1-3 (params/return/typeParams) |
+| `TypeTemplateLiteral` | **2 + 6N bytes** (variable) |                       0 bits | 1 (NodeList, interpolations)   |
+| `TypeSymbol`          |                 **6 bytes** |          1 bit (has_element) | 0 or 1 (TypeNode)              |
 
 **Design highlights**:
 
-- **5/6 are fixed at 2 bytes**: aligned to the minimum unit (a single u16 string index), minimizing management cost within Extended Data
-- **Only `TypeTemplateLiteral` is variable** (2 + 2N): because string segments form an array
+- **5/6 are fixed at 6 bytes**: each carries a single inline `StringField`, no offsets-table indirection
+- **Only `TypeTemplateLiteral` is variable** (2 + 6N): because string segments form an array
 - **Booleans / enums offloaded to Common Data**: not stuffed into Extended Data, consolidated into byte 1
 
 ### Implementation notes for encoder/decoder
@@ -1119,11 +1199,11 @@ fn write_type_keyvalue(buf: &mut Vec<u8>, n: &TypeKeyValue) -> u32 {
     let offset = align8(buf.len()) as u32;
     buf.resize(offset as usize, 0);  // padding
 
-    // 2 bytes: key string index
-    let key_idx = intern_string(&n.key);
-    buf.extend_from_slice(&key_idx.to_le_bytes());
+    // 6 bytes: key StringField (offset u32 + length u16)
+    let key_field = intern_string_field(&n.key);
+    key_field.write_le(&mut buf[offset as usize..offset as usize + 6]);
 
-    // The remaining 6 bytes are padding for the next record (alignment)
+    // The remaining 2 bytes are padding for the next record (alignment)
     let pad = align8(buf.len()) as usize - buf.len();
     buf.resize(buf.len() + pad, 0);
 
@@ -1135,8 +1215,10 @@ fn write_type_keyvalue(buf: &mut Vec<u8>, n: &TypeKeyValue) -> u32 {
 
 ```javascript
 function decodeTypeKeyValue(view, extendedOffset, commonData) {
-  const keyIdx = view.getUint16(extendedOffset, true)
-  const key = getString(keyIdx)
+  // Read 6-byte StringField inline (offset u32 at +0, length u16 at +4)
+  const offset = view.getUint32(extendedOffset, true)
+  const length = view.getUint16(extendedOffset + 4, true)
+  const key = getStringByField(offset, length)
   const optional = (commonData & 0b0000_0001) !== 0
   const variadic = (commonData & 0b0000_0010) !== 0
   // The child node (Option<right>) is reconstructed by the parent index
@@ -1147,15 +1229,19 @@ function decodeTypeKeyValue(view, extendedOffset, commonData) {
 
 ### Differences from tsgo
 
-| Item                     | tsgo                                  | ox-jsdoc                                                      |
-| ------------------------ | ------------------------------------- | ------------------------------------------------------------- |
-| Target                   | TypeScript types like `TypeReference` | **JSDoc-extended types** (TypeKeyValue, TypeMappedType, etc.) |
-| Extended Data unit       | Variable (per struct)                 | **2 bytes / 2+2N bytes** (minimum unit)                       |
-| String index width       | u32                                   | **u16** (Extended Data is a local region)                     |
-| Child reconstruction     | parent index + order                  | **Same** (convention reused)                                  |
-| Boolean / enum placement | NodeFlags or directly in Node Data    | **Consolidated in 6 bits of Common Data**                     |
+| Item                     | tsgo                                  | ox-jsdoc                                                                                   |
+| ------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Target                   | TypeScript types like `TypeReference` | **JSDoc-extended types** (TypeKeyValue, TypeMappedType, etc.)                              |
+| Extended Data unit       | Variable (per struct)                 | **6 bytes / 2+6N bytes** (minimum unit, one inline StringField)                            |
+| String reference width   | u32 index → offsets table             | **`StringField` (u32 offset + u16 length, 6 bytes)** inline (no offsets-table indirection) |
+| Child reconstruction     | parent index + order                  | **Same** (convention reused)                                                               |
+| Boolean / enum placement | NodeFlags or directly in Node Data    | **Consolidated in 6 bits of Common Data**                                                  |
 
-ox-jsdoc must support **JSDoc-extended types (originating from Closure Compiler)**, so it adds 6 kinds of structures not present in TypeScript's standard TypeNodes (TypeKeyValue, TypeSymbol, etc.). Their Extended Data is minimized in size and combined with Common Data so that each of these nodes is expressed as 24 bytes fixed + 2 bytes Extended = 26 bytes total (effective).
+ox-jsdoc must support **JSDoc-extended types (originating from Closure
+Compiler)**, so it adds 6 kinds of structures not present in TypeScript's
+standard TypeNodes (TypeKeyValue, TypeSymbol, etc.). Each of these nodes
+is expressed as 24 bytes fixed + 6 bytes Extended (just one inline
+`StringField`) = 30 bytes total (effective).
 
 ## Diagnostics section (4 + 8M bytes)
 
@@ -1954,18 +2040,18 @@ For the detailed layout of the Kind number space (0x00 = Sentinel, 0x01-0x0F = c
 
 | Kind | Node name              | Node Data type                | Common Data             | Extended Data (basic / compat) |
 | ---- | ---------------------- | ----------------------------- | ----------------------- | ------------------------------ |
-| 0x01 | `JsdocBlock`           | Extended                      | (unused)                | 18 / 40 bytes                  |
-| 0x02 | `JsdocDescriptionLine` | String / Extended (in compat) | (unused)                | 0 / 8 bytes                    |
-| 0x03 | `JsdocTag`             | Extended                      | bit0=optional           | 8 / 22 bytes                   |
+| 0x01 | `JsdocBlock`           | Extended                      | (unused)                | 50 / 72 bytes                  |
+| 0x02 | `JsdocDescriptionLine` | String / Extended (in compat) | (unused)                | 0 / 24 bytes                   |
+| 0x03 | `JsdocTag`             | Extended                      | bit0=optional           | 20 / 62 bytes                  |
 | 0x04 | `JsdocTagName`         | String                        | (unused)                | -                              |
 | 0x05 | `JsdocTagNameValue`    | String                        | (unused)                | -                              |
 | 0x06 | `JsdocTypeSource`      | String                        | (unused)                | -                              |
-| 0x07 | `JsdocTypeLine`        | String / Extended (in compat) | (unused)                | 0 / 8 bytes                    |
-| 0x08 | `JsdocInlineTag`       | Extended                      | bits[0:2]=format        | 6 bytes                        |
-| 0x09 | `JsdocGenericTagBody`  | Extended                      | bit0=has_dash_separator | 4 bytes                        |
+| 0x07 | `JsdocTypeLine`        | String / Extended (in compat) | (unused)                | 0 / 24 bytes                   |
+| 0x08 | `JsdocInlineTag`       | Extended                      | bits[0:2]=format        | 18 bytes                       |
+| 0x09 | `JsdocGenericTagBody`  | Extended                      | bit0=has_dash_separator | 8 bytes                        |
 | 0x0A | `JsdocBorrowsTagBody`  | Children                      | (unused)                | -                              |
 | 0x0B | `JsdocRawTagBody`      | String                        | (unused)                | -                              |
-| 0x0C | `JsdocParameterName`   | Extended                      | bit0=optional           | 4 bytes                        |
+| 0x0C | `JsdocParameterName`   | Extended                      | bit0=optional           | 12 bytes                       |
 | 0x0D | `JsdocNamepathSource`  | String                        | (unused)                | -                              |
 | 0x0E | `JsdocIdentifier`      | String                        | (unused)                | -                              |
 | 0x0F | `JsdocText`            | String                        | (unused)                | -                              |
@@ -2015,14 +2101,14 @@ The bitmask is stored in the 30-bit payload of Node Data. Visitor order of child
 
 #### Pattern 3: Mixed string + children (Extended type 0b10, 6 kinds)
 
-| Node name             | Common Data                                                    | Extended Data                          | Child count                              |
-| --------------------- | -------------------------------------------------------------- | -------------------------------------- | ---------------------------------------- |
-| `TypeKeyValue`        | bit0=optional, bit1=variadic                                   | 2 bytes (key index)                    | 0 or 1                                   |
-| `TypeIndexSignature`  | (unused)                                                       | 2 bytes (key index)                    | 1 (right)                                |
-| `TypeMappedType`      | (unused)                                                       | 2 bytes (key index)                    | 1 (right)                                |
-| `TypeMethodSignature` | bits[0:1]=quote, bit2=has_parameters, bit3=has_type_parameters | 2 bytes (name index)                   | 1-3 (parameters?/return/typeParameters?) |
-| `TypeTemplateLiteral` | (unused)                                                       | 2+2N bytes (literal count + N indices) | 1 NodeList (interpolations)              |
-| `TypeSymbol`          | bit0=has_element                                               | 2 bytes (value index)                  | 0 or 1 (element)                         |
+| Node name             | Common Data                                                    | Extended Data                                | Child count                              |
+| --------------------- | -------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------- |
+| `TypeKeyValue`        | bit0=optional, bit1=variadic                                   | 6 bytes (key StringField)                    | 0 or 1                                   |
+| `TypeIndexSignature`  | (unused)                                                       | 6 bytes (key StringField)                    | 1 (right)                                |
+| `TypeMappedType`      | (unused)                                                       | 6 bytes (key StringField)                    | 1 (right)                                |
+| `TypeMethodSignature` | bits[0:1]=quote, bit2=has_parameters, bit3=has_type_parameters | 6 bytes (name StringField)                   | 1-3 (parameters?/return/typeParameters?) |
+| `TypeTemplateLiteral` | (unused)                                                       | 2+6N bytes (literal count + N × StringField) | 1 NodeList (interpolations)              |
+| `TypeSymbol`          | bit0=has_element                                               | 6 bytes (value StringField)                  | 0 or 1 (element)                         |
 
 #### Others
 

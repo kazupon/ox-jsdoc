@@ -60,14 +60,15 @@ Contents of `#internal` (common to all node classes):
 ```javascript
 const inspectSymbol = Symbol.for('nodejs.util.inspect.custom')
 
-// JsdocTag Extended Data layout (basic 8 bytes, see format.md):
+// JsdocTag Extended Data layout (basic 20 bytes, see format.md):
 //   byte 0: Children bitmask (u8)
 //     bit0=tag, bit1=rawType, bit2=name, bit3=parsedType, bit4=body,
 //     bit5=typeLines, bit6=descLines, bit7=inlineTags
 //   byte 1: padding
-//   byte 2-3: default_value string index (u16, 0xFFFF=None)
-//   byte 4-5: description  string index (u16, 0xFFFF=None)
-//   byte 6-7: raw_body     string index (u16, 0xFFFF=None)
+//   byte 2-7  : default_value StringField (offset u32 + length u16)
+//                                          NONE = (offset=0xFFFF_FFFF, length=0)
+//   byte 8-13 : description   StringField  (NONE if absent)
+//   byte 14-19: raw_body      StringField  (NONE if absent)
 // tag/rawType/name/parsedType/body are span-bearing structs and are placed as **child nodes**
 // → check the corresponding bit in the Children bitmask; if bit=1, fetch the child at the matching visitor index
 
@@ -97,15 +98,15 @@ export class RemoteJsdocTag {
     return (this.#internal.$parsedType = this.#childAt(3)) // TypeNode (Kind 0x80-0xFF)
   }
 
-  // Pure string fields stored directly inside Extended Data
+  // Pure string fields stored as inline 6-byte StringField slots in Extended Data
   get defaultValue() {
-    return this.#u16StringAt(2)
+    return this.#stringFieldAt(2)
   }
   get description() {
-    return this.#u16StringAt(4)
+    return this.#stringFieldAt(8)
   }
   get rawBody() {
-    return this.#u16StringAt(6)
+    return this.#stringFieldAt(14)
   }
 
   get range() {
@@ -130,9 +131,12 @@ export class RemoteJsdocTag {
   #childAt(visitorIndex) {
     return childAtVisitorIndex(this.#internal, visitorIndex)
   }
-  #u16StringAt(o) {
-    const idx = this.#internal.view.getUint16(this.#extOffset() + o, true)
-    return idx === 0xffff ? null : this.#internal.sourceFile.getString(idx)
+  #stringFieldAt(o) {
+    // Read 6-byte StringField inline: u32 offset at +0, u16 length at +4.
+    const ext = this.#extOffset() + o
+    const offset = this.#internal.view.getUint32(ext, true)
+    const length = this.#internal.view.getUint16(ext + 4, true)
+    return this.#internal.sourceFile.getStringByField(offset, length)
   }
 
   // ECMA standard: invoked by JSON.stringify
@@ -259,7 +263,9 @@ export class RemoteSourceFile {
     return this.#internal.rootCount
   }
 
-  // String Offsets[idx] → String Data slice (UTF-8 → UTF-16 via TextDecoder)
+  // String Offsets[idx] → String Data slice (UTF-8 → UTF-16 via TextDecoder).
+  // Used by string-leaf nodes (TypeTag::String payload) and the
+  // diagnostics section's `message_index`.
   getString(idx) {
     if (idx === 0xffff || idx === 0x3fff_ffff) return null
     const cached = this.#internal.stringCache.get(idx)
@@ -270,6 +276,24 @@ export class RemoteSourceFile {
     const bytes = new Uint8Array(view.buffer, stringDataOffset + start, end - start)
     const str = utf8Decoder.decode(bytes)
     this.#internal.stringCache.set(idx, str)
+    return str
+  }
+
+  // Inline `StringField` `(offset, length)` → String Data slice. Used by
+  // Extended Data string slots which embed `(offset, length)` directly
+  // without going through the offsets table.
+  // None sentinel: `offset === 0xFFFF_FFFF` (length is 0).
+  getStringByField(offset, length) {
+    if (offset === 0xffff_ffff) return null
+    // Cache key: high-bit-set form so it never collides with index-keyed
+    // entries from getString().
+    const cacheKey = -(offset + 1)
+    const cached = this.#internal.stringCache.get(cacheKey)
+    if (cached !== undefined) return cached
+    const { view, stringDataOffset } = this.#internal
+    const bytes = new Uint8Array(view.buffer, stringDataOffset + offset, length)
+    const str = utf8Decoder.decode(bytes)
+    this.#internal.stringCache.set(cacheKey, str)
     return str
   }
 

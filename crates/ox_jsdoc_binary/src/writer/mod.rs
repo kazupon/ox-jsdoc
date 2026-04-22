@@ -22,6 +22,7 @@ mod extended_data;
 pub mod nodes;
 mod string_table;
 
+pub use crate::format::string_field::StringField;
 pub use binary_writer::BinaryWriter;
 pub use extended_data::{ExtOffset, ExtendedDataBuilder};
 pub use nodes::NodeIndex;

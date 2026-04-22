@@ -24,4 +24,5 @@ pub mod header;
 pub mod kind;
 pub mod node_record;
 pub mod root_index;
+pub mod string_field;
 pub mod string_table;

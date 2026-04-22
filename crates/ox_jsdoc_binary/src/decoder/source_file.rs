@@ -17,6 +17,7 @@ use crate::format::header::{
 };
 use crate::format::node_record::STRING_PAYLOAD_NONE_SENTINEL;
 use crate::format::root_index::{BASE_OFFSET_FIELD, NODE_INDEX_OFFSET, ROOT_INDEX_ENTRY_SIZE};
+use crate::format::string_field::StringField;
 use crate::format::string_table::{STRING_OFFSET_ENTRY_SIZE, U16_NONE_SENTINEL};
 
 use super::error::DecodeError;
@@ -37,9 +38,14 @@ pub struct LazySourceFile<'a> {
     pub compat_mode: bool,
     /// Byte offset of the Root index array within `bytes`.
     pub root_array_offset: u32,
-    /// Byte offset of the String Offsets section.
+    /// Byte offset of the String Offsets section. Indexed by
+    /// `StringIndex` for string-leaf nodes and the diagnostics section's
+    /// `message_index`.
     pub string_offsets_offset: u32,
-    /// Byte offset of the String Data section.
+    /// Byte offset of the String Data section. Both string-leaf
+    /// (offsets-table indirection) and Extended Data
+    /// [`crate::format::string_field::StringField`] slots resolve into
+    /// this section's raw UTF-8 bytes.
     pub string_data_offset: u32,
     /// Byte offset of the Extended Data section.
     pub extended_data_offset: u32,
@@ -100,13 +106,12 @@ impl<'a> LazySourceFile<'a> {
         self.bytes
     }
 
-    /// Resolve the string at `idx` (None when `idx` is the u16 None sentinel
-    /// `0xFFFF` or the 30-bit `0x3FFF_FFFF`).
+    /// Resolve the string at `idx` (None when `idx` is the u16 None
+    /// sentinel `0xFFFF` or the 30-bit `0x3FFF_FFFF`). Used by
+    /// string-leaf nodes (`TypeTag::String` payload) and the diagnostics
+    /// section.
     ///
-    /// Performs a zero-copy slice from String Data; the returned `&str`
-    /// borrows directly from the buffer. The writer is responsible for
-    /// only feeding valid UTF-8 (`&str` inputs), so we use the unchecked
-    /// `from_utf8` variant to keep the hot path branch-free.
+    /// Performs a zero-copy slice from String Data via the offsets table.
     #[must_use]
     pub fn get_string(&self, idx: u32) -> Option<&'a str> {
         if idx == STRING_PAYLOAD_NONE_SENTINEL || idx == U16_NONE_SENTINEL as u32 {
@@ -121,6 +126,47 @@ impl<'a> LazySourceFile<'a> {
         // SAFETY: Phase 1 writers only accept `&str` inputs and feed them
         // verbatim into String Data, so the slice is guaranteed UTF-8.
         Some(unsafe { core::str::from_utf8_unchecked(slice) })
+    }
+
+    /// Resolve a [`StringField`] into the underlying string (`None` when
+    /// the field equals [`StringField::NONE`]).
+    ///
+    /// Performs a zero-copy slice from String Data; the returned `&str`
+    /// borrows directly from the buffer. Used by Extended Data string
+    /// slots which embed `(offset, length)` directly without going
+    /// through the offsets table.
+    #[inline]
+    #[must_use]
+    pub fn get_string_by_field(&self, field: StringField) -> Option<&'a str> {
+        if field.is_none() {
+            return None;
+        }
+        let sd_offset = self.string_data_offset as usize;
+        let start = sd_offset + field.offset as usize;
+        let end = start + field.length as usize;
+        let slice = &self.bytes[start..end];
+        // SAFETY: writers only accept `&str` inputs and feed them
+        // verbatim into String Data, so the slice is guaranteed UTF-8.
+        Some(unsafe { core::str::from_utf8_unchecked(slice) })
+    }
+
+    /// Required-string variant of [`Self::get_string_by_field`]. Panics on
+    /// the [`StringField::NONE`] sentinel — callers must guarantee the
+    /// field is non-NONE (used for required-by-spec slots like
+    /// `JsdocBlock.delimiter`).
+    #[inline]
+    #[must_use]
+    pub fn get_required_string_by_field(&self, field: StringField) -> &'a str {
+        debug_assert!(
+            !field.is_none(),
+            "get_required_string_by_field called with StringField::NONE"
+        );
+        let sd_offset = self.string_data_offset as usize;
+        let start = sd_offset + field.offset as usize;
+        let end = start + field.length as usize;
+        let slice = &self.bytes[start..end];
+        // SAFETY: see `get_string_by_field`.
+        unsafe { core::str::from_utf8_unchecked(slice) }
     }
 
     /// Get the `base_offset` (original-file absolute byte position) for

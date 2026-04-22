@@ -62,7 +62,7 @@ Exception: `JsdocType` (Parsed|Raw) does not get a wrapper Kind:
 - For `JsdocType::Parsed`: `JsdocTag.parsedType` directly points to a TypeNode
   (one of Kind 0x80-0xFF)
 - For `JsdocType::Raw`: the parsedType field itself is omitted (rawType is
-  held separately as a string index in Extended Data)
+  held separately as a child `JsdocTypeSource` string-leaf node)
 
 ---
 
@@ -87,12 +87,12 @@ within the single format (Option A: switching via a Header flag):
 3. **The decoder reads or skips the compat region based on the Header flag**
 4. **`empty_string_for_null` is applied on the decoder side**: in the Binary
    AST it is always represented as `Option` (the sentinel for None depends on
-   the storage location: **30-bit slot in Node Data is `0x3FFFFFFF`**, **u16
-   slot in Extended Data is `0xFFFF`**)
-   - Most fields live in Extended Data (string fields of JsdocBlock, JsdocTag,
-     JsdocInlineTag, etc., are all u16)
+   the storage location: **30-bit slot in Node Data is `0x3FFFFFFF`**, **6-byte
+   `StringField` slot in Extended Data is `(offset = 0xFFFF_FFFF, length = 0)`**)
+   - Most string fields live in Extended Data as inline `StringField` slots
+     (JsdocBlock, JsdocTag, JsdocInlineTag, etc.)
    - The 30-bit string index in Node Data is only used by String-type nodes
-     (TypeName, TypeNumber, etc.)
+     (TypeName, TypeNumber, JsdocText, JsdocTagName, etc.)
 5. **`include_positions` is always true** (Pos/End are fixed fields)
 6. **The lazy decoder holds the compat flag at the `RemoteSourceFile` (root)**:
    child nodes traverse `parent → root → compat` to look it up

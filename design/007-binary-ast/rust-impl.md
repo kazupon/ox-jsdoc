@@ -187,7 +187,9 @@ impl<'a> LazySourceFile<'a> {
         })
     }
 
-    /// String Offsets[idx] -> String Data slice (zero-copy &str reconstruction)
+    /// String Offsets[idx] -> String Data slice (zero-copy &str reconstruction).
+    /// Used by string-leaf nodes (TypeTag::String payload) and the
+    /// diagnostics section's `message_index`.
     #[inline]
     pub fn get_string(&self, idx: u32) -> Option<&'a str> {
         if idx == 0xFFFF || idx == 0x3FFF_FFFF { return None; }
@@ -197,6 +199,20 @@ impl<'a> LazySourceFile<'a> {
         let sd = self.string_data_offset as usize;
         // Zero-copy slice as UTF-8 (encoder guarantees valid UTF-8)
         Some(unsafe { std::str::from_utf8_unchecked(&self.bytes[sd + start .. sd + end]) })
+    }
+
+    /// `StringField` -> String Data slice (zero-copy &str reconstruction).
+    /// Used by Extended Data string slots which embed `(offset, length)`
+    /// directly without going through the offsets table.
+    ///
+    /// `None` is signalled by `(offset = 0xFFFF_FFFF, length = 0)`.
+    #[inline]
+    pub fn get_string_by_field(&self, field: StringField) -> Option<&'a str> {
+        if field.is_none() { return None; }
+        let sd = self.string_data_offset as usize;
+        let start = sd + field.offset as usize;
+        let end   = start + field.length as usize;
+        Some(unsafe { std::str::from_utf8_unchecked(&self.bytes[start..end]) })
     }
 
     /// base_offset of the i-th entry of the root array

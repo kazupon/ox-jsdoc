@@ -34,6 +34,7 @@ import {
   ROOT_INDEX_ENTRY_SIZE,
   SOURCE_TEXT_LENGTH_FIELD,
   STRING_DATA_OFFSET_FIELD,
+  STRING_FIELD_NONE_OFFSET,
   STRING_OFFSET_ENTRY_SIZE,
   STRING_OFFSETS_OFFSET_FIELD,
   STRING_PAYLOAD_NONE_SENTINEL,
@@ -155,6 +156,9 @@ export class RemoteSourceFile {
 
   /**
    * Resolve the string at `idx` (returns `null` for the None sentinels).
+   * Used by string-leaf nodes (TypeTag::String payload) and the
+   * diagnostics section.
+   *
    * Cached on first lookup so repeated reads are O(1).
    *
    * @param {number} idx
@@ -169,9 +173,6 @@ export class RemoteSourceFile {
       return cached
     }
     const { view, uint32View, stringOffsetsOffset, stringDataOffset } = this.#internal
-    // String Offsets section is 4-byte aligned (sections preceding it
-    // are 4-byte multiples), and entries are 8 bytes each (`(start, end)`),
-    // so both reads land on 4-byte boundaries — safe for Uint32Array.
     const entryWordIndex = (stringOffsetsOffset + idx * STRING_OFFSET_ENTRY_SIZE) >>> 2
     const start = uint32View[entryWordIndex]
     const end = uint32View[entryWordIndex + 1]
@@ -182,6 +183,42 @@ export class RemoteSourceFile {
     )
     const str = utf8Decoder.decode(bytes)
     this.#internal.stringCache.set(idx, str)
+    return str
+  }
+
+  /**
+   * Resolve a `StringField` `(offset, length)` pair into the underlying
+   * string. Returns `null` when the field is the `NONE` sentinel
+   * (`offset === STRING_FIELD_NONE_OFFSET`). Used by Extended Data string
+   * slots which embed `(offset, length)` directly.
+   *
+   * Cache key uses a high-bit-set form of `offset` so it never collides
+   * with `getString(idx)` cache entries (string-leaf path uses small
+   * indices, ED path uses byte offsets — both fit in u32 and overlap).
+   *
+   * @param {number} offset Byte offset within the String Data section.
+   * @param {number} length UTF-8 byte length.
+   * @returns {string | null}
+   */
+  getStringByField(offset, length) {
+    if (offset === STRING_FIELD_NONE_OFFSET) {
+      return null
+    }
+    // Cache key disambiguation: ED-path keys are tagged with a sentinel
+    // bit so they never collide with index-path keys.
+    const cacheKey = -(offset + 1)
+    const cached = this.#internal.stringCache.get(cacheKey)
+    if (cached !== undefined) {
+      return cached
+    }
+    const { view, stringDataOffset } = this.#internal
+    const bytes = new Uint8Array(
+      view.buffer,
+      view.byteOffset + stringDataOffset + offset,
+      length
+    )
+    const str = utf8Decoder.decode(bytes)
+    this.#internal.stringCache.set(cacheKey, str)
     return str
   }
 

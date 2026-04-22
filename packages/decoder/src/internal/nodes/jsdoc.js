@@ -12,13 +12,12 @@
 
 // @ts-check
 
-import { COMMON_DATA_MASK, COMMON_DATA_OFFSET } from '../constants.js'
+import { COMMON_DATA_MASK, COMMON_DATA_OFFSET, STRING_FIELD_SIZE } from '../constants.js'
 import {
   absoluteRange,
   childNodeAtVisitorIndex,
-  extOffsetOf,
-  extU16String,
-  extU16StringRequired,
+  extStringField,
+  extStringFieldRequired,
   stringPayloadOf
 } from '../helpers.js'
 import { inspectPayload, inspectSymbol } from '../inspect.js'
@@ -46,15 +45,22 @@ const INLINE_TAG_FORMATS = ['plain', 'pipe', 'space', 'prefix', 'unknown']
 
 // ===========================================================================
 // 0x01 RemoteJsdocBlock
+//
+// Extended Data layout (basic 50 bytes; compat extends to 72 bytes):
+//   byte 0      : Children bitmask (u8)
+//   byte 1      : padding (u8)
+//   byte 2-7    : description     (StringField, NONE if absent)
+//   byte 8-13   : delimiter
+//   byte 14-19  : post_delimiter
+//   byte 20-25  : terminal
+//   byte 26-31  : line_end
+//   byte 32-37  : initial
+//   byte 38-43  : delimiter_line_break
+//   byte 44-49  : preterminal_line_break
 // ===========================================================================
 
 /**
  * `JsdocBlock` (Kind 0x01) — root of every parsed `/** ... *​/` comment.
- *
- * Getters self-cache into `#internal.$field` slots. The slots are
- * pre-allocated in the constructor so the V8 hidden class is fixed before
- * any getter writes; repeated access (toJSON, multi-pass visitors) returns
- * the cached value with one property read.
  */
 export class RemoteJsdocBlock {
   type = 'JsdocBlock'
@@ -98,56 +104,56 @@ export class RemoteJsdocBlock {
     const internal = this.#internal
     const cached = internal.$description
     if (cached !== undefined) return cached
-    return (internal.$description = extU16String(internal, 2))
+    return (internal.$description = extStringField(internal, 2))
   }
   /** Source-preserving `*` line-prefix delimiter. */
   get delimiter() {
     const internal = this.#internal
     const cached = internal.$delimiter
     if (cached !== undefined) return cached
-    return (internal.$delimiter = extU16StringRequired(internal, 4))
+    return (internal.$delimiter = extStringFieldRequired(internal, 8))
   }
   /** Source-preserving space after `*`. */
   get postDelimiter() {
     const internal = this.#internal
     const cached = internal.$postDelimiter
     if (cached !== undefined) return cached
-    return (internal.$postDelimiter = extU16StringRequired(internal, 6))
+    return (internal.$postDelimiter = extStringFieldRequired(internal, 14))
   }
   /** Source-preserving `*​/` terminal. */
   get terminal() {
     const internal = this.#internal
     const cached = internal.$terminal
     if (cached !== undefined) return cached
-    return (internal.$terminal = extU16StringRequired(internal, 8))
+    return (internal.$terminal = extStringFieldRequired(internal, 20))
   }
   /** Source-preserving line-end characters. */
   get lineEnd() {
     const internal = this.#internal
     const cached = internal.$lineEnd
     if (cached !== undefined) return cached
-    return (internal.$lineEnd = extU16StringRequired(internal, 10))
+    return (internal.$lineEnd = extStringFieldRequired(internal, 26))
   }
   /** Indentation before the leading `*`. */
   get initial() {
     const internal = this.#internal
     const cached = internal.$initial
     if (cached !== undefined) return cached
-    return (internal.$initial = extU16StringRequired(internal, 12))
+    return (internal.$initial = extStringFieldRequired(internal, 32))
   }
   /** Line-break right after `/**`. */
   get delimiterLineBreak() {
     const internal = this.#internal
     const cached = internal.$delimiterLineBreak
     if (cached !== undefined) return cached
-    return (internal.$delimiterLineBreak = extU16StringRequired(internal, 14))
+    return (internal.$delimiterLineBreak = extStringFieldRequired(internal, 38))
   }
   /** Line-break right before `*​/`. */
   get preterminalLineBreak() {
     const internal = this.#internal
     const cached = internal.$preterminalLineBreak
     if (cached !== undefined) return cached
-    return (internal.$preterminalLineBreak = extU16StringRequired(internal, 16))
+    return (internal.$preterminalLineBreak = extStringFieldRequired(internal, 44))
   }
 
   /** Top-level description lines. */
@@ -197,12 +203,14 @@ export class RemoteJsdocBlock {
 
 // ===========================================================================
 // 0x02 RemoteJsdocDescriptionLine
+//
+// Extended Data layout: byte 0-5 description (always required); compat
+// adds 3 × 6-byte StringField slots after it.
 // ===========================================================================
 
 /**
- * `JsdocDescriptionLine` (Kind 0x02). Basic mode stores `description`
- * as a String payload; compat mode promotes it (plus delimiters) into
- * Extended Data.
+ * `JsdocDescriptionLine` (Kind 0x02). Both basic and compat modes store
+ * `description` as the leading StringField of the Extended Data record.
  */
 export class RemoteJsdocDescriptionLine {
   type = 'JsdocDescriptionLine'
@@ -231,13 +239,14 @@ export class RemoteJsdocDescriptionLine {
     return this.#internal.parent
   }
 
-  /** Description content. */
+  /** Description content. Basic mode reads the String payload (Node Data);
+   * compat mode reads byte 0-5 of the Extended Data record. */
   get description() {
     const internal = this.#internal
     const cached = internal.$description
     if (cached !== undefined) return cached
     const value = internal.sourceFile.compatMode
-      ? extU16StringRequired(internal, 0)
+      ? extStringFieldRequired(internal, 0)
       : (stringPayloadOf(internal) ?? '')
     return (internal.$description = value)
   }
@@ -252,12 +261,17 @@ export class RemoteJsdocDescriptionLine {
 
 // ===========================================================================
 // 0x03 RemoteJsdocTag
+//
+// Extended Data layout (basic 20 bytes; compat extends to 62 bytes):
+//   byte 0      : Children bitmask (u8)
+//   byte 1      : padding (u8)
+//   byte 2-7    : default_value (StringField, NONE if absent)
+//   byte 8-13   : description    (StringField, NONE if absent)
+//   byte 14-19  : raw_body       (StringField, NONE if absent)
 // ===========================================================================
 
 /**
- * `JsdocTag` (Kind 0x03) — one block tag (e.g. `@param`). Self-caches
- * structural fields; cheap bit checks like {@link RemoteJsdocTag.optional}
- * stay uncached because the cache check would cost more than recomputing.
+ * `JsdocTag` (Kind 0x03) — one block tag (e.g. `@param`).
  */
 export class RemoteJsdocTag {
   type = 'JsdocTag'
@@ -305,21 +319,21 @@ export class RemoteJsdocTag {
     const internal = this.#internal
     const cached = internal.$defaultValue
     if (cached !== undefined) return cached
-    return (internal.$defaultValue = extU16String(internal, 2))
+    return (internal.$defaultValue = extStringField(internal, 2))
   }
   /** Joined description text. */
   get description() {
     const internal = this.#internal
     const cached = internal.$description
     if (cached !== undefined) return cached
-    return (internal.$description = extU16String(internal, 4))
+    return (internal.$description = extStringField(internal, 8))
   }
   /** Raw body when the tag uses the `Raw` body variant. */
   get rawBody() {
     const internal = this.#internal
     const cached = internal.$rawBody
     if (cached !== undefined) return cached
-    return (internal.$rawBody = extU16String(internal, 6))
+    return (internal.$rawBody = extStringField(internal, 14))
   }
 
   /** Mandatory tag-name child (visitor index 0 — the `@name` token). */
@@ -403,11 +417,12 @@ export class RemoteJsdocTag {
 }
 
 // ===========================================================================
-// 0x04-0x06, 0x0B, 0x0D-0x0F: String-type leaves
+// 0x04-0x06, 0x0B, 0x0D-0x0F: Extended-type string-leaf nodes
+// (each carries a single 6-byte StringField in Extended Data)
 // ===========================================================================
 
 /**
- * Build a class for a single-string-payload leaf node.
+ * Build a class for a single-string-leaf node.
  *
  * @param {string} typeName     The `type` field value.
  * @param {string} accessorName The accessor that returns the resolved string.
@@ -473,11 +488,13 @@ export const RemoteJsdocText = defineStringLeaf('JsdocText', 'value')
 
 // ===========================================================================
 // 0x07 RemoteJsdocTypeLine
+//
+// Extended Data layout: byte 0-5 raw_type (always required); compat adds
+// 3 × 6-byte StringField slots after it.
 // ===========================================================================
 
 /**
- * `JsdocTypeLine` (Kind 0x07). Basic mode = String payload; compat mode
- * promotes `rawType` + delimiters into Extended Data.
+ * `JsdocTypeLine` (Kind 0x07).
  */
 export class RemoteJsdocTypeLine {
   type = 'JsdocTypeLine'
@@ -506,13 +523,14 @@ export class RemoteJsdocTypeLine {
     return this.#internal.parent
   }
 
-  /** Raw `{...}` line content. */
+  /** Raw `{...}` line content. Basic mode reads the String payload;
+   * compat mode reads byte 0-5 of the Extended Data record. */
   get rawType() {
     const internal = this.#internal
     const cached = internal.$rawType
     if (cached !== undefined) return cached
     const value = internal.sourceFile.compatMode
-      ? extU16StringRequired(internal, 0)
+      ? extStringFieldRequired(internal, 0)
       : (stringPayloadOf(internal) ?? '')
     return (internal.$rawType = value)
   }
@@ -527,6 +545,11 @@ export class RemoteJsdocTypeLine {
 
 // ===========================================================================
 // 0x08 RemoteJsdocInlineTag
+//
+// Extended Data layout (18 bytes):
+//   byte 0-5    : namepath_or_url (StringField, NONE if absent)
+//   byte 6-11   : text             (StringField, NONE if absent)
+//   byte 12-17  : raw_body         (StringField, NONE if absent)
 // ===========================================================================
 
 /**
@@ -570,21 +593,21 @@ export class RemoteJsdocInlineTag {
     const internal = this.#internal
     const cached = internal.$namepathOrURL
     if (cached !== undefined) return cached
-    return (internal.$namepathOrURL = extU16String(internal, 0))
+    return (internal.$namepathOrURL = extStringField(internal, 0))
   }
   /** Optional display text portion. */
   get text() {
     const internal = this.#internal
     const cached = internal.$text
     if (cached !== undefined) return cached
-    return (internal.$text = extU16String(internal, 2))
+    return (internal.$text = extStringField(internal, STRING_FIELD_SIZE))
   }
   /** Raw body text fallback. */
   get rawBody() {
     const internal = this.#internal
     const cached = internal.$rawBody
     if (cached !== undefined) return cached
-    return (internal.$rawBody = extU16String(internal, 4))
+    return (internal.$rawBody = extStringField(internal, 2 * STRING_FIELD_SIZE))
   }
 
   toJSON() {
@@ -604,6 +627,11 @@ export class RemoteJsdocInlineTag {
 
 // ===========================================================================
 // 0x09 RemoteJsdocGenericTagBody
+//
+// Extended Data layout (8 bytes):
+//   byte 0      : Children bitmask (u8)
+//   byte 1      : padding (u8)
+//   byte 2-7    : description (StringField, NONE if absent)
 // ===========================================================================
 
 /**
@@ -630,7 +658,7 @@ export class RemoteJsdocGenericTagBody {
   }
   /** Description text after the dash separator. */
   get description() {
-    return extU16String(this.#internal, 2)
+    return extStringField(this.#internal, 2)
   }
 
   toJSON() {
@@ -653,8 +681,8 @@ export class RemoteJsdocGenericTagBody {
 /**
  * `JsdocBorrowsTagBody` (Kind 0x0A) — Children type with `source` + `target`
  * children. The child accessors will be filled in once the parser starts
- * emitting them (Phase 1.2a); for now the class exposes the standard
- * range/parent/toJSON surface.
+ * emitting them; for now the class exposes the standard range/parent/toJSON
+ * surface.
  */
 export class RemoteJsdocBorrowsTagBody {
   type = 'JsdocBorrowsTagBody'
@@ -681,6 +709,10 @@ export class RemoteJsdocBorrowsTagBody {
 
 // ===========================================================================
 // 0x0C RemoteJsdocParameterName
+//
+// Extended Data layout (12 bytes):
+//   byte 0-5    : path           (StringField, required)
+//   byte 6-11   : default_value  (StringField, NONE if absent)
 // ===========================================================================
 
 /**
@@ -707,11 +739,11 @@ export class RemoteJsdocParameterName {
   }
   /** Path text. */
   get path() {
-    return extU16StringRequired(this.#internal, 0)
+    return extStringFieldRequired(this.#internal, 0)
   }
   /** Default value parsed from `[id=foo]` syntax. */
   get defaultValue() {
-    return extU16String(this.#internal, 2)
+    return extStringField(this.#internal, STRING_FIELD_SIZE)
   }
 
   toJSON() {

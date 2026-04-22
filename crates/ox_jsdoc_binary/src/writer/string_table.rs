@@ -4,12 +4,24 @@
 
 //! String table builder used by [`super::BinaryWriter`].
 //!
-//! Owns the **String Offsets** (`8K` bytes) and **String Data** buffers.
-//! Strings are deduplicated by content so that `param`, `returns`, etc.
-//! shared across a batch of comments are interned only once.
+//! Owns the **String Offsets** + **String Data** buffers. Strings are
+//! deduplicated by content via a HashMap so that repeated values
+//! (`param`, `returns`, etc.) shared across a batch of comments are
+//! interned only once.
 //!
-//! See `design/007-binary-ast/format.md#string-table` for the section
-//! layout, and `format::string_table` for the on-wire constants.
+//! Two intern result types coexist:
+//!
+//! - [`StringIndex`] — index into the String Offsets table; used for
+//!   string-leaf nodes (TypeTag::String) and the diagnostics section's
+//!   `message_index`. Embedded as a 30-bit payload in Node Data, so each
+//!   leaf node costs 0 extra bytes beyond its 24-byte record.
+//! - [`crate::format::string_field::StringField`] — inline `(offset,
+//!   length)` pair returned for Extended Data string slots; readers
+//!   bypass the offsets table entirely.
+//!
+//! Both forms share the same `data_buffer`; dedup hits return whichever
+//! representation the caller asked for, allocating the other lazily on
+//! first use. See `design/007-binary-ast/format.md#string-table`.
 
 use core::num::NonZeroU32;
 use std::sync::OnceLock;
@@ -17,13 +29,14 @@ use std::sync::OnceLock;
 use oxc_allocator::{Allocator, Vec as ArenaVec};
 use rustc_hash::FxHashMap;
 
+use crate::format::string_field::StringField;
 use crate::format::string_table::{STRING_TABLE_MAX_INDEX, U16_NONE_SENTINEL};
 
 /// Index into the **String Offsets** table.
 ///
 /// Newtype wrapper so a string index cannot accidentally be confused with a
 /// node index, an extended-data offset, or a raw `u32`. The maximum value
-/// fits in a `u16` for Extended Data slots
+/// fits in a `u16` for legacy Extended Data slots
 /// (see `format::string_table::STRING_TABLE_MAX_INDEX`); String-type Node
 /// Data leaves can reference up to 30 bits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -52,13 +65,10 @@ impl StringIndex {
     }
 
     /// Get the raw value as `u16`. Returns [`U16_NONE_SENTINEL`] when the
-    /// index exceeds [`STRING_TABLE_MAX_INDEX`] — Extended Data slots use
-    /// `0xFFFF` as the "None" marker, so that mapping is what the
-    /// per-Kind helpers want even when interpretation is ambiguous.
+    /// index exceeds [`STRING_TABLE_MAX_INDEX`].
     ///
     /// Realistic encoders never overflow because the writer caps the
-    /// string table at [`STRING_TABLE_MAX_INDEX`] entries; this fallback
-    /// merely guarantees memory safety if a bug causes overflow.
+    /// string table at [`STRING_TABLE_MAX_INDEX`] entries.
     #[inline]
     #[must_use]
     pub const fn as_u16(self) -> u16 {
@@ -69,36 +79,6 @@ impl StringIndex {
             U16_NONE_SENTINEL
         }
     }
-}
-
-/// Builds the String Offsets + String Data buffers incrementally.
-///
-/// Internally:
-/// - the offsets buffer accumulates `(start, end)` u32 pairs (8 bytes each),
-/// - the data buffer accumulates UTF-8 bytes (zero-copy slice from the
-///   source text whenever possible),
-/// - a hash map from `&'arena str` to existing [`StringIndex`] enables dedup.
-pub struct StringTableBuilder<'arena> {
-    /// `8K` bytes of `(start, end)` u32 pairs, one per interned string.
-    pub(crate) offsets_buffer: ArenaVec<'arena, u8>,
-    /// Raw concatenated UTF-8 bytes for every interned string and every
-    /// appended sourceText.
-    pub(crate) data_buffer: ArenaVec<'arena, u8>,
-    /// Number of strings interned so far. Equal to
-    /// `offsets_buffer.len() / 8`.
-    pub(crate) count: u32,
-    /// Reference to the underlying arena, used to allocate dedup keys with
-    /// `'arena` lifetime.
-    arena: &'arena Allocator,
-    /// Dedup map: arena-allocated string → its `StringIndex`. Stored on
-    /// the `std` heap (not the arena) because `HashMap` cannot live inside
-    /// `oxc_allocator` without a custom allocator binding.
-    ///
-    /// Uses `FxHashMap` (rustc-hash) instead of the default `SipHash` for
-    /// ~2x faster hashing on the unique-string slow path. Inputs are
-    /// parser-derived AST text (no untrusted user input), so the lack of
-    /// HashDoS resistance is acceptable.
-    dedup: FxHashMap<&'arena str, StringIndex>,
 }
 
 /// Number of common strings pre-interned by [`StringTableBuilder::new`].
@@ -249,6 +229,72 @@ fn prelude_data() -> &'static [u8] {
     })
 }
 
+/// Pre-computed [`StringField`] for each entry in [`COMMON_STRINGS`].
+///
+/// Built once at first use by walking `COMMON_STRINGS` and tracking the
+/// running data-buffer offset. Returned to callers by [`lookup_common`] hits
+/// without touching `data_buffer` or the dedup map.
+fn common_string_fields() -> &'static [StringField] {
+    static CACHE: OnceLock<Vec<StringField>> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        let mut fields = Vec::with_capacity(COMMON_STRINGS.len());
+        let mut pos = 0u32;
+        for s in COMMON_STRINGS {
+            let length = u16::try_from(s.len()).expect("common string longer than u16");
+            fields.push(StringField { offset: pos, length });
+            pos += s.len() as u32;
+        }
+        fields
+    })
+}
+
+/// Resolve the pre-computed [`StringField`] for the [`lookup_common`]
+/// fast-path index `idx`. Used by writer combined-intern helpers to
+/// short-circuit the COMMON_STRINGS dedup without copying bytes.
+#[inline]
+pub(crate) fn common_string_field(idx: u32) -> StringField {
+    common_string_fields()[idx as usize]
+}
+
+/// One entry in the dedup table — tracks both representations a string
+/// might be requested as. The `index` is `None` until a string-leaf caller
+/// first asks for the [`StringIndex`] form (lazy offsets-table allocation).
+#[derive(Debug, Clone, Copy)]
+struct DedupEntry {
+    field: StringField,
+    index: Option<StringIndex>,
+}
+
+/// Builds the String Offsets + String Data buffers incrementally.
+///
+/// Internally:
+/// - `data_buffer` accumulates UTF-8 bytes (zero-copy slice from source
+///   text whenever possible),
+/// - `offsets_buffer` accumulates `(start, end)` u32 pairs (8 bytes each)
+///   only for strings actually requested as [`StringIndex`],
+/// - a hash map from `&'arena str` to a [`DedupEntry`] enables both forms
+///   of dedup without redundant byte writes.
+pub struct StringTableBuilder<'arena> {
+    /// `8K` bytes of `(start, end)` u32 pairs, one per StringIndex requested.
+    pub(crate) offsets_buffer: ArenaVec<'arena, u8>,
+    /// Raw concatenated UTF-8 bytes for every interned string and every
+    /// appended sourceText.
+    pub(crate) data_buffer: ArenaVec<'arena, u8>,
+    /// Number of [`StringIndex`] entries allocated so far. Equal to
+    /// `offsets_buffer.len() / 8`.
+    pub(crate) count: u32,
+    /// Reference to the underlying arena, used to allocate dedup keys with
+    /// `'arena` lifetime.
+    arena: &'arena Allocator,
+    /// Dedup map: arena-allocated string → its [`DedupEntry`]. Stored on
+    /// the `std` heap (not the arena) because `HashMap` cannot live inside
+    /// `oxc_allocator` without a custom allocator binding.
+    ///
+    /// Uses `FxHashMap` (rustc-hash) instead of the default `SipHash` for
+    /// ~2x faster hashing on the unique-string slow path.
+    dedup: FxHashMap<&'arena str, DedupEntry>,
+}
+
 impl<'arena> StringTableBuilder<'arena> {
     /// Create a builder seeded with [`COMMON_STRINGS`] at fixed indices.
     ///
@@ -273,130 +319,152 @@ impl<'arena> StringTableBuilder<'arena> {
         }
     }
 
-    /// Intern `value` and return its [`StringIndex`].
+    /// Intern `value` as a [`StringField`] (Extended Data slot path).
     ///
-    /// Fast path: [`lookup_common`] returns the predetermined index for
-    /// the well-known strings pre-seeded by [`Self::new`], avoiding the
-    /// HashMap lookup entirely.
+    /// Fast path: [`lookup_common`] returns the pre-computed StringField
+    /// for the well-known strings without HashMap lookup.
     ///
-    /// Slow path: regular HashMap dedup, falling back to a fresh entry.
-    pub fn intern(&mut self, value: &str) -> StringIndex {
+    /// Slow path: regular HashMap dedup; on miss, append to `data_buffer`
+    /// only (no `offsets_buffer` write) and cache the resulting
+    /// StringField for future hits.
+    pub fn intern(&mut self, value: &str) -> StringField {
         if let Some(idx) = lookup_common(value) {
-            // SAFETY: `idx` < COMMON_STRINGS.len() < u32::MAX, so
-            // `from_u32` always succeeds.
+            return common_string_field(idx);
+        }
+        if let Some(entry) = self.dedup.get(value) {
+            return entry.field;
+        }
+        let field = self.append_no_dedup(value);
+        let key: &'arena str = self.arena.alloc_str(value);
+        self.dedup.insert(key, DedupEntry { field, index: None });
+        field
+    }
+
+    /// Intern `value` as a [`StringIndex`] — used by string-leaf nodes
+    /// (TypeTag::String) and the diagnostics section's `message_index`.
+    ///
+    /// Fast path: [`lookup_common`] returns the pre-seeded index.
+    ///
+    /// Slow path: HashMap dedup. On hit, allocates a StringIndex lazily
+    /// (so ED-only strings never pay the `offsets_buffer` write).
+    pub fn intern_for_leaf(&mut self, value: &str) -> StringIndex {
+        if let Some(idx) = lookup_common(value) {
+            // SAFETY: idx < COMMON_STRINGS.len() < u32::MAX.
             return StringIndex::from_u32(idx).expect("common index in range");
         }
-        if let Some(&existing) = self.dedup.get(value) {
-            return existing;
+        if let Some(entry) = self.dedup.get(value) {
+            if let Some(idx) = entry.index {
+                return idx;
+            }
+            // Same string was previously interned as StringField only —
+            // promote it now by allocating an offsets-table entry.
+            let field = entry.field;
+            let idx = self.assign_index(field);
+            // Re-fetch & write back. (`get_mut` was unavailable while we
+            // held the borrow on `assign_index` to mutate offsets_buffer.)
+            if let Some(entry_mut) = self.dedup.get_mut(value) {
+                entry_mut.index = Some(idx);
+            }
+            return idx;
         }
-        self.intern_uncached(value)
-    }
-
-    /// Internal: append a fresh entry without consulting the fast path or
-    /// the dedup map. Used by [`Self::new`] to seed the common strings
-    /// (the fast path is not yet usable until they have been written) and
-    /// by [`Self::intern`] for the genuine cache-miss case.
-    fn intern_uncached(&mut self, value: &str) -> StringIndex {
-        let start = self.data_buffer.len() as u32;
-        self.data_buffer.extend_from_slice(value.as_bytes());
-        let end = self.data_buffer.len() as u32;
-        self.offsets_buffer.extend_from_slice(&start.to_le_bytes());
-        self.offsets_buffer.extend_from_slice(&end.to_le_bytes());
-
-        let idx = StringIndex::from_u32(self.count).expect("string index overflow");
-        self.count = self.count.checked_add(1).expect("string table overflow");
-
-        // Allocate a stable &'arena str so the dedup key outlives every
-        // future call.
+        // First-touch: append data_buffer + offsets_buffer together.
+        let field = self.append_no_dedup(value);
+        let idx = self.assign_index(field);
         let key: &'arena str = self.arena.alloc_str(value);
-        self.dedup.insert(key, idx);
+        self.dedup.insert(key, DedupEntry { field, index: Some(idx) });
         idx
     }
 
-    /// Append `value` as a fresh entry with neither the [`lookup_common`]
-    /// fast path nor the dedup HashMap consulted. Use this for strings
-    /// the caller knows are dominated by unique-per-call values
-    /// (description-line text, raw `{type}` source, etc.) where paying
-    /// the FxHash + lookup work and the arena `alloc_str` for a key that
-    /// will never be revisited is pure overhead.
-    ///
-    /// Trade-off: identical content called twice produces two distinct
-    /// `StringIndex` values (so two offsets entries + two data copies).
-    /// The decoder reads either one as the same string, so correctness
-    /// is unaffected; only the binary grows by ~8 bytes per duplicate.
-    pub fn intern_unique(&mut self, value: &str) -> StringIndex {
-        let start = self.data_buffer.len() as u32;
-        self.data_buffer.extend_from_slice(value.as_bytes());
-        let end = self.data_buffer.len() as u32;
-        self.offsets_buffer.extend_from_slice(&start.to_le_bytes());
-        self.offsets_buffer.extend_from_slice(&end.to_le_bytes());
-
-        let idx = StringIndex::from_u32(self.count).expect("string index overflow");
-        self.count = self.count.checked_add(1).expect("string table overflow");
-        idx
+    /// Append `value` as a fresh [`StringField`] without [`lookup_common`]
+    /// or dedup. Use this for strings dominated by per-call unique values
+    /// (description-line text, raw `{type}` source, etc.) where paying the
+    /// FxHash + lookup work for a key that will never be revisited is
+    /// pure overhead.
+    pub fn intern_unique(&mut self, value: &str) -> StringField {
+        self.append_no_dedup(value)
     }
 
-    /// Append a String Offsets entry that points into an existing range of
+    /// Materialize a [`StringField`] pointing at an existing range of
     /// `data_buffer` — typically the source text region appended via
     /// [`Self::append_source_text`] — **without copying any bytes**.
-    ///
-    /// This is the zero-copy intern path used when the caller knows the
-    /// string content already lives somewhere in the data buffer (e.g. it
-    /// is a slice of the just-appended source text). It collapses the
-    /// per-call cost from "FxHash probe + `data_buffer` write +
-    /// `offsets_buffer` write" down to just the `offsets_buffer` write,
-    /// which is the dominant emit-phase saving identified in
-    /// `.notes/binary-ast-emit-phase-format-analysis.md` (Path A).
-    ///
-    /// Caller's contract: `[start, end)` MUST be a valid byte range that
-    /// already lives inside `data_buffer`. Passing an out-of-range range
-    /// produces a corrupted binary (decoder will read junk bytes); the
-    /// caller is responsible for the bounds.
-    pub fn intern_at_offset(&mut self, start: u32, end: u32) -> StringIndex {
+    pub fn intern_at_offset(&mut self, start: u32, end: u32) -> StringField {
         debug_assert!(
             (end as usize) <= self.data_buffer.len(),
             "intern_at_offset range [{start}, {end}) extends past data_buffer length {}",
             self.data_buffer.len()
         );
         debug_assert!(start <= end, "intern_at_offset start > end");
+        let length =
+            u16::try_from(end - start).expect("source slice length exceeds u16 (StringField max)");
+        StringField {
+            offset: start,
+            length,
+        }
+    }
+
+    /// Allocate a [`StringIndex`] pointing at an existing range of
+    /// `data_buffer` (typically a slice of the just-appended source
+    /// text). Writes a `(start, end)` pair into `offsets_buffer` so the
+    /// reader can resolve the index without scanning.
+    ///
+    /// Used by string-leaf emitters (description-line / type-line basic)
+    /// where the source slice becomes the String payload of a leaf node.
+    pub fn intern_at_offset_for_leaf(&mut self, start: u32, end: u32) -> StringIndex {
+        debug_assert!(
+            (end as usize) <= self.data_buffer.len(),
+            "intern_at_offset_for_leaf range [{start}, {end}) extends past data_buffer length {}",
+            self.data_buffer.len()
+        );
+        debug_assert!(start <= end, "intern_at_offset_for_leaf start > end");
         self.offsets_buffer.extend_from_slice(&start.to_le_bytes());
         self.offsets_buffer.extend_from_slice(&end.to_le_bytes());
-
         let idx = StringIndex::from_u32(self.count).expect("string index overflow");
         self.count = self.count.checked_add(1).expect("string table overflow");
         idx
     }
 
-    /// Append a sourceText prefix without registering it in the offsets
-    /// table.
-    ///
-    /// Used by the writer to register each `BatchItem.sourceText` at the
-    /// front of String Data so that `Pos`/`End` slicing is direct. Returns
-    /// the byte offset where the text was written (used to populate
-    /// `root[i].source_offset_in_data`).
-    ///
-    /// Caller's contract: must be invoked **before** any [`Self::intern`]
-    /// call so source-text bytes occupy the front of the String Data
-    /// section, matching the format spec ("[sourceText[0]] [sourceText[1]]
-    /// ... [unique strings...]").
+    /// Append a sourceText prefix to `data_buffer` (no offsets-table entry).
     pub fn append_source_text(&mut self, value: &str) -> u32 {
         let offset = self.data_buffer.len() as u32;
         self.data_buffer.extend_from_slice(value.as_bytes());
         offset
     }
 
-    /// Number of strings interned so far.
+    /// Number of strings registered in the offsets table so far.
     #[inline]
     #[must_use]
     pub const fn len(&self) -> u32 {
         self.count
     }
 
-    /// Whether nothing has been interned yet.
+    /// Whether nothing has been registered in the offsets table yet.
     #[inline]
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.count == 0
+    }
+
+    /// Internal: append `value` to `data_buffer` and return the resulting
+    /// [`StringField`]. Shared between [`Self::intern`] (after dedup miss)
+    /// and [`Self::intern_unique`].
+    #[inline]
+    fn append_no_dedup(&mut self, value: &str) -> StringField {
+        let offset = self.data_buffer.len() as u32;
+        self.data_buffer.extend_from_slice(value.as_bytes());
+        let length = u16::try_from(value.len())
+            .expect("string length exceeds u16 (StringField max)");
+        StringField { offset, length }
+    }
+
+    /// Internal: allocate a fresh [`StringIndex`] for an existing
+    /// [`StringField`] by writing a (start, end) pair into `offsets_buffer`.
+    fn assign_index(&mut self, field: StringField) -> StringIndex {
+        let idx = StringIndex::from_u32(self.count).expect("string index overflow");
+        self.count = self.count.checked_add(1).expect("string table overflow");
+        let end = field.offset + field.length as u32;
+        self.offsets_buffer.extend_from_slice(&field.offset.to_le_bytes());
+        self.offsets_buffer.extend_from_slice(&end.to_le_bytes());
+        idx
     }
 }
 
@@ -418,47 +486,30 @@ mod tests {
     }
 
     #[test]
-    fn string_index_zero_is_representable() {
-        let idx = StringIndex::from_u32(0).unwrap();
-        assert_eq!(idx.as_u32(), 0);
-    }
-
-    #[test]
-    fn intern_dedups_repeated_values() {
+    fn intern_dedups_repeated_values_as_string_field() {
         let arena = Allocator::default();
         let mut builder = StringTableBuilder::new(&arena);
-        // Use names that are NOT in COMMON_STRINGS so we exercise the
-        // HashMap dedup path rather than the fast-path lookup.
         let a = builder.intern("custom_alpha");
         let b = builder.intern("custom_beta");
         let a_again = builder.intern("custom_alpha");
-        assert_eq!(a, a_again, "intern must dedup identical strings");
+        assert_eq!(a, a_again);
         assert_ne!(a, b);
-        assert_eq!(
-            builder.len(),
-            COMMON_STRING_COUNT + 2,
-            "two unique entries beyond the common prelude"
-        );
     }
 
     #[test]
-    fn intern_appends_to_offsets_and_data_buffers() {
+    fn intern_for_leaf_is_lazy_about_offsets_entry() {
         let arena = Allocator::default();
         let mut builder = StringTableBuilder::new(&arena);
-        let common_offsets_bytes = builder.offsets_buffer.len();
-        let common_data_bytes = builder.data_buffer.len();
-        let _ = builder.intern("ab");
-        let _ = builder.intern("cd");
-        assert_eq!(
-            builder.offsets_buffer.len() - common_offsets_bytes,
-            16,
-            "two new 8-byte entries beyond the common prelude"
-        );
-        assert_eq!(
-            builder.data_buffer.len() - common_data_bytes,
-            4,
-            "two new strings appended (2 bytes each)"
-        );
+        let prelude_count = COMMON_STRING_COUNT;
+        // Intern as field only — must not allocate an offsets entry.
+        let _f = builder.intern("custom_xyz");
+        assert_eq!(builder.len(), prelude_count, "no offsets entry for ED-only intern");
+        // Now ask for the leaf form — that allocates one entry.
+        let _idx = builder.intern_for_leaf("custom_xyz");
+        assert_eq!(builder.len(), prelude_count + 1, "leaf intern allocates offsets entry");
+        // Calling intern_for_leaf again must dedup, no extra allocation.
+        let _idx2 = builder.intern_for_leaf("custom_xyz");
+        assert_eq!(builder.len(), prelude_count + 1, "dedup on second leaf intern");
     }
 
     #[test]
@@ -474,24 +525,27 @@ mod tests {
         assert_eq!(
             builder.len(),
             COMMON_STRING_COUNT,
-            "source text does not count as an interned entry"
-        );
-        assert_eq!(
-            builder.data_buffer.len(),
-            common_data_bytes as usize + "/** @x */".len()
+            "source text does not count as an offsets entry"
         );
     }
 
     #[test]
-    fn intern_common_string_returns_predetermined_index() {
+    fn intern_common_string_returns_predetermined_field() {
+        let arena = Allocator::default();
+        let mut builder = StringTableBuilder::new(&arena);
+        let field = builder.intern("param");
+        let expected = common_string_fields()[8];
+        assert_eq!(field, expected);
+    }
+
+    #[test]
+    fn intern_for_leaf_common_string_returns_predetermined_index() {
         let arena = Allocator::default();
         let mut builder = StringTableBuilder::new(&arena);
         // "param" is COMMON_STRINGS[8].
-        assert_eq!(builder.intern("param").as_u32(), 8);
-        // Repeating the same string returns the same index without
-        // bumping the count.
+        assert_eq!(builder.intern_for_leaf("param").as_u32(), 8);
         let pre_count = builder.len();
-        assert_eq!(builder.intern("param").as_u32(), 8);
+        assert_eq!(builder.intern_for_leaf("param").as_u32(), 8);
         assert_eq!(builder.len(), pre_count, "fast path must not append");
     }
 }

@@ -107,11 +107,12 @@ fn build_fixture(arena: &Allocator) -> Vec<u8> {
     let space = w.intern_string(" ");
     let close = w.intern_string("*/");
     let nl = w.intern_string("\n");
-    let desc_str = w.intern_string("description");
-    let returns_str = w.intern_string("returns");
-    let ok_str = w.intern_string("ok");
-    let string_str = w.intern_string("string");
-    let number_lit = w.intern_string("number");
+    // String-leaf nodes need a StringIndex (TypeTag::String payload).
+    let desc_str = w.intern_string_index("description");
+    let returns_str = w.intern_string_index("returns");
+    let ok_str = w.intern_string_index("ok");
+    let string_str = w.intern_string_index("string");
+    let number_lit = w.intern_string_index("number");
 
     // JsdocBlock with bit0 (descriptionLines) + bit1 (tags) = 0b011.
     let block = write_jsdoc_block(
@@ -130,7 +131,6 @@ fn build_fixture(arena: &Allocator) -> Vec<u8> {
         Span::new(4, 15),
         desc_list.as_u32(),
         desc_str,
-        None, None, None,
     );
 
     // tags NodeList (1 entry).

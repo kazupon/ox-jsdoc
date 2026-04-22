@@ -9,11 +9,24 @@
 //! followed by the per-Kind payload parameters. Each helper returns the
 //! [`NodeIndex`] of the freshly written node so that the parser can wire
 //! it as a child of its parent (via backpatched `next_sibling`).
+//!
+//! String reference encoding:
+//!
+//! - **String-leaf nodes** (`JsdocTagName`, `JsdocText`, `JsdocTypeSource`,
+//!   `JsdocRawTagBody`, `JsdocNamepathSource`, `JsdocIdentifier`,
+//!   `JsdocTagNameValue`, plus the basic-mode forms of
+//!   `JsdocDescriptionLine` and `JsdocTypeLine`) use `TypeTag::String`
+//!   with a 30-bit `StringIndex` packed into Node Data — no Extended Data
+//!   record allocated.
+//! - **Extended Data string slots** (e.g. `JsdocBlock.delimiter`,
+//!   `JsdocTag.description`, `JsdocInlineTag.text`) use inline 6-byte
+//!   `StringField` slots, bypassing the offsets-table indirection.
 
 use oxc_span::Span;
 
 use crate::format::kind::Kind;
 use crate::format::node_record::{TypeTag, pack_node_data};
+use crate::format::string_field::{STRING_FIELD_SIZE, StringField};
 
 use super::super::{BinaryWriter, ExtOffset, StringIndex};
 use super::NodeIndex;
@@ -22,76 +35,80 @@ use super::NodeIndex;
 // 0x01 JsdocBlock (Extended, root)
 // ---------------------------------------------------------------------------
 
+/// Basic-mode Extended Data size for [`JsdocBlock`]:
+/// `1 + 1 + 8 × StringField = 50` bytes.
+const JSDOC_BLOCK_BASIC_SIZE: usize = 1 + 1 + 8 * STRING_FIELD_SIZE;
+/// Compat-mode Extended Data size for [`JsdocBlock`]: basic + `22` bytes
+/// of compat tail (line indices, has_preterminal_* flags).
+const JSDOC_BLOCK_COMPAT_SIZE: usize = JSDOC_BLOCK_BASIC_SIZE + 22;
+
 /// Write a `JsdocBlock` (Kind `0x01`, Extended type).
 ///
-/// Extended Data layout (basic 18 bytes; compat extends to 40 bytes via
+/// Extended Data layout (basic 50 bytes; compat extends to 72 bytes via
 /// [`write_jsdoc_block_compat_tail`]):
 ///
 /// ```text
-/// byte 0     : Children bitmask (u8)
-/// byte 1     : padding (u8)
-/// byte 2-3   : description string index           (u16)
-/// byte 4-5   : delimiter                          (u16)
-/// byte 6-7   : post_delimiter                     (u16)
-/// byte 8-9   : terminal                           (u16)
-/// byte 10-11 : line_end                           (u16)
-/// byte 12-13 : initial                            (u16)
-/// byte 14-15 : delimiter_line_break               (u16)
-/// byte 16-17 : preterminal_line_break             (u16)
+/// byte 0      : Children bitmask (u8)
+/// byte 1      : padding (u8)
+/// byte 2-7    : description     (StringField, NONE if absent)
+/// byte 8-13   : delimiter
+/// byte 14-19  : post_delimiter
+/// byte 20-25  : terminal
+/// byte 26-31  : line_end
+/// byte 32-37  : initial
+/// byte 38-43  : delimiter_line_break
+/// byte 44-49  : preterminal_line_break
 /// ```
-///
-/// The caller supplies `description = None` as `0xFFFF`. All other slots
-/// are mandatory u16 indices written as-is.
 #[allow(clippy::too_many_arguments)]
 pub fn write_jsdoc_block(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    description: Option<StringIndex>,
-    delimiter: StringIndex,
-    post_delimiter: StringIndex,
-    terminal: StringIndex,
-    line_end: StringIndex,
-    initial: StringIndex,
-    delimiter_line_break: StringIndex,
-    preterminal_line_break: StringIndex,
+    description: Option<StringField>,
+    delimiter: StringField,
+    post_delimiter: StringField,
+    terminal: StringField,
+    line_end: StringField,
+    initial: StringField,
+    delimiter_line_break: StringField,
+    preterminal_line_break: StringField,
     children_bitmask: u8,
 ) -> NodeIndex {
-    let basic_size = 18;
-    let total_size = if writer.compat_mode() { 40 } else { basic_size };
-    // Build the 18-byte basic record on the stack so the buffer write is
-    // a single 18-byte memcpy instead of nine `write_u16` dispatches +
-    // their per-call slice bounds checks. The compat tail (bytes 18..40)
-    // is left as the zero fill `reserve_mut` already laid down; the
-    // `_compat_tail` helper patches it later.
-    let desc = opt_string_index(description).to_le_bytes();
-    let delim = delimiter.as_u16().to_le_bytes();
-    let pdelim = post_delimiter.as_u16().to_le_bytes();
-    let term = terminal.as_u16().to_le_bytes();
-    let le = line_end.as_u16().to_le_bytes();
-    let init = initial.as_u16().to_le_bytes();
-    let dlb = delimiter_line_break.as_u16().to_le_bytes();
-    let plb = preterminal_line_break.as_u16().to_le_bytes();
-    let record: [u8; 18] = [
-        children_bitmask, 0,
-        desc[0], desc[1],
-        delim[0], delim[1],
-        pdelim[0], pdelim[1],
-        term[0], term[1],
-        le[0], le[1],
-        init[0], init[1],
-        dlb[0], dlb[1],
-        plb[0], plb[1],
-    ];
+    let total_size = if writer.compat_mode() {
+        JSDOC_BLOCK_COMPAT_SIZE
+    } else {
+        JSDOC_BLOCK_BASIC_SIZE
+    };
     let (off, dst) = writer.extended.reserve_mut(total_size);
-    dst[..basic_size].copy_from_slice(&record);
+    dst[0] = children_bitmask;
+    dst[1] = 0;
+    write_opt_string_field(dst, 2, description);
+    write_string_field(dst, 8, delimiter);
+    write_string_field(dst, 14, post_delimiter);
+    write_string_field(dst, 20, terminal);
+    write_string_field(dst, 26, line_end);
+    write_string_field(dst, 32, initial);
+    write_string_field(dst, 38, delimiter_line_break);
+    write_string_field(dst, 44, preterminal_line_break);
     writer.emit_extended_node(parent_index, Kind::JsdocBlock, 0, span, off)
 }
 
-/// Patch the compat-mode tail (`bytes 18..=39`) on a previously written
+/// Patch the compat-mode tail (`bytes 50..=71`) on a previously written
 /// `JsdocBlock` Extended Data record. Only call this when
 /// [`BinaryWriter::compat_mode`] is `true` (the basic write helper already
 /// reserved the extra bytes).
+///
+/// Tail layout:
+/// ```text
+/// byte 50-51 : padding (u16, zero-fill)
+/// byte 52-55 : end_line (u32)
+/// byte 56-59 : description_start_line (u32, 0xFFFF_FFFF = None)
+/// byte 60-63 : description_end_line   (u32, 0xFFFF_FFFF = None)
+/// byte 64-67 : last_description_line  (u32, 0xFFFF_FFFF = None)
+/// byte 68    : has_preterminal_description (u8)
+/// byte 69    : has_preterminal_tag_description (u8, 0xFF = None)
+/// byte 70-71 : padding (u16, zero-fill)
+/// ```
 pub fn write_jsdoc_block_compat_tail(
     writer: &mut BinaryWriter<'_>,
     ext_offset: ExtOffset,
@@ -106,119 +123,136 @@ pub fn write_jsdoc_block_compat_tail(
         writer.compat_mode(),
         "write_jsdoc_block_compat_tail called but compat_mode is off"
     );
-    let dst = writer.extended.slice_mut(ext_offset, 40);
-    // bytes 18-19 are u32 alignment padding (already zero)
-    dst[20..24].copy_from_slice(&end_line.to_le_bytes());
-    dst[24..28].copy_from_slice(&opt_u32_sentinel(description_start_line).to_le_bytes());
-    dst[28..32].copy_from_slice(&opt_u32_sentinel(description_end_line).to_le_bytes());
-    dst[32..36].copy_from_slice(&opt_u32_sentinel(last_description_line).to_le_bytes());
-    dst[36] = has_preterminal_description;
-    dst[37] = has_preterminal_tag_description.unwrap_or(0xFF);
-    // bytes 38-39 trailing alignment (already zero)
+    let dst = writer.extended.slice_mut(ext_offset, JSDOC_BLOCK_COMPAT_SIZE);
+    // bytes 50-51 are u32 alignment padding (already zero from reserve_mut)
+    dst[52..56].copy_from_slice(&end_line.to_le_bytes());
+    dst[56..60].copy_from_slice(&opt_u32_sentinel(description_start_line).to_le_bytes());
+    dst[60..64].copy_from_slice(&opt_u32_sentinel(description_end_line).to_le_bytes());
+    dst[64..68].copy_from_slice(&opt_u32_sentinel(last_description_line).to_le_bytes());
+    dst[68] = has_preterminal_description;
+    dst[69] = has_preterminal_tag_description.unwrap_or(0xFF);
+    // bytes 70-71 trailing alignment (already zero)
 }
 
 // ---------------------------------------------------------------------------
-// 0x02 JsdocDescriptionLine (String / Extended in compat)
+// 0x02 JsdocDescriptionLine (String basic / Extended compat)
 // ---------------------------------------------------------------------------
 
-/// Write a `JsdocDescriptionLine` (Kind `0x02`).
+/// Compat-mode Extended Data size for [`JsdocDescriptionLine`]: 4 ×
+/// StringField (description + 3 optional delimiter strings).
+const JSDOC_DESCRIPTION_LINE_COMPAT_SIZE: usize = 4 * STRING_FIELD_SIZE;
+
+/// Write a `JsdocDescriptionLine` (Kind `0x02`, basic mode).
 ///
-/// Node Data type depends on `compat_mode`:
-/// - basic: `String` type — payload = description string index
-/// - compat: `Extended` type — Extended Data holds 4 string indices
-///   (description + 3 delimiters)
+/// Node Data: `TypeTag::String` carrying the description's StringIndex.
+/// No Extended Data record is allocated.
 pub fn write_jsdoc_description_line(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
     description: StringIndex,
-    delimiter: Option<StringIndex>,
-    post_delimiter: Option<StringIndex>,
-    initial: Option<StringIndex>,
 ) -> NodeIndex {
-    if writer.compat_mode() {
-        // Extended Data: byte 0-1 description, 2-3 delimiter, 4-5 post_delimiter, 6-7 initial
-        let d = description.as_u16().to_le_bytes();
-        let dl = opt_string_index(delimiter).to_le_bytes();
-        let pd = opt_string_index(post_delimiter).to_le_bytes();
-        let init = opt_string_index(initial).to_le_bytes();
-        let record: [u8; 8] = [d[0], d[1], dl[0], dl[1], pd[0], pd[1], init[0], init[1]];
-        let (off, dst) = writer.extended.reserve_mut(8);
-        dst.copy_from_slice(&record);
-        writer.emit_extended_node(parent_index, Kind::JsdocDescriptionLine, 0, span, off)
-    } else {
-        writer.emit_string_node(parent_index, Kind::JsdocDescriptionLine, 0, span, description)
-    }
+    writer.emit_string_node(parent_index, Kind::JsdocDescriptionLine, 0, span, description)
+}
+
+/// Write a `JsdocDescriptionLine` (Kind `0x02`, compat mode).
+///
+/// Extended Data layout (24 bytes):
+/// - byte 0-5   : description    (StringField, required)
+/// - byte 6-11  : delimiter      (StringField, NONE if absent)
+/// - byte 12-17 : post_delimiter (StringField, NONE if absent)
+/// - byte 18-23 : initial        (StringField, NONE if absent)
+pub fn write_jsdoc_description_line_compat(
+    writer: &mut BinaryWriter<'_>,
+    span: Span,
+    parent_index: u32,
+    description: StringField,
+    delimiter: Option<StringField>,
+    post_delimiter: Option<StringField>,
+    initial: Option<StringField>,
+) -> NodeIndex {
+    debug_assert!(writer.compat_mode());
+    let (off, dst) = writer.extended.reserve_mut(JSDOC_DESCRIPTION_LINE_COMPAT_SIZE);
+    write_string_field(dst, 0, description);
+    write_opt_string_field(dst, 6, delimiter);
+    write_opt_string_field(dst, 12, post_delimiter);
+    write_opt_string_field(dst, 18, initial);
+    writer.emit_extended_node(parent_index, Kind::JsdocDescriptionLine, 0, span, off)
 }
 
 // ---------------------------------------------------------------------------
 // 0x03 JsdocTag (Extended)
 // ---------------------------------------------------------------------------
 
+/// Basic-mode Extended Data size for [`JsdocTag`]:
+/// `1 + 1 + 3 × StringField = 20` bytes.
+const JSDOC_TAG_BASIC_SIZE: usize = 1 + 1 + 3 * STRING_FIELD_SIZE;
+/// Compat-mode Extended Data size for [`JsdocTag`]: basic + 7 × StringField
+/// of compat tail.
+const JSDOC_TAG_COMPAT_SIZE: usize = JSDOC_TAG_BASIC_SIZE + 7 * STRING_FIELD_SIZE;
+
 /// Write a `JsdocTag` (Kind `0x03`, Extended type).
 ///
-/// Common Data: `bit0 = optional`. Extended Data layout (basic 8 bytes):
+/// Common Data: `bit0 = optional`. Extended Data layout (basic 20 bytes):
 ///
 /// ```text
-/// byte 0     : Children bitmask (u8)
-/// byte 1     : padding (u8)
-/// byte 2-3   : default_value (u16, 0xFFFF=None)
-/// byte 4-5   : description    (u16, 0xFFFF=None)
-/// byte 6-7   : raw_body       (u16, 0xFFFF=None)
+/// byte 0      : Children bitmask (u8)
+/// byte 1      : padding (u8)
+/// byte 2-7    : default_value (StringField, NONE if absent)
+/// byte 8-13   : description    (StringField, NONE if absent)
+/// byte 14-19  : raw_body       (StringField, NONE if absent)
 /// ```
 ///
-/// In compat mode the 7 delimiter string indices follow at byte 8..=21
-/// (total 22 bytes); use [`write_jsdoc_tag_compat_tail`] to patch them.
+/// In compat mode the 7 delimiter StringFields follow at byte 20..=61
+/// (total 62 bytes); use [`write_jsdoc_tag_compat_tail`] to patch them.
 #[allow(clippy::too_many_arguments)]
 pub fn write_jsdoc_tag(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
     optional: bool,
-    default_value: Option<StringIndex>,
-    description: Option<StringIndex>,
-    raw_body: Option<StringIndex>,
+    default_value: Option<StringField>,
+    description: Option<StringField>,
+    raw_body: Option<StringField>,
     children_bitmask: u8,
 ) -> NodeIndex {
-    let basic_size = 8;
-    let total_size = if writer.compat_mode() { 22 } else { basic_size };
-    let dv = opt_string_index(default_value).to_le_bytes();
-    let desc = opt_string_index(description).to_le_bytes();
-    let rb = opt_string_index(raw_body).to_le_bytes();
-    let record: [u8; 8] = [
-        children_bitmask, 0,
-        dv[0], dv[1],
-        desc[0], desc[1],
-        rb[0], rb[1],
-    ];
+    let total_size = if writer.compat_mode() {
+        JSDOC_TAG_COMPAT_SIZE
+    } else {
+        JSDOC_TAG_BASIC_SIZE
+    };
     let (off, dst) = writer.extended.reserve_mut(total_size);
-    dst[..basic_size].copy_from_slice(&record);
+    dst[0] = children_bitmask;
+    dst[1] = 0;
+    write_opt_string_field(dst, 2, default_value);
+    write_opt_string_field(dst, 8, description);
+    write_opt_string_field(dst, 14, raw_body);
     writer.emit_extended_node(parent_index, Kind::JsdocTag, optional as u8, span, off)
 }
 
-/// Write the 7 delimiter string indices (14 bytes) at the compat tail of a
+/// Write the 7 delimiter [`StringField`]s (42 bytes) at the compat tail of a
 /// previously written `JsdocTag` Extended Data record.
 #[allow(clippy::too_many_arguments)]
 pub fn write_jsdoc_tag_compat_tail(
     writer: &mut BinaryWriter<'_>,
     ext_offset: ExtOffset,
-    delimiter: StringIndex,
-    post_delimiter: StringIndex,
-    post_tag: StringIndex,
-    post_type: StringIndex,
-    post_name: StringIndex,
-    initial: StringIndex,
-    line_end: StringIndex,
+    delimiter: StringField,
+    post_delimiter: StringField,
+    post_tag: StringField,
+    post_type: StringField,
+    post_name: StringField,
+    initial: StringField,
+    line_end: StringField,
 ) {
     debug_assert!(writer.compat_mode());
-    let dst = writer.extended.slice_mut(ext_offset, 22);
-    write_u16(dst, 8, delimiter.as_u16());
-    write_u16(dst, 10, post_delimiter.as_u16());
-    write_u16(dst, 12, post_tag.as_u16());
-    write_u16(dst, 14, post_type.as_u16());
-    write_u16(dst, 16, post_name.as_u16());
-    write_u16(dst, 18, initial.as_u16());
-    write_u16(dst, 20, line_end.as_u16());
+    let dst = writer.extended.slice_mut(ext_offset, JSDOC_TAG_COMPAT_SIZE);
+    write_string_field(dst, 20, delimiter);
+    write_string_field(dst, 26, post_delimiter);
+    write_string_field(dst, 32, post_tag);
+    write_string_field(dst, 38, post_type);
+    write_string_field(dst, 44, post_name);
+    write_string_field(dst, 50, initial);
+    write_string_field(dst, 56, line_end);
 }
 
 // ---------------------------------------------------------------------------
@@ -264,57 +298,74 @@ pub fn write_jsdoc_type_source(
 }
 
 // ---------------------------------------------------------------------------
-// 0x07 JsdocTypeLine (String / Extended in compat)
+// 0x07 JsdocTypeLine (String basic / Extended compat)
 // ---------------------------------------------------------------------------
 
-/// Write a `JsdocTypeLine` (Kind `0x07`).
+/// Compat-mode Extended Data size for [`JsdocTypeLine`]: 4 × StringField
+/// (raw_type + 3 optional delimiter strings).
+const JSDOC_TYPE_LINE_COMPAT_SIZE: usize = 4 * STRING_FIELD_SIZE;
+
+/// Write a `JsdocTypeLine` (Kind `0x07`, basic mode).
 ///
-/// Mirrors [`write_jsdoc_description_line`]: basic = String type, compat =
-/// Extended with `raw_type` + 3 delimiter u16 fields.
+/// Node Data: `TypeTag::String` carrying the raw_type's StringIndex.
 pub fn write_jsdoc_type_line(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
     raw_type: StringIndex,
-    delimiter: Option<StringIndex>,
-    post_delimiter: Option<StringIndex>,
-    initial: Option<StringIndex>,
 ) -> NodeIndex {
-    if writer.compat_mode() {
-        let off = writer.extended.reserve(8);
-        let dst = writer.extended.slice_mut(off, 8);
-        write_u16(dst, 0, raw_type.as_u16());
-        write_u16(dst, 2, opt_string_index(delimiter));
-        write_u16(dst, 4, opt_string_index(post_delimiter));
-        write_u16(dst, 6, opt_string_index(initial));
-        writer.emit_extended_node(parent_index, Kind::JsdocTypeLine, 0, span, off)
-    } else {
-        writer.emit_string_node(parent_index, Kind::JsdocTypeLine, 0, span, raw_type)
-    }
+    writer.emit_string_node(parent_index, Kind::JsdocTypeLine, 0, span, raw_type)
+}
+
+/// Write a `JsdocTypeLine` (Kind `0x07`, compat mode).
+///
+/// Extended Data layout (24 bytes):
+/// - byte 0-5   : raw_type       (StringField, required)
+/// - byte 6-11  : delimiter      (StringField, NONE if absent)
+/// - byte 12-17 : post_delimiter (StringField, NONE if absent)
+/// - byte 18-23 : initial        (StringField, NONE if absent)
+pub fn write_jsdoc_type_line_compat(
+    writer: &mut BinaryWriter<'_>,
+    span: Span,
+    parent_index: u32,
+    raw_type: StringField,
+    delimiter: Option<StringField>,
+    post_delimiter: Option<StringField>,
+    initial: Option<StringField>,
+) -> NodeIndex {
+    debug_assert!(writer.compat_mode());
+    let (off, dst) = writer.extended.reserve_mut(JSDOC_TYPE_LINE_COMPAT_SIZE);
+    write_string_field(dst, 0, raw_type);
+    write_opt_string_field(dst, 6, delimiter);
+    write_opt_string_field(dst, 12, post_delimiter);
+    write_opt_string_field(dst, 18, initial);
+    writer.emit_extended_node(parent_index, Kind::JsdocTypeLine, 0, span, off)
 }
 
 // ---------------------------------------------------------------------------
 // 0x08 JsdocInlineTag (Extended)
 // ---------------------------------------------------------------------------
 
+/// Extended Data size for [`JsdocInlineTag`]: 3 × StringField = 18 bytes.
+const JSDOC_INLINE_TAG_SIZE: usize = 3 * STRING_FIELD_SIZE;
+
 /// Write a `JsdocInlineTag` (Kind `0x08`, Extended type).
 ///
-/// Common Data: `bits[0:2] = format`. Extended Data: 6 bytes
-/// (`namepath_or_url` + `text` + `raw_body`, each `u16`).
+/// Common Data: `bits[0:2] = format`. Extended Data: 18 bytes
+/// (3 × StringField for `namepath_or_url`, `text`, `raw_body`).
 pub fn write_jsdoc_inline_tag(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
     format: u8,
-    namepath_or_url: Option<StringIndex>,
-    text: Option<StringIndex>,
-    raw_body: Option<StringIndex>,
+    namepath_or_url: Option<StringField>,
+    text: Option<StringField>,
+    raw_body: Option<StringField>,
 ) -> NodeIndex {
-    let off = writer.extended.reserve(6);
-    let dst = writer.extended.slice_mut(off, 6);
-    write_u16(dst, 0, opt_string_index(namepath_or_url));
-    write_u16(dst, 2, opt_string_index(text));
-    write_u16(dst, 4, opt_string_index(raw_body));
+    let (off, dst) = writer.extended.reserve_mut(JSDOC_INLINE_TAG_SIZE);
+    write_opt_string_field(dst, 0, namepath_or_url);
+    write_opt_string_field(dst, 6, text);
+    write_opt_string_field(dst, 12, raw_body);
     writer.emit_extended_node(
         parent_index,
         Kind::JsdocInlineTag,
@@ -328,25 +379,26 @@ pub fn write_jsdoc_inline_tag(
 // 0x09 JsdocGenericTagBody (Extended)
 // ---------------------------------------------------------------------------
 
+/// Extended Data size for [`JsdocGenericTagBody`]: bitmask + padding +
+/// StringField = 8 bytes.
+const JSDOC_GENERIC_TAG_BODY_SIZE: usize = 1 + 1 + STRING_FIELD_SIZE;
+
 /// Write a `JsdocGenericTagBody` (Kind `0x09`, Extended type).
 ///
-/// Common Data: `bit0 = has_dash_separator`. Extended Data: 4 bytes
-/// (Children bitmask u8 + padding u8 + description u16).
+/// Common Data: `bit0 = has_dash_separator`. Extended Data: 8 bytes
+/// (Children bitmask u8 + padding u8 + description StringField).
 pub fn write_jsdoc_generic_tag_body(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
     has_dash_separator: bool,
-    description: Option<StringIndex>,
+    description: Option<StringField>,
     children_bitmask: u8,
 ) -> NodeIndex {
-    let off = writer.extended.reserve(4);
-    {
-        let dst = writer.extended.slice_mut(off, 4);
-        dst[0] = children_bitmask;
-        dst[1] = 0;
-        write_u16(dst, 2, opt_string_index(description));
-    }
+    let (off, dst) = writer.extended.reserve_mut(JSDOC_GENERIC_TAG_BODY_SIZE);
+    dst[0] = children_bitmask;
+    dst[1] = 0;
+    write_opt_string_field(dst, 2, description);
     writer.emit_extended_node(
         parent_index,
         Kind::JsdocGenericTagBody,
@@ -395,24 +447,24 @@ pub fn write_jsdoc_raw_tag_body(
 // 0x0C JsdocParameterName (Extended)
 // ---------------------------------------------------------------------------
 
+/// Extended Data size for [`JsdocParameterName`]: 2 × StringField = 12 bytes.
+const JSDOC_PARAMETER_NAME_SIZE: usize = 2 * STRING_FIELD_SIZE;
+
 /// Write a `JsdocParameterName` (Kind `0x0C`, Extended type).
 ///
-/// Common Data: `bit0 = optional`. Extended Data: 4 bytes (`path` u16 +
-/// `default_value` u16).
+/// Common Data: `bit0 = optional`. Extended Data: 12 bytes (`path`
+/// StringField (required) + `default_value` StringField (Optional)).
 pub fn write_jsdoc_parameter_name(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
     optional: bool,
-    path: StringIndex,
-    default_value: Option<StringIndex>,
+    path: StringField,
+    default_value: Option<StringField>,
 ) -> NodeIndex {
-    let off = writer.extended.reserve(4);
-    {
-        let dst = writer.extended.slice_mut(off, 4);
-        write_u16(dst, 0, path.as_u16());
-        write_u16(dst, 2, opt_string_index(default_value));
-    }
+    let (off, dst) = writer.extended.reserve_mut(JSDOC_PARAMETER_NAME_SIZE);
+    write_string_field(dst, 0, path);
+    write_opt_string_field(dst, 6, default_value);
     writer.emit_extended_node(
         parent_index,
         Kind::JsdocParameterName,
@@ -486,17 +538,21 @@ pub fn write_node_list(
 // helpers
 // ---------------------------------------------------------------------------
 
+/// Write a [`StringField`] at `offset` inside `dst`. Caller guarantees that
+/// `dst[offset..offset+6]` is in range.
 #[inline]
-fn write_u16(buf: &mut [u8], offset: usize, value: u16) {
-    buf[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
+fn write_string_field(dst: &mut [u8], offset: usize, field: StringField) {
+    field.write_le(&mut dst[offset..offset + STRING_FIELD_SIZE]);
 }
 
+/// Write `opt.unwrap_or(StringField::NONE)` at `offset` inside `dst`.
 #[inline]
-fn opt_string_index(opt: Option<StringIndex>) -> u16 {
-    use crate::format::string_table::U16_NONE_SENTINEL;
-    opt.map(StringIndex::as_u16).unwrap_or(U16_NONE_SENTINEL)
+fn write_opt_string_field(dst: &mut [u8], offset: usize, opt: Option<StringField>) {
+    let field = opt.unwrap_or(StringField::NONE);
+    field.write_le(&mut dst[offset..offset + STRING_FIELD_SIZE]);
 }
 
+/// Sentinel-conversion helper for compat-mode `Option<u32>` line indices.
 #[inline]
 fn opt_u32_sentinel(opt: Option<u32>) -> u32 {
     opt.unwrap_or(0xFFFF_FFFF)
