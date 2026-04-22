@@ -20,10 +20,11 @@ use crate::format::node_record::{
     COMMON_DATA_MASK, NEXT_SIBLING_OFFSET, NODE_RECORD_SIZE, TypeTag, pack_node_data,
 };
 use crate::format::root_index::ROOT_INDEX_ENTRY_SIZE;
+use crate::format::string_field::StringField;
 
 use super::extended_data::{ExtOffset, ExtendedDataBuilder};
 use super::nodes::NodeIndex;
-use super::string_table::{lookup_common, StringIndex, StringTableBuilder};
+use super::string_table::{common_string_field, lookup_common, StringIndex, StringTableBuilder};
 
 /// Top-level writer that owns one buffer per Binary AST section.
 ///
@@ -213,7 +214,9 @@ impl<'arena> BinaryWriter<'arena> {
     }
 
     /// Convenience for **String-type** leaves: emit a node whose Node Data
-    /// payload is a 30-bit String Offsets index.
+    /// payload is a 30-bit String Offsets index. Used by string-leaf Kinds
+    /// where embedding the index in Node Data is cheaper than allocating a
+    /// 6-byte Extended Data record.
     #[inline]
     pub(crate) fn emit_string_node(
         &mut self,
@@ -299,7 +302,7 @@ impl<'arena> BinaryWriter<'arena> {
     /// ascending at [`Self::finish`] (so callers may insert them in any
     /// order).
     pub fn push_diagnostic(&mut self, root_index: u32, message: &str) {
-        let message_index = self.strings.intern(message);
+        let message_index = self.strings.intern_for_leaf(message);
         self.diagnostics.push((root_index, message_index.as_u32()));
     }
 
@@ -314,11 +317,18 @@ impl<'arena> BinaryWriter<'arena> {
         &mut self.extended
     }
 
-    /// Convenience: intern a string into the table. Returns the index that
-    /// can be packed into a Node Data String payload or an Extended Data
-    /// `u16` slot.
-    pub fn intern_string(&mut self, value: &str) -> StringIndex {
+    /// Convenience: intern a string into the table. Returns the
+    /// [`StringField`] that can be embedded in an Extended Data record.
+    pub fn intern_string(&mut self, value: &str) -> StringField {
         self.strings.intern(value)
+    }
+
+    /// Intern a string and return its [`StringIndex`] (String Offsets table
+    /// path). Used by string-leaf Kinds (`emit_string_node`) where the
+    /// 30-bit index packed into Node Data is cheaper than a 6-byte ED
+    /// record.
+    pub fn intern_string_index(&mut self, value: &str) -> StringIndex {
+        self.strings.intern_for_leaf(value)
     }
 
     /// Skip-dedup variant of [`Self::intern_string`] for callers who know
@@ -326,7 +336,7 @@ impl<'arena> BinaryWriter<'arena> {
     /// text, raw type source). Trades a small amount of binary growth
     /// (duplicate content stored twice) for the FxHash + lookup work the
     /// dedup map would otherwise perform on every call.
-    pub fn intern_string_unique(&mut self, value: &str) -> StringIndex {
+    pub fn intern_string_unique(&mut self, value: &str) -> StringField {
         self.strings.intern_unique(value)
     }
 
@@ -372,7 +382,7 @@ impl<'arena> BinaryWriter<'arena> {
     /// duplicated bytes for an offsets-only registration. See
     /// `.notes/binary-ast-emit-phase-format-analysis.md` for context.
     #[inline]
-    pub fn intern_source_slice(&mut self, source_byte_start: u32, source_byte_end: u32) -> StringIndex {
+    pub fn intern_source_slice(&mut self, source_byte_start: u32, source_byte_end: u32) -> StringField {
         debug_assert!(
             source_byte_end <= self.current_source_length,
             "intern_source_slice end {source_byte_end} > current source length {}",
@@ -381,6 +391,32 @@ impl<'arena> BinaryWriter<'arena> {
         let absolute_start = self.current_source_data_offset.saturating_add(source_byte_start);
         let absolute_end = self.current_source_data_offset.saturating_add(source_byte_end);
         self.strings.intern_at_offset(absolute_start, absolute_end)
+    }
+
+    /// String-leaf-targeted variant of [`Self::intern_source_slice`].
+    ///
+    /// Returns a [`StringIndex`] (allocates a String Offsets entry) so the
+    /// caller can pass it to [`Self::emit_string_node`]. Used by
+    /// description-line / type-line basic-mode emission where the source
+    /// slice becomes the String-payload of a leaf node.
+    ///
+    /// The bytes themselves are **not** copied; only the (start, end) pair
+    /// is appended to the offsets table.
+    #[inline]
+    pub fn intern_source_slice_for_leaf(
+        &mut self,
+        source_byte_start: u32,
+        source_byte_end: u32,
+    ) -> StringIndex {
+        debug_assert!(
+            source_byte_end <= self.current_source_length,
+            "intern_source_slice_for_leaf end {source_byte_end} > current source length {}",
+            self.current_source_length
+        );
+        let absolute_start = self.current_source_data_offset.saturating_add(source_byte_start);
+        let absolute_end = self.current_source_data_offset.saturating_add(source_byte_end);
+        self.strings
+            .intern_at_offset_for_leaf(absolute_start, absolute_end)
     }
 
     /// Intern `value` choosing the cheapest of three paths automatically,
@@ -405,15 +441,36 @@ impl<'arena> BinaryWriter<'arena> {
     /// the source (e.g. `TypeProperty.value` may have its outer quotes
     /// stripped while its span still includes them). See
     /// `.notes/binary-ast-emit-intern-audit.md` for the per-caller analysis.
-    pub fn intern_source_or_string(&mut self, value: &str, span: Span) -> StringIndex {
+    pub fn intern_source_or_string(&mut self, value: &str, span: Span) -> StringField {
         if let Some(idx) = lookup_common(value) {
-            return StringIndex::from_u32(idx).expect("common index in range");
+            return common_string_field(idx);
         }
         let span_len = span.end.saturating_sub(span.start);
         if span_len as usize == value.len() && span.end <= self.current_source_length {
             return self.intern_source_slice(span.start, span.end);
         }
         self.strings.intern_unique(value)
+    }
+
+    /// String-leaf-targeted variant of [`Self::intern_source_or_string`]
+    /// — returns a [`StringIndex`] suitable for [`Self::emit_string_node`].
+    ///
+    /// Mirrors the same three-path decision tree (common-string fast path,
+    /// zero-copy source slice, dedup'd unique entry) but allocates a
+    /// String Offsets index for the result.
+    pub fn intern_source_or_string_for_leaf(
+        &mut self,
+        value: &str,
+        span: Span,
+    ) -> StringIndex {
+        if let Some(idx) = lookup_common(value) {
+            return StringIndex::from_u32(idx).expect("common index in range");
+        }
+        let span_len = span.end.saturating_sub(span.start);
+        if span_len as usize == value.len() && span.end <= self.current_source_length {
+            return self.intern_source_slice_for_leaf(span.start, span.end);
+        }
+        self.strings.intern_for_leaf(value)
     }
 
     /// Span-less sibling of [`Self::intern_source_or_string`] for callers that
@@ -434,9 +491,9 @@ impl<'arena> BinaryWriter<'arena> {
     /// descriptions remain a sub-slice of the source and take path 2;
     /// multi-line joins live in the parser's scratch String (separate
     /// allocation) and fall through to path 3.
-    pub fn intern_source_slice_or_string(&mut self, value: &str) -> StringIndex {
+    pub fn intern_source_slice_or_string(&mut self, value: &str) -> StringField {
         if let Some(idx) = lookup_common(value) {
-            return StringIndex::from_u32(idx).expect("common index in range");
+            return common_string_field(idx);
         }
         let value_ptr = value.as_ptr() as usize;
         let source_start = self.current_source_ptr;
@@ -449,6 +506,25 @@ impl<'arena> BinaryWriter<'arena> {
             }
         }
         self.strings.intern_unique(value)
+    }
+
+    /// String-leaf-targeted variant of [`Self::intern_source_slice_or_string`]
+    /// — returns a [`StringIndex`] suitable for [`Self::emit_string_node`].
+    pub fn intern_source_slice_or_string_for_leaf(&mut self, value: &str) -> StringIndex {
+        if let Some(idx) = lookup_common(value) {
+            return StringIndex::from_u32(idx).expect("common index in range");
+        }
+        let value_ptr = value.as_ptr() as usize;
+        let source_start = self.current_source_ptr;
+        if source_start != 0 {
+            let source_end = source_start.saturating_add(self.current_source_length as usize);
+            let value_end = value_ptr.saturating_add(value.len());
+            if value_ptr >= source_start && value_end <= source_end {
+                let offset = (value_ptr - source_start) as u32;
+                return self.intern_source_slice_for_leaf(offset, offset + value.len() as u32);
+            }
+        }
+        self.strings.intern_for_leaf(value)
     }
 
     /// Number of node records currently in the Nodes section (including the
@@ -516,14 +592,17 @@ impl<'arena> BinaryWriter<'arena> {
         let string_data_offset = string_offsets_offset + string_offsets_size as u32;
         // Pad after String Data so Extended Data starts 4-byte aligned.
         let extended_data_offset = align_up_4(string_data_offset + string_data_size as u32);
-        let string_data_padding = (extended_data_offset - (string_data_offset + string_data_size as u32)) as usize;
+        let string_data_padding =
+            (extended_data_offset - (string_data_offset + string_data_size as u32)) as usize;
         // Pad after Extended Data so Diagnostics starts 4-byte aligned.
         let diagnostics_offset = align_up_4(extended_data_offset + extended_data_size as u32);
-        let extended_data_padding = (diagnostics_offset - (extended_data_offset + extended_data_size as u32)) as usize;
+        let extended_data_padding =
+            (diagnostics_offset - (extended_data_offset + extended_data_size as u32)) as usize;
         // diagnostics_size is `4 + 8M` (always 4-aligned), so the next
         // boundary is automatically 4-aligned. Compute defensively anyway.
         let nodes_offset = align_up_4(diagnostics_offset + diagnostics_size as u32);
-        let diagnostics_padding = (nodes_offset - (diagnostics_offset + diagnostics_size as u32)) as usize;
+        let diagnostics_padding =
+            (nodes_offset - (diagnostics_offset + diagnostics_size as u32)) as usize;
 
         // -- 4. build the output buffer -------------------------------------
         let total_size = HEADER_SIZE
@@ -560,7 +639,6 @@ impl<'arena> BinaryWriter<'arena> {
         // -- 4c. String Offsets / Data --------------------------------------
         out.extend_from_slice(&self.strings.offsets_buffer);
         out.extend_from_slice(&self.strings.data_buffer);
-        // Pad String Data so Extended Data starts 4-byte aligned.
         if string_data_padding > 0 {
             out.resize(out.len() + string_data_padding, 0);
         }
@@ -571,7 +649,7 @@ impl<'arena> BinaryWriter<'arena> {
             out.resize(out.len() + extended_data_padding, 0);
         }
 
-        // -- 4e. Diagnostics: count header + entries ------------------------
+        // -- 4e. Diagnostics: count header + 8-byte entries ----------------
         out.extend_from_slice(&diagnostic_count.to_le_bytes());
         for (root_index, message_index) in &self.diagnostics {
             out.extend_from_slice(&root_index.to_le_bytes());
@@ -619,8 +697,8 @@ mod tests {
         assert_eq!(writer.root_count(), 0);
         assert!(!writer.compat_mode());
         // The string table is seeded with `COMMON_STRING_COUNT` entries
-        // (delimiters, whitespace, common tag names) that the writer
-        // pre-interns so per-call `intern()` can skip the HashMap.
+        // (delimiters, whitespace, common tag names) so per-call
+        // `intern_for_leaf` can skip the HashMap.
         assert_eq!(writer.strings.len(), COMMON_STRING_COUNT);
 
         let bytes = writer.finish();

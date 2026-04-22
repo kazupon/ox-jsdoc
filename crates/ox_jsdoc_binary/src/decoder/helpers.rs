@@ -10,6 +10,7 @@ use crate::format::node_record::{
     NEXT_SIBLING_OFFSET, NODE_DATA_OFFSET, NODE_RECORD_SIZE, PARENT_INDEX_OFFSET, PAYLOAD_MASK,
     TYPE_TAG_SHIFT, TypeTag,
 };
+use crate::format::string_field::{STRING_FIELD_SIZE, StringField};
 
 use super::source_file::LazySourceFile;
 
@@ -92,9 +93,21 @@ pub fn first_child(sf: &LazySourceFile<'_>, parent_index: u32) -> Option<u32> {
     }
 }
 
+/// Read a [`StringField`] (6 bytes, little-endian) from `bytes` at
+/// `offset`. Used by lazy nodes when reading a string slot from inside
+/// their Extended Data record.
+#[inline]
+#[must_use]
+pub fn read_string_field(bytes: &[u8], offset: usize) -> StringField {
+    StringField::read_le(&bytes[offset..offset + STRING_FIELD_SIZE])
+}
+
 /// Resolve the 30-bit String payload of a String-type node into its
 /// underlying string. `None` when the writer used the
 /// [`crate::format::node_record::STRING_PAYLOAD_NONE_SENTINEL`] sentinel.
+///
+/// Used by string-leaf Kinds whose Node Data carries a `TypeTag::String`
+/// payload (cheaper than allocating an Extended Data record).
 #[inline]
 #[must_use]
 pub fn string_payload<'a>(sf: &LazySourceFile<'a>, node_index: u32) -> Option<&'a str> {
@@ -105,6 +118,20 @@ pub fn string_payload<'a>(sf: &LazySourceFile<'a>, node_index: u32) -> Option<&'
         "string_payload called on a non-String node"
     );
     sf.get_string(nd & PAYLOAD_MASK)
+}
+
+/// Resolve the leading [`StringField`] of an Extended-type node whose
+/// Extended Data record begins with a 6-byte StringField slot
+/// (Pattern 3 TypeNodes such as `TypeKeyValue.key`,
+/// `TypeMethodSignature.name`, `TypeSymbol.value`, …).
+///
+/// Returns the empty string when the slot equals [`StringField::NONE`].
+#[inline]
+#[must_use]
+pub fn ext_string_leaf<'a>(sf: &LazySourceFile<'a>, node_index: u32) -> &'a str {
+    let ext = ext_offset(sf, node_index) as usize;
+    let field = read_string_field(sf.bytes(), ext);
+    sf.get_string_by_field(field).unwrap_or("")
 }
 
 /// Read the Children bitmask from the 30-bit Node Data payload of a

@@ -59,7 +59,7 @@ export const PAYLOAD_MASK = 0x3fff_ffff
 
 /** TypeTag: payload is a 30-bit Children bitmask (visitor order). */
 export const TYPE_TAG_CHILDREN = 0b00
-/** TypeTag: payload is a 30-bit String Offsets index. */
+/** TypeTag: payload is a 30-bit String Offsets index (string-leaf nodes). */
 export const TYPE_TAG_STRING = 0b01
 /** TypeTag: payload is a 30-bit byte offset into the Extended Data section. */
 export const TYPE_TAG_EXTENDED = 0b10
@@ -79,8 +79,19 @@ export const SOURCE_OFFSET_FIELD = 4
 export const BASE_OFFSET_FIELD = 8
 
 // ---------------------------------------------------------------------------
-// String table
+// String table (offsets table for string-leaf nodes + diagnostics)
 // ---------------------------------------------------------------------------
 
 export const STRING_OFFSET_ENTRY_SIZE = 8
 export const U16_NONE_SENTINEL = 0xffff
+
+// ---------------------------------------------------------------------------
+// String field (6 bytes per slot, inlined in Extended Data)
+// ---------------------------------------------------------------------------
+
+/** Size of one inline `StringField` slot in bytes. */
+export const STRING_FIELD_SIZE = 6
+/** Offset value used by the `None` sentinel (matches Rust's u32::MAX). */
+export const STRING_FIELD_NONE_OFFSET = 0xffff_ffff
+/** Length value used by the `None` sentinel (always 0). */
+export const STRING_FIELD_NONE_LENGTH = 0

@@ -70,13 +70,19 @@ pub const PAYLOAD_MAX: u32 = PAYLOAD_MASK;
 
 /// Type tag values stored in the upper 2 bits of Node Data.
 ///
-/// Discriminants are stable per the format spec.
+/// Discriminants are stable per the format spec. String-leaf nodes use
+/// `TypeTag::String` with a 30-bit String Offsets index in the payload;
+/// Extended-type records reach their string slots via inline
+/// [`crate::format::string_field::StringField`] entries (no offsets-table
+/// indirection).
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TypeTag {
     /// `0b00` - payload is a 30-bit Children bitmask (visitor order).
     Children = 0b00,
-    /// `0b01` - payload is a 30-bit String Offsets index.
+    /// `0b01` - payload is a 30-bit String Offsets index. Used for
+    /// string-leaf nodes; ED-internal string slots embed StringField
+    /// directly instead.
     String = 0b01,
     /// `0b10` - payload is a 30-bit byte offset into the Extended Data section.
     Extended = 0b10,

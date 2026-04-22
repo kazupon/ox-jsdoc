@@ -6,15 +6,16 @@
 //!
 //! Every struct is a `Copy` value type wrapping
 //! `(source_file, node_index, root_index)` (16 bytes on 64-bit targets).
-//! Phase 1.1b ships full `LazyNode` impls + the per-Kind getters that the
-//! Phase 1.2a parser and Phase 1.1c visitor will rely on.
+//! All string fields read inline [`crate::format::string_field::StringField`]
+//! slots from Extended Data — there is no longer a String Offsets table to
+//! consult.
 
 use crate::format::kind::Kind;
 use crate::format::node_record::{KIND_OFFSET, NODE_RECORD_SIZE};
-use crate::format::string_table::U16_NONE_SENTINEL;
+use crate::format::string_field::STRING_FIELD_SIZE;
 
 use super::super::helpers::{
-    child_at_visitor_index, ext_offset, first_child, read_u16, string_payload,
+    child_at_visitor_index, ext_offset, first_child, read_string_field, string_payload,
 };
 use super::super::source_file::LazySourceFile;
 use super::type_node::LazyTypeNode;
@@ -65,15 +66,27 @@ macro_rules! define_lazy_comment_node {
     };
 }
 
-/// Resolve a u16 string slot in Extended Data into an `Option<&str>`.
+/// Read an Optional `StringField` slot at `field_offset` inside a node's
+/// Extended Data record. Returns `None` when the slot equals
+/// [`crate::format::string_field::StringField::NONE`].
 #[inline]
-fn resolve_u16_slot<'a>(sf: &LazySourceFile<'a>, ext_byte: usize, field_offset: usize) -> Option<&'a str> {
-    let idx = read_u16(sf.bytes(), ext_byte + field_offset);
-    if idx == U16_NONE_SENTINEL {
-        None
-    } else {
-        sf.get_string(idx as u32)
-    }
+fn resolve_string_field_slot<'a>(
+    sf: &LazySourceFile<'a>,
+    ext_byte: usize,
+    field_offset: usize,
+) -> Option<&'a str> {
+    let field = read_string_field(sf.bytes(), ext_byte + field_offset);
+    sf.get_string_by_field(field)
+}
+
+/// Read a Required `StringField` slot at `field_offset` inside a node's
+/// Extended Data record. Returns `""` if the slot is mistakenly the NONE
+/// sentinel (defensive — the writer never emits NONE for a Required slot).
+#[inline]
+fn ext_string<'a>(sf: &LazySourceFile<'a>, node_index: u32, field_offset: usize) -> &'a str {
+    let ext = ext_offset(sf, node_index) as usize;
+    let field = read_string_field(sf.bytes(), ext + field_offset);
+    sf.get_string_by_field(field).unwrap_or("")
 }
 
 // ---------------------------------------------------------------------------
@@ -96,36 +109,36 @@ impl<'a> LazyJsdocBlock<'a> {
     /// Description string (None when absent).
     pub fn description(&self) -> Option<&'a str> {
         let ext = ext_offset(self.source_file, self.node_index) as usize;
-        resolve_u16_slot(self.source_file, ext, 2)
+        resolve_string_field_slot(self.source_file, ext, 2)
     }
 
     /// Source-preserving delimiter strings stored in Extended Data.
     pub fn delimiter(&self) -> &'a str {
-        ext_string(self.source_file, self.node_index, 4)
+        ext_string(self.source_file, self.node_index, 8)
     }
     /// `post_delimiter`.
     pub fn post_delimiter(&self) -> &'a str {
-        ext_string(self.source_file, self.node_index, 6)
+        ext_string(self.source_file, self.node_index, 14)
     }
     /// `terminal` source string (`"*/"`).
     pub fn terminal(&self) -> &'a str {
-        ext_string(self.source_file, self.node_index, 8)
+        ext_string(self.source_file, self.node_index, 20)
     }
     /// `line_end` source string.
     pub fn line_end(&self) -> &'a str {
-        ext_string(self.source_file, self.node_index, 10)
+        ext_string(self.source_file, self.node_index, 26)
     }
     /// `initial` source string.
     pub fn initial(&self) -> &'a str {
-        ext_string(self.source_file, self.node_index, 12)
+        ext_string(self.source_file, self.node_index, 32)
     }
     /// `delimiter_line_break` source string.
     pub fn delimiter_line_break(&self) -> &'a str {
-        ext_string(self.source_file, self.node_index, 14)
+        ext_string(self.source_file, self.node_index, 38)
     }
     /// `preterminal_line_break` source string.
     pub fn preterminal_line_break(&self) -> &'a str {
-        ext_string(self.source_file, self.node_index, 16)
+        ext_string(self.source_file, self.node_index, 44)
     }
 
     /// Top-level description lines (visitor index 0).
@@ -141,7 +154,7 @@ impl<'a> LazyJsdocBlock<'a> {
         self.children_node_list(2)
     }
 
-    // -- compat-mode-only line metadata (Extended Data byte 20+) -------------
+    // -- compat-mode-only line metadata (Extended Data byte 52+) ------------
 
     /// 0-based line index of the closing `*/` line. Returns `None` when the
     /// buffer was not written in compat mode.
@@ -150,7 +163,10 @@ impl<'a> LazyJsdocBlock<'a> {
             return None;
         }
         let ext = ext_offset(self.source_file, self.node_index) as usize;
-        Some(super::super::helpers::read_u32(self.source_file.bytes(), ext + 20))
+        Some(super::super::helpers::read_u32(
+            self.source_file.bytes(),
+            ext + 52,
+        ))
     }
 
     /// Helper: build a NodeListIter for visitor index `i` of this block.
@@ -179,9 +195,9 @@ define_lazy_comment_node!(
 );
 
 impl<'a> LazyJsdocDescriptionLine<'a> {
-    /// Description content. When `compat_mode` is off, it lives directly in
-    /// Node Data as a String payload; when on, it lives at byte 0-1 of
-    /// Extended Data.
+    /// Description content. Basic mode reads it from the String-payload
+    /// (Node Data); compat mode reads from byte 0-5 of the Extended Data
+    /// record.
     pub fn description(&self) -> &'a str {
         if self.source_file.compat_mode {
             ext_string(self.source_file, self.node_index, 0)
@@ -210,17 +226,17 @@ impl<'a> LazyJsdocTag<'a> {
     /// `default_value` from `[id=foo]` syntax.
     pub fn default_value(&self) -> Option<&'a str> {
         let ext = ext_offset(self.source_file, self.node_index) as usize;
-        resolve_u16_slot(self.source_file, ext, 2)
+        resolve_string_field_slot(self.source_file, ext, 2)
     }
     /// Joined description text.
     pub fn description(&self) -> Option<&'a str> {
         let ext = ext_offset(self.source_file, self.node_index) as usize;
-        resolve_u16_slot(self.source_file, ext, 4)
+        resolve_string_field_slot(self.source_file, ext, 8)
     }
     /// Raw body when the tag uses the `Raw` body variant.
     pub fn raw_body(&self) -> Option<&'a str> {
         let ext = ext_offset(self.source_file, self.node_index) as usize;
-        resolve_u16_slot(self.source_file, ext, 6)
+        resolve_string_field_slot(self.source_file, ext, 14)
     }
 
     #[inline]
@@ -307,7 +323,7 @@ impl<'a> LazyJsdocTag<'a> {
 }
 
 // ---------------------------------------------------------------------------
-// 0x04-0x06, 0x0B, 0x0D-0x0F: String-type leaves
+// 0x04-0x06, 0x0B, 0x0D-0x0F: Extended-type string-leaf nodes (6-byte ED)
 // ---------------------------------------------------------------------------
 
 macro_rules! define_string_leaf {
@@ -366,7 +382,7 @@ define_string_leaf!(
 );
 
 // ---------------------------------------------------------------------------
-// 0x07 LazyJsdocTypeLine (String basic / Extended compat)
+// 0x07 LazyJsdocTypeLine (Extended)
 // ---------------------------------------------------------------------------
 define_lazy_comment_node!(
     LazyJsdocTypeLine,
@@ -375,7 +391,9 @@ define_lazy_comment_node!(
 );
 
 impl<'a> LazyJsdocTypeLine<'a> {
-    /// Raw `{...}` line content.
+    /// Raw `{...}` line content. Basic mode reads it from the
+    /// String-payload (Node Data); compat mode reads from byte 0-5 of the
+    /// Extended Data record.
     pub fn raw_type(&self) -> &'a str {
         if self.source_file.compat_mode {
             ext_string(self.source_file, self.node_index, 0)
@@ -403,17 +421,17 @@ impl<'a> LazyJsdocInlineTag<'a> {
     /// Optional name path or URL portion.
     pub fn namepath_or_url(&self) -> Option<&'a str> {
         let ext = ext_offset(self.source_file, self.node_index) as usize;
-        resolve_u16_slot(self.source_file, ext, 0)
+        resolve_string_field_slot(self.source_file, ext, 0)
     }
     /// Optional display text portion.
     pub fn text(&self) -> Option<&'a str> {
         let ext = ext_offset(self.source_file, self.node_index) as usize;
-        resolve_u16_slot(self.source_file, ext, 2)
+        resolve_string_field_slot(self.source_file, ext, STRING_FIELD_SIZE)
     }
     /// Raw body text fallback.
     pub fn raw_body(&self) -> Option<&'a str> {
         let ext = ext_offset(self.source_file, self.node_index) as usize;
-        resolve_u16_slot(self.source_file, ext, 4)
+        resolve_string_field_slot(self.source_file, ext, 2 * STRING_FIELD_SIZE)
     }
 }
 
@@ -435,7 +453,7 @@ impl<'a> LazyJsdocGenericTagBody<'a> {
     /// `description` string after the dash separator.
     pub fn description(&self) -> Option<&'a str> {
         let ext = ext_offset(self.source_file, self.node_index) as usize;
-        resolve_u16_slot(self.source_file, ext, 2)
+        resolve_string_field_slot(self.source_file, ext, 2)
     }
 }
 
@@ -463,28 +481,15 @@ impl<'a> LazyJsdocParameterName<'a> {
     pub fn optional(&self) -> bool {
         (self.common_data() & 0b0000_0001) != 0
     }
-    /// The path text.
+    /// The path text (required, byte 0-5).
     pub fn path(&self) -> &'a str {
         ext_string(self.source_file, self.node_index, 0)
     }
-    /// Default value from `[id=foo]` syntax.
+    /// Default value from `[id=foo]` syntax (Optional, byte 6-11).
     pub fn default_value(&self) -> Option<&'a str> {
         let ext = ext_offset(self.source_file, self.node_index) as usize;
-        resolve_u16_slot(self.source_file, ext, 2)
+        resolve_string_field_slot(self.source_file, ext, STRING_FIELD_SIZE)
     }
-}
-
-// ---------------------------------------------------------------------------
-// helpers
-// ---------------------------------------------------------------------------
-
-/// Read a required string field at `ext_byte_offset` inside the node's
-/// Extended Data record.
-#[inline]
-fn ext_string<'a>(sf: &LazySourceFile<'a>, node_index: u32, field_offset: usize) -> &'a str {
-    let ext = ext_offset(sf, node_index) as usize;
-    let idx = read_u16(sf.bytes(), ext + field_offset);
-    sf.get_string(idx as u32).unwrap_or("")
 }
 
 // ---------------------------------------------------------------------------

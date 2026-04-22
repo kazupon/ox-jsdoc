@@ -6,24 +6,27 @@
 //!
 //! TypeNodes split into 4 patterns (see `format.md` "Node catalog matrix"):
 //!
-//! - **Pattern 1 — String only** (5 kinds): payload is a 30-bit string index.
+//! - **Pattern 1 — String leaf** (5 kinds): Extended type with a 6-byte ED
+//!   record holding a single [`StringField`] (formerly the v1 String-tag
+//!   payload).
 //! - **Pattern 2 — Children only** (29 kinds): payload is a 30-bit Children
 //!   bitmask.
 //! - **Pattern 3 — Mixed string + children** (6 kinds): payload is a
 //!   30-bit Extended Data offset; Extended Data holds the per-Kind layout.
-//! - **Others** (5 kinds): pure leaves with no payload (`TypeNull` / `TypeUndefined`
-//!   / `TypeAny` / `TypeUnknown` / `TypeUniqueSymbol`).
+//! - **Others** (5 kinds): pure leaves with no payload (`TypeNull` /
+//!   `TypeUndefined` / `TypeAny` / `TypeUnknown` / `TypeUniqueSymbol`).
 
 use oxc_span::Span;
 
 use crate::format::kind::Kind;
 use crate::format::node_record::{TypeTag, pack_node_data};
+use crate::format::string_field::{STRING_FIELD_SIZE, StringField};
 
 use super::super::{BinaryWriter, StringIndex};
 use super::NodeIndex;
 
 // ===========================================================================
-// Pattern 1: String only (5 kinds, payload = string index)
+// Pattern 1: String only (5 kinds, payload = StringIndex)
 // ===========================================================================
 
 /// `TypeName` (Kind `0x80`, Pattern 1).
@@ -411,12 +414,12 @@ pub fn write_type_readonly_property(
 //
 // Each helper:
 // 1. Reserves Extended Data of the per-Kind size.
-// 2. Writes the per-Kind layout (typically u16 string indices).
+// 2. Writes the per-Kind layout (one or more StringField slots).
 // 3. Emits the node record with `TypeTag::Extended` payload pointing to the
 //    reserved offset.
 // ===========================================================================
 
-/// `TypeKeyValue` (Kind `0xA2`, Pattern 3; 2 bytes Extended Data = key index).
+/// `TypeKeyValue` (Kind `0xA2`, Pattern 3; 6-byte ED = key StringField).
 ///
 /// Common Data: `bit0 = optional`, `bit1 = variadic`.
 pub fn write_type_key_value(
@@ -425,39 +428,39 @@ pub fn write_type_key_value(
     parent_index: u32,
     optional: bool,
     variadic: bool,
-    key: StringIndex,
+    key: StringField,
 ) -> NodeIndex {
     let common = (optional as u8) | ((variadic as u8) << 1);
-    let off = writer.extended.reserve(2);
-    writer.extended.slice_mut(off, 2).copy_from_slice(&key.as_u16().to_le_bytes());
+    let (off, dst) = writer.extended.reserve_mut(STRING_FIELD_SIZE);
+    key.write_le(dst);
     writer.emit_extended_node(parent_index, Kind::TypeKeyValue, common, span, off)
 }
 
-/// `TypeIndexSignature` (Kind `0xA4`, Pattern 3; 1 child).
+/// `TypeIndexSignature` (Kind `0xA4`, Pattern 3; 1 child + 6-byte ED = key).
 pub fn write_type_index_signature(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    key: StringIndex,
+    key: StringField,
 ) -> NodeIndex {
-    let off = writer.extended.reserve(2);
-    writer.extended.slice_mut(off, 2).copy_from_slice(&key.as_u16().to_le_bytes());
+    let (off, dst) = writer.extended.reserve_mut(STRING_FIELD_SIZE);
+    key.write_le(dst);
     writer.emit_extended_node(parent_index, Kind::TypeIndexSignature, 0, span, off)
 }
 
-/// `TypeMappedType` (Kind `0xA5`, Pattern 3; 1 child).
+/// `TypeMappedType` (Kind `0xA5`, Pattern 3; 1 child + 6-byte ED = key).
 pub fn write_type_mapped_type(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    key: StringIndex,
+    key: StringField,
 ) -> NodeIndex {
-    let off = writer.extended.reserve(2);
-    writer.extended.slice_mut(off, 2).copy_from_slice(&key.as_u16().to_le_bytes());
+    let (off, dst) = writer.extended.reserve_mut(STRING_FIELD_SIZE);
+    key.write_le(dst);
     writer.emit_extended_node(parent_index, Kind::TypeMappedType, 0, span, off)
 }
 
-/// `TypeMethodSignature` (Kind `0xA9`, Pattern 3).
+/// `TypeMethodSignature` (Kind `0xA9`, Pattern 3; 6-byte ED = name StringField).
 ///
 /// Common Data: `bits[0:1]=quote`, `bit2=has_parameters`, `bit3=has_type_parameters`.
 pub fn write_type_method_signature(
@@ -467,42 +470,38 @@ pub fn write_type_method_signature(
     quote: u8,
     has_parameters: bool,
     has_type_parameters: bool,
-    name: StringIndex,
+    name: StringField,
 ) -> NodeIndex {
     let common = (quote & 0b11)
         | ((has_parameters as u8) << 2)
         | ((has_type_parameters as u8) << 3);
-    let off = writer.extended.reserve(2);
-    writer.extended.slice_mut(off, 2).copy_from_slice(&name.as_u16().to_le_bytes());
+    let (off, dst) = writer.extended.reserve_mut(STRING_FIELD_SIZE);
+    name.write_le(dst);
     writer.emit_extended_node(parent_index, Kind::TypeMethodSignature, common, span, off)
 }
 
 /// `TypeTemplateLiteral` (Kind `0x9D`, Pattern 3; 1 NodeList child).
 ///
-/// Extended Data: `2 + 2N` bytes (`u16 literal_count` + `N × u16` indices).
+/// Extended Data: `2 + 6N` bytes (`u16 literal_count` + `N × StringField`).
 pub fn write_type_template_literal(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    literals: &[StringIndex],
+    literals: &[StringField],
 ) -> NodeIndex {
     let n = literals.len();
-    let size = 2 + 2 * n;
-    let off = writer.extended.reserve(size);
+    let size = 2 + STRING_FIELD_SIZE * n;
+    let (off, dst) = writer.extended.reserve_mut(size);
     let len_u16 = u16::try_from(n).expect("literal count exceeds u16");
-    writer
-        .extended
-        .slice_mut(off, 2)
-        .copy_from_slice(&len_u16.to_le_bytes());
-    let dst = writer.extended.slice_mut(off, size);
+    dst[0..2].copy_from_slice(&len_u16.to_le_bytes());
     for (i, lit) in literals.iter().enumerate() {
-        let pos = 2 + i * 2;
-        dst[pos..pos + 2].copy_from_slice(&lit.as_u16().to_le_bytes());
+        let pos = 2 + i * STRING_FIELD_SIZE;
+        lit.write_le(&mut dst[pos..pos + STRING_FIELD_SIZE]);
     }
     writer.emit_extended_node(parent_index, Kind::TypeTemplateLiteral, 0, span, off)
 }
 
-/// `TypeSymbol` (Kind `0x9F`, Pattern 3; 0 or 1 child).
+/// `TypeSymbol` (Kind `0x9F`, Pattern 3; 0 or 1 child + 6-byte ED = value).
 ///
 /// Common Data: `bit0 = has_element`.
 pub fn write_type_symbol(
@@ -510,11 +509,11 @@ pub fn write_type_symbol(
     span: Span,
     parent_index: u32,
     has_element: bool,
-    value: StringIndex,
+    value: StringField,
 ) -> NodeIndex {
     let common = has_element as u8;
-    let off = writer.extended.reserve(2);
-    writer.extended.slice_mut(off, 2).copy_from_slice(&value.as_u16().to_le_bytes());
+    let (off, dst) = writer.extended.reserve_mut(STRING_FIELD_SIZE);
+    value.write_le(dst);
     writer.emit_extended_node(parent_index, Kind::TypeSymbol, common, span, off)
 }
 
@@ -571,3 +570,4 @@ pub fn write_type_unique_symbol(
     let node_data = pack_node_data(TypeTag::Children, 0);
     writer.emit_node_record(parent_index, Kind::TypeUniqueSymbol, 0, span, node_data)
 }
+

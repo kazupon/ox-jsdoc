@@ -26,27 +26,27 @@ use super::type_data::*;
 pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, parent_index: u32) -> u32 {
     match node {
         TypeNodeData::Name(n) => {
-            let v = writer.intern_source_or_string(n.value, n.span);
+            let v = writer.intern_source_or_string_for_leaf(n.value, n.span);
             write_type_name(writer, n.span, parent_index, v).as_u32()
         }
         TypeNodeData::Number(n) => {
-            let v = writer.intern_source_or_string(n.value, n.span);
+            let v = writer.intern_source_or_string_for_leaf(n.value, n.span);
             write_type_number(writer, n.span, parent_index, v).as_u32()
         }
         TypeNodeData::StringValue(n) => {
-            let v = writer.intern_source_or_string(n.value, n.span);
+            let v = writer.intern_source_or_string_for_leaf(n.value, n.span);
             write_type_string_value(writer, n.span, parent_index, quote_to_u8(Some(n.quote)), v).as_u32()
         }
         TypeNodeData::Property(n) => {
             // length-mismatch fallback handles the unquoted-property case
             // (`"foo"` → value `foo`, span `"foo"`).
-            let v = writer.intern_source_or_string(n.value, n.span);
+            let v = writer.intern_source_or_string_for_leaf(n.value, n.span);
             write_type_property(writer, n.span, parent_index, quote_to_u8(n.quote), v).as_u32()
         }
         TypeNodeData::SpecialNamePath(n) => {
             // Span here covers `module:foo` while value is just `foo` →
             // length-mismatch fallback.
-            let v = writer.intern_source_or_string(n.value, n.span);
+            let v = writer.intern_source_or_string_for_leaf(n.value, n.span);
             let st = match n.special_type {
                 SpecialPathType::Module => 0,
                 SpecialPathType::Event => 1,
@@ -327,7 +327,7 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
             parent
         }
         TypeNodeData::TemplateLiteral(n) => {
-            let interned: Vec<crate::writer::StringIndex> =
+            let interned: Vec<crate::writer::StringField> =
                 n.literals.iter().map(|s| writer.intern_string(s)).collect();
             let parent = write_type_template_literal(writer, n.span, parent_index, &interned).as_u32();
             for interp in &n.interpolations {

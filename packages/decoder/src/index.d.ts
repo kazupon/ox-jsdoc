@@ -40,6 +40,7 @@ export class RemoteSourceFile {
   readonly asts: ReadonlyArray<RemoteNode | null>
 
   getString(idx: number): string | null
+  getStringByField(offset: number, length: number): string | null
   getRootBaseOffset(rootIndex: number): number
   getNode(nodeIndex: number, parent: RemoteNode | null, rootIndex?: number): RemoteNode | null
 }

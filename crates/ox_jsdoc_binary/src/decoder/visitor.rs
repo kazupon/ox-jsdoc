@@ -724,9 +724,10 @@ mod tests {
         let space = writer.intern_string(" ");
         let close = writer.intern_string("*/");
         let nl = writer.intern_string("\n");
-        let tag_name_str = writer.intern_string("param");
-        let type_name_str = writer.intern_string("string");
-        let param_name_str = writer.intern_string("id");
+        // String-leaf nodes need a StringIndex (TypeTag::String payload).
+        let tag_name_str = writer.intern_string_index("param");
+        let type_name_str = writer.intern_string_index("string");
+        let param_name_str = writer.intern_string_index("id");
 
         let block = write_jsdoc_block(
             &mut writer,
@@ -813,7 +814,7 @@ mod tests {
     fn visit_type_node_dispatches_each_variant() {
         let arena = Allocator::default();
         let mut writer = BinaryWriter::new(&arena);
-        let s = writer.intern_string("Foo");
+        let s = writer.intern_string_index("Foo");
         // Build a TypeUnion → NodeList → 2 TypeName children. Pattern-2
         // accessors expect a NodeList wrapper just like JsdocBlock.tags().
         use crate::writer::nodes::type_node::{write_type_name, write_type_union};

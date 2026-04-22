@@ -18,8 +18,7 @@ import {
   POS_OFFSET,
   STRING_PAYLOAD_NONE_SENTINEL,
   TYPE_TAG_EXTENDED,
-  TYPE_TAG_SHIFT,
-  U16_NONE_SENTINEL
+  TYPE_TAG_SHIFT
 } from './constants.js'
 
 /**
@@ -73,7 +72,8 @@ export function extOffsetOf(internal) {
 
 /**
  * Read the 30-bit String payload of a String-type node, returning the
- * resolved string or `null` if the writer used the None sentinel.
+ * resolved string or `null` if the writer used the None sentinel. Used by
+ * string-leaf Kinds whose Node Data carries a `TypeTag::String` payload.
  *
  * @param {RemoteInternal} internal
  * @returns {string | null}
@@ -86,6 +86,21 @@ export function stringPayloadOf(internal) {
     return null
   }
   return sourceFile.getString(payload)
+}
+
+/**
+ * Resolve the leading `StringField` (6 bytes at offset 0 of the record)
+ * of an Extended-type node whose record begins with a StringField slot
+ * (Pattern 3 TypeNodes such as `TypeKeyValue.key`, `TypeMethodSignature.name`,
+ * `TypeSymbol.value`).
+ *
+ * Returns `""` when the field equals the NONE sentinel.
+ *
+ * @param {RemoteInternal} internal
+ * @returns {string}
+ */
+export function extStringLeaf(internal) {
+  return extStringFieldRequired(internal, 0)
 }
 
 /**
@@ -197,33 +212,37 @@ export function childNodeAtVisitorIndexChildren(internal, visitorIndex) {
 }
 
 /**
- * Resolve a u16 string slot inside Extended Data (`null` when 0xFFFF).
+ * Resolve an Optional `StringField` slot at `fieldOffset` inside this
+ * node's Extended Data record (`null` when the slot equals the NONE
+ * sentinel).
+ *
+ * The 6-byte slot is read as `(offset: u32 LE, length: u16 LE)` and then
+ * passed to {@link import('./source-file.js').RemoteSourceFile.getStringByField}.
  *
  * @param {RemoteInternal} internal
  * @param {number} fieldOffset Byte offset within the Extended Data record.
  * @returns {string | null}
  */
-export function extU16String(internal, fieldOffset) {
-  const idx = internal.view.getUint16(extOffsetOf(internal) + fieldOffset, true)
-  if (idx === U16_NONE_SENTINEL) {
-    return null
-  }
-  return internal.sourceFile.getString(idx)
+export function extStringField(internal, fieldOffset) {
+  const ext = extOffsetOf(internal) + fieldOffset
+  const offset = internal.view.getUint32(ext, true)
+  const length = internal.view.getUint16(ext + 4, true)
+  return internal.sourceFile.getStringByField(offset, length)
 }
 
 /**
- * Resolve a required u16 string slot inside Extended Data (empty string when 0xFFFF).
+ * Resolve a Required `StringField` slot at `fieldOffset` (returns `""` for
+ * the NONE sentinel).
  *
  * @param {RemoteInternal} internal
  * @param {number} fieldOffset
  * @returns {string}
  */
-export function extU16StringRequired(internal, fieldOffset) {
-  const idx = internal.view.getUint16(extOffsetOf(internal) + fieldOffset, true)
-  if (idx === U16_NONE_SENTINEL) {
-    return ''
-  }
-  return internal.sourceFile.getString(idx) ?? ''
+export function extStringFieldRequired(internal, fieldOffset) {
+  const ext = extOffsetOf(internal) + fieldOffset
+  const offset = internal.view.getUint32(ext, true)
+  const length = internal.view.getUint16(ext + 4, true)
+  return internal.sourceFile.getStringByField(offset, length) ?? ''
 }
 
 /**

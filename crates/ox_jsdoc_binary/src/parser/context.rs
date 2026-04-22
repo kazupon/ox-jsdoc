@@ -27,9 +27,7 @@
 
 use oxc_allocator::{Allocator, Vec as ArenaVec};
 use oxc_span::Span;
-use smallvec::SmallVec;
 
-use crate::format::string_table::U16_NONE_SENTINEL;
 
 /// Path C-2: arena-allocated inline-tag list. Was `SmallVec<[_; 2]>` but
 /// SmallVec implements `Drop` (for the spilled-heap case), which prevents
@@ -38,12 +36,13 @@ use crate::format::string_table::U16_NONE_SENTINEL;
 type InlineTagsVec<'arena, 'a> = ArenaVec<'arena, InlineTagData<'a>>;
 use crate::writer::nodes::comment_ast::{
     write_jsdoc_block, write_jsdoc_block_compat_tail, write_jsdoc_description_line,
-    write_jsdoc_generic_tag_body, write_jsdoc_identifier, write_jsdoc_inline_tag,
-    write_jsdoc_namepath_source, write_jsdoc_parameter_name, write_jsdoc_tag,
-    write_jsdoc_tag_compat_tail, write_jsdoc_tag_name, write_jsdoc_tag_name_value,
-    write_jsdoc_text, write_jsdoc_type_line, write_jsdoc_type_source, write_node_list,
+    write_jsdoc_description_line_compat, write_jsdoc_generic_tag_body, write_jsdoc_identifier,
+    write_jsdoc_inline_tag, write_jsdoc_namepath_source, write_jsdoc_parameter_name,
+    write_jsdoc_tag, write_jsdoc_tag_compat_tail, write_jsdoc_tag_name,
+    write_jsdoc_tag_name_value, write_jsdoc_text, write_jsdoc_type_line,
+    write_jsdoc_type_line_compat, write_jsdoc_type_source, write_node_list,
 };
-use crate::writer::{BinaryWriter, StringIndex};
+use crate::writer::{BinaryWriter, StringField};
 
 use super::checkpoint::{Checkpoint, FenceState, QuoteKind};
 use super::diagnostics::{DiagnosticKind, ParserDiagnosticKind, TypeDiagnosticKind};
@@ -1202,7 +1201,7 @@ pub fn emit_block<'arena>(
     Some(emit_block_inner(writer, block, compat))
 }
 
-fn opt_string(writer: &mut BinaryWriter<'_>, value: Option<&str>) -> Option<StringIndex> {
+fn opt_string(writer: &mut BinaryWriter<'_>, value: Option<&str>) -> Option<StringField> {
     value.map(|s| writer.intern_string(s))
 }
 
@@ -1212,15 +1211,15 @@ fn opt_string(writer: &mut BinaryWriter<'_>, value: Option<&str>) -> Option<Stri
 /// identification picks the zero-copy path automatically; multi-line
 /// `normalize_lines` joins (separate allocation) fall through to the
 /// unique-string path with no per-call branching at the call site.
-fn opt_source_string(writer: &mut BinaryWriter<'_>, value: Option<&str>) -> Option<StringIndex> {
+fn opt_source_string(writer: &mut BinaryWriter<'_>, value: Option<&str>) -> Option<StringField> {
     value.map(|s| writer.intern_source_slice_or_string(s))
 }
 
-fn empty_string(writer: &mut BinaryWriter<'_>) -> StringIndex {
+fn empty_string(writer: &mut BinaryWriter<'_>) -> StringField {
     writer.intern_string("")
 }
 
-fn intern(writer: &mut BinaryWriter<'_>, value: &str) -> StringIndex {
+fn intern(writer: &mut BinaryWriter<'_>, value: &str) -> StringField {
     writer.intern_string(value)
 }
 
@@ -1347,32 +1346,37 @@ fn emit_description_line(
     writer: &mut BinaryWriter<'_>,
     line: &DescriptionLineData<'_>,
     parent_index: u32,
-    _compat: bool,
+    compat: bool,
 ) {
     // Path A: `line.description` is `line.content.trim_end()`, i.e. a
     // sub-slice of the source text that was just appended to `data_buffer`
-    // via `append_source_text`. Use the zero-copy `intern_source_slice`
-    // path so we register the offsets-only entry without re-copying the
-    // bytes — the dominant emit-phase cost we identified in
+    // via `append_source_text`. Use the zero-copy intern paths so we
+    // register the offsets-only entry without re-copying the bytes — the
+    // dominant emit-phase cost we identified in
     // `.notes/binary-ast-emit-phase-format-analysis.md`.
     //
     // The byte range is `[span.start, span.start + description.len())`;
     // `span.end` would over-shoot because it includes the trailing
     // whitespace that `trim_end()` removed.
     let desc_byte_end = line.span.start + line.description.len() as u32;
-    let desc_idx = writer.intern_source_slice(line.span.start, desc_byte_end);
-    let delim = opt_string(writer, non_empty_str(line.delimiter));
-    let pdelim = opt_string(writer, non_empty_str(line.post_delimiter));
-    let init = opt_string(writer, non_empty_str(line.initial));
-    let _ = write_jsdoc_description_line(
-        writer,
-        line.span,
-        parent_index,
-        desc_idx,
-        delim,
-        pdelim,
-        init,
-    );
+    if compat {
+        let desc_field = writer.intern_source_slice(line.span.start, desc_byte_end);
+        let delim = opt_string(writer, non_empty_str(line.delimiter));
+        let pdelim = opt_string(writer, non_empty_str(line.post_delimiter));
+        let init = opt_string(writer, non_empty_str(line.initial));
+        let _ = write_jsdoc_description_line_compat(
+            writer,
+            line.span,
+            parent_index,
+            desc_field,
+            delim,
+            pdelim,
+            init,
+        );
+    } else {
+        let desc_idx = writer.intern_source_slice_for_leaf(line.span.start, desc_byte_end);
+        let _ = write_jsdoc_description_line(writer, line.span, parent_index, desc_idx);
+    }
 }
 
 fn non_empty_str(s: &str) -> Option<&str> {
@@ -1409,9 +1413,6 @@ fn emit_tag(
     }
     if !tag.type_lines.is_empty() {
         bitmask |= 0b0010_0000;
-    }
-    if !tag.description_lines.is_empty() {
-        bitmask |= 0b0100_0000;
     }
     if !tag.description_lines.is_empty() {
         bitmask |= 0b0100_0000;
@@ -1461,15 +1462,15 @@ fn emit_tag(
 
     // Mandatory tag-name child (visitor index 0). Common tag names hit
     // COMMON_STRINGS via the helper; uncommon ones zero-copy off the source.
-    let tn_str = writer.intern_source_or_string(tag.tag_name, tag.tag_name_span);
-    let _ = write_jsdoc_tag_name(writer, tag.tag_name_span, tag_parent, tn_str);
+    let tn_idx = writer.intern_source_or_string_for_leaf(tag.tag_name, tag.tag_name_span);
+    let _ = write_jsdoc_tag_name(writer, tag.tag_name_span, tag_parent, tn_idx);
 
     if let Some(rt) = tag.raw_type.as_ref() {
-        let raw_idx = writer.intern_source_or_string(rt.raw, rt.span);
+        let raw_idx = writer.intern_source_or_string_for_leaf(rt.raw, rt.span);
         let _ = write_jsdoc_type_source(writer, rt.span, tag_parent, raw_idx);
     }
     if let Some(name) = tag.name.as_ref() {
-        let raw_idx = writer.intern_source_or_string(name.raw, name.span);
+        let raw_idx = writer.intern_source_or_string_for_leaf(name.raw, name.span);
         let _ = write_jsdoc_tag_name_value(writer, name.span, tag_parent, raw_idx);
     }
     if let Some(pt) = parsed_type {
@@ -1487,19 +1488,24 @@ fn emit_tag(
             tag.type_lines.len() as u32,
         );
         for tl in &tag.type_lines {
-            let raw_idx = writer.intern_source_or_string(tl.raw_type, tl.span);
-            let delim = opt_string(writer, non_empty_str(tl.delimiter));
-            let pdelim = opt_string(writer, non_empty_str(tl.post_delimiter));
-            let init = opt_string(writer, non_empty_str(tl.initial));
-            let _ = write_jsdoc_type_line(
-                writer,
-                tl.span,
-                list.as_u32(),
-                raw_idx,
-                delim,
-                pdelim,
-                init,
-            );
+            if compat {
+                let raw_field = writer.intern_source_or_string(tl.raw_type, tl.span);
+                let delim = opt_string(writer, non_empty_str(tl.delimiter));
+                let pdelim = opt_string(writer, non_empty_str(tl.post_delimiter));
+                let init = opt_string(writer, non_empty_str(tl.initial));
+                let _ = write_jsdoc_type_line_compat(
+                    writer,
+                    tl.span,
+                    list.as_u32(),
+                    raw_field,
+                    delim,
+                    pdelim,
+                    init,
+                );
+            } else {
+                let raw_idx = writer.intern_source_or_string_for_leaf(tl.raw_type, tl.span);
+                let _ = write_jsdoc_type_line(writer, tl.span, list.as_u32(), raw_idx);
+            }
         }
     }
     if !tag.description_lines.is_empty() {
@@ -1549,7 +1555,7 @@ fn emit_tag_body(writer: &mut BinaryWriter<'_>, body: &TagBodyData<'_>, parent_i
             let body_parent = body_idx.as_u32();
 
             if let Some(ts) = g.type_source.as_ref() {
-                let raw_idx = writer.intern_source_or_string(ts.raw, ts.span);
+                let raw_idx = writer.intern_source_or_string_for_leaf(ts.raw, ts.span);
                 let _ = write_jsdoc_type_source(writer, ts.span, body_parent, raw_idx);
             }
             if let Some(v) = g.value.as_ref() {
@@ -1579,15 +1585,15 @@ fn emit_tag_value(writer: &mut BinaryWriter<'_>, value: &TagValueData<'_>, paren
             );
         }
         TagValueData::Namepath { span, raw } => {
-            let raw_idx = writer.intern_source_or_string(raw, *span);
+            let raw_idx = writer.intern_source_or_string_for_leaf(raw, *span);
             let _ = write_jsdoc_namepath_source(writer, *span, parent_index, raw_idx);
         }
         TagValueData::Identifier { span, name } => {
-            let name_idx = writer.intern_source_or_string(name, *span);
+            let name_idx = writer.intern_source_or_string_for_leaf(name, *span);
             let _ = write_jsdoc_identifier(writer, *span, parent_index, name_idx);
         }
         TagValueData::Raw { span, value } => {
-            let val_idx = writer.intern_source_or_string(value, *span);
+            let val_idx = writer.intern_source_or_string_for_leaf(value, *span);
             let _ = write_jsdoc_text(writer, *span, parent_index, val_idx);
         }
     }
@@ -1611,7 +1617,6 @@ fn emit_inline_tag(
         text_idx,
         raw_idx,
     );
-    let _ = U16_NONE_SENTINEL; // suppress unused-import warning
     // Note: the inline tag's `tag` child (JsdocTagName) is referenced by the
     // jsdoccomment AST shape but the binary writer's JsdocInlineTag does not
     // currently include a child slot for it. This matches the Rust lazy

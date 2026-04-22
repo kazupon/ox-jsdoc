@@ -20,11 +20,12 @@
 
 // @ts-check
 
-import { COMMON_DATA_MASK, COMMON_DATA_OFFSET } from '../constants.js'
+import { COMMON_DATA_MASK, COMMON_DATA_OFFSET, STRING_FIELD_SIZE } from '../constants.js'
 import {
   absoluteRange,
   childNodeAtVisitorIndexChildren,
   extOffsetOf,
+  extStringLeaf,
   firstChildIndex,
   stringPayloadOf,
   thisNode
@@ -34,19 +35,6 @@ import { nodeListAtVisitorIndexChildren } from '../node-list.js'
 
 function commonData(internal) {
   return internal.view.getUint8(internal.byteIndex + COMMON_DATA_OFFSET) & COMMON_DATA_MASK
-}
-
-/**
- * Read the u16 string at `fieldOffset` of the node's Extended Data record.
- * Used by Pattern 3 where the key/name string lives at byte 0.
- *
- * @param {import('../helpers.js').RemoteInternal} internal
- * @param {number} fieldOffset
- * @returns {string}
- */
-function extKeyString(internal, fieldOffset) {
-  const idx = internal.view.getUint16(extOffsetOf(internal) + fieldOffset, true)
-  return internal.sourceFile.getString(idx) ?? ''
 }
 
 /**
@@ -571,7 +559,7 @@ export class RemoteTypeKeyValue {
     return (commonData(this._internal) & 0b10) !== 0
   }
   get key() {
-    return extKeyString(this._internal, 0)
+    return extStringLeaf(this._internal)
   }
   get right() {
     const head = firstChildIndex(this._internal.sourceFile, this._internal.index)
@@ -613,7 +601,7 @@ function defineKeyAndChild(typeName) {
       return this._internal.parent
     }
     get key() {
-      return extKeyString(this._internal, 0)
+      return extStringLeaf(this._internal)
     }
     get right() {
       const head = firstChildIndex(this._internal.sourceFile, this._internal.index)
@@ -666,7 +654,7 @@ export class RemoteTypeMethodSignature {
     return (commonData(this._internal) & 0b1000) !== 0
   }
   get name() {
-    return extKeyString(this._internal, 0)
+    return extStringLeaf(this._internal)
   }
   toJSON() {
     return {
@@ -707,9 +695,10 @@ export class RemoteTypeTemplateLiteral {
    * @param {number} index
    */
   literal(index) {
-    const off = extOffsetOf(this._internal) + 2 + index * 2
-    const idx = this._internal.view.getUint16(off, true)
-    return this._internal.sourceFile.getString(idx) ?? ''
+    const off = extOffsetOf(this._internal) + 2 + index * STRING_FIELD_SIZE
+    const offset = this._internal.view.getUint32(off, true)
+    const length = this._internal.view.getUint16(off + 4, true)
+    return this._internal.sourceFile.getStringByField(offset, length) ?? ''
   }
   /** All literal segments as an array. */
   get literals() {
@@ -746,7 +735,7 @@ export class RemoteTypeSymbol {
     return (commonData(this._internal) & 1) !== 0
   }
   get value() {
-    return extKeyString(this._internal, 0)
+    return extStringLeaf(this._internal)
   }
   get element() {
     if (!this.hasElement) {
