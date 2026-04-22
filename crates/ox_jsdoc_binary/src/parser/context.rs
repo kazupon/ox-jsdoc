@@ -1024,22 +1024,24 @@ fn leading_whitespace_len(value: &str) -> usize {
 fn find_matching_type_end(text: &str, start: usize) -> Option<usize> {
     // `{` and `}` are single-byte ASCII chars and unambiguous within UTF-8
     // (continuation bytes never collide with ASCII), so byte iteration is
-    // both correct and avoids per-step UTF-8 decoding. The previous
-    // `char_indices().skip(start)` was also semantically wrong because
-    // `start` is a byte offset but `.skip(N)` skips N chars.
+    // both correct and avoids per-step UTF-8 decoding.
+    //
+    // Use `memchr2` to skip directly to the next brace; on
+    // typescript-checker.ts most `{Type}` bodies are 5-30 bytes, which is
+    // around memchr's SIMD break-even, but the per-comment frequency
+    // (tens of `{...}` per file) makes the cumulative win worthwhile.
     let bytes = text.as_bytes();
     let mut depth = 0usize;
     let mut i = start;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'{' => depth += 1,
-            b'}' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(i);
-                }
+    while let Some(off) = memchr::memchr2(b'{', b'}', &bytes[i..]) {
+        i += off;
+        if bytes[i] == b'{' {
+            depth += 1;
+        } else {
+            depth -= 1;
+            if depth == 0 {
+                return Some(i);
             }
-            _ => {}
         }
         i += 1;
     }
