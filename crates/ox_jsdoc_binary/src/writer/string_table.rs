@@ -293,6 +293,17 @@ pub struct StringTableBuilder<'arena> {
     /// Uses `FxHashMap` (rustc-hash) instead of the default `SipHash` for
     /// ~2x faster hashing on the unique-string slow path.
     dedup: FxHashMap<&'arena str, DedupEntry>,
+    /// 1-slot recent-call cache. Stores the most recently interned
+    /// `&str`'s pointer + length and the resulting `(StringField, Option<StringIndex>)`.
+    /// Hot when callers re-intern the same literal back-to-back
+    /// (e.g. `intern("")` for empty source slots, or `intern("param")` /
+    /// `intern("returns")` repeatedly across a batch).
+    ///
+    /// The pointer is only ever compared (never dereferenced) and its
+    /// underlying allocation outlives the builder by virtue of the arena.
+    last_key_ptr: *const u8,
+    last_key_len: usize,
+    last_entry: DedupEntry,
 }
 
 impl<'arena> StringTableBuilder<'arena> {
@@ -316,6 +327,14 @@ impl<'arena> StringTableBuilder<'arena> {
             count: COMMON_STRING_COUNT,
             arena,
             dedup: FxHashMap::default(),
+            // Sentinel pointer never matches a real `&str` (length-0 reads
+            // are guarded by the `len` check too).
+            last_key_ptr: core::ptr::null(),
+            last_key_len: 0,
+            last_entry: DedupEntry {
+                field: StringField::NONE,
+                index: None,
+            },
         }
     }
 
@@ -328,15 +347,27 @@ impl<'arena> StringTableBuilder<'arena> {
     /// only (no `offsets_buffer` write) and cache the resulting
     /// StringField for future hits.
     pub fn intern(&mut self, value: &str) -> StringField {
+        // 1-slot recent-call cache: skip lookup_common + HashMap probe
+        // when the caller passes the same `&str` (same backing allocation
+        // and length) twice in a row.
+        if value.as_ptr() == self.last_key_ptr && value.len() == self.last_key_len {
+            return self.last_entry.field;
+        }
         if let Some(idx) = lookup_common(value) {
-            return common_string_field(idx);
+            let field = common_string_field(idx);
+            self.update_recent_cache(value, DedupEntry { field, index: None });
+            return field;
         }
         if let Some(entry) = self.dedup.get(value) {
-            return entry.field;
+            let snapshot = *entry;
+            self.update_recent_cache(value, snapshot);
+            return snapshot.field;
         }
         let field = self.append_no_dedup(value);
         let key: &'arena str = self.arena.alloc_str(value);
-        self.dedup.insert(key, DedupEntry { field, index: None });
+        let entry = DedupEntry { field, index: None };
+        self.dedup.insert(key, entry);
+        self.update_recent_cache(value, entry);
         field
     }
 
@@ -348,30 +379,44 @@ impl<'arena> StringTableBuilder<'arena> {
     /// Slow path: HashMap dedup. On hit, allocates a StringIndex lazily
     /// (so ED-only strings never pay the `offsets_buffer` write).
     pub fn intern_for_leaf(&mut self, value: &str) -> StringIndex {
+        // 1-slot recent-call cache hit: only valid if the cached entry
+        // already has an `index` allocated (recent path may have stored
+        // a StringField-only entry).
+        if value.as_ptr() == self.last_key_ptr && value.len() == self.last_key_len {
+            if let Some(idx) = self.last_entry.index {
+                return idx;
+            }
+        }
         if let Some(idx) = lookup_common(value) {
             // SAFETY: idx < COMMON_STRINGS.len() < u32::MAX.
             return StringIndex::from_u32(idx).expect("common index in range");
         }
         if let Some(entry) = self.dedup.get(value) {
             if let Some(idx) = entry.index {
+                let snapshot = *entry;
+                self.update_recent_cache(value, snapshot);
                 return idx;
             }
             // Same string was previously interned as StringField only —
             // promote it now by allocating an offsets-table entry.
             let field = entry.field;
             let idx = self.assign_index(field);
+            let entry = DedupEntry { field, index: Some(idx) };
             // Re-fetch & write back. (`get_mut` was unavailable while we
             // held the borrow on `assign_index` to mutate offsets_buffer.)
             if let Some(entry_mut) = self.dedup.get_mut(value) {
-                entry_mut.index = Some(idx);
+                *entry_mut = entry;
             }
+            self.update_recent_cache(value, entry);
             return idx;
         }
         // First-touch: append data_buffer + offsets_buffer together.
         let field = self.append_no_dedup(value);
         let idx = self.assign_index(field);
         let key: &'arena str = self.arena.alloc_str(value);
-        self.dedup.insert(key, DedupEntry { field, index: Some(idx) });
+        let entry = DedupEntry { field, index: Some(idx) };
+        self.dedup.insert(key, entry);
+        self.update_recent_cache(value, entry);
         idx
     }
 
@@ -442,6 +487,15 @@ impl<'arena> StringTableBuilder<'arena> {
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.count == 0
+    }
+
+    /// Internal: refresh the 1-slot recent-call cache so the next intern
+    /// of the same `&str` slice can short-circuit before HashMap probe.
+    #[inline]
+    fn update_recent_cache(&mut self, value: &str, entry: DedupEntry) {
+        self.last_key_ptr = value.as_ptr();
+        self.last_key_len = value.len();
+        self.last_entry = entry;
     }
 
     /// Internal: append `value` to `data_buffer` and return the resulting

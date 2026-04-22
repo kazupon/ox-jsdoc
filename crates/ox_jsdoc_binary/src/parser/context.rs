@@ -1244,16 +1244,10 @@ fn emit_block_inner<'arena>(
     let dlb = intern(writer, block.delimiter_line_break);
     let plb = intern(writer, block.preterminal_line_break);
 
-    let mut bitmask: u8 = 0;
-    if !block.description_lines.is_empty() {
-        bitmask |= 0b001;
-    }
-    if !block.tags.is_empty() {
-        bitmask |= 0b010;
-    }
-    if !block.inline_tags.is_empty() {
-        bitmask |= 0b100;
-    }
+    // Branchless bitmask: each `is_empty()` returns bool, cast to u8 (0 or 1).
+    let bitmask: u8 = ((!block.description_lines.is_empty()) as u8)
+        | (((!block.tags.is_empty()) as u8) << 1)
+        | (((!block.inline_tags.is_empty()) as u8) << 2);
 
     let block_idx = write_jsdoc_block(
         writer,
@@ -1398,28 +1392,15 @@ fn emit_tag(
     let desc_idx = opt_source_string(writer, tag.description);
     let raw_body_idx = opt_source_string(writer, tag.raw_body);
 
-    let mut bitmask: u8 = 0b0000_0001; // bit0 = tag (mandatory)
-    if tag.raw_type.is_some() {
-        bitmask |= 0b0000_0010;
-    }
-    if tag.name.is_some() {
-        bitmask |= 0b0000_0100;
-    }
-    if tag.has_parsed_type {
-        bitmask |= 0b0000_1000;
-    }
-    if tag.body.is_some() {
-        bitmask |= 0b0001_0000;
-    }
-    if !tag.type_lines.is_empty() {
-        bitmask |= 0b0010_0000;
-    }
-    if !tag.description_lines.is_empty() {
-        bitmask |= 0b0100_0000;
-    }
-    if !tag.inline_tags.is_empty() {
-        bitmask |= 0b1000_0000;
-    }
+    // bit0 = tag (mandatory, always 1). Remaining bits via branchless OR.
+    let bitmask: u8 = 0b0000_0001
+        | ((tag.raw_type.is_some() as u8) << 1)
+        | ((tag.name.is_some() as u8) << 2)
+        | ((tag.has_parsed_type as u8) << 3)
+        | ((tag.body.is_some() as u8) << 4)
+        | (((!tag.type_lines.is_empty()) as u8) << 5)
+        | (((!tag.description_lines.is_empty()) as u8) << 6)
+        | (((!tag.inline_tags.is_empty()) as u8) << 7);
 
     let tag_idx = write_jsdoc_tag(
         writer,
@@ -1536,14 +1517,9 @@ fn emit_tag_body(writer: &mut BinaryWriter<'_>, body: &TagBodyData<'_>, parent_i
     match body {
         TagBodyData::Generic(g) => {
             let desc_idx = opt_source_string(writer, g.description);
-            // Children bitmask: bit0 = type_source, bit1 = value.
-            let mut bm: u8 = 0;
-            if g.type_source.is_some() {
-                bm |= 0b01;
-            }
-            if g.value.is_some() {
-                bm |= 0b10;
-            }
+            // Children bitmask: bit0 = type_source, bit1 = value (branchless).
+            let bm: u8 = (g.type_source.is_some() as u8)
+                | ((g.value.is_some() as u8) << 1);
             let body_idx = write_jsdoc_generic_tag_body(
                 writer,
                 g.span,

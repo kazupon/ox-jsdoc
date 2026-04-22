@@ -217,7 +217,12 @@ impl<'arena> BinaryWriter<'arena> {
     /// payload is a 30-bit String Offsets index. Used by string-leaf Kinds
     /// where embedding the index in Node Data is cheaper than allocating a
     /// 6-byte Extended Data record.
-    #[inline]
+    ///
+    /// `#[inline(always)]` because the only work this fn does on top of
+    /// `emit_node_record` is one `pack_node_data` call; `#[inline]` alone
+    /// is not enough to convince LLVM to inline through the per-Kind
+    /// `write_jsdoc_*` helpers in `writer/nodes/`.
+    #[inline(always)]
     pub(crate) fn emit_string_node(
         &mut self,
         parent_index: u32,
@@ -232,7 +237,7 @@ impl<'arena> BinaryWriter<'arena> {
 
     /// Convenience for **Children-type** nodes: emit a node whose Node Data
     /// payload is a 30-bit visitor-order Children bitmask.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn emit_children_node(
         &mut self,
         parent_index: u32,
@@ -247,7 +252,7 @@ impl<'arena> BinaryWriter<'arena> {
 
     /// Convenience for **Extended-type** nodes: emit a node whose Node Data
     /// payload is the supplied Extended Data byte offset.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn emit_extended_node(
         &mut self,
         parent_index: u32,
