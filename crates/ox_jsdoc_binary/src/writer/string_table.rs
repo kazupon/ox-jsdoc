@@ -432,6 +432,7 @@ impl<'arena> StringTableBuilder<'arena> {
     /// Materialize a [`StringField`] pointing at an existing range of
     /// `data_buffer` — typically the source text region appended via
     /// [`Self::append_source_text`] — **without copying any bytes**.
+    #[inline]
     pub fn intern_at_offset(&mut self, start: u32, end: u32) -> StringField {
         debug_assert!(
             (end as usize) <= self.data_buffer.len(),
@@ -439,11 +440,14 @@ impl<'arena> StringTableBuilder<'arena> {
             self.data_buffer.len()
         );
         debug_assert!(start <= end, "intern_at_offset start > end");
-        let length =
-            u16::try_from(end - start).expect("source slice length exceeds u16 (StringField max)");
+        debug_assert!(
+            (end - start) <= u16::MAX as u32,
+            "source slice length {} exceeds u16 (StringField max)",
+            end - start
+        );
         StringField {
             offset: start,
-            length,
+            length: (end - start) as u16,
         }
     }
 
@@ -501,12 +505,22 @@ impl<'arena> StringTableBuilder<'arena> {
     /// Internal: append `value` to `data_buffer` and return the resulting
     /// [`StringField`]. Shared between [`Self::intern`] (after dedup miss)
     /// and [`Self::intern_unique`].
+    ///
+    /// `value.len()` is cast directly to `u16`; the encoder's contract is
+    /// that no individual JSDoc field exceeds 65 KiB (description text is
+    /// the worst case in practice). A debug-assert catches the overflow in
+    /// development builds without paying the panic check on the release
+    /// hot path.
     #[inline]
     fn append_no_dedup(&mut self, value: &str) -> StringField {
+        debug_assert!(
+            value.len() <= u16::MAX as usize,
+            "string length {} exceeds u16 (StringField max)",
+            value.len()
+        );
         let offset = self.data_buffer.len() as u32;
         self.data_buffer.extend_from_slice(value.as_bytes());
-        let length = u16::try_from(value.len())
-            .expect("string length exceeds u16 (StringField max)");
+        let length = value.len() as u16;
         StringField { offset, length }
     }
 

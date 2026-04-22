@@ -446,6 +446,11 @@ impl<'arena> BinaryWriter<'arena> {
     /// the source (e.g. `TypeProperty.value` may have its outer quotes
     /// stripped while its span still includes them). See
     /// `.notes/binary-ast-emit-intern-audit.md` for the per-caller analysis.
+    ///
+    /// `#[inline]` because the per-Kind `parse_*` callers in
+    /// `parser/context.rs` invoke this once per emitted string field; cross-
+    /// crate inlining is not implicit for `pub fn` even at `-O3`.
+    #[inline]
     pub fn intern_source_or_string(&mut self, value: &str, span: Span) -> StringField {
         if let Some(idx) = lookup_common(value) {
             return common_string_field(idx);
@@ -463,6 +468,7 @@ impl<'arena> BinaryWriter<'arena> {
     /// Mirrors the same three-path decision tree (common-string fast path,
     /// zero-copy source slice, dedup'd unique entry) but allocates a
     /// String Offsets index for the result.
+    #[inline]
     pub fn intern_source_or_string_for_leaf(
         &mut self,
         value: &str,
@@ -496,6 +502,13 @@ impl<'arena> BinaryWriter<'arena> {
     /// descriptions remain a sub-slice of the source and take path 2;
     /// multi-line joins live in the parser's scratch String (separate
     /// allocation) and fall through to path 3.
+    ///
+    /// `#[inline]` because this is the single hottest writer entry point
+    /// (per `examples/profile_parse_batch.rs` samply runs ≈ 14.8% self
+    /// time): cross-crate inlining with the per-Kind `parse_*` callers
+    /// in `parser/context.rs` lets LLVM fold the lookup_common hit and
+    /// the pointer-comparison branches into the surrounding emission.
+    #[inline]
     pub fn intern_source_slice_or_string(&mut self, value: &str) -> StringField {
         if let Some(idx) = lookup_common(value) {
             return common_string_field(idx);
@@ -515,6 +528,7 @@ impl<'arena> BinaryWriter<'arena> {
 
     /// String-leaf-targeted variant of [`Self::intern_source_slice_or_string`]
     /// — returns a [`StringIndex`] suitable for [`Self::emit_string_node`].
+    #[inline]
     pub fn intern_source_slice_or_string_for_leaf(&mut self, value: &str) -> StringIndex {
         if let Some(idx) = lookup_common(value) {
             return StringIndex::from_u32(idx).expect("common index in range");
