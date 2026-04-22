@@ -68,6 +68,16 @@ pub fn body_range(source_text: &str) -> Option<(usize, usize)> {
 }
 
 /// Split the comment body into content lines with parallel margin metadata.
+///
+/// Hot path on parse phase (~44% of `parse_block_into_data` on the
+/// typescript-checker.ts fixture per `examples/profile_parse_block.rs`).
+/// The implementation:
+///
+/// - uses `memchr` for both the line-count estimate and the per-iteration
+///   newline search (SIMD-accelerated on every target memchr supports),
+/// - converts `(raw_start + …) -> u32` via `as u32` instead of
+///   `u32::try_from(…).unwrap()` to drop the panic check (the encoder's
+///   precondition is that source offsets fit in u32 — see `format.md`).
 #[must_use]
 pub fn logical_lines(source_text: &str, base_offset: u32) -> ScanResult<'_> {
     let Some((body_start, body_end)) = body_range(source_text) else {
@@ -78,22 +88,23 @@ pub fn logical_lines(source_text: &str, base_offset: u32) -> ScanResult<'_> {
     };
 
     let body = &source_text[body_start..body_end];
-    // Estimate line count from newline density. Most JSDoc bodies follow the
-    // canonical "leading `*` per line" layout, so a simple newline count
-    // gives a tight upper bound and lets us skip Vec doubling growth for
-    // every comment in the batch (1500+ comments × 2 vecs each on a typical
-    // typescript-checker.ts run). The byte-iter filter compiles to a
-    // SIMD-friendly loop on modern targets.
-    let estimated_lines = body.as_bytes().iter().filter(|&&b| b == b'\n').count() + 1;
+    let body_bytes = body.as_bytes();
+    let body_len = body_bytes.len();
+
+    // Estimate line count from newline density. memchr's SIMD-accelerated
+    // iterator beats the generic `iter().filter().count()` lowering on the
+    // x86_64 / ARM64 targets we ship.
+    let estimated_lines = memchr::memchr_iter(b'\n', body_bytes).count() + 1;
     let mut lines = Vec::with_capacity(estimated_lines);
     let mut margins = Vec::with_capacity(estimated_lines);
     let mut cursor = 0usize;
 
-    while cursor <= body.len() {
-        let line_end = body[cursor..]
-            .find('\n')
-            .map(|index| cursor + index)
-            .unwrap_or(body.len());
+    loop {
+        // memchr from `cursor` — single SIMD scan for the next '\n'.
+        let line_end = match memchr::memchr(b'\n', &body_bytes[cursor..]) {
+            Some(off) => cursor + off,
+            None => body_len,
+        };
         let raw_line = &body[cursor..line_end];
         let raw_start = body_start + cursor;
 
@@ -123,8 +134,8 @@ pub fn logical_lines(source_text: &str, base_offset: u32) -> ScanResult<'_> {
 
         let is_content_empty = content.bytes().all(|b| b == b' ' || b == b'\t');
 
-        let line_end_str = if line_end < body.len() {
-            if line_end > 0 && body.as_bytes().get(line_end - 1) == Some(&b'\r') {
+        let line_end_str = if line_end < body_len {
+            if line_end > 0 && body_bytes[line_end - 1] == b'\r' {
                 "\r\n"
             } else {
                 "\n"
@@ -133,9 +144,10 @@ pub fn logical_lines(source_text: &str, base_offset: u32) -> ScanResult<'_> {
             ""
         };
 
-        let absolute_content_start =
-            base_offset + u32::try_from(raw_start + content_start).unwrap();
-        let absolute_content_end = base_offset + u32::try_from(raw_start + raw_line.len()).unwrap();
+        // Source offsets fit in u32 by encoder precondition; skip the
+        // `try_from(...).unwrap()` panic check.
+        let absolute_content_start = base_offset + (raw_start + content_start) as u32;
+        let absolute_content_end = base_offset + (raw_start + raw_line.len()) as u32;
 
         lines.push(LogicalLine {
             content,
@@ -150,7 +162,7 @@ pub fn logical_lines(source_text: &str, base_offset: u32) -> ScanResult<'_> {
             is_content_empty,
         });
 
-        if line_end == body.len() {
+        if line_end == body_len {
             break;
         }
         cursor = line_end + 1;
