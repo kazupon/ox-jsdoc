@@ -1283,11 +1283,18 @@ fn emit_description_line(
     parent_index: u32,
     _compat: bool,
 ) {
-    // Description text is dominated by per-line unique content (a few
-    // thousand calls per full-file batch with low repeat rate). Skip the
-    // FxHash + dedup lookup and accept a few extra duplicate bytes when
-    // the same line text genuinely recurs.
-    let desc_idx = writer.intern_string_unique(line.description);
+    // Path A: `line.description` is `line.content.trim_end()`, i.e. a
+    // sub-slice of the source text that was just appended to `data_buffer`
+    // via `append_source_text`. Use the zero-copy `intern_source_slice`
+    // path so we register the offsets-only entry without re-copying the
+    // bytes — the dominant emit-phase cost we identified in
+    // `.notes/binary-ast-emit-phase-format-analysis.md`.
+    //
+    // The byte range is `[span.start, span.start + description.len())`;
+    // `span.end` would over-shoot because it includes the trailing
+    // whitespace that `trim_end()` removed.
+    let desc_byte_end = line.span.start + line.description.len() as u32;
+    let desc_idx = writer.intern_source_slice(line.span.start, desc_byte_end);
     let delim = opt_string(writer, non_empty_str(line.delimiter));
     let pdelim = opt_string(writer, non_empty_str(line.post_delimiter));
     let init = opt_string(writer, non_empty_str(line.initial));

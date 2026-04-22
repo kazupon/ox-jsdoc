@@ -336,6 +336,37 @@ impl<'arena> StringTableBuilder<'arena> {
         idx
     }
 
+    /// Append a String Offsets entry that points into an existing range of
+    /// `data_buffer` — typically the source text region appended via
+    /// [`Self::append_source_text`] — **without copying any bytes**.
+    ///
+    /// This is the zero-copy intern path used when the caller knows the
+    /// string content already lives somewhere in the data buffer (e.g. it
+    /// is a slice of the just-appended source text). It collapses the
+    /// per-call cost from "FxHash probe + `data_buffer` write +
+    /// `offsets_buffer` write" down to just the `offsets_buffer` write,
+    /// which is the dominant emit-phase saving identified in
+    /// `.notes/binary-ast-emit-phase-format-analysis.md` (Path A).
+    ///
+    /// Caller's contract: `[start, end)` MUST be a valid byte range that
+    /// already lives inside `data_buffer`. Passing an out-of-range range
+    /// produces a corrupted binary (decoder will read junk bytes); the
+    /// caller is responsible for the bounds.
+    pub fn intern_at_offset(&mut self, start: u32, end: u32) -> StringIndex {
+        debug_assert!(
+            (end as usize) <= self.data_buffer.len(),
+            "intern_at_offset range [{start}, {end}) extends past data_buffer length {}",
+            self.data_buffer.len()
+        );
+        debug_assert!(start <= end, "intern_at_offset start > end");
+        self.offsets_buffer.extend_from_slice(&start.to_le_bytes());
+        self.offsets_buffer.extend_from_slice(&end.to_le_bytes());
+
+        let idx = StringIndex::from_u32(self.count).expect("string index overflow");
+        self.count = self.count.checked_add(1).expect("string table overflow");
+        idx
+    }
+
     /// Append a sourceText prefix without registering it in the offsets
     /// table.
     ///

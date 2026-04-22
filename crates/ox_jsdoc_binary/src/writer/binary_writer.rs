@@ -58,6 +58,22 @@ pub struct BinaryWriter<'arena> {
     /// `strings.data_buffer.len()` because that buffer also contains
     /// interned strings.
     pub(crate) source_text_length: u32,
+    /// `data_buffer` byte offset where the **most recently appended**
+    /// source text region starts. Used by [`Self::intern_source_slice`] to
+    /// translate a source-relative byte range into the absolute offset
+    /// pair that lands in the `String Offsets` section.
+    ///
+    /// Updated on every [`Self::append_source_text`] call. The contract
+    /// for `intern_source_slice` callers is that they must intern source
+    /// slices belonging to the **latest** appended source text — which is
+    /// what every `emit_block` call does (parse-then-emit per item in
+    /// `parse_batch_to_bytes`).
+    pub(crate) current_source_data_offset: u32,
+    /// Byte length of the most recently appended source text. Together
+    /// with [`Self::current_source_data_offset`] this defines the valid
+    /// byte range that [`Self::intern_source_slice`] callers must keep
+    /// their span within.
+    pub(crate) current_source_length: u32,
     /// Per-parent backpatch table: `next_sibling_patch[parent_index]`
     /// stores the byte offset of the most recent child of `parent_index`
     /// (so the next call to [`Self::emit_node_record`] can patch its
@@ -93,6 +109,8 @@ impl<'arena> BinaryWriter<'arena> {
             strings: StringTableBuilder::new(arena),
             extended: ExtendedDataBuilder::new(arena),
             source_text_length: 0,
+            current_source_data_offset: 0,
+            current_source_length: 0,
             next_sibling_patch: ArenaVec::new_in(arena),
             arena,
         }
@@ -273,12 +291,49 @@ impl<'arena> BinaryWriter<'arena> {
 
     /// Convenience: append a sourceText prefix and remember its byte length
     /// so [`Header.source_text_length`] is set correctly at [`Self::finish`].
+    ///
+    /// Also caches the appended region's data-buffer offset / length so
+    /// the next [`Self::emit_block`] cycle can use [`Self::intern_source_slice`]
+    /// to zero-copy intern source-derived strings (description text,
+    /// tag names, raw type sources) without re-copying their bytes into
+    /// the data buffer.
     pub fn append_source_text(&mut self, value: &str) -> u32 {
         let offset = self.strings.append_source_text(value);
         self.source_text_length = self
             .source_text_length
             .saturating_add(value.len() as u32);
+        self.current_source_data_offset = offset;
+        self.current_source_length = value.len() as u32;
         offset
+    }
+
+    /// Zero-copy intern: register a String Offsets entry that points into
+    /// the **most recently appended** source text (see
+    /// [`Self::append_source_text`]) without writing the bytes a second
+    /// time into the String Data section.
+    ///
+    /// `source_byte_start` and `source_byte_end` are byte offsets relative
+    /// to the start of the latest source text (i.e. matching the spans
+    /// produced by `parse_block_into_data` when called with
+    /// `base_offset = 0`). The caller must ensure the range falls within
+    /// `[0, current_source_length]`.
+    ///
+    /// This is the Path-A optimization: it eliminates the per-call
+    /// `data_buffer.extend_from_slice(value.as_bytes())` that
+    /// [`Self::intern_string_unique`] does for every source-slice field
+    /// (description, tag name, raw type, parameter name, …), trading the
+    /// duplicated bytes for an offsets-only registration. See
+    /// `.notes/binary-ast-emit-phase-format-analysis.md` for context.
+    #[inline]
+    pub fn intern_source_slice(&mut self, source_byte_start: u32, source_byte_end: u32) -> StringIndex {
+        debug_assert!(
+            source_byte_end <= self.current_source_length,
+            "intern_source_slice end {source_byte_end} > current source length {}",
+            self.current_source_length
+        );
+        let absolute_start = self.current_source_data_offset.saturating_add(source_byte_start);
+        let absolute_end = self.current_source_data_offset.saturating_add(source_byte_end);
+        self.strings.intern_at_offset(absolute_start, absolute_end)
     }
 
     /// Number of node records currently in the Nodes section (including the
