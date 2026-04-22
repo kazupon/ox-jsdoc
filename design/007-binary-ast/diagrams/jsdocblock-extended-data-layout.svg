@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 780" font-family="monospace" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1480 780" font-family="monospace" font-size="13">
   <defs>
     <linearGradient id="gBitmask" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#8e6cbf"/>
@@ -23,94 +23,91 @@
   </defs>
 
   <!-- Title -->
-  <text x="460" y="28" text-anchor="middle" font-size="18" font-weight="bold" fill="#222" font-family="-apple-system, system-ui, sans-serif">JsdocBlock Extended Data — Complete Field Layout</text>
-  <text x="460" y="50" text-anchor="middle" font-size="11" fill="#666" font-family="-apple-system, system-ui, sans-serif">Basic 18 bytes (always present) + Compat extension 22 bytes (Header bit0 = 1) = 40 bytes total</text>
+  <text x="740" y="28" text-anchor="middle" font-size="18" font-weight="bold" fill="#222" font-family="-apple-system, system-ui, sans-serif">JsdocBlock Extended Data — Complete Field Layout</text>
+  <text x="740" y="50" text-anchor="middle" font-size="11" fill="#666" font-family="-apple-system, system-ui, sans-serif">Basic 50 bytes (always present) + Compat extension 22 bytes (Header bit0 = 1) = 72 bytes total</text>
 
   <!-- ============================================================ -->
-  <!-- Section 1: Basic part (18 bytes)                             -->
+  <!-- Section 1: Basic part (50 bytes)                             -->
   <!-- ============================================================ -->
-  <text x="40" y="82" font-size="13" font-weight="bold" fill="#3da558" font-family="-apple-system, system-ui, sans-serif">Basic part (18 bytes — always present)</text>
+  <text x="40" y="82" font-size="13" font-weight="bold" fill="#3da558" font-family="-apple-system, system-ui, sans-serif">Basic part (50 bytes — always present)</text>
 
-  <!-- Byte cells: 1 byte = 35px (wider for readability) -->
+  <!-- Cell widths: 1 byte = 18px (cells sized in proportion to byte count) -->
   <g transform="translate(40, 95)">
-    <!-- byte 0: Children bitmask (u8) -->
-    <rect x="0" y="0" width="35" height="80" rx="4" fill="url(#gBitmask)" opacity="0.85" stroke="#7b59ac" stroke-width="1.5"/>
-    <text x="17" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 0</text>
-    <text x="17" y="42" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">Children</text>
-    <text x="17" y="55" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">bitmask</text>
-    <text x="17" y="73" text-anchor="middle" font-size="8" fill="#efeaf5">u8</text>
+    <!-- byte 0: Children bitmask (u8) → 18 px -->
+    <rect x="0" y="0" width="18" height="80" rx="4" fill="url(#gBitmask)" opacity="0.85" stroke="#7b59ac" stroke-width="1.5"/>
+    <text x="9" y="20" text-anchor="middle" font-size="8" fill="#fff" font-weight="bold">b 0</text>
+    <text x="9" y="44" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold" transform="rotate(-90 9 44)">bitmask</text>
+    <text x="9" y="73" text-anchor="middle" font-size="7" fill="#efeaf5">u8</text>
 
-    <!-- byte 1: padding (u8) -->
-    <rect x="35" y="0" width="35" height="80" rx="4" fill="#bbb" opacity="0.6" stroke="#888" stroke-width="1" stroke-dasharray="3,2"/>
-    <text x="52" y="20" text-anchor="middle" font-size="9" fill="#444" font-weight="bold">byte 1</text>
-    <text x="52" y="46" text-anchor="middle" font-size="11" fill="#444" font-weight="bold">pad</text>
-    <text x="52" y="62" text-anchor="middle" font-size="8" fill="#444">u8</text>
-    <text x="52" y="74" text-anchor="middle" font-size="7" fill="#666">align u16</text>
+    <!-- byte 1: padding (u8) → 18 px -->
+    <rect x="18" y="0" width="18" height="80" rx="4" fill="#bbb" opacity="0.6" stroke="#888" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="27" y="20" text-anchor="middle" font-size="8" fill="#444" font-weight="bold">b 1</text>
+    <text x="27" y="48" text-anchor="middle" font-size="9" fill="#444" font-weight="bold">pad</text>
+    <text x="27" y="64" text-anchor="middle" font-size="7" fill="#444">u8</text>
 
-    <!-- byte 2-3: description (u16, string index) -->
-    <rect x="70" y="0" width="70" height="80" rx="4" fill="url(#gStr)" opacity="0.85" stroke="#3da558" stroke-width="1.5"/>
-    <text x="105" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 2-3</text>
-    <text x="105" y="46" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold">description</text>
-    <text x="105" y="62" text-anchor="middle" font-size="8" fill="#e8f5ec">u16 string idx</text>
-    <text x="105" y="74" text-anchor="middle" font-size="7" fill="#e8f5ec">None=0xFFFF</text>
+    <!-- byte 2-7: description StringField (6B) → 108 px -->
+    <rect x="36" y="0" width="108" height="80" rx="4" fill="url(#gStr)" opacity="0.85" stroke="#3da558" stroke-width="1.5"/>
+    <text x="90" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 2-7</text>
+    <text x="90" y="44" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold">description</text>
+    <text x="90" y="60" text-anchor="middle" font-size="8" fill="#e8f5ec">StringField (6B)</text>
+    <text x="90" y="72" text-anchor="middle" font-size="7" fill="#e8f5ec">u32 offset + u16 length</text>
 
-    <!-- byte 4-5: delimiter (u16) -->
-    <rect x="140" y="0" width="70" height="80" rx="4" fill="url(#gStrLight)" opacity="0.85" stroke="#3da558" stroke-width="1"/>
-    <text x="175" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 4-5</text>
-    <text x="175" y="46" text-anchor="middle" font-size="12" fill="#fff" font-weight="bold">delimiter</text>
-    <text x="175" y="62" text-anchor="middle" font-size="8" fill="#e8f5ec">u16 string idx</text>
+    <!-- byte 8-13: delimiter StringField → 108 px -->
+    <rect x="144" y="0" width="108" height="80" rx="4" fill="url(#gStrLight)" opacity="0.85" stroke="#3da558" stroke-width="1"/>
+    <text x="198" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 8-13</text>
+    <text x="198" y="44" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold">delimiter</text>
+    <text x="198" y="60" text-anchor="middle" font-size="8" fill="#e8f5ec">StringField (6B)</text>
 
-    <!-- byte 6-7: post_delimiter (u16) -->
-    <rect x="210" y="0" width="70" height="80" rx="4" fill="url(#gStrLight)" opacity="0.7" stroke="#3da558" stroke-width="1"/>
-    <text x="245" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 6-7</text>
-    <text x="245" y="42" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">post_</text>
-    <text x="245" y="55" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">delimiter</text>
-    <text x="245" y="73" text-anchor="middle" font-size="8" fill="#e8f5ec">u16 string idx</text>
+    <!-- byte 14-19: post_delimiter -->
+    <rect x="252" y="0" width="108" height="80" rx="4" fill="url(#gStrLight)" opacity="0.7" stroke="#3da558" stroke-width="1"/>
+    <text x="306" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 14-19</text>
+    <text x="306" y="44" text-anchor="middle" font-size="12" fill="#fff" font-weight="bold">post_delimiter</text>
+    <text x="306" y="60" text-anchor="middle" font-size="8" fill="#e8f5ec">StringField (6B)</text>
 
-    <!-- byte 8-9: terminal (u16) -->
-    <rect x="280" y="0" width="70" height="80" rx="4" fill="url(#gStrLight)" opacity="0.85" stroke="#3da558" stroke-width="1"/>
-    <text x="315" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 8-9</text>
-    <text x="315" y="46" text-anchor="middle" font-size="12" fill="#fff" font-weight="bold">terminal</text>
-    <text x="315" y="62" text-anchor="middle" font-size="8" fill="#e8f5ec">u16 string idx</text>
+    <!-- byte 20-25: terminal -->
+    <rect x="360" y="0" width="108" height="80" rx="4" fill="url(#gStrLight)" opacity="0.85" stroke="#3da558" stroke-width="1"/>
+    <text x="414" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 20-25</text>
+    <text x="414" y="44" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold">terminal</text>
+    <text x="414" y="60" text-anchor="middle" font-size="8" fill="#e8f5ec">StringField (6B)</text>
 
-    <!-- byte 10-11: line_end (u16) -->
-    <rect x="350" y="0" width="70" height="80" rx="4" fill="url(#gStrLight)" opacity="0.7" stroke="#3da558" stroke-width="1"/>
-    <text x="385" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 10-11</text>
-    <text x="385" y="46" text-anchor="middle" font-size="12" fill="#fff" font-weight="bold">line_end</text>
-    <text x="385" y="62" text-anchor="middle" font-size="8" fill="#e8f5ec">u16 string idx</text>
+    <!-- byte 26-31: line_end -->
+    <rect x="468" y="0" width="108" height="80" rx="4" fill="url(#gStrLight)" opacity="0.7" stroke="#3da558" stroke-width="1"/>
+    <text x="522" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 26-31</text>
+    <text x="522" y="44" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold">line_end</text>
+    <text x="522" y="60" text-anchor="middle" font-size="8" fill="#e8f5ec">StringField (6B)</text>
 
-    <!-- byte 12-13: initial (u16) -->
-    <rect x="420" y="0" width="70" height="80" rx="4" fill="url(#gStrLight)" opacity="0.85" stroke="#3da558" stroke-width="1"/>
-    <text x="455" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 12-13</text>
-    <text x="455" y="46" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold">initial</text>
-    <text x="455" y="62" text-anchor="middle" font-size="8" fill="#e8f5ec">u16 string idx</text>
+    <!-- byte 32-37: initial -->
+    <rect x="576" y="0" width="108" height="80" rx="4" fill="url(#gStrLight)" opacity="0.85" stroke="#3da558" stroke-width="1"/>
+    <text x="630" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 32-37</text>
+    <text x="630" y="44" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold">initial</text>
+    <text x="630" y="60" text-anchor="middle" font-size="8" fill="#e8f5ec">StringField (6B)</text>
 
-    <!-- byte 14-15: delimiter_line_break (u16) -->
-    <rect x="490" y="0" width="70" height="80" rx="4" fill="url(#gStrLight)" opacity="0.7" stroke="#3da558" stroke-width="1"/>
-    <text x="525" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 14-15</text>
-    <text x="525" y="40" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">delimiter_</text>
-    <text x="525" y="54" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">line_break</text>
-    <text x="525" y="73" text-anchor="middle" font-size="8" fill="#e8f5ec">u16 string idx</text>
+    <!-- byte 38-43: delimiter_line_break -->
+    <rect x="684" y="0" width="108" height="80" rx="4" fill="url(#gStrLight)" opacity="0.7" stroke="#3da558" stroke-width="1"/>
+    <text x="738" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 38-43</text>
+    <text x="738" y="40" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">delimiter_</text>
+    <text x="738" y="54" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">line_break</text>
+    <text x="738" y="72" text-anchor="middle" font-size="8" fill="#e8f5ec">StringField (6B)</text>
 
-    <!-- byte 16-17: preterminal_line_break (u16) -->
-    <rect x="560" y="0" width="70" height="80" rx="4" fill="url(#gStrLight)" opacity="0.85" stroke="#3da558" stroke-width="1"/>
-    <text x="595" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 16-17</text>
-    <text x="595" y="40" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">preterminal_</text>
-    <text x="595" y="54" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">line_break</text>
-    <text x="595" y="73" text-anchor="middle" font-size="8" fill="#e8f5ec">u16 string idx</text>
+    <!-- byte 44-49: preterminal_line_break -->
+    <rect x="792" y="0" width="108" height="80" rx="4" fill="url(#gStrLight)" opacity="0.85" stroke="#3da558" stroke-width="1"/>
+    <text x="846" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 44-49</text>
+    <text x="846" y="40" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">preterminal_</text>
+    <text x="846" y="54" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">line_break</text>
+    <text x="846" y="72" text-anchor="middle" font-size="8" fill="#e8f5ec">StringField (6B)</text>
 
     <!-- Basic ends marker -->
-    <line x1="630" y1="-5" x2="630" y2="100" stroke="#666" stroke-width="2.5"/>
-    <text x="640" y="50" font-size="11" fill="#666" font-style="italic" font-family="-apple-system, system-ui, sans-serif">← basic ends</text>
-    <text x="640" y="64" font-size="11" fill="#666" font-style="italic" font-family="-apple-system, system-ui, sans-serif">  (byte 18)</text>
+    <line x1="900" y1="-5" x2="900" y2="100" stroke="#666" stroke-width="2.5"/>
+    <text x="910" y="50" font-size="11" fill="#666" font-style="italic" font-family="-apple-system, system-ui, sans-serif">← basic ends</text>
+    <text x="910" y="64" font-size="11" fill="#666" font-style="italic" font-family="-apple-system, system-ui, sans-serif">  (byte 50)</text>
   </g>
 
-  <!-- Bracket showing 7 delimiters -->
+  <!-- Bracket showing 7 delimiters (StringField × 7 = 42 bytes) -->
   <g transform="translate(40, 200)">
-    <line x1="140" y1="0" x2="630" y2="0" stroke="#3da558" stroke-width="2"/>
-    <line x1="140" y1="-3" x2="140" y2="3" stroke="#3da558" stroke-width="2"/>
-    <line x1="630" y1="-3" x2="630" y2="3" stroke="#3da558" stroke-width="2"/>
-    <text x="385" y="18" text-anchor="middle" fill="#2d8b48" font-size="11" font-weight="bold">7 delimiter fields (u16 × 7 = 14 bytes)</text>
+    <line x1="144" y1="0" x2="900" y2="0" stroke="#3da558" stroke-width="2"/>
+    <line x1="144" y1="-3" x2="144" y2="3" stroke="#3da558" stroke-width="2"/>
+    <line x1="900" y1="-3" x2="900" y2="3" stroke="#3da558" stroke-width="2"/>
+    <text x="522" y="18" text-anchor="middle" fill="#2d8b48" font-size="11" font-weight="bold">7 delimiter fields (StringField × 7 = 42 bytes)</text>
   </g>
 
   <!-- ============================================================ -->
@@ -119,79 +116,74 @@
   <text x="40" y="265" font-size="13" font-weight="bold" fill="#d49520" font-family="-apple-system, system-ui, sans-serif">Compat extension (+22 bytes — only when Header bit0 = 1)</text>
 
   <g transform="translate(40, 280)">
-    <!-- byte 18-19: padding (u16) - u32 alignment -->
-    <rect x="0" y="0" width="70" height="80" rx="4" fill="#bbb" opacity="0.6" stroke="#888" stroke-width="1" stroke-dasharray="3,2"/>
-    <text x="35" y="20" text-anchor="middle" font-size="9" fill="#444" font-weight="bold">byte 18-19</text>
-    <text x="35" y="46" text-anchor="middle" font-size="12" fill="#444" font-weight="bold">pad</text>
-    <text x="35" y="62" text-anchor="middle" font-size="8" fill="#444">u16 (2B)</text>
-    <text x="35" y="74" text-anchor="middle" font-size="7" fill="#666">align u32</text>
+    <!-- byte 50-51: padding (u16) - u32 alignment → 36 px -->
+    <rect x="0" y="0" width="36" height="80" rx="4" fill="#bbb" opacity="0.6" stroke="#888" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="18" y="20" text-anchor="middle" font-size="8" fill="#444" font-weight="bold">b 50-51</text>
+    <text x="18" y="46" text-anchor="middle" font-size="11" fill="#444" font-weight="bold">pad</text>
+    <text x="18" y="62" text-anchor="middle" font-size="7" fill="#444">u16</text>
 
-    <!-- byte 20-23: end_line (u32) -->
-    <rect x="70" y="0" width="140" height="80" rx="4" fill="url(#gLine)" opacity="0.85" stroke="#d49520" stroke-width="1.5"/>
-    <text x="140" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 20-23</text>
-    <text x="140" y="46" text-anchor="middle" font-size="14" fill="#fff" font-weight="bold">end_line</text>
-    <text x="140" y="62" text-anchor="middle" font-size="9" fill="#fff5e0">u32 line index</text>
+    <!-- byte 52-55: end_line (u32) → 72 px -->
+    <rect x="36" y="0" width="72" height="80" rx="4" fill="url(#gLine)" opacity="0.85" stroke="#d49520" stroke-width="1.5"/>
+    <text x="72" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 52-55</text>
+    <text x="72" y="46" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold">end_line</text>
+    <text x="72" y="62" text-anchor="middle" font-size="8" fill="#fff5e0">u32 line index</text>
 
-    <!-- byte 24-27: description_start_line (u32) -->
-    <rect x="210" y="0" width="140" height="80" rx="4" fill="url(#gLine)" opacity="0.7" stroke="#d49520" stroke-width="1.5"/>
-    <text x="280" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 24-27</text>
-    <text x="280" y="40" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">description_</text>
-    <text x="280" y="54" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">start_line</text>
-    <text x="280" y="68" text-anchor="middle" font-size="9" fill="#fff5e0">u32 line idx</text>
-    <text x="280" y="78" text-anchor="middle" font-size="7" fill="#fff5e0">None=0xFFFFFFFF</text>
+    <!-- byte 56-59: description_start_line (u32) -->
+    <rect x="108" y="0" width="72" height="80" rx="4" fill="url(#gLine)" opacity="0.7" stroke="#d49520" stroke-width="1.5"/>
+    <text x="144" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 56-59</text>
+    <text x="144" y="40" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">description_</text>
+    <text x="144" y="54" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">start_line</text>
+    <text x="144" y="72" text-anchor="middle" font-size="7" fill="#fff5e0">u32, None=0xFF…FF</text>
 
-    <!-- byte 28-31: description_end_line (u32) -->
-    <rect x="350" y="0" width="140" height="80" rx="4" fill="url(#gLine)" opacity="0.85" stroke="#d49520" stroke-width="1.5"/>
-    <text x="420" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 28-31</text>
-    <text x="420" y="40" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">description_</text>
-    <text x="420" y="54" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">end_line</text>
-    <text x="420" y="68" text-anchor="middle" font-size="9" fill="#fff5e0">u32 line idx</text>
-    <text x="420" y="78" text-anchor="middle" font-size="7" fill="#fff5e0">None=0xFFFFFFFF</text>
+    <!-- byte 60-63: description_end_line (u32) -->
+    <rect x="180" y="0" width="72" height="80" rx="4" fill="url(#gLine)" opacity="0.85" stroke="#d49520" stroke-width="1.5"/>
+    <text x="216" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 60-63</text>
+    <text x="216" y="40" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">description_</text>
+    <text x="216" y="54" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">end_line</text>
+    <text x="216" y="72" text-anchor="middle" font-size="7" fill="#fff5e0">u32, None=0xFF…FF</text>
 
-    <!-- byte 32-35: last_description_line (u32) -->
-    <rect x="490" y="0" width="140" height="80" rx="4" fill="url(#gLine)" opacity="0.7" stroke="#d49520" stroke-width="1.5"/>
-    <text x="560" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 32-35</text>
-    <text x="560" y="40" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">last_</text>
-    <text x="560" y="54" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">description_line</text>
-    <text x="560" y="68" text-anchor="middle" font-size="9" fill="#fff5e0">u32 line idx</text>
-    <text x="560" y="78" text-anchor="middle" font-size="7" fill="#fff5e0">None=0xFFFFFFFF</text>
+    <!-- byte 64-67: last_description_line (u32) -->
+    <rect x="252" y="0" width="72" height="80" rx="4" fill="url(#gLine)" opacity="0.7" stroke="#d49520" stroke-width="1.5"/>
+    <text x="288" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">byte 64-67</text>
+    <text x="288" y="40" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">last_</text>
+    <text x="288" y="54" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">description_line</text>
+    <text x="288" y="72" text-anchor="middle" font-size="7" fill="#fff5e0">u32, None=0xFF…FF</text>
 
-    <!-- byte 36: has_preterminal_description (u8) -->
-    <rect x="630" y="0" width="35" height="80" rx="4" fill="url(#gBool)" opacity="0.85" stroke="#c43e3e" stroke-width="1.5"/>
-    <text x="647" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">b 36</text>
-    <text x="647" y="40" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">has_</text>
-    <text x="647" y="50" text-anchor="middle" font-size="8" fill="#fff" font-weight="bold">preterm_</text>
-    <text x="647" y="60" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">desc</text>
-    <text x="647" y="74" text-anchor="middle" font-size="8" fill="#fce8e8">u8 bool</text>
+    <!-- byte 68: has_preterminal_description (u8) → 18 px -->
+    <rect x="324" y="0" width="18" height="80" rx="4" fill="url(#gBool)" opacity="0.85" stroke="#c43e3e" stroke-width="1.5"/>
+    <text x="333" y="20" text-anchor="middle" font-size="8" fill="#fff" font-weight="bold">b 68</text>
+    <text x="333" y="42" text-anchor="middle" font-size="8" fill="#fff" font-weight="bold">has_</text>
+    <text x="333" y="52" text-anchor="middle" font-size="7" fill="#fff" font-weight="bold">preterm_</text>
+    <text x="333" y="62" text-anchor="middle" font-size="8" fill="#fff" font-weight="bold">desc</text>
+    <text x="333" y="74" text-anchor="middle" font-size="7" fill="#fce8e8">u8 bool</text>
 
-    <!-- byte 37: has_preterminal_tag_description (u8) -->
-    <rect x="665" y="0" width="35" height="80" rx="4" fill="url(#gBool)" opacity="0.7" stroke="#c43e3e" stroke-width="1.5"/>
-    <text x="682" y="20" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">b 37</text>
-    <text x="682" y="40" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">has_</text>
-    <text x="682" y="50" text-anchor="middle" font-size="7" fill="#fff" font-weight="bold">preterm_</text>
-    <text x="682" y="60" text-anchor="middle" font-size="8" fill="#fff" font-weight="bold">tag_desc</text>
-    <text x="682" y="74" text-anchor="middle" font-size="7" fill="#fce8e8">u8, 0xFF=None</text>
+    <!-- byte 69: has_preterminal_tag_description (u8) → 18 px -->
+    <rect x="342" y="0" width="18" height="80" rx="4" fill="url(#gBool)" opacity="0.7" stroke="#c43e3e" stroke-width="1.5"/>
+    <text x="351" y="20" text-anchor="middle" font-size="8" fill="#fff" font-weight="bold">b 69</text>
+    <text x="351" y="42" text-anchor="middle" font-size="8" fill="#fff" font-weight="bold">has_</text>
+    <text x="351" y="52" text-anchor="middle" font-size="7" fill="#fff" font-weight="bold">preterm_</text>
+    <text x="351" y="62" text-anchor="middle" font-size="7" fill="#fff" font-weight="bold">tag_desc</text>
+    <text x="351" y="74" text-anchor="middle" font-size="6" fill="#fce8e8">u8, 0xFF=None</text>
 
-    <!-- byte 38-39: trailing padding (u16) -->
-    <rect x="700" y="0" width="70" height="80" rx="4" fill="#bbb" opacity="0.6" stroke="#888" stroke-width="1" stroke-dasharray="3,2"/>
-    <text x="735" y="20" text-anchor="middle" font-size="9" fill="#444" font-weight="bold">byte 38-39</text>
-    <text x="735" y="46" text-anchor="middle" font-size="12" fill="#444" font-weight="bold">pad</text>
-    <text x="735" y="62" text-anchor="middle" font-size="8" fill="#444">u16 (2B)</text>
-    <text x="735" y="74" text-anchor="middle" font-size="7" fill="#666">trailing</text>
+    <!-- byte 70-71: trailing padding (u16) → 36 px -->
+    <rect x="360" y="0" width="36" height="80" rx="4" fill="#bbb" opacity="0.6" stroke="#888" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="378" y="20" text-anchor="middle" font-size="8" fill="#444" font-weight="bold">b 70-71</text>
+    <text x="378" y="46" text-anchor="middle" font-size="11" fill="#444" font-weight="bold">pad</text>
+    <text x="378" y="62" text-anchor="middle" font-size="7" fill="#444">u16 trailing</text>
 
     <!-- Compat ends marker -->
-    <line x1="770" y1="-5" x2="770" y2="100" stroke="#666" stroke-width="2.5"/>
-    <text x="780" y="42" font-size="11" fill="#666" font-style="italic" font-family="-apple-system, system-ui, sans-serif">← compat</text>
-    <text x="780" y="56" font-size="11" fill="#666" font-style="italic" font-family="-apple-system, system-ui, sans-serif">   ends</text>
-    <text x="780" y="70" font-size="11" fill="#666" font-style="italic" font-family="-apple-system, system-ui, sans-serif">(byte 40)</text>
+    <line x1="396" y1="-5" x2="396" y2="100" stroke="#666" stroke-width="2.5"/>
+    <text x="406" y="42" font-size="11" fill="#666" font-style="italic" font-family="-apple-system, system-ui, sans-serif">← compat</text>
+    <text x="406" y="56" font-size="11" fill="#666" font-style="italic" font-family="-apple-system, system-ui, sans-serif">   ends</text>
+    <text x="406" y="70" font-size="11" fill="#666" font-style="italic" font-family="-apple-system, system-ui, sans-serif">(byte 72)</text>
   </g>
 
-  <!-- Bracket showing line indices -->
+  <!-- Bracket showing line indices (u32 × 4 = 16 bytes) -->
   <g transform="translate(40, 385)">
-    <line x1="70" y1="0" x2="630" y2="0" stroke="#d49520" stroke-width="2"/>
-    <line x1="70" y1="-3" x2="70" y2="3" stroke="#d49520" stroke-width="2"/>
-    <line x1="630" y1="-3" x2="630" y2="3" stroke="#d49520" stroke-width="2"/>
-    <text x="350" y="18" text-anchor="middle" fill="#a87515" font-size="11" font-weight="bold">4 line index fields (u32 × 4 = 16 bytes)</text>
+    <line x1="36" y1="0" x2="324" y2="0" stroke="#d49520" stroke-width="2"/>
+    <line x1="36" y1="-3" x2="36" y2="3" stroke="#d49520" stroke-width="2"/>
+    <line x1="324" y1="-3" x2="324" y2="3" stroke="#d49520" stroke-width="2"/>
+    <text x="180" y="18" text-anchor="middle" fill="#a87515" font-size="11" font-weight="bold">4 line index fields (u32 × 4 = 16 bytes)</text>
   </g>
 
   <!-- ============================================================ -->
@@ -205,20 +197,20 @@
     <rect x="0" y="0" width="20" height="20" fill="url(#gBitmask)" opacity="0.85"/>
     <text x="28" y="15" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">Children bitmask (u8)</text>
 
-    <rect x="180" y="0" width="20" height="20" fill="url(#gStr)" opacity="0.85"/>
-    <text x="208" y="15" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">description (u16 str idx)</text>
+    <rect x="200" y="0" width="20" height="20" fill="url(#gStr)" opacity="0.85"/>
+    <text x="228" y="15" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">description (StringField, 6B)</text>
 
-    <rect x="370" y="0" width="20" height="20" fill="url(#gStrLight)" opacity="0.85"/>
-    <text x="398" y="15" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">7 delimiters (u16 str idx)</text>
+    <rect x="440" y="0" width="20" height="20" fill="url(#gStrLight)" opacity="0.85"/>
+    <text x="468" y="15" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">7 delimiters (StringField × 7 = 42B)</text>
 
-    <rect x="560" y="0" width="20" height="20" fill="url(#gLine)" opacity="0.85"/>
-    <text x="588" y="15" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">line indices (u32, compat)</text>
+    <rect x="710" y="0" width="20" height="20" fill="url(#gLine)" opacity="0.85"/>
+    <text x="738" y="15" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">line indices (u32, compat)</text>
 
     <rect x="0" y="28" width="20" height="20" fill="url(#gBool)" opacity="0.85"/>
     <text x="28" y="43" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">has_* booleans (u8, compat)</text>
 
-    <rect x="180" y="28" width="20" height="20" fill="#bbb" opacity="0.6" stroke="#888" stroke-dasharray="3,2"/>
-    <text x="208" y="43" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">padding (alignment)</text>
+    <rect x="200" y="28" width="20" height="20" fill="#bbb" opacity="0.6" stroke="#888" stroke-dasharray="3,2"/>
+    <text x="228" y="43" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">padding (alignment)</text>
   </g>
 
   <!-- ============================================================ -->
@@ -227,73 +219,73 @@
   <g transform="translate(40, 510)">
     <text x="0" y="14" font-size="12" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">Field summary</text>
 
-    <rect x="0" y="22" width="840" height="245" rx="6" fill="#f8f8f8" stroke="#ccc" stroke-width="1"/>
+    <rect x="0" y="22" width="1400" height="245" rx="6" fill="#f8f8f8" stroke="#ccc" stroke-width="1"/>
 
     <!-- Table header -->
-    <line x1="10" y1="42" x2="830" y2="42" stroke="#ccc"/>
+    <line x1="10" y1="42" x2="1390" y2="42" stroke="#ccc"/>
     <text x="20" y="38" font-size="11" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">byte</text>
-    <text x="80" y="38" font-size="11" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">field</text>
-    <text x="280" y="38" font-size="11" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">type</text>
-    <text x="380" y="38" font-size="11" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">notes</text>
+    <text x="100" y="38" font-size="11" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">field</text>
+    <text x="320" y="38" font-size="11" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">type</text>
+    <text x="500" y="38" font-size="11" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">notes</text>
 
     <!-- Basic part rows -->
     <text x="20" y="60" font-size="10" fill="#7b59ac" font-family="monospace">0</text>
-    <text x="80" y="60" font-size="10" fill="#444" font-family="monospace">Children bitmask</text>
-    <text x="280" y="60" font-size="10" fill="#444" font-family="monospace">u8</text>
-    <text x="380" y="60" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">3 bits used (descLines / tags / inlineTags)</text>
+    <text x="100" y="60" font-size="10" fill="#444" font-family="monospace">Children bitmask</text>
+    <text x="320" y="60" font-size="10" fill="#444" font-family="monospace">u8</text>
+    <text x="500" y="60" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">3 bits used (descLines / tags / inlineTags)</text>
 
     <text x="20" y="76" font-size="10" fill="#888" font-family="monospace">1</text>
-    <text x="80" y="76" font-size="10" fill="#444" font-family="monospace">padding</text>
-    <text x="280" y="76" font-size="10" fill="#444" font-family="monospace">u8</text>
-    <text x="380" y="76" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">u16 alignment</text>
+    <text x="100" y="76" font-size="10" fill="#444" font-family="monospace">padding</text>
+    <text x="320" y="76" font-size="10" fill="#444" font-family="monospace">u8</text>
+    <text x="500" y="76" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">aligns next StringField start</text>
 
-    <text x="20" y="92" font-size="10" fill="#3da558" font-family="monospace">2-3</text>
-    <text x="80" y="92" font-size="10" fill="#444" font-family="monospace">description</text>
-    <text x="280" y="92" font-size="10" fill="#444" font-family="monospace">u16 string idx</text>
-    <text x="380" y="92" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">leading description text, None = 0xFFFF</text>
+    <text x="20" y="92" font-size="10" fill="#3da558" font-family="monospace">2-7</text>
+    <text x="100" y="92" font-size="10" fill="#444" font-family="monospace">description</text>
+    <text x="320" y="92" font-size="10" fill="#444" font-family="monospace">StringField (6B)</text>
+    <text x="500" y="92" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">leading description text, NONE = (offset 0xFFFF_FFFF, length 0)</text>
 
-    <text x="20" y="108" font-size="10" fill="#3da558" font-family="monospace">4-17</text>
-    <text x="80" y="108" font-size="10" fill="#444" font-family="monospace">7 delimiters</text>
-    <text x="280" y="108" font-size="10" fill="#444" font-family="monospace">u16 × 7</text>
-    <text x="380" y="108" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">delimiter / post_delimiter / terminal / line_end / initial / delim_lb / preterm_lb</text>
+    <text x="20" y="108" font-size="10" fill="#3da558" font-family="monospace">8-49</text>
+    <text x="100" y="108" font-size="10" fill="#444" font-family="monospace">7 delimiters</text>
+    <text x="320" y="108" font-size="10" fill="#444" font-family="monospace">StringField × 7</text>
+    <text x="500" y="108" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">delimiter / post_delimiter / terminal / line_end / initial / delim_lb / preterm_lb</text>
 
-    <line x1="10" y1="120" x2="830" y2="120" stroke="#ccc" stroke-dasharray="3,2"/>
-    <text x="420" y="135" text-anchor="middle" font-size="10" font-style="italic" fill="#666">↑ basic 18 bytes ↑                ↓ compat extension +22 bytes (Header bit0 = 1) ↓</text>
+    <line x1="10" y1="120" x2="1390" y2="120" stroke="#ccc" stroke-dasharray="3,2"/>
+    <text x="700" y="135" text-anchor="middle" font-size="10" font-style="italic" fill="#666">↑ basic 50 bytes ↑                ↓ compat extension +22 bytes (Header bit0 = 1) ↓</text>
 
     <!-- Compat part rows -->
-    <text x="20" y="155" font-size="10" fill="#888" font-family="monospace">18-19</text>
-    <text x="80" y="155" font-size="10" fill="#444" font-family="monospace">padding</text>
-    <text x="280" y="155" font-size="10" fill="#444" font-family="monospace">u16</text>
-    <text x="380" y="155" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">u32 alignment (next field is u32)</text>
+    <text x="20" y="155" font-size="10" fill="#888" font-family="monospace">50-51</text>
+    <text x="100" y="155" font-size="10" fill="#444" font-family="monospace">padding</text>
+    <text x="320" y="155" font-size="10" fill="#444" font-family="monospace">u16</text>
+    <text x="500" y="155" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">u32 alignment (next field is u32)</text>
 
-    <text x="20" y="171" font-size="10" fill="#d49520" font-family="monospace">20-23</text>
-    <text x="80" y="171" font-size="10" fill="#444" font-family="monospace">end_line</text>
-    <text x="280" y="171" font-size="10" fill="#444" font-family="monospace">u32 line idx</text>
-    <text x="380" y="171" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">closing `*/` line index (always present in compat)</text>
+    <text x="20" y="171" font-size="10" fill="#d49520" font-family="monospace">52-55</text>
+    <text x="100" y="171" font-size="10" fill="#444" font-family="monospace">end_line</text>
+    <text x="320" y="171" font-size="10" fill="#444" font-family="monospace">u32 line idx</text>
+    <text x="500" y="171" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">closing `*/` line index (always present in compat)</text>
 
-    <text x="20" y="187" font-size="10" fill="#d49520" font-family="monospace">24-27</text>
-    <text x="80" y="187" font-size="10" fill="#444" font-family="monospace">description_start_line</text>
-    <text x="280" y="187" font-size="10" fill="#444" font-family="monospace">u32 line idx</text>
-    <text x="380" y="187" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">first non-empty desc line, None = 0xFFFFFFFF</text>
+    <text x="20" y="187" font-size="10" fill="#d49520" font-family="monospace">56-59</text>
+    <text x="100" y="187" font-size="10" fill="#444" font-family="monospace">description_start_line</text>
+    <text x="320" y="187" font-size="10" fill="#444" font-family="monospace">u32 line idx</text>
+    <text x="500" y="187" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">first non-empty desc line, None = 0xFFFFFFFF</text>
 
-    <text x="20" y="203" font-size="10" fill="#d49520" font-family="monospace">28-31</text>
-    <text x="80" y="203" font-size="10" fill="#444" font-family="monospace">description_end_line</text>
-    <text x="280" y="203" font-size="10" fill="#444" font-family="monospace">u32 line idx</text>
-    <text x="380" y="203" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">last non-empty desc line, None = 0xFFFFFFFF</text>
+    <text x="20" y="203" font-size="10" fill="#d49520" font-family="monospace">60-63</text>
+    <text x="100" y="203" font-size="10" fill="#444" font-family="monospace">description_end_line</text>
+    <text x="320" y="203" font-size="10" fill="#444" font-family="monospace">u32 line idx</text>
+    <text x="500" y="203" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">last non-empty desc line, None = 0xFFFFFFFF</text>
 
-    <text x="20" y="219" font-size="10" fill="#d49520" font-family="monospace">32-35</text>
-    <text x="80" y="219" font-size="10" fill="#444" font-family="monospace">last_description_line</text>
-    <text x="280" y="219" font-size="10" fill="#444" font-family="monospace">u32 line idx</text>
-    <text x="380" y="219" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">first tag or end-line (description boundary), None = 0xFFFFFFFF</text>
+    <text x="20" y="219" font-size="10" fill="#d49520" font-family="monospace">64-67</text>
+    <text x="100" y="219" font-size="10" fill="#444" font-family="monospace">last_description_line</text>
+    <text x="320" y="219" font-size="10" fill="#444" font-family="monospace">u32 line idx</text>
+    <text x="500" y="219" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">first tag or end-line (description boundary), None = 0xFFFFFFFF</text>
 
-    <text x="20" y="235" font-size="10" fill="#c43e3e" font-family="monospace">36-37</text>
-    <text x="80" y="235" font-size="10" fill="#444" font-family="monospace">has_preterm_(tag_)desc</text>
-    <text x="280" y="235" font-size="10" fill="#444" font-family="monospace">u8 × 2</text>
-    <text x="380" y="235" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">2 boolean flags (presence on `*/` line); 2nd field None sentinel = 0xFF</text>
+    <text x="20" y="235" font-size="10" fill="#c43e3e" font-family="monospace">68-69</text>
+    <text x="100" y="235" font-size="10" fill="#444" font-family="monospace">has_preterm_(tag_)desc</text>
+    <text x="320" y="235" font-size="10" fill="#444" font-family="monospace">u8 × 2</text>
+    <text x="500" y="235" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">2 boolean flags (presence on `*/` line); 2nd field None sentinel = 0xFF</text>
 
-    <text x="20" y="255" font-size="10" fill="#888" font-family="monospace">38-39</text>
-    <text x="80" y="255" font-size="10" fill="#444" font-family="monospace">padding</text>
-    <text x="280" y="255" font-size="10" fill="#444" font-family="monospace">u16</text>
-    <text x="380" y="255" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">trailing alignment</text>
+    <text x="20" y="255" font-size="10" fill="#888" font-family="monospace">70-71</text>
+    <text x="100" y="255" font-size="10" fill="#444" font-family="monospace">padding</text>
+    <text x="320" y="255" font-size="10" fill="#444" font-family="monospace">u16</text>
+    <text x="500" y="255" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif">trailing alignment</text>
   </g>
 </svg>

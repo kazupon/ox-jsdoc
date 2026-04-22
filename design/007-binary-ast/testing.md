@@ -317,7 +317,8 @@ Coverage targets:
 - Each node type and each bit of Common Data (6-bit) (every entry in the table at [format.md "Usage per node kind"](./format.md#per-node-kind-usage))
 - All 4 Node Data type tags (Children/String/Extended/Reserved); Reserved triggers a decoder error
 - Children bitmask (JsdocTag 8 bits / JsdocBlock 3 bits / JsdocGenericTagBody 2 bits)
-- u16 string index sentinel (`0xFFFF`) and u32 sentinels (`0x3FFF_FFFF`, `0xFFFFFFFF`)
+- u16 string index sentinel (`0xFFFF`, used by diagnostics) and u32 sentinels (`0x3FFF_FFFF` for the Node-Data String payload, `0xFFFFFFFF` for compat line indices)
+- StringField NONE sentinel (`offset = 0xFFFF_FFFF, length = 0`) for absent Extended Data string slots
 
 ## 15. Lazy / cache behavior verification
 
@@ -374,7 +375,7 @@ fn compat_mode_changes_extended_data_size() {
     assert_eq!(basic[1] & 0x01, 0);
     assert_eq!(compat[1] & 0x01, 1);
 
-    // JsdocBlock Extended Data size difference: basic 18 / compat 40 bytes
+    // JsdocBlock Extended Data size difference: basic 50 / compat 72 bytes
     let basic_sf  = LazySourceFile::new(&basic).unwrap();
     let compat_sf = LazySourceFile::new(&compat).unwrap();
     assert!(compat_sf.extended_data_size() > basic_sf.extended_data_size());
@@ -394,10 +395,10 @@ fn compat_mode_round_trips_line_metadata() {
 
 Verification targets:
 
-- `JsdocBlock`: 18 / 40 bytes (+22 bytes for compat)
-- `JsdocTag`: 8 / 22 bytes (+14 bytes for compat)
-- `JsdocDescriptionLine` / `JsdocTypeLine`: 0 / 8 bytes (switches to Extended type only when compat)
-- Output sentinels (`0xFFFFFFFF` for `Option<u32>` such as `description_start_line`)
+- `JsdocBlock`: 50 / 72 bytes (+22 bytes for compat)
+- `JsdocTag`: 20 / 62 bytes (+42 bytes for compat — 7 × StringField)
+- `JsdocDescriptionLine` / `JsdocTypeLine`: 0 / 24 bytes (switches to Extended type only when compat — 4 × StringField)
+- Output sentinels (`0xFFFFFFFF` for `Option<u32>` such as `description_start_line`; `(offset 0xFFFF_FFFF, length 0)` for `StringField::NONE`)
 
 ## CI integration
 

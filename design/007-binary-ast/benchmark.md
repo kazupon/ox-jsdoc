@@ -270,8 +270,8 @@ bench('size: compat', () => encode(source, { compat_mode: true }).byteLength)
 
 **Expected values** (see [the Extended Data section size table in format.md](./format.md#extended-data-section)):
 
-- `JsdocBlock`: 18 -> 40 bytes (Extended Data adds 22 bytes)
-- `JsdocTag`: 8 -> 22 bytes (adds 14 bytes)
+- `JsdocBlock`: 50 -> 72 bytes (Extended Data adds 22 bytes for the compat tail)
+- `JsdocTag`: 20 -> 62 bytes (adds 42 bytes for compat — 7 × StringField)
 - For large fixtures (typescript-checker.ts), expect a **+30-50% buffer size increase**
 
 ### Scenario G: Isolated measurement of batch dedup effects
