@@ -361,7 +361,7 @@ KIND_TABLE[0x01] = RemoteJsdocBlock
 KIND_TABLE[0x02] = RemoteJsdocDescriptionLine
 KIND_TABLE[0x03] = RemoteJsdocTag
 // ... 0x04-0x0F (remaining comment AST)
-KIND_TABLE[0x7f] = RemoteNodeListNode // NodeList wrapper
+KIND_TABLE[0x7f] = RemoteNodeListNode // NodeList (reserved boundary slot)
 KIND_TABLE[0x80] = RemoteTypeName
 KIND_TABLE[0x81] = RemoteTypeNumber
 // ... 0x82-0xFF (remaining TypeNodes)

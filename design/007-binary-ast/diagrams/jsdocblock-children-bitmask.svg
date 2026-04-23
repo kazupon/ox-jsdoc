@@ -15,7 +15,7 @@
 
   <!-- Title -->
   <text x="460" y="28" text-anchor="middle" font-size="18" font-weight="bold" fill="#222" font-family="-apple-system, system-ui, sans-serif">JsdocBlock Children Bitmask (Extended Data byte 0)</text>
-  <text x="460" y="50" text-anchor="middle" font-size="11" fill="#666" font-family="-apple-system, system-ui, sans-serif">8-bit field — only 3 bits used (3 NodeList children); bits 3-7 reserved for future expansion</text>
+  <text x="460" y="50" text-anchor="middle" font-size="11" fill="#666" font-family="-apple-system, system-ui, sans-serif">8-bit field — only 3 bits used (visitor-framework hints for 3 list metadata slots in ED bytes 50-67); bits 3-7 reserved</text>
 
   <!-- ============================================================ -->
   <!-- Section 1: 8-bit cell layout                                 -->
@@ -30,8 +30,8 @@
     <text x="55" y="64" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">Lines</text>
     <text x="55" y="80" text-anchor="middle" font-size="9" fill="#fff5e0">JsdocDesc...[]</text>
     <line x1="10" y1="90" x2="100" y2="90" stroke="#fff" stroke-width="0.5" opacity="0.5"/>
-    <text x="55" y="108" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">NodeList</text>
-    <text x="55" y="124" text-anchor="middle" font-size="9" fill="#fff5e0">(skip if empty)</text>
+    <text x="55" y="108" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">ED b 50-55</text>
+    <text x="55" y="124" text-anchor="middle" font-size="9" fill="#fff5e0">(head, count)</text>
 
     <!-- bit 1: tags (NodeList) -->
     <rect x="115" width="110" height="135" rx="6" fill="url(#gNL)" opacity="0.85" stroke="#d49520" stroke-width="1.5"/>
@@ -39,8 +39,8 @@
     <text x="170" y="55" text-anchor="middle" font-size="14" fill="#fff" font-weight="bold">tags</text>
     <text x="170" y="74" text-anchor="middle" font-size="9" fill="#fff5e0">JsdocTag[]</text>
     <line x1="125" y1="85" x2="215" y2="85" stroke="#fff" stroke-width="0.5" opacity="0.5"/>
-    <text x="170" y="105" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">NodeList</text>
-    <text x="170" y="122" text-anchor="middle" font-size="9" fill="#fff5e0">(skip if empty)</text>
+    <text x="170" y="105" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">ED b 56-61</text>
+    <text x="170" y="122" text-anchor="middle" font-size="9" fill="#fff5e0">(head, count)</text>
 
     <!-- bit 2: inlineTags (NodeList) -->
     <rect x="230" width="110" height="135" rx="6" fill="url(#gNL)" opacity="0.85" stroke="#d49520" stroke-width="1.5"/>
@@ -49,8 +49,8 @@
     <text x="285" y="64" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold">Tags</text>
     <text x="285" y="80" text-anchor="middle" font-size="9" fill="#fff5e0">JsdocInlineTag[]</text>
     <line x1="240" y1="90" x2="330" y2="90" stroke="#fff" stroke-width="0.5" opacity="0.5"/>
-    <text x="285" y="108" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">NodeList</text>
-    <text x="285" y="124" text-anchor="middle" font-size="9" fill="#fff5e0">(skip if empty)</text>
+    <text x="285" y="108" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">ED b 62-67</text>
+    <text x="285" y="124" text-anchor="middle" font-size="9" fill="#fff5e0">(head, count)</text>
 
     <!-- bit 3-7: reserved (5 cells with same style) -->
     <rect x="345" width="110" height="135" rx="6" fill="url(#gReserved)" opacity="0.6" stroke="#888" stroke-width="1.5" stroke-dasharray="4,2"/>
@@ -100,7 +100,7 @@
     <line x1="0" y1="0" x2="340" y2="0" stroke="#d49520" stroke-width="2"/>
     <line x1="0" y1="-3" x2="0" y2="3" stroke="#d49520" stroke-width="2"/>
     <line x1="340" y1="-3" x2="340" y2="3" stroke="#d49520" stroke-width="2"/>
-    <text x="170" y="18" text-anchor="middle" fill="#a87515" font-size="11" font-weight="bold">3 bits used (3 NodeList children)</text>
+    <text x="170" y="18" text-anchor="middle" fill="#a87515" font-size="11" font-weight="bold">3 bits used (visitor-framework hints for 3 list metadata slots)</text>
 
     <!-- Reserved (bits 3-7) bracket -->
     <line x1="345" y1="0" x2="880" y2="0" stroke="#888" stroke-width="2" stroke-dasharray="3,2"/>
@@ -179,9 +179,9 @@
     <text x="0" y="14" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">Resulting child layout in node tree (visitor order, only bits = 1 are emitted):</text>
 
     <text x="0" y="40" font-size="11" fill="#7b59ac" font-family="monospace" font-weight="bold">JsdocBlock (parent)</text>
-    <text x="20" y="58" font-size="10" font-family="monospace" fill="#d49520">├── descriptionLines NodeList = [JsdocDescriptionLine "Some description."]</text>
-    <text x="20" y="74" font-size="10" font-family="monospace" fill="#d49520">└── tags NodeList = [JsdocTag "@param x The id."]</text>
-    <text x="20" y="92" font-size="10" font-family="monospace" fill="#bbb">    (inlineTags omitted ← bit 2 = 0, empty array — Option A2 optimization)</text>
+    <text x="20" y="58" font-size="10" font-family="monospace" fill="#d49520">├── descriptionLines (count=1, head→ JsdocDescriptionLine "Some description.")</text>
+    <text x="20" y="74" font-size="10" font-family="monospace" fill="#d49520">└── tags             (count=1, head→ JsdocTag "@param x The id.")</text>
+    <text x="20" y="92" font-size="10" font-family="monospace" fill="#bbb">    (inlineTags slot = (head=0, count=0) ← bit 2 = 0, empty)</text>
   </g>
 
   <!-- ============================================================ -->
@@ -191,8 +191,8 @@
     <rect width="840" height="100" rx="6" fill="#f8f8f8" stroke="#ccc" stroke-width="1"/>
     <text x="15" y="22" font-size="12" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">Bitmask interpretation rules</text>
 
-    <text x="15" y="46" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan fill="#d49520" font-weight="bold">All 3 children are NodeList type</tspan>: 1 = NodeList emitted, 0 = empty array (NodeList skipped, "Option A2" optimization)</text>
-    <text x="15" y="64" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">DFS pre-order</tspan>: descriptionLines → tags → inlineTags (bit 0 first, bit 2 last)</text>
-    <text x="15" y="82" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan fill="#666" font-weight="bold">bits 3-7 (RSV)</tspan>: <tspan font-weight="bold">always 0</tspan> — reserved for future child types (e.g., footer NodeList, metadata NodeList)</text>
+    <text x="15" y="46" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan fill="#d49520" font-weight="bold">All 3 bits flag list metadata slots in ED</tspan>: bit = 1 ⇔ list non-empty (count &gt; 0); bit = 0 ⇔ list empty (slot is (head=0, count=0))</text>
+    <text x="15" y="64" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">DFS pre-order</tspan>: descriptionLines → tags → inlineTags (bit 0 first, bit 2 last); children are direct siblings under the JsdocBlock (no NodeList wrapper)</text>
+    <text x="15" y="82" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan fill="#666" font-weight="bold">bits 3-7 (RSV)</tspan>: <tspan font-weight="bold">always 0</tspan> — reserved for future list slots (each future list adds one bit + one 6-byte ED metadata slot)</text>
   </g>
 </svg>

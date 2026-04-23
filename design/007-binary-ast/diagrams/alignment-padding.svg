@@ -152,11 +152,11 @@
   </g>
 
   <!-- ============================================================ -->
-  <!-- Section 3: Concrete example - JsdocBlock compat (basic 50 + compat 22 = 72 bytes) -->
+  <!-- Section 3: Concrete example - JsdocBlock compat (basic 68 + compat 22 = 90 bytes) -->
   <!-- ============================================================ -->
-  <text x="40" y="410" font-size="13" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">(3) Concrete example: <tspan font-family="monospace" fill="#7b59ac">JsdocBlock</tspan> Extended Data padding (3 padding insertions, 72 bytes total)</text>
+  <text x="40" y="410" font-size="13" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">(3) Concrete example: <tspan font-family="monospace" fill="#7b59ac">JsdocBlock</tspan> Extended Data padding (3 padding insertions, 90 bytes total — incl. 18B list metadata)</text>
 
-  <!-- 1 byte = 11.5 px → 72 byte ≈ 828 px (margin 12 px) -->
+  <!-- 1 byte = 11.5 px → 90 byte ≈ 1035 px (margin 12 px); diagram preserved at 72-byte width as a representative example -->
   <g transform="translate(40, 425)">
     <!-- 4-byte boundary lines (vertical ticks at every 4 byte) -->
     <line x1="0"   y1="0" x2="0"   y2="80" stroke="#3da558" stroke-width="1" stroke-dasharray="2,1" opacity="0.4"/>

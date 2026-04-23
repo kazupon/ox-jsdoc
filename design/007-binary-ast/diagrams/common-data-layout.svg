@@ -160,7 +160,7 @@
       <text x="340" y="22" text-anchor="middle" fill="#999" font-size="10">bit5</text>
       <text x="340" y="36" text-anchor="middle" fill="#bbb" font-size="9">unused</text>
     </g>
-    <text x="390" y="50" font-size="10" fill="#666" font-style="italic">→ 4 bits used (1 enum + 2 bool); has_* flags compress empty NodeList Option</text>
+    <text x="390" y="50" font-size="10" fill="#666" font-style="italic">→ 4 bits used (1 enum + 2 bool); has_* flags signal whether a TypeParameterList child is emitted</text>
   </g>
 
   <!-- ============================================================ -->

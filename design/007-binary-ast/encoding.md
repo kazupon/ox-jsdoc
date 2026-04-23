@@ -20,9 +20,14 @@ Key decisions:
 - **compat_mode is handled within the single format (Header bit0)**: no
   separate format or section; switches between basic / compat via a Header
   flag. Binary compatibility is preserved
-- **Empty NodeLists are not emitted (Option A2)**: bit=0 in the parent's
-  Children bitmask is treated semantically as "empty array". A reduction of
-  about 1100 nodes / about 26 KB per 100-batch
+- **Variable-length child lists live as direct children of the parent**:
+  each list owns a 6-byte `(head_index: u32, count: u16)` metadata slot
+  inside the parent's Extended Data block (see
+  [format.md](./format.md#list-metadata-in-extended-data)). Decoders read
+  `(head, count)` and walk `next_sibling` exactly `count` times
+- **Empty lists are encoded as `(head=0, count=0)`**: the parent's Children
+  bitmask bit for that list is also cleared so visitor frameworks can
+  shortcut empty traversals before reading the metadata slot
 - **The lazy decoder holds the compat flag at the root (`RemoteSourceFile`)**:
   child nodes traverse `parent → root → compat` to look it up; no flag is held
   per node (memory efficient)
@@ -164,26 +169,31 @@ the same rules as tsgo:
 3. The first child of `node[i]` is `node[i+1]` (when `node[i+1].parent == i`)
 4. Siblings are linked via the `next_sibling` field
 5. When there is no child or no sibling, the value is 0 (= points to the sentinel)
-6. Following the tsgo `NodeList` (Kind 0x7F in ox-jsdoc) pattern, array fields
-   are wrapped in a single node (`tags[]`, `description_lines[]`, etc.)
+6. Variable-length child lists (`tags[]`, `description_lines[]`,
+   `interpolations[]`, etc.) are stored as direct children of the parent. Each
+   list has a 6-byte `(head_index: u32, count: u16)` slot in the parent's
+   Extended Data block — see [List metadata in Extended Data](./format.md#list-metadata-in-extended-data)
 
-### NodeList optimization: skip empty arrays (Option A2)
+### List metadata: empty-list encoding
 
-Because NodeList overhead accumulates during batch processing (empty arrays
-in JSDoc comments can account for more than half of the node count), we adopt
-the rule of **not emitting NodeLists for empty arrays**:
+Each variable-length child list has its metadata stored inline in the
+parent's Extended Data block:
 
 ```text
-Parent node's Children bitmask:
-  bit n = 1 → emit NodeList (length=0 is allowed but rare)
-  bit n = 0 → do not emit NodeList (= treated as empty array)
+Per list (6 bytes):
+  byte 0-3: head_index (u32) — node index of the list's first element
+  byte 4-5: count      (u16) — number of elements (0 for empty)
 ```
+
+Empty lists are encoded as `(head=0, count=0)`; the parent's Children bitmask
+bit for that list is also cleared so a fast `(bitmask & X) != 0` check can
+shortcut the metadata read.
 
 **Semantic unification**:
 
 - In the ox-jsdoc Rust AST, `tags: Vec<JsdocTag>` (not Option, can be empty)
-- In the Binary AST, "**empty array**" and "**field absent**" are **treated
-  identically** (represented by bit 0)
+- In the Binary AST, an absent or empty list is encoded the same way
+  (`count = 0`); decoders return an immediately-empty iterator
 - From the ESLint plugin's perspective, the behavior with `tags.length === 0`
   is the same
 
@@ -192,25 +202,15 @@ Parent node's Children bitmask:
 ```javascript
 class RemoteJsdocBlock {
   get tags() {
-    if (!(this.childMask & TAGS_BIT)) return EMPTY_NODE_LIST // bit 0 → shared empty NodeList
-    return this.#getNodeList(TAGS_NODE_INDEX) // bit 1 → RemoteNodeList instance
+    const bitmask = this.#readExtByte(0)
+    if (!(bitmask & TAGS_BIT)) return EMPTY_NODE_LIST
+    const head = this.#readExtU32(JSDOC_BLOCK_TAGS_SLOT)
+    const count = this.#readExtU16(JSDOC_BLOCK_TAGS_SLOT + 4)
+    return new RemoteNodeList(this.bytes, head, count, this.rootIndex)
   }
 }
 ```
 
-The return type is `RemoteNodeList extends Array` (see [js-decoder.md](./js-decoder.md)
-"Return type for array fields" for details).
-Empty arrays are represented by a shared singleton (`EMPTY_NODE_LIST`,
-`length === 0`).
-
-**Effect**: a 100-comment batch removes about 1100 empty-array NodeLists
-(~600 `inlineTags` + ~500 `typeLines`, etc.) → **about 26 KB reduction**.
-
-**Exception**: cases where the NodeList must always be emitted (noted as
-future extension room):
-
-- Cases where the array length is "0 but not empty" (no such case in the
-  current ox-jsdoc AST)
-- When the existence of the empty NodeList itself carries meaning
-- This exception is not currently needed (extend the spec if it becomes
-  necessary)
+`RemoteNodeList extends Array` (see [js-decoder.md](./js-decoder.md)
+"Return type for array fields" for details). Empty arrays are represented by
+a shared singleton (`EMPTY_NODE_LIST`, `length === 0`).
