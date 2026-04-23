@@ -248,19 +248,37 @@ mod structs {
     use super::*;
 
     #[derive(Debug)]
-    pub struct TypeName<'a> { pub span: Span, pub value: &'a str }
+    pub struct TypeName<'a> {
+        pub span: Span,
+        pub value: &'a str,
+    }
     #[derive(Debug)]
-    pub struct TypeNumber<'a> { pub span: Span, pub value: &'a str }
+    pub struct TypeNumber<'a> {
+        pub span: Span,
+        pub value: &'a str,
+    }
     #[derive(Debug)]
-    pub struct TypeStringValue<'a> { pub span: Span, pub value: &'a str, pub quote: QuoteStyle }
+    pub struct TypeStringValue<'a> {
+        pub span: Span,
+        pub value: &'a str,
+        pub quote: QuoteStyle,
+    }
     #[derive(Debug)]
-    pub struct TypeNull { pub span: Span }
+    pub struct TypeNull {
+        pub span: Span,
+    }
     #[derive(Debug)]
-    pub struct TypeUndefined { pub span: Span }
+    pub struct TypeUndefined {
+        pub span: Span,
+    }
     #[derive(Debug)]
-    pub struct TypeAny { pub span: Span }
+    pub struct TypeAny {
+        pub span: Span,
+    }
     #[derive(Debug)]
-    pub struct TypeUnknown { pub span: Span }
+    pub struct TypeUnknown {
+        pub span: Span,
+    }
     #[derive(Debug)]
     pub struct TypeUnion<'a> {
         pub span: Span,
@@ -353,13 +371,25 @@ mod structs {
         pub false_type: Box<TypeNodeData<'a>>,
     }
     #[derive(Debug)]
-    pub struct TypeInfer<'a> { pub span: Span, pub element: Box<TypeNodeData<'a>> }
+    pub struct TypeInfer<'a> {
+        pub span: Span,
+        pub element: Box<TypeNodeData<'a>>,
+    }
     #[derive(Debug)]
-    pub struct TypeKeyOf<'a> { pub span: Span, pub element: Box<TypeNodeData<'a>> }
+    pub struct TypeKeyOf<'a> {
+        pub span: Span,
+        pub element: Box<TypeNodeData<'a>>,
+    }
     #[derive(Debug)]
-    pub struct TypeTypeOf<'a> { pub span: Span, pub element: Box<TypeNodeData<'a>> }
+    pub struct TypeTypeOf<'a> {
+        pub span: Span,
+        pub element: Box<TypeNodeData<'a>>,
+    }
     #[derive(Debug)]
-    pub struct TypeImport<'a> { pub span: Span, pub element: Box<TypeNodeData<'a>> }
+    pub struct TypeImport<'a> {
+        pub span: Span,
+        pub element: Box<TypeNodeData<'a>>,
+    }
     #[derive(Debug)]
     pub struct TypePredicate<'a> {
         pub span: Span,
@@ -373,9 +403,15 @@ mod structs {
         pub right: Box<TypeNodeData<'a>>,
     }
     #[derive(Debug)]
-    pub struct TypeAssertsPlain<'a> { pub span: Span, pub element: Box<TypeNodeData<'a>> }
+    pub struct TypeAssertsPlain<'a> {
+        pub span: Span,
+        pub element: Box<TypeNodeData<'a>>,
+    }
     #[derive(Debug)]
-    pub struct TypeReadonlyArray<'a> { pub span: Span, pub element: Box<TypeNodeData<'a>> }
+    pub struct TypeReadonlyArray<'a> {
+        pub span: Span,
+        pub element: Box<TypeNodeData<'a>>,
+    }
     #[derive(Debug)]
     pub struct TypeTemplateLiteral<'a> {
         pub span: Span,
@@ -383,7 +419,9 @@ mod structs {
         pub interpolations: Vec<Box<TypeNodeData<'a>>>,
     }
     #[derive(Debug)]
-    pub struct TypeUniqueSymbol { pub span: Span }
+    pub struct TypeUniqueSymbol {
+        pub span: Span,
+    }
     #[derive(Debug)]
     pub struct TypeSymbol<'a> {
         pub span: Span,
@@ -462,7 +500,10 @@ mod structs {
         pub quote: Option<QuoteStyle>,
     }
     #[derive(Debug)]
-    pub struct TypeIndexedAccessIndex<'a> { pub span: Span, pub right: Box<TypeNodeData<'a>> }
+    pub struct TypeIndexedAccessIndex<'a> {
+        pub span: Span,
+        pub right: Box<TypeNodeData<'a>>,
+    }
     #[derive(Debug)]
     pub struct TypeParameterList<'a> {
         pub span: Span,

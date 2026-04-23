@@ -11,10 +11,11 @@
 use std::fs;
 use std::path::PathBuf;
 
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{BatchSize, Criterion, black_box, criterion_group, criterion_main};
 use ox_jsdoc_binary::parser::{
+    BatchItem, ParseOptions,
     context::{emit_block, parse_block_into_data},
-    parse, parse_batch_to_bytes, parse_to_bytes, BatchItem, ParseOptions,
+    parse, parse_batch_to_bytes, parse_to_bytes,
 };
 use ox_jsdoc_binary::writer::BinaryWriter;
 use oxc_allocator::Allocator;
@@ -158,20 +159,23 @@ fn bench_parse_plus_emit(c: &mut Criterion) {
 /// the emit + finish portion.
 fn bench_batch_parse_only(c: &mut Criterion) {
     let blocks = load_fixture();
-    c.bench_function("batch phase 1 — parse_block_into_data only (full file)", |b| {
-        b.iter(|| {
-            let arena = Allocator::default();
-            for src in &blocks {
-                let _ = black_box(parse_block_into_data(
-                    &arena,
-                    src.as_str(),
-                    0,
-                    ParseOptions::default(),
-                ));
-            }
-            black_box(arena);
-        });
-    });
+    c.bench_function(
+        "batch phase 1 — parse_block_into_data only (full file)",
+        |b| {
+            b.iter(|| {
+                let arena = Allocator::default();
+                for src in &blocks {
+                    let _ = black_box(parse_block_into_data(
+                        &arena,
+                        src.as_str(),
+                        0,
+                        ParseOptions::default(),
+                    ));
+                }
+                black_box(arena);
+            });
+        },
+    );
 }
 
 /// Batch-mode Phase 1+2: same loop body as `parse_batch_to_bytes` minus
@@ -186,29 +190,32 @@ fn bench_batch_parse_plus_emit(c: &mut Criterion) {
             base_offset: 0,
         })
         .collect();
-    c.bench_function("batch phase 1+2 — parse + emit (no finish, full file)", |b| {
-        b.iter(|| {
-            let arena = Allocator::default();
-            let mut writer = BinaryWriter::new(&arena);
-            for (index, item) in items.iter().enumerate() {
-                let source_offset = writer.append_source_text(item.source_text);
-                let parsed =
-                    parse_block_into_data(&arena, item.source_text, 0, ParseOptions::default());
-                let root_node_index = if parsed.is_failure() {
-                    0
-                } else {
-                    emit_block(&mut writer, &parsed).unwrap_or(0)
-                };
-                writer.push_root(root_node_index, source_offset, item.base_offset);
-                for diag in parsed.diagnostics() {
-                    writer.push_diagnostic(index as u32, diag.message());
+    c.bench_function(
+        "batch phase 1+2 — parse + emit (no finish, full file)",
+        |b| {
+            b.iter(|| {
+                let arena = Allocator::default();
+                let mut writer = BinaryWriter::new(&arena);
+                for (index, item) in items.iter().enumerate() {
+                    let source_offset = writer.append_source_text(item.source_text);
+                    let parsed =
+                        parse_block_into_data(&arena, item.source_text, 0, ParseOptions::default());
+                    let root_node_index = if parsed.is_failure() {
+                        0
+                    } else {
+                        emit_block(&mut writer, &parsed).unwrap_or(0)
+                    };
+                    writer.push_root(root_node_index, source_offset, item.base_offset);
+                    for diag in parsed.diagnostics() {
+                        writer.push_diagnostic(index as u32, diag.message());
+                    }
                 }
-            }
-            // Drop without finish() to exclude the final concat cost.
-            drop(writer);
-            black_box(arena);
-        });
-    });
+                // Drop without finish() to exclude the final concat cost.
+                drop(writer);
+                black_box(arena);
+            });
+        },
+    );
 }
 
 criterion_group!(

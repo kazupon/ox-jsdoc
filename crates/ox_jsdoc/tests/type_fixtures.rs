@@ -3,12 +3,12 @@
 //
 // Test fixtures ported from jsdoc-type-pratt-parser test/fixtures/
 
-use oxc_allocator::Allocator;
+use ox_jsdoc::ast::JsdocType;
+use ox_jsdoc::parse_comment;
 use ox_jsdoc::parser::ParseOptions;
 use ox_jsdoc::type_parser::ast::ParseMode;
 use ox_jsdoc::type_parser::stringify::stringify_type;
-use ox_jsdoc::parse_comment;
-use ox_jsdoc::ast::JsdocType;
+use oxc_allocator::Allocator;
 
 /// Parse a type expression via the full comment parser pipeline.
 /// Wraps the type in `/** @param {<type>} x */` and extracts parsed_type.
@@ -100,7 +100,10 @@ fn assert_type_value(source: &str, mode: ParseMode, expected_type: &str, expecte
 fn assert_roundtrip(source: &str, mode: ParseMode) {
     let result = roundtrip(source, mode)
         .unwrap_or_else(|| panic!("failed to parse '{source}' for roundtrip in mode {mode:?}"));
-    assert_eq!(result, source, "roundtrip mismatch for '{source}' in {mode:?}");
+    assert_eq!(
+        result, source,
+        "roundtrip mismatch for '{source}' in {mode:?}"
+    );
 }
 
 /// Check stringify roundtrip with expected output (when whitespace differs).
@@ -108,7 +111,10 @@ fn assert_roundtrip(source: &str, mode: ParseMode) {
 fn assert_roundtrip_to(source: &str, mode: ParseMode, expected: &str) {
     let result = roundtrip(source, mode)
         .unwrap_or_else(|| panic!("failed to parse '{source}' for roundtrip in mode {mode:?}"));
-    assert_eq!(result, expected, "roundtrip mismatch for '{source}' in {mode:?}");
+    assert_eq!(
+        result, expected,
+        "roundtrip mismatch for '{source}' in {mode:?}"
+    );
 }
 
 /// Serialize TypeNode to JSON for comparison.
@@ -118,7 +124,9 @@ fn serialize_node(node: &ox_jsdoc::type_parser::ast::TypeNode<'_>) -> serde_json
 
     match node {
         TypeNode::Name(n) => json!({ "type": "JsdocTypeName", "value": n.value }),
-        TypeNode::Number(n) => json!({ "type": "JsdocTypeNumber", "value": n.value.parse::<f64>().unwrap_or(0.0) }),
+        TypeNode::Number(n) => {
+            json!({ "type": "JsdocTypeNumber", "value": n.value.parse::<f64>().unwrap_or(0.0) })
+        }
         TypeNode::StringValue(n) => json!({
             "type": "JsdocTypeStringValue",
             "value": unquote(n.value),
@@ -216,15 +224,31 @@ fn serialize_node(node: &ox_jsdoc::type_parser::ast::TypeNode<'_>) -> serde_json
             "trueType": serialize_node(&n.true_type),
             "falseType": serialize_node(&n.false_type),
         }),
-        TypeNode::KeyOf(n) => json!({ "type": "JsdocTypeKeyof", "element": serialize_node(&n.element) }),
-        TypeNode::TypeOf(n) => json!({ "type": "JsdocTypeTypeof", "element": serialize_node(&n.element) }),
-        TypeNode::Import(n) => json!({ "type": "JsdocTypeImport", "element": serialize_node(&n.element) }),
-        TypeNode::Predicate(n) => json!({ "type": "JsdocTypePredicate", "left": serialize_node(&n.left), "right": serialize_node(&n.right) }),
-        TypeNode::Asserts(n) => json!({ "type": "JsdocTypeAsserts", "left": serialize_node(&n.left), "right": serialize_node(&n.right) }),
-        TypeNode::AssertsPlain(n) => json!({ "type": "JsdocTypeAssertsPlain", "element": serialize_node(&n.element) }),
-        TypeNode::Infer(n) => json!({ "type": "JsdocTypeInfer", "element": serialize_node(&n.element) }),
+        TypeNode::KeyOf(n) => {
+            json!({ "type": "JsdocTypeKeyof", "element": serialize_node(&n.element) })
+        }
+        TypeNode::TypeOf(n) => {
+            json!({ "type": "JsdocTypeTypeof", "element": serialize_node(&n.element) })
+        }
+        TypeNode::Import(n) => {
+            json!({ "type": "JsdocTypeImport", "element": serialize_node(&n.element) })
+        }
+        TypeNode::Predicate(n) => {
+            json!({ "type": "JsdocTypePredicate", "left": serialize_node(&n.left), "right": serialize_node(&n.right) })
+        }
+        TypeNode::Asserts(n) => {
+            json!({ "type": "JsdocTypeAsserts", "left": serialize_node(&n.left), "right": serialize_node(&n.right) })
+        }
+        TypeNode::AssertsPlain(n) => {
+            json!({ "type": "JsdocTypeAssertsPlain", "element": serialize_node(&n.element) })
+        }
+        TypeNode::Infer(n) => {
+            json!({ "type": "JsdocTypeInfer", "element": serialize_node(&n.element) })
+        }
         TypeNode::UniqueSymbol(_) => json!({ "type": "JsdocTypeUniqueSymbol" }),
-        TypeNode::ReadonlyArray(n) => json!({ "type": "JsdocTypeReadonlyArray", "element": serialize_node(&n.element) }),
+        TypeNode::ReadonlyArray(n) => {
+            json!({ "type": "JsdocTypeReadonlyArray", "element": serialize_node(&n.element) })
+        }
         TypeNode::Function(n) => {
             let mut obj = json!({
                 "type": "JsdocTypeFunction",
@@ -498,7 +522,12 @@ fn basic_reserved_word_prefix() {
 
 #[test]
 fn basic_hyphen_name() {
-    assert_type_value("My-1st-Class", ParseMode::Jsdoc, "JsdocTypeName", "My-1st-Class");
+    assert_type_value(
+        "My-1st-Class",
+        ParseMode::Jsdoc,
+        "JsdocTypeName",
+        "My-1st-Class",
+    );
     assert_parses("My-1st-Class", JSDOC_CLOSURE);
 }
 
@@ -808,7 +837,12 @@ fn misc_string_literal_single() {
 
 #[test]
 fn misc_reserved_word_function_prefix() {
-    assert_type_value("functionBar", ParseMode::Jsdoc, "JsdocTypeName", "functionBar");
+    assert_type_value(
+        "functionBar",
+        ParseMode::Jsdoc,
+        "JsdocTypeName",
+        "functionBar",
+    );
     assert_parses("functionBar", ALL);
 }
 
@@ -1188,7 +1222,12 @@ fn function_variadic_param() {
 
 #[test]
 fn jsdoc_functional_name() {
-    assert_type_value("functional", ParseMode::Jsdoc, "JsdocTypeName", "functional");
+    assert_type_value(
+        "functional",
+        ParseMode::Jsdoc,
+        "JsdocTypeName",
+        "functional",
+    );
     assert_parses("functional", ALL);
 }
 
@@ -1560,7 +1599,10 @@ fn function_new_optional_any_return() {
 
 #[test]
 fn function_this_date_returns_union() {
-    assert_parses("function(this: Date, number): (boolean | number | string)", ALL);
+    assert_parses(
+        "function(this: Date, number): (boolean | number | string)",
+        ALL,
+    );
 }
 
 // ============================================================================
@@ -1662,7 +1704,10 @@ fn union_error_or_function() {
 
 #[test]
 fn union_optional_many_types() {
-    assert_parses("(jQuerySelector | Element | Object | Array.<Element> | jQuery | string | function())=", ALL);
+    assert_parses(
+        "(jQuerySelector | Element | Object | Array.<Element> | jQuery | string | function())=",
+        ALL,
+    );
 }
 
 // ============================================================================
@@ -1671,7 +1716,10 @@ fn union_optional_many_types() {
 
 #[test]
 fn generic_complex_nested() {
-    assert_parses("Object.<Array.<(boolean | {myKey: Error})>, (boolean | string | function(new: foo): string)>", ALL);
+    assert_parses(
+        "Object.<Array.<(boolean | {myKey: Error})>, (boolean | string | function(new: foo): string)>",
+        ALL,
+    );
 }
 
 // ============================================================================
@@ -1768,12 +1816,18 @@ fn ts_arrow_as_generic_param() {
 
 #[test]
 fn ts_arrow_optional_param() {
-    assert_parses("(param1: string, param2?: string) => number", &[ParseMode::Typescript]);
+    assert_parses(
+        "(param1: string, param2?: string) => number",
+        &[ParseMode::Typescript],
+    );
 }
 
 #[test]
 fn ts_arrow_with_params_returning_arrow() {
-    assert_parses("(a: number) => (b: string) => boolean", &[ParseMode::Typescript]);
+    assert_parses(
+        "(a: number) => (b: string) => boolean",
+        &[ParseMode::Typescript],
+    );
 }
 
 #[test]
@@ -1811,7 +1865,10 @@ fn ts_typed_variadic_args() {
 
 #[test]
 fn ts_conditional_infer_non_initial() {
-    assert_parses("T extends Map<any, infer V> ? V : never", &[ParseMode::Typescript]);
+    assert_parses(
+        "T extends Map<any, infer V> ? V : never",
+        &[ParseMode::Typescript],
+    );
 }
 
 // ============================================================================
@@ -1856,12 +1913,18 @@ fn ts_tuple_with_keyof() {
 
 #[test]
 fn ts_tuple_with_spread_and_typeof() {
-    assert_parses("[tuple, with, typeof foo, and, ...rest]", &[ParseMode::Typescript]);
+    assert_parses(
+        "[tuple, with, typeof foo, and, ...rest]",
+        &[ParseMode::Typescript],
+    );
 }
 
 #[test]
 fn ts_tuple_with_spread_and_keyof() {
-    assert_parses("[tuple, with, keyof foo, and, ...rest]", &[ParseMode::Typescript]);
+    assert_parses(
+        "[tuple, with, keyof foo, and, ...rest]",
+        &[ParseMode::Typescript],
+    );
 }
 
 // ============================================================================
@@ -1995,7 +2058,10 @@ fn ts_object_optional_no_type() {
 
 #[test]
 fn ts_object_function_key() {
-    assert_parses("{function: string}", &[ParseMode::Typescript, ParseMode::Jsdoc]);
+    assert_parses(
+        "{function: string}",
+        &[ParseMode::Typescript, ParseMode::Jsdoc],
+    );
 }
 
 #[test]
@@ -2121,7 +2187,11 @@ fn ts_call_signature_with_type_params() {
 
 #[test]
 fn ts_constructor_signature() {
-    let json = parse_and_json("{new (a: string, b: number): SomeType}", ParseMode::Typescript).unwrap();
+    let json = parse_and_json(
+        "{new (a: string, b: number): SomeType}",
+        ParseMode::Typescript,
+    )
+    .unwrap();
     assert_eq!(json["type"], "JsdocTypeObject");
 }
 
@@ -2132,7 +2202,10 @@ fn ts_constructor_signature_variadic() {
 
 #[test]
 fn ts_constructor_signature_complex_type_params() {
-    assert_parses("{new <T extends A = string, V>(a: T, b: number): SomeType}", &[ParseMode::Typescript]);
+    assert_parses(
+        "{new <T extends A = string, V>(a: T, b: number): SomeType}",
+        &[ParseMode::Typescript],
+    );
 }
 
 // ============================================================================
@@ -2141,23 +2214,36 @@ fn ts_constructor_signature_complex_type_params() {
 
 #[test]
 fn ts_method_signature() {
-    let json = parse_and_json("{someName(a: string, b: number): SomeType}", ParseMode::Typescript).unwrap();
+    let json = parse_and_json(
+        "{someName(a: string, b: number): SomeType}",
+        ParseMode::Typescript,
+    )
+    .unwrap();
     assert_eq!(json["type"], "JsdocTypeObject");
 }
 
 #[test]
 fn ts_method_signature_with_type_params() {
-    assert_parses("{abc<T = string>(a: T, b: number): SomeType}", &[ParseMode::Typescript]);
+    assert_parses(
+        "{abc<T = string>(a: T, b: number): SomeType}",
+        &[ParseMode::Typescript],
+    );
 }
 
 #[test]
 fn ts_method_signature_double_quoted_name() {
-    assert_parses("{\"new\"(a: string, b: number): SomeType}", &[ParseMode::Typescript]);
+    assert_parses(
+        "{\"new\"(a: string, b: number): SomeType}",
+        &[ParseMode::Typescript],
+    );
 }
 
 #[test]
 fn ts_method_signature_single_quoted_name() {
-    assert_parses("{'some-method'(a: string, b: number): SomeType}", &[ParseMode::Typescript]);
+    assert_parses(
+        "{'some-method'(a: string, b: number): SomeType}",
+        &[ParseMode::Typescript],
+    );
 }
 
 // ============================================================================
@@ -2175,7 +2261,11 @@ fn ts_template_literal_no_interpolation() {
 
 #[test]
 fn ts_template_literal_with_escape() {
-    assert_type("`acd\\`ehij`", ParseMode::Typescript, "JsdocTypeTemplateLiteral");
+    assert_type(
+        "`acd\\`ehij`",
+        ParseMode::Typescript,
+        "JsdocTypeTemplateLiteral",
+    );
 }
 
 #[test]
@@ -2189,7 +2279,10 @@ fn ts_template_literal_empty() {
 
 #[test]
 fn ts_arrow_trailing_comma() {
-    assert_parses("(arrow: Function, with: TrailingComma, ) => string", &[ParseMode::Typescript]);
+    assert_parses(
+        "(arrow: Function, with: TrailingComma, ) => string",
+        &[ParseMode::Typescript],
+    );
 }
 
 #[test]
@@ -2285,22 +2378,34 @@ fn ts_object_multi_level_bracket_access() {
 
 #[test]
 fn ts_mapped_type_readonly_optional() {
-    assert_parses("{readonly [key in Type]?: number}", &[ParseMode::Typescript]);
+    assert_parses(
+        "{readonly [key in Type]?: number}",
+        &[ParseMode::Typescript],
+    );
 }
 
 #[test]
 fn ts_mapped_type_complex_value() {
-    assert_parses("{[key in AvailableArbitraryType]: Partial<TypeObject> | string[]}", &[ParseMode::Typescript]);
+    assert_parses(
+        "{[key in AvailableArbitraryType]: Partial<TypeObject> | string[]}",
+        &[ParseMode::Typescript],
+    );
 }
 
 #[test]
 fn ts_mapped_type_string_literal_union() {
-    assert_parses("{[key in \"abc\" | \"def\"]: number}", &[ParseMode::Typescript]);
+    assert_parses(
+        "{[key in \"abc\" | \"def\"]: number}",
+        &[ParseMode::Typescript],
+    );
 }
 
 #[test]
 fn ts_index_signature_union_key() {
-    assert_parses("{[key: string | number]: boolean}", &[ParseMode::Typescript]);
+    assert_parses(
+        "{[key: string | number]: boolean}",
+        &[ParseMode::Typescript],
+    );
 }
 
 #[test]
@@ -2310,7 +2415,10 @@ fn ts_readonly_index_signature() {
 
 #[test]
 fn ts_readonly_index_signature_generic_value() {
-    assert_parses("{readonly [type: string]: ReadonlyArray<string>}", &[ParseMode::Typescript]);
+    assert_parses(
+        "{readonly [type: string]: ReadonlyArray<string>}",
+        &[ParseMode::Typescript],
+    );
 }
 
 // ============================================================================
@@ -2324,7 +2432,10 @@ fn ts_tuple_trailing_comma() {
 
 #[test]
 fn ts_tuple_with_typeof_and_keyof() {
-    assert_parses("[tuple, with, typeof foo, and, keyof foo]", &[ParseMode::Typescript]);
+    assert_parses(
+        "[tuple, with, typeof foo, and, keyof foo]",
+        &[ParseMode::Typescript],
+    );
 }
 
 // ============================================================================
@@ -2333,7 +2444,10 @@ fn ts_tuple_with_typeof_and_keyof() {
 
 #[test]
 fn closure_typeof_as_function_param_no_return() {
-    assert_parses("function(typeof A)", &[ParseMode::Closure, ParseMode::Typescript]);
+    assert_parses(
+        "function(typeof A)",
+        &[ParseMode::Closure, ParseMode::Typescript],
+    );
 }
 
 // ============================================================================
@@ -2480,22 +2594,34 @@ fn ts_computed_method_optional() {
 
 #[test]
 fn ts_computed_method_with_params() {
-    assert_parses("{[someType](a: string, b: number[]): AnotherType}", &[ParseMode::Typescript]);
+    assert_parses(
+        "{[someType](a: string, b: number[]): AnotherType}",
+        &[ParseMode::Typescript],
+    );
 }
 
 #[test]
 fn ts_computed_method_optional_with_type_params() {
-    assert_parses("{[someType]?<T>(a: T, b: number[]): AnotherType}", &[ParseMode::Typescript]);
+    assert_parses(
+        "{[someType]?<T>(a: T, b: number[]): AnotherType}",
+        &[ParseMode::Typescript],
+    );
 }
 
 #[test]
 fn ts_computed_method_default_type_params() {
-    assert_parses("{[someType]<T = string>(a: T, b: number[]): AnotherType}", &[ParseMode::Typescript]);
+    assert_parses(
+        "{[someType]<T = string>(a: T, b: number[]): AnotherType}",
+        &[ParseMode::Typescript],
+    );
 }
 
 #[test]
 fn ts_computed_method_complex_type_params() {
-    assert_parses("{[someType]<T extends A = string, V>(a: T, b: number[]): AnotherType}", &[ParseMode::Typescript]);
+    assert_parses(
+        "{[someType]<T extends A = string, V>(a: T, b: number[]): AnotherType}",
+        &[ParseMode::Typescript],
+    );
 }
 
 #[test]
@@ -2681,7 +2807,12 @@ fn reserved_word_enum() {
 
 #[test]
 fn reserved_word_implements() {
-    assert_type_value("implements", ParseMode::Jsdoc, "JsdocTypeName", "implements");
+    assert_type_value(
+        "implements",
+        ParseMode::Jsdoc,
+        "JsdocTypeName",
+        "implements",
+    );
 }
 
 #[test]

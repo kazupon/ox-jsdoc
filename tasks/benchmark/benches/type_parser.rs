@@ -13,7 +13,10 @@ const TYPE_EXPRESSIONS: &[(&str, &str)] = &[
     ("basic/unknown", "?"),
     ("union/two", "string | number"),
     ("union/three", "string | number | boolean"),
-    ("union/complex", "string | number | null | undefined | boolean"),
+    (
+        "union/complex",
+        "string | number | null | undefined | boolean",
+    ),
     ("intersection/two", "A & B"),
     ("intersection/three", "A & B & C"),
     ("generic/simple", "Array<string>"),
@@ -27,15 +30,24 @@ const TYPE_EXPRESSIONS: &[(&str, &str)] = &[
     ("modifier/optional", "string="),
     ("modifier/variadic", "...string"),
     ("function/no-params", "function()"),
-    ("function/params-return", "function(string, number): boolean"),
+    (
+        "function/params-return",
+        "function(string, number): boolean",
+    ),
     ("function/arrow", "(x: number) => string"),
-    ("function/arrow-multi", "(a: string, b: number, c: boolean) => void"),
+    (
+        "function/arrow-multi",
+        "(a: string, b: number, c: boolean) => void",
+    ),
     ("object/empty", "{}"),
     ("object/simple", "{key: string}"),
     ("object/multi", "{a: string, b: number, c: boolean}"),
     ("object/optional", "{a?: string, b?: number}"),
     ("ts/conditional", "T extends U ? X : Y"),
-    ("ts/conditional-complex", "T extends Array<infer U> ? U : never"),
+    (
+        "ts/conditional-complex",
+        "T extends Array<infer U> ? U : never",
+    ),
     ("ts/keyof", "keyof MyType"),
     ("ts/typeof", "typeof myVar"),
     ("ts/import", "import('./module')"),
@@ -45,11 +57,26 @@ const TYPE_EXPRESSIONS: &[(&str, &str)] = &[
     ("ts/unique-symbol", "unique symbol"),
     ("tuple/two", "[string, number]"),
     ("tuple/labeled", "[a: string, b: number]"),
-    ("complex/union-generic", "Array<string> | Map<string, number> | null"),
-    ("complex/nested-generic", "Promise<Map<string, Array<number>>>"),
-    ("complex/conditional-keyof", "K extends keyof T ? T[K] : never"),
-    ("realworld/react-props", "{children: React.ReactNode, className?: string}"),
-    ("realworld/union-literals", "\"success\" | \"error\" | \"pending\""),
+    (
+        "complex/union-generic",
+        "Array<string> | Map<string, number> | null",
+    ),
+    (
+        "complex/nested-generic",
+        "Promise<Map<string, Array<number>>>",
+    ),
+    (
+        "complex/conditional-keyof",
+        "K extends keyof T ? T[K] : never",
+    ),
+    (
+        "realworld/react-props",
+        "{children: React.ReactNode, className?: string}",
+    ),
+    (
+        "realworld/union-literals",
+        "\"success\" | \"error\" | \"pending\"",
+    ),
 ];
 
 /// Benchmark parse_type (type parser only, no comment parser overhead).
@@ -61,12 +88,7 @@ fn bench_parse_type(criterion: &mut Criterion) {
         group.bench_function(id, |b| {
             let mut allocator = Allocator::default();
             b.iter(|| {
-                let _ = parse_type(
-                    &allocator,
-                    black_box(type_expr),
-                    0,
-                    ParseMode::Typescript,
-                );
+                let _ = parse_type(&allocator, black_box(type_expr), 0, ParseMode::Typescript);
                 allocator.reset();
             });
         });
@@ -91,12 +113,7 @@ fn bench_parse_comment_with_types(criterion: &mut Criterion) {
         group.bench_function(id, |b| {
             let mut allocator = Allocator::default();
             b.iter(|| {
-                let _ = parse_comment(
-                    &allocator,
-                    black_box(&comment),
-                    0,
-                    options,
-                );
+                let _ = parse_comment(&allocator, black_box(&comment), 0, options);
                 allocator.reset();
             });
         });
@@ -115,19 +132,15 @@ fn bench_batch(criterion: &mut Criterion) {
         let mut allocator = Allocator::default();
         b.iter(|| {
             for &(_, type_expr) in TYPE_EXPRESSIONS {
-                let _ = parse_type(
-                    &allocator,
-                    black_box(type_expr),
-                    0,
-                    ParseMode::Typescript,
-                );
+                let _ = parse_type(&allocator, black_box(type_expr), 0, ParseMode::Typescript);
             }
             allocator.reset();
         });
     });
 
     // Full pipeline batch
-    let comments: Vec<String> = TYPE_EXPRESSIONS.iter()
+    let comments: Vec<String> = TYPE_EXPRESSIONS
+        .iter()
         .map(|&(_, type_expr)| format!("/** @param {{{type_expr}}} x */"))
         .collect();
     let options = ParseOptions {
@@ -140,12 +153,7 @@ fn bench_batch(criterion: &mut Criterion) {
         let mut allocator = Allocator::default();
         b.iter(|| {
             for comment in &comments {
-                let _ = parse_comment(
-                    &allocator,
-                    black_box(comment),
-                    0,
-                    options,
-                );
+                let _ = parse_comment(&allocator, black_box(comment), 0, options);
             }
             allocator.reset();
         });
@@ -153,17 +161,15 @@ fn bench_batch(criterion: &mut Criterion) {
 
     // Baseline: no type parsing
     let options_no_types = ParseOptions::default();
-    let id = BenchmarkId::new("no_types_baseline", format!("{}_types", TYPE_EXPRESSIONS.len()));
+    let id = BenchmarkId::new(
+        "no_types_baseline",
+        format!("{}_types", TYPE_EXPRESSIONS.len()),
+    );
     group.bench_function(id, |b| {
         let mut allocator = Allocator::default();
         b.iter(|| {
             for comment in &comments {
-                let _ = parse_comment(
-                    &allocator,
-                    black_box(comment),
-                    0,
-                    options_no_types,
-                );
+                let _ = parse_comment(&allocator, black_box(comment), 0, options_no_types);
             }
             allocator.reset();
         });
@@ -186,12 +192,7 @@ fn bench_modes(criterion: &mut Criterion) {
         group.bench_function(id, |b| {
             let mut allocator = Allocator::default();
             b.iter(|| {
-                let _ = parse_type(
-                    &allocator,
-                    black_box(type_expr),
-                    0,
-                    mode,
-                );
+                let _ = parse_type(&allocator, black_box(type_expr), 0, mode);
                 allocator.reset();
             });
         });
@@ -200,5 +201,11 @@ fn bench_modes(criterion: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(type_parser, bench_parse_type, bench_parse_comment_with_types, bench_batch, bench_modes);
+criterion_group!(
+    type_parser,
+    bench_parse_type,
+    bench_parse_comment_with_types,
+    bench_batch,
+    bench_modes
+);
 criterion_main!(type_parser);

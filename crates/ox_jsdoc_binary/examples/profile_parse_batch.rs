@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Tight loop runner for `samply` / `cargo flamegraph` to profile
 //! `parse_batch_to_bytes` on the typescript-checker.ts fixture.
 //!
@@ -6,7 +10,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use ox_jsdoc_binary::parser::{parse_batch_to_bytes, BatchItem, ParseOptions};
+use ox_jsdoc_binary::parser::{BatchItem, ParseOptions, parse_batch_to_bytes};
 
 fn fixture_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

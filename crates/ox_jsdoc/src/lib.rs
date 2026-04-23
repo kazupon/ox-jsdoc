@@ -13,8 +13,8 @@ pub mod validator;
 
 pub use analyzer::{AnalysisOutput, analyze_comment};
 pub use parser::{ParseOptions, ParseOutput, ParseTypeOutput, parse_comment, parse_type};
-pub use type_parser::ast::ParseMode;
 pub use serializer::{
     SerializeOptions, SpacingMode, serialize_comment_json, serialize_comment_json_with_options,
 };
+pub use type_parser::ast::ParseMode;
 pub use validator::{ValidationMode, ValidationOptions, ValidationOutput, validate_comment};

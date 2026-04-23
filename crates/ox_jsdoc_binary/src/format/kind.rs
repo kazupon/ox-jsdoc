@@ -420,7 +420,10 @@ mod tests {
         for byte in 0u8..=u8::MAX {
             if Kind::from_u8(byte).is_ok() {
                 assert!(
-                    is_sentinel(byte) || is_node_list(byte) || is_comment_ast(byte) || is_type_node(byte),
+                    is_sentinel(byte)
+                        || is_node_list(byte)
+                        || is_comment_ast(byte)
+                        || is_type_node(byte),
                     "known Kind 0x{byte:02X} fell into reserved range"
                 );
                 assert!(!is_reserved(byte));
@@ -441,6 +444,9 @@ mod tests {
         assert_eq!(Kind::JsdocText.as_u8(), LAST_COMMENT_AST_KIND_IN_USE);
         assert_eq!(Kind::NodeList.as_u8(), NODE_LIST_KIND);
         assert_eq!(Kind::TypeName.as_u8(), FIRST_TYPE_NODE_KIND);
-        assert_eq!(Kind::TypeReadonlyProperty.as_u8(), LAST_TYPE_NODE_KIND_IN_USE);
+        assert_eq!(
+            Kind::TypeReadonlyProperty.as_u8(),
+            LAST_TYPE_NODE_KIND_IN_USE
+        );
     }
 }

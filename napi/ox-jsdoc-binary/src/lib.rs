@@ -10,11 +10,11 @@
 //! them in its Diagnostics section, but exposing both lets the JS layer
 //! avoid a re-decode for the common case).
 
-use napi::bindgen_prelude::{Uint32Array, Uint8Array};
+use napi::bindgen_prelude::{Uint8Array, Uint32Array};
 use napi_derive::napi;
 
 use ox_jsdoc_binary::parser::{
-    parse_batch_to_bytes, parse_to_bytes, type_data::ParseMode, BatchItem, ParseOptions,
+    BatchItem, ParseOptions, parse_batch_to_bytes, parse_to_bytes, type_data::ParseMode,
 };
 
 #[napi(object)]

@@ -9,11 +9,10 @@ use oxc_span::Span;
 
 use crate::format::diagnostics;
 use crate::format::header::{
-    self, COMPAT_MODE_BIT, Header, SUPPORTED_VERSION_BYTE,
-    DIAGNOSTICS_OFFSET_FIELD, EXTENDED_DATA_OFFSET_FIELD, FLAGS_OFFSET, HEADER_SIZE,
-    NODES_OFFSET_FIELD, NODE_COUNT_FIELD, ROOT_ARRAY_OFFSET_FIELD, ROOT_COUNT_FIELD,
-    SOURCE_TEXT_LENGTH_FIELD, STRING_DATA_OFFSET_FIELD, STRING_OFFSETS_OFFSET_FIELD,
-    VERSION_OFFSET,
+    self, COMPAT_MODE_BIT, DIAGNOSTICS_OFFSET_FIELD, EXTENDED_DATA_OFFSET_FIELD, FLAGS_OFFSET,
+    HEADER_SIZE, Header, NODE_COUNT_FIELD, NODES_OFFSET_FIELD, ROOT_ARRAY_OFFSET_FIELD,
+    ROOT_COUNT_FIELD, SOURCE_TEXT_LENGTH_FIELD, STRING_DATA_OFFSET_FIELD,
+    STRING_OFFSETS_OFFSET_FIELD, SUPPORTED_VERSION_BYTE, VERSION_OFFSET,
 };
 use crate::format::kind::Kind;
 use crate::format::node_record::{
@@ -24,7 +23,7 @@ use crate::format::string_field::StringField;
 
 use super::extended_data::{ExtOffset, ExtendedDataBuilder};
 use super::nodes::NodeIndex;
-use super::string_table::{common_string_field, lookup_common, StringIndex, StringTableBuilder};
+use super::string_table::{StringIndex, StringTableBuilder, common_string_field, lookup_common};
 
 /// Tracks one in-progress NodeList — the head index and element count that
 /// will be patched into the owning parent's Extended Data block when the
@@ -308,16 +307,13 @@ impl<'arena> BinaryWriter<'arena> {
     /// [`crate::format::root_index::PARSE_FAILURE_SENTINEL`]); when used,
     /// at least one matching diagnostic must subsequently be emitted via
     /// [`Self::push_diagnostic`].
-    pub fn push_root(
-        &mut self,
-        node_index: u32,
-        source_offset_in_data: u32,
-        base_offset: u32,
-    ) {
-        self.root_index_buffer.extend_from_slice(&node_index.to_le_bytes());
+    pub fn push_root(&mut self, node_index: u32, source_offset_in_data: u32, base_offset: u32) {
+        self.root_index_buffer
+            .extend_from_slice(&node_index.to_le_bytes());
         self.root_index_buffer
             .extend_from_slice(&source_offset_in_data.to_le_bytes());
-        self.root_index_buffer.extend_from_slice(&base_offset.to_le_bytes());
+        self.root_index_buffer
+            .extend_from_slice(&base_offset.to_le_bytes());
     }
 
     /// Append one diagnostic entry. The entries are sorted by `root_index`
@@ -372,9 +368,7 @@ impl<'arena> BinaryWriter<'arena> {
     /// the data buffer.
     pub fn append_source_text(&mut self, value: &str) -> u32 {
         let offset = self.strings.append_source_text(value);
-        self.source_text_length = self
-            .source_text_length
-            .saturating_add(value.len() as u32);
+        self.source_text_length = self.source_text_length.saturating_add(value.len() as u32);
         self.current_source_data_offset = offset;
         self.current_source_length = value.len() as u32;
         // Stash the source's start address as a usize so subsequent
@@ -404,14 +398,22 @@ impl<'arena> BinaryWriter<'arena> {
     /// duplicated bytes for an offsets-only registration. See
     /// `.notes/binary-ast-emit-phase-format-analysis.md` for context.
     #[inline]
-    pub fn intern_source_slice(&mut self, source_byte_start: u32, source_byte_end: u32) -> StringField {
+    pub fn intern_source_slice(
+        &mut self,
+        source_byte_start: u32,
+        source_byte_end: u32,
+    ) -> StringField {
         debug_assert!(
             source_byte_end <= self.current_source_length,
             "intern_source_slice end {source_byte_end} > current source length {}",
             self.current_source_length
         );
-        let absolute_start = self.current_source_data_offset.saturating_add(source_byte_start);
-        let absolute_end = self.current_source_data_offset.saturating_add(source_byte_end);
+        let absolute_start = self
+            .current_source_data_offset
+            .saturating_add(source_byte_start);
+        let absolute_end = self
+            .current_source_data_offset
+            .saturating_add(source_byte_end);
         self.strings.intern_at_offset(absolute_start, absolute_end)
     }
 
@@ -435,8 +437,12 @@ impl<'arena> BinaryWriter<'arena> {
             "intern_source_slice_for_leaf end {source_byte_end} > current source length {}",
             self.current_source_length
         );
-        let absolute_start = self.current_source_data_offset.saturating_add(source_byte_start);
-        let absolute_end = self.current_source_data_offset.saturating_add(source_byte_end);
+        let absolute_start = self
+            .current_source_data_offset
+            .saturating_add(source_byte_start);
+        let absolute_end = self
+            .current_source_data_offset
+            .saturating_add(source_byte_end);
         self.strings
             .intern_at_offset_for_leaf(absolute_start, absolute_end)
     }
@@ -486,11 +492,7 @@ impl<'arena> BinaryWriter<'arena> {
     /// zero-copy source slice, dedup'd unique entry) but allocates a
     /// String Offsets index for the result.
     #[inline]
-    pub fn intern_source_or_string_for_leaf(
-        &mut self,
-        value: &str,
-        span: Span,
-    ) -> StringIndex {
+    pub fn intern_source_or_string_for_leaf(&mut self, value: &str, span: Span) -> StringIndex {
         if let Some(idx) = lookup_common(value) {
             return StringIndex::from_u32(idx).expect("common index in range");
         }
@@ -583,11 +585,7 @@ impl<'arena> BinaryWriter<'arena> {
     ///    the parent's ED block at the recorded slot.
     #[inline]
     #[must_use]
-    pub fn begin_node_list_at(
-        &self,
-        parent_ext: ExtOffset,
-        slot_offset: usize,
-    ) -> ListInProgress {
+    pub fn begin_node_list_at(&self, parent_ext: ExtOffset, slot_offset: usize) -> ListInProgress {
         ListInProgress {
             parent_ext,
             slot_offset,
@@ -754,7 +752,11 @@ impl<'arena> BinaryWriter<'arena> {
         out.extend_from_slice(&self.nodes_buffer);
 
         debug_assert_eq!(total_size, out.len(), "section sizes must match capacity");
-        debug_assert_eq!(extended_data_offset & 3, 0, "Extended Data must be 4-aligned");
+        debug_assert_eq!(
+            extended_data_offset & 3,
+            0,
+            "Extended Data must be 4-aligned"
+        );
         debug_assert_eq!(diagnostics_offset & 3, 0, "Diagnostics must be 4-aligned");
         debug_assert_eq!(nodes_offset & 3, 0, "Nodes must be 4-aligned");
         out
@@ -835,7 +837,11 @@ mod tests {
         assert_eq!(read_u32_at(&bytes, root0), 1, "node_index of root 0");
         assert_eq!(read_u32_at(&bytes, root0 + 4), 0, "source_offset_in_data");
         assert_eq!(read_u32_at(&bytes, root0 + 8), 100, "base_offset");
-        assert_eq!(read_u32_at(&bytes, root0 + 12), 0, "node_index of root 1 (failure)");
+        assert_eq!(
+            read_u32_at(&bytes, root0 + 12),
+            0,
+            "node_index of root 1 (failure)"
+        );
         assert_eq!(read_u32_at(&bytes, root0 + 20), 200);
     }
 

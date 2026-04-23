@@ -28,7 +28,6 @@
 use oxc_allocator::{Allocator, Vec as ArenaVec};
 use oxc_span::Span;
 
-
 /// Path C-2: arena-allocated inline-tag list. Was `SmallVec<[_; 2]>` but
 /// SmallVec implements `Drop` (for the spilled-heap case), which prevents
 /// the surrounding `TagData` from itself being placed in `ArenaVec`. The
@@ -38,17 +37,16 @@ use crate::writer::nodes::comment_ast::{
     write_jsdoc_block, write_jsdoc_block_compat_tail, write_jsdoc_description_line,
     write_jsdoc_description_line_compat, write_jsdoc_generic_tag_body, write_jsdoc_identifier,
     write_jsdoc_inline_tag, write_jsdoc_namepath_source, write_jsdoc_parameter_name,
-    write_jsdoc_tag, write_jsdoc_tag_compat_tail, write_jsdoc_tag_name,
-    write_jsdoc_tag_name_value, write_jsdoc_text, write_jsdoc_type_line,
-    write_jsdoc_type_line_compat, write_jsdoc_type_source,
+    write_jsdoc_tag, write_jsdoc_tag_compat_tail, write_jsdoc_tag_name, write_jsdoc_tag_name_value,
+    write_jsdoc_text, write_jsdoc_type_line, write_jsdoc_type_line_compat, write_jsdoc_type_source,
 };
 use crate::writer::{BinaryWriter, StringField};
 
+use super::ParseOptions;
 use super::checkpoint::{Checkpoint, FenceState, QuoteKind};
 use super::diagnostics::{DiagnosticKind, ParserDiagnosticKind, TypeDiagnosticKind};
 use super::scanner;
 use super::type_data::TypeNodeData;
-use super::ParseOptions;
 
 // ---------------------------------------------------------------------------
 // Diagnostic + parsed-data types
@@ -273,7 +271,12 @@ pub struct ParserContext<'arena, 'a> {
 impl<'arena, 'a> ParserContext<'arena, 'a> {
     /// Create a parser context for one complete comment block.
     #[must_use]
-    pub fn new(arena: &'arena Allocator, source_text: &'a str, base_offset: u32, options: ParseOptions) -> Self {
+    pub fn new(
+        arena: &'arena Allocator,
+        source_text: &'a str,
+        base_offset: u32,
+        options: ParseOptions,
+    ) -> Self {
         Self {
             arena,
             source_text,
@@ -710,7 +713,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         (tag, parsed_type)
     }
 
-    fn parse_generic_tag_body(&mut self, normalized: NormalizedText<'a>) -> ParsedTagBody<'arena, 'a> {
+    fn parse_generic_tag_body(
+        &mut self,
+        normalized: NormalizedText<'a>,
+    ) -> ParsedTagBody<'arena, 'a> {
         let mut cursor = 0usize;
         let bytes = normalized.text.as_bytes();
         while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
@@ -805,7 +811,8 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         lines: &[scanner::LogicalLine<'a>],
         margins: &[scanner::MarginInfo<'a>],
     ) -> ParsedDescription<'arena, 'a> {
-        let mut description_lines: ArenaVec<'arena, DescriptionLineData<'a>> = ArenaVec::new_in(self.arena);
+        let mut description_lines: ArenaVec<'arena, DescriptionLineData<'a>> =
+            ArenaVec::new_in(self.arena);
         for (line, margin) in lines.iter().zip(margins.iter()) {
             if margin.is_content_empty {
                 continue;
@@ -831,7 +838,11 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         description
     }
 
-    fn parse_description_text(&mut self, text: &'a str, span: Span) -> ParsedDescription<'arena, 'a> {
+    fn parse_description_text(
+        &mut self,
+        text: &'a str,
+        span: Span,
+    ) -> ParsedDescription<'arena, 'a> {
         let mut lines: ArenaVec<'arena, DescriptionLineData<'a>> = ArenaVec::new_in(self.arena);
         let mut inline_tags = InlineTagsVec::new_in(self.arena);
 
@@ -905,7 +916,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         }
     }
 
-    fn normalize_lines(&mut self, lines: &[scanner::LogicalLine<'a>]) -> Option<NormalizedText<'a>> {
+    fn normalize_lines(
+        &mut self,
+        lines: &[scanner::LogicalLine<'a>],
+    ) -> Option<NormalizedText<'a>> {
         let first_index = lines.iter().position(|line| !line.is_content_empty)?;
         let last_index = lines.iter().rposition(|line| !line.is_content_empty)?;
         let lines = &lines[first_index..=last_index];
@@ -938,7 +952,8 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         // is only called from the same `parse_block_into_data` call frame
         // and the returned `&str` is consumed before `self.scratch` is
         // mutated again in the same frame.
-        let leaked: &'a str = unsafe { std::mem::transmute::<&str, &'a str>(self.scratch.as_str()) };
+        let leaked: &'a str =
+            unsafe { std::mem::transmute::<&str, &'a str>(self.scratch.as_str()) };
         Some(NormalizedText { text: leaked, span })
     }
 }
@@ -1149,14 +1164,9 @@ fn tag_value_name<'a>(
             *optional,
             *default_value,
         ),
-        Some(TagValueData::Namepath { span, raw }) => (
-            Some(TagNameValueData {
-                span: *span,
-                raw,
-            }),
-            false,
-            None,
-        ),
+        Some(TagValueData::Namepath { span, raw }) => {
+            (Some(TagNameValueData { span: *span, raw }), false, None)
+        }
         Some(TagValueData::Identifier { span, name }) => (
             Some(TagNameValueData {
                 span: *span,
@@ -1227,11 +1237,7 @@ fn trim_fast(s: &str) -> &str {
         return t;
     }
     let needs_unicode = bytes[0] >= 0x80 || bytes[bytes.len() - 1] >= 0x80;
-    if needs_unicode {
-        t.trim()
-    } else {
-        t
-    }
+    if needs_unicode { t.trim() } else { t }
 }
 
 // ---------------------------------------------------------------------------
@@ -1265,9 +1271,7 @@ fn opt_source_string(writer: &mut BinaryWriter<'_>, value: Option<&str>) -> Opti
 }
 
 fn empty_string(_writer: &mut BinaryWriter<'_>) -> StringField {
-    crate::writer::common_string_field(
-        crate::writer::COMMON_EMPTY,
-    )
+    crate::writer::common_string_field(crate::writer::COMMON_EMPTY)
 }
 
 fn intern(writer: &mut BinaryWriter<'_>, value: &str) -> StringField {
@@ -1282,9 +1286,7 @@ fn intern(writer: &mut BinaryWriter<'_>, value: &str) -> StringField {
 /// (e.g. the rare `\r`-only or trimmed line ending).
 #[inline]
 fn intern_line_end(writer: &mut BinaryWriter<'_>, value: &str) -> StringField {
-    use crate::writer::{
-        common_string_field, COMMON_CRLF, COMMON_EMPTY, COMMON_LF,
-    };
+    use crate::writer::{COMMON_CRLF, COMMON_EMPTY, COMMON_LF, common_string_field};
     match value {
         "" => common_string_field(COMMON_EMPTY),
         "\n" => common_string_field(COMMON_LF),
@@ -1307,7 +1309,7 @@ fn emit_block_inner<'arena>(
         ""
     };
     use crate::writer::{
-        common_string_field, COMMON_EMPTY, COMMON_SLASH_STAR, COMMON_SPACE, COMMON_STAR,
+        COMMON_EMPTY, COMMON_SLASH_STAR, COMMON_SPACE, COMMON_STAR, common_string_field,
     };
     let star = common_string_field(COMMON_STAR);
     let close = common_string_field(COMMON_SLASH_STAR);
@@ -1446,11 +1448,7 @@ fn emit_description_line(
 }
 
 fn non_empty_str(s: &str) -> Option<&str> {
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
-    }
+    if s.is_empty() { None } else { Some(s) }
 }
 
 fn emit_tag(
@@ -1542,13 +1540,7 @@ fn emit_tag(
             let pdelim = opt_string(writer, non_empty_str(tl.post_delimiter));
             let init = opt_string(writer, non_empty_str(tl.initial));
             write_jsdoc_type_line_compat(
-                writer,
-                tl.span,
-                tag_parent,
-                raw_field,
-                delim,
-                pdelim,
-                init,
+                writer, tl.span, tag_parent, raw_field, delim, pdelim, init,
             )
             .as_u32()
         } else {
@@ -1587,8 +1579,7 @@ fn emit_tag_body(writer: &mut BinaryWriter<'_>, body: &TagBodyData<'_>, parent_i
         TagBodyData::Generic(g) => {
             let desc_idx = opt_source_string(writer, g.description);
             // Children bitmask: bit0 = type_source, bit1 = value (branchless).
-            let bm: u8 = (g.type_source.is_some() as u8)
-                | ((g.value.is_some() as u8) << 1);
+            let bm: u8 = (g.type_source.is_some() as u8) | ((g.value.is_some() as u8) << 1);
             let body_idx = write_jsdoc_generic_tag_body(
                 writer,
                 g.span,

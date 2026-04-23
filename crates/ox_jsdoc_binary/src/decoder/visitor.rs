@@ -33,17 +33,17 @@ use super::nodes::comment_ast::{
     LazyJsdocText, LazyJsdocTypeLine, LazyJsdocTypeSource,
 };
 use super::nodes::type_node::{
-    LazyTypeAny, LazyTypeAsserts, LazyTypeAssertsPlain, LazyTypeCallSignature,
-    LazyTypeConditional, LazyTypeConstructorSignature, LazyTypeFunction, LazyTypeGeneric,
-    LazyTypeImport, LazyTypeIndexSignature, LazyTypeIndexedAccessIndex, LazyTypeInfer,
-    LazyTypeIntersection, LazyTypeJsdocObjectField, LazyTypeKeyOf, LazyTypeKeyValue,
-    LazyTypeMappedType, LazyTypeMethodSignature, LazyTypeName, LazyTypeNamePath, LazyTypeNode,
-    LazyTypeNotNullable, LazyTypeNull, LazyTypeNullable, LazyTypeNumber, LazyTypeObject,
-    LazyTypeObjectField, LazyTypeOptional, LazyTypeParameterList, LazyTypeParenthesis,
-    LazyTypePredicate, LazyTypeProperty, LazyTypeReadonlyArray, LazyTypeReadonlyProperty,
-    LazyTypeSpecialNamePath, LazyTypeStringValue, LazyTypeSymbol, LazyTypeTemplateLiteral,
-    LazyTypeTuple, LazyTypeTypeOf, LazyTypeTypeParameter, LazyTypeUndefined, LazyTypeUnion,
-    LazyTypeUniqueSymbol, LazyTypeUnknown, LazyTypeVariadic,
+    LazyTypeAny, LazyTypeAsserts, LazyTypeAssertsPlain, LazyTypeCallSignature, LazyTypeConditional,
+    LazyTypeConstructorSignature, LazyTypeFunction, LazyTypeGeneric, LazyTypeImport,
+    LazyTypeIndexSignature, LazyTypeIndexedAccessIndex, LazyTypeInfer, LazyTypeIntersection,
+    LazyTypeJsdocObjectField, LazyTypeKeyOf, LazyTypeKeyValue, LazyTypeMappedType,
+    LazyTypeMethodSignature, LazyTypeName, LazyTypeNamePath, LazyTypeNode, LazyTypeNotNullable,
+    LazyTypeNull, LazyTypeNullable, LazyTypeNumber, LazyTypeObject, LazyTypeObjectField,
+    LazyTypeOptional, LazyTypeParameterList, LazyTypeParenthesis, LazyTypePredicate,
+    LazyTypeProperty, LazyTypeReadonlyArray, LazyTypeReadonlyProperty, LazyTypeSpecialNamePath,
+    LazyTypeStringValue, LazyTypeSymbol, LazyTypeTemplateLiteral, LazyTypeTuple, LazyTypeTypeOf,
+    LazyTypeTypeParameter, LazyTypeUndefined, LazyTypeUnion, LazyTypeUniqueSymbol, LazyTypeUnknown,
+    LazyTypeVariadic,
 };
 
 /// Hand-written depth-first visitor over the lazy decoder. The default
@@ -544,10 +544,7 @@ pub trait LazyJsdocVisitor<'a> {
         self.visit_type_constructor_signature_default(node);
     }
     /// Default `TypeConstructorSignature` traversal.
-    fn visit_type_constructor_signature_default(
-        &mut self,
-        node: LazyTypeConstructorSignature<'a>,
-    ) {
+    fn visit_type_constructor_signature_default(&mut self, node: LazyTypeConstructorSignature<'a>) {
         if let Some(params) = node.parameters() {
             self.visit_type_parameter_list(params);
         }
@@ -670,13 +667,13 @@ mod tests {
     use super::*;
     use crate::decoder::source_file::LazySourceFile;
     use crate::format::kind::Kind;
+    use crate::writer::BinaryWriter;
     use crate::writer::nodes::comment_ast::{
-        write_jsdoc_block, write_jsdoc_tag, write_jsdoc_tag_name, write_jsdoc_tag_name_value,
-        JSDOC_BLOCK_TAGS_SLOT,
+        JSDOC_BLOCK_TAGS_SLOT, write_jsdoc_block, write_jsdoc_tag, write_jsdoc_tag_name,
+        write_jsdoc_tag_name_value,
     };
     use crate::writer::nodes::type_node::TYPE_LIST_PARENT_SLOT;
     use crate::writer::nodes::type_node::write_type_name;
-    use crate::writer::BinaryWriter;
     use oxc_allocator::Allocator;
     use oxc_span::Span;
     use std::collections::HashMap;
@@ -734,7 +731,13 @@ mod tests {
             Span::new(0, 25),
             0,
             None,
-            star, space, close, nl, empty, nl, empty,
+            star,
+            space,
+            close,
+            nl,
+            empty,
+            nl,
+            empty,
             0b010, // bit1 = tags
         );
         let mut tags_list = writer.begin_node_list_at(block_ext, JSDOC_BLOCK_TAGS_SLOT);

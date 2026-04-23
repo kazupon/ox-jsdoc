@@ -24,7 +24,11 @@ use crate::writer::{BinaryWriter, ExtOffset, NodeIndex};
 use super::type_data::*;
 
 /// Emit a TypeNodeData node into `writer` and return the assigned NodeIndex.
-pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, parent_index: u32) -> u32 {
+pub fn emit_type_node(
+    writer: &mut BinaryWriter<'_>,
+    node: &TypeNodeData<'_>,
+    parent_index: u32,
+) -> u32 {
     match node {
         TypeNodeData::Name(n) => {
             let v = writer.intern_source_or_string_for_leaf(n.value, n.span);
@@ -36,7 +40,8 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
         }
         TypeNodeData::StringValue(n) => {
             let v = writer.intern_source_or_string_for_leaf(n.value, n.span);
-            write_type_string_value(writer, n.span, parent_index, quote_to_u8(Some(n.quote)), v).as_u32()
+            write_type_string_value(writer, n.span, parent_index, quote_to_u8(Some(n.quote)), v)
+                .as_u32()
         }
         TypeNodeData::Property(n) => {
             // length-mismatch fallback handles the unquoted-property case
@@ -53,23 +58,32 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
                 SpecialPathType::Event => 1,
                 SpecialPathType::External => 2,
             };
-            write_type_special_name_path(writer, n.span, parent_index, st, quote_to_u8(n.quote), v).as_u32()
+            write_type_special_name_path(writer, n.span, parent_index, st, quote_to_u8(n.quote), v)
+                .as_u32()
         }
         TypeNodeData::Null(n) => write_type_null(writer, n.span, parent_index).as_u32(),
         TypeNodeData::Undefined(n) => write_type_undefined(writer, n.span, parent_index).as_u32(),
         TypeNodeData::Any(n) => write_type_any(writer, n.span, parent_index).as_u32(),
         TypeNodeData::Unknown(n) => write_type_unknown(writer, n.span, parent_index).as_u32(),
-        TypeNodeData::UniqueSymbol(n) => write_type_unique_symbol(writer, n.span, parent_index).as_u32(),
+        TypeNodeData::UniqueSymbol(n) => {
+            write_type_unique_symbol(writer, n.span, parent_index).as_u32()
+        }
 
-        TypeNodeData::Union(n) => emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p| {
-            write_type_union(w, s, p)
-        }),
-        TypeNodeData::Intersection(n) => emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p| {
-            write_type_intersection(w, s, p)
-        }),
-        TypeNodeData::Tuple(n) => emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p| {
-            write_type_tuple(w, s, p)
-        }),
+        TypeNodeData::Union(n) => {
+            emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p| {
+                write_type_union(w, s, p)
+            })
+        }
+        TypeNodeData::Intersection(n) => {
+            emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p| {
+                write_type_intersection(w, s, p)
+            })
+        }
+        TypeNodeData::Tuple(n) => {
+            emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p| {
+                write_type_tuple(w, s, p)
+            })
+        }
         TypeNodeData::TypeParameter(n) => {
             // TypeTypeParameter wraps name + optional constraint + optional default
             // as a single elements list per the lazy decoder shape.
@@ -85,9 +99,11 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
                 write_type_type_parameter(w, s, p)
             })
         }
-        TypeNodeData::ParameterList(n) => emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p| {
-            write_type_parameter_list(w, s, p)
-        }),
+        TypeNodeData::ParameterList(n) => {
+            emit_elements_only(writer, parent_index, n.span, &n.elements, |w, s, p| {
+                write_type_parameter_list(w, s, p)
+            })
+        }
 
         TypeNodeData::Object(n) => {
             let sep = match n.separator {
@@ -132,7 +148,9 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
             &n.parameters,
             n.return_type.as_deref(),
             &n.type_parameters,
-            |w, s, p, b| write_type_function(w, s, p, n.constructor, n.arrow, n.parenthesis, b).as_u32(),
+            |w, s, p, b| {
+                write_type_function(w, s, p, n.constructor, n.arrow, n.parenthesis, b).as_u32()
+            },
         ),
 
         TypeNodeData::CallSignature(n) => emit_function_like(
@@ -155,50 +173,91 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
             |w, s, p, b| write_type_constructor_signature(w, s, p, b).as_u32(),
         ),
 
-        TypeNodeData::Parenthesis(n) => emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
-            write_type_parenthesis(w, s, p, b).as_u32()
-        }),
-        TypeNodeData::Infer(n) => emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
-            write_type_infer(w, s, p, b).as_u32()
-        }),
-        TypeNodeData::KeyOf(n) => emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
-            write_type_key_of(w, s, p, b).as_u32()
-        }),
-        TypeNodeData::TypeOf(n) => emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
-            write_type_type_of(w, s, p, b).as_u32()
-        }),
-        TypeNodeData::Import(n) => emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
-            write_type_import(w, s, p, b).as_u32()
-        }),
-        TypeNodeData::AssertsPlain(n) => emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
-            write_type_asserts_plain(w, s, p, b).as_u32()
-        }),
-        TypeNodeData::ReadonlyArray(n) => emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
-            write_type_readonly_array(w, s, p, b).as_u32()
-        }),
-        TypeNodeData::IndexedAccessIndex(n) => emit_single_child(writer, parent_index, n.span, &n.right, |w, s, p, b| {
-            write_type_indexed_access_index(w, s, p, b).as_u32()
-        }),
-        TypeNodeData::ReadonlyProperty(n) => emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
-            write_type_readonly_property(w, s, p, b).as_u32()
-        }),
+        TypeNodeData::Parenthesis(n) => {
+            emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
+                write_type_parenthesis(w, s, p, b).as_u32()
+            })
+        }
+        TypeNodeData::Infer(n) => {
+            emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
+                write_type_infer(w, s, p, b).as_u32()
+            })
+        }
+        TypeNodeData::KeyOf(n) => {
+            emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
+                write_type_key_of(w, s, p, b).as_u32()
+            })
+        }
+        TypeNodeData::TypeOf(n) => {
+            emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
+                write_type_type_of(w, s, p, b).as_u32()
+            })
+        }
+        TypeNodeData::Import(n) => {
+            emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
+                write_type_import(w, s, p, b).as_u32()
+            })
+        }
+        TypeNodeData::AssertsPlain(n) => {
+            emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
+                write_type_asserts_plain(w, s, p, b).as_u32()
+            })
+        }
+        TypeNodeData::ReadonlyArray(n) => {
+            emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
+                write_type_readonly_array(w, s, p, b).as_u32()
+            })
+        }
+        TypeNodeData::IndexedAccessIndex(n) => {
+            emit_single_child(writer, parent_index, n.span, &n.right, |w, s, p, b| {
+                write_type_indexed_access_index(w, s, p, b).as_u32()
+            })
+        }
+        TypeNodeData::ReadonlyProperty(n) => {
+            emit_single_child(writer, parent_index, n.span, &n.element, |w, s, p, b| {
+                write_type_readonly_property(w, s, p, b).as_u32()
+            })
+        }
 
-        TypeNodeData::Nullable(n) => emit_modifier_child(writer, parent_index, n.span, &n.element, n.position, |w, s, p, pos, b| {
-            write_type_nullable(w, s, p, pos, b).as_u32()
-        }),
-        TypeNodeData::NotNullable(n) => emit_modifier_child(writer, parent_index, n.span, &n.element, n.position, |w, s, p, pos, b| {
-            write_type_not_nullable(w, s, p, pos, b).as_u32()
-        }),
-        TypeNodeData::Optional(n) => emit_modifier_child(writer, parent_index, n.span, &n.element, n.position, |w, s, p, pos, b| {
-            write_type_optional(w, s, p, pos, b).as_u32()
-        }),
+        TypeNodeData::Nullable(n) => emit_modifier_child(
+            writer,
+            parent_index,
+            n.span,
+            &n.element,
+            n.position,
+            |w, s, p, pos, b| write_type_nullable(w, s, p, pos, b).as_u32(),
+        ),
+        TypeNodeData::NotNullable(n) => emit_modifier_child(
+            writer,
+            parent_index,
+            n.span,
+            &n.element,
+            n.position,
+            |w, s, p, pos, b| write_type_not_nullable(w, s, p, pos, b).as_u32(),
+        ),
+        TypeNodeData::Optional(n) => emit_modifier_child(
+            writer,
+            parent_index,
+            n.span,
+            &n.element,
+            n.position,
+            |w, s, p, pos, b| write_type_optional(w, s, p, pos, b).as_u32(),
+        ),
         TypeNodeData::Variadic(n) => {
             let pos = n.position.map_or(0, |p| match p {
                 VariadicPosition::Prefix => 0,
                 VariadicPosition::Suffix => 1,
             });
             let bitmask = if n.element.is_some() { 0b1 } else { 0 };
-            let parent = write_type_variadic(writer, n.span, parent_index, pos, n.square_brackets, bitmask).as_u32();
+            let parent = write_type_variadic(
+                writer,
+                n.span,
+                parent_index,
+                pos,
+                n.square_brackets,
+                bitmask,
+            )
+            .as_u32();
             if let Some(el) = n.element.as_ref() {
                 emit_type_node(writer, el, parent);
             }
@@ -215,12 +274,22 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
             parent
         }
 
-        TypeNodeData::Predicate(n) => emit_left_right(writer, parent_index, n.span, &n.left, &n.right, |w, s, p, b| {
-            write_type_predicate(w, s, p, b).as_u32()
-        }),
-        TypeNodeData::Asserts(n) => emit_left_right(writer, parent_index, n.span, &n.left, &n.right, |w, s, p, b| {
-            write_type_asserts(w, s, p, b).as_u32()
-        }),
+        TypeNodeData::Predicate(n) => emit_left_right(
+            writer,
+            parent_index,
+            n.span,
+            &n.left,
+            &n.right,
+            |w, s, p, b| write_type_predicate(w, s, p, b).as_u32(),
+        ),
+        TypeNodeData::Asserts(n) => emit_left_right(
+            writer,
+            parent_index,
+            n.span,
+            &n.left,
+            &n.right,
+            |w, s, p, b| write_type_asserts(w, s, p, b).as_u32(),
+        ),
 
         TypeNodeData::NamePath(n) => {
             let pt = match n.path_type {
@@ -259,7 +328,8 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
         }
         TypeNodeData::JsdocObjectField(n) => {
             let bitmask = 0b11;
-            let parent = write_type_jsdoc_object_field(writer, n.span, parent_index, bitmask).as_u32();
+            let parent =
+                write_type_jsdoc_object_field(writer, n.span, parent_index, bitmask).as_u32();
             emit_type_node(writer, &n.left, parent);
             emit_type_node(writer, &n.right, parent);
             parent
@@ -270,7 +340,9 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
             // Span covers `key: value` (or `...key: value`); length-mismatch
             // fallback when `key` is just the leading identifier.
             let key = writer.intern_source_or_string(n.key, n.span);
-            let parent = write_type_key_value(writer, n.span, parent_index, n.optional, n.variadic, key).as_u32();
+            let parent =
+                write_type_key_value(writer, n.span, parent_index, n.optional, n.variadic, key)
+                    .as_u32();
             if let Some(r) = n.right.as_ref() {
                 emit_type_node(writer, r, parent);
             }
@@ -325,7 +397,8 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
         TypeNodeData::TemplateLiteral(n) => {
             let interned: Vec<crate::writer::StringField> =
                 n.literals.iter().map(|s| writer.intern_string(s)).collect();
-            let parent = write_type_template_literal(writer, n.span, parent_index, &interned).as_u32();
+            let parent =
+                write_type_template_literal(writer, n.span, parent_index, &interned).as_u32();
             for interp in &n.interpolations {
                 emit_type_node(writer, interp, parent);
             }
@@ -335,7 +408,9 @@ pub fn emit_type_node(writer: &mut BinaryWriter<'_>, node: &TypeNodeData<'_>, pa
             // Span covers `Symbol(...)` while value is the leading name →
             // length-mismatch fallback.
             let value = writer.intern_source_or_string(n.value, n.span);
-            let parent = write_type_symbol(writer, n.span, parent_index, n.element.is_some(), value).as_u32();
+            let parent =
+                write_type_symbol(writer, n.span, parent_index, n.element.is_some(), value)
+                    .as_u32();
             if let Some(el) = n.element.as_ref() {
                 emit_type_node(writer, el, parent);
             }

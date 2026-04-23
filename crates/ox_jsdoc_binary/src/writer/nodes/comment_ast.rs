@@ -151,7 +151,9 @@ pub fn write_jsdoc_block_compat_tail(
         writer.compat_mode(),
         "write_jsdoc_block_compat_tail called but compat_mode is off"
     );
-    let dst = writer.extended.slice_mut(ext_offset, JSDOC_BLOCK_COMPAT_SIZE);
+    let dst = writer
+        .extended
+        .slice_mut(ext_offset, JSDOC_BLOCK_COMPAT_SIZE);
     let base = JSDOC_BLOCK_COMPAT_TAIL_BASE;
     // bytes [base..base+2] are u32 alignment padding (already zero)
     dst[base + 2..base + 6].copy_from_slice(&end_line.to_le_bytes());
@@ -184,7 +186,13 @@ pub fn write_jsdoc_description_line(
     parent_index: u32,
     description: StringIndex,
 ) -> NodeIndex {
-    writer.emit_string_node(parent_index, Kind::JsdocDescriptionLine, 0, span, description)
+    writer.emit_string_node(
+        parent_index,
+        Kind::JsdocDescriptionLine,
+        0,
+        span,
+        description,
+    )
 }
 
 /// Write a `JsdocDescriptionLine` (Kind `0x02`, compat mode).
@@ -204,7 +212,9 @@ pub fn write_jsdoc_description_line_compat(
     initial: Option<StringField>,
 ) -> NodeIndex {
     debug_assert!(writer.compat_mode());
-    let (off, dst) = writer.extended.reserve_mut(JSDOC_DESCRIPTION_LINE_COMPAT_SIZE);
+    let (off, dst) = writer
+        .extended
+        .reserve_mut(JSDOC_DESCRIPTION_LINE_COMPAT_SIZE);
     write_string_field(dst, 0, description);
     write_opt_string_field(dst, 6, delimiter);
     write_opt_string_field(dst, 12, post_delimiter);

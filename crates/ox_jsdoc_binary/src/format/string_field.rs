@@ -135,7 +135,10 @@ mod tests {
         let none = StringField::NONE;
         assert!(none.is_none());
         let empty = StringField::new(0, 0);
-        assert!(!empty.is_none(), "empty (offset=0, length=0) is a valid string, not NONE");
+        assert!(
+            !empty.is_none(),
+            "empty (offset=0, length=0) is a valid string, not NONE"
+        );
     }
 
     #[test]

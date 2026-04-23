@@ -184,7 +184,12 @@ mod tests {
 
     #[test]
     fn node_data_pack_unpack_round_trip() {
-        for tag in [TypeTag::Children, TypeTag::String, TypeTag::Extended, TypeTag::Reserved] {
+        for tag in [
+            TypeTag::Children,
+            TypeTag::String,
+            TypeTag::Extended,
+            TypeTag::Reserved,
+        ] {
             for &payload_value in &[0u32, 1, 0xABCD, PAYLOAD_MAX, PAYLOAD_MAX - 1] {
                 let nd = pack_node_data(tag, payload_value);
                 let extracted_tag = TypeTag::from_u32(type_tag_bits(nd)).unwrap();

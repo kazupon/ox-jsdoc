@@ -32,11 +32,11 @@ pub mod type_parse;
 
 pub use checkpoint::{Checkpoint, FenceState, QuoteKind};
 pub use context::{
-    emit_block, parse_block_into_data, InlineTagFormatData, ParsedBlock, ParsedDiagnostic,
-    ParserContext,
+    InlineTagFormatData, ParsedBlock, ParsedDiagnostic, ParserContext, emit_block,
+    parse_block_into_data,
 };
 pub use diagnostics::{
-    parser_diagnostic_message, type_diagnostic_message, ParserDiagnosticKind, TypeDiagnosticKind,
+    ParserDiagnosticKind, TypeDiagnosticKind, parser_diagnostic_message, type_diagnostic_message,
 };
 
 use oxc_allocator::{Allocator, Vec as ArenaVec};
@@ -553,11 +553,7 @@ mod tests {
         let arena = Allocator::default();
         let mut opts = ParseOptions::default();
         opts.parse_types = true;
-        let result = parse(
-            &arena,
-            "/**\n * @param {string} id\n */",
-            opts,
-        );
+        let result = parse(&arena, "/**\n * @param {string} id\n */", opts);
         assert!(result.diagnostics.is_empty());
         let root = result.lazy_root.unwrap();
         let tag = root.tags().next().expect("tag present");
@@ -575,11 +571,7 @@ mod tests {
         let mut opts = ParseOptions::default();
         opts.parse_types = true;
         opts.type_parse_mode = crate::parser::type_data::ParseMode::Typescript;
-        let result = parse(
-            &arena,
-            "/**\n * @param {string | number} id\n */",
-            opts,
-        );
+        let result = parse(&arena, "/**\n * @param {string | number} id\n */", opts);
         assert!(result.diagnostics.is_empty());
         let root = result.lazy_root.unwrap();
         let tag = root.tags().next().expect("tag present");
@@ -615,11 +607,7 @@ mod tests {
         let arena = Allocator::default();
         let mut opts = ParseOptions::default();
         opts.parse_types = true;
-        let result = parse(
-            &arena,
-            "/**\n * @param {Array.<string>} ids\n */",
-            opts,
-        );
+        let result = parse(&arena, "/**\n * @param {Array.<string>} ids\n */", opts);
         assert!(result.diagnostics.is_empty());
         let root = result.lazy_root.unwrap();
         let tag = root.tags().next().expect("tag present");
@@ -639,11 +627,7 @@ mod tests {
         let mut opts = ParseOptions::default();
         opts.parse_types = true;
         opts.type_parse_mode = crate::parser::type_data::ParseMode::Typescript;
-        let result = parse(
-            &arena,
-            "/**\n * @param {`hello-${T}`} value\n */",
-            opts,
-        );
+        let result = parse(&arena, "/**\n * @param {`hello-${T}`} value\n */", opts);
         assert!(result.diagnostics.is_empty());
         let root = result.lazy_root.unwrap();
         let tag = root.tags().next().expect("tag present");
@@ -890,11 +874,7 @@ mod tests {
         let mut opts = ParseOptions::default();
         opts.parse_types = true;
         opts.type_parse_mode = crate::parser::type_data::ParseMode::Typescript;
-        let result = parse(
-            &arena,
-            "/**\n * @param {T extends U ? X : Y} v\n */",
-            opts,
-        );
+        let result = parse(&arena, "/**\n * @param {T extends U ? X : Y} v\n */", opts);
         assert!(result.diagnostics.is_empty());
         let root = result.lazy_root.unwrap();
         let tag = root.tags().next().expect("tag present");

@@ -10,11 +10,11 @@
 //! lands in Phase 1.2b once the parser is wired through the writer.
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use ox_jsdoc_binary::writer::BinaryWriter;
 use ox_jsdoc_binary::writer::nodes::comment_ast::{
     write_jsdoc_block, write_jsdoc_tag, write_jsdoc_tag_name,
 };
 use ox_jsdoc_binary::writer::nodes::type_node::write_type_name;
-use ox_jsdoc_binary::writer::BinaryWriter;
 use oxc_allocator::Allocator;
 use oxc_span::Span;
 
@@ -40,7 +40,13 @@ fn encode_simple_param(arena: &Allocator) -> Vec<u8> {
         Span::new(0, 35),
         0,
         None,
-        star, space, close, nl, empty, nl, empty,
+        star,
+        space,
+        close,
+        nl,
+        empty,
+        nl,
+        empty,
         0b010, // bit1 = tags present
     );
 

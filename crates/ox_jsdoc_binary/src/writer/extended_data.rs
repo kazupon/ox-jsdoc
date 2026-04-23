@@ -104,8 +104,8 @@ impl<'arena> ExtendedDataBuilder<'arena> {
         let aligned_offset = self.next_aligned_offset();
         let new_len = aligned_offset + size;
         self.buffer.resize(new_len, 0);
-        let off = ExtOffset::from_u32(aligned_offset as u32)
-            .expect("Extended Data offset overflow");
+        let off =
+            ExtOffset::from_u32(aligned_offset as u32).expect("Extended Data offset overflow");
         let slice = &mut self.buffer[aligned_offset..new_len];
         (off, slice)
     }

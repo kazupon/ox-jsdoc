@@ -7,8 +7,8 @@
 use napi_derive::napi;
 use oxc_allocator::Allocator;
 
-use ox_jsdoc::{ParseMode, ParseOptions, parse_comment, parse_type, serialize_comment_json};
 use ox_jsdoc::type_parser::stringify::stringify_type;
+use ox_jsdoc::{ParseMode, ParseOptions, parse_comment, parse_type, serialize_comment_json};
 
 #[napi(object)]
 #[derive(Default)]

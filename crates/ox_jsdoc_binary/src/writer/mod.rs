@@ -27,6 +27,6 @@ pub use binary_writer::{BinaryWriter, ListInProgress};
 pub use extended_data::{ExtOffset, ExtendedDataBuilder};
 pub use nodes::NodeIndex;
 pub use string_table::{
-    common_string_field, StringIndex, StringTableBuilder, COMMON_CRLF, COMMON_EMPTY, COMMON_LF,
-    COMMON_SLASH_STAR, COMMON_SLASH_STAR_STAR, COMMON_SPACE, COMMON_STAR, COMMON_TAB,
+    COMMON_CRLF, COMMON_EMPTY, COMMON_LF, COMMON_SLASH_STAR, COMMON_SLASH_STAR_STAR, COMMON_SPACE,
+    COMMON_STAR, COMMON_TAB, StringIndex, StringTableBuilder, common_string_field,
 };

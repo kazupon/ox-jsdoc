@@ -72,7 +72,11 @@ macro_rules! define_lazy_type_node {
 // Pattern 1 — String only (5 kinds)
 // ===========================================================================
 
-define_lazy_type_node!(LazyTypeName, Kind::TypeName, "Lazy view of `TypeName` (Kind 0x80).");
+define_lazy_type_node!(
+    LazyTypeName,
+    Kind::TypeName,
+    "Lazy view of `TypeName` (Kind 0x80)."
+);
 impl<'a> LazyTypeName<'a> {
     /// Identifier name string.
     pub fn value(&self) -> &'a str {
@@ -80,7 +84,11 @@ impl<'a> LazyTypeName<'a> {
     }
 }
 
-define_lazy_type_node!(LazyTypeNumber, Kind::TypeNumber, "Lazy view of `TypeNumber` (Kind 0x81).");
+define_lazy_type_node!(
+    LazyTypeNumber,
+    Kind::TypeNumber,
+    "Lazy view of `TypeNumber` (Kind 0x81)."
+);
 impl<'a> LazyTypeNumber<'a> {
     /// Numeric literal as written in the source.
     pub fn value(&self) -> &'a str {
@@ -96,18 +104,26 @@ define_lazy_type_node!(
 impl<'a> LazyTypeStringValue<'a> {
     /// Quote style (None=0 / Single=1 / Double=2).
     #[inline]
-    pub fn quote(&self) -> u8 { self.common_data() & 0b11 }
+    pub fn quote(&self) -> u8 {
+        self.common_data() & 0b11
+    }
     /// String literal value.
     pub fn value(&self) -> &'a str {
         string_payload(self.source_file, self.node_index).unwrap_or("")
     }
 }
 
-define_lazy_type_node!(LazyTypeProperty, Kind::TypeProperty, "Lazy view of `TypeProperty` (Kind 0xA3).");
+define_lazy_type_node!(
+    LazyTypeProperty,
+    Kind::TypeProperty,
+    "Lazy view of `TypeProperty` (Kind 0xA3)."
+);
 impl<'a> LazyTypeProperty<'a> {
     /// Quote style (3-state).
     #[inline]
-    pub fn quote(&self) -> u8 { self.common_data() & 0b11 }
+    pub fn quote(&self) -> u8 {
+        self.common_data() & 0b11
+    }
     /// Property name string.
     pub fn value(&self) -> &'a str {
         string_payload(self.source_file, self.node_index).unwrap_or("")
@@ -122,10 +138,14 @@ define_lazy_type_node!(
 impl<'a> LazyTypeSpecialNamePath<'a> {
     /// Special path category (3 variants).
     #[inline]
-    pub fn special_type(&self) -> u8 { self.common_data() & 0b11 }
+    pub fn special_type(&self) -> u8 {
+        self.common_data() & 0b11
+    }
     /// Quote style (3-state).
     #[inline]
-    pub fn quote(&self) -> u8 { (self.common_data() >> 2) & 0b11 }
+    pub fn quote(&self) -> u8 {
+        (self.common_data() >> 2) & 0b11
+    }
     /// Path string.
     pub fn value(&self) -> &'a str {
         string_payload(self.source_file, self.node_index).unwrap_or("")
@@ -201,11 +221,8 @@ impl<'a> Iterator for LazyTypeNodeListIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.remaining > 0 {
-            let item = LazyTypeNode::from_index(
-                self.source_file,
-                self.current_index,
-                self.root_index,
-            );
+            let item =
+                LazyTypeNode::from_index(self.source_file, self.current_index, self.root_index);
             self.current_index = read_next_sibling(self.source_file, self.current_index);
             self.remaining -= 1;
             if let Some(node) = item {
@@ -248,7 +265,11 @@ fn child_type_node<'a>(
     LazyTypeNode::from_index(sf, idx, root_index)
 }
 
-define_lazy_type_node!(LazyTypeUnion, Kind::TypeUnion, "Lazy view of `TypeUnion` (Kind 0x87).");
+define_lazy_type_node!(
+    LazyTypeUnion,
+    Kind::TypeUnion,
+    "Lazy view of `TypeUnion` (Kind 0x87)."
+);
 impl<'a> LazyTypeUnion<'a> {
     /// Union elements.
     pub fn elements(&self) -> LazyTypeNodeListIter<'a> {
@@ -268,14 +289,22 @@ impl<'a> LazyTypeIntersection<'a> {
     }
 }
 
-define_lazy_type_node!(LazyTypeGeneric, Kind::TypeGeneric, "Lazy view of `TypeGeneric` (Kind 0x89).");
+define_lazy_type_node!(
+    LazyTypeGeneric,
+    Kind::TypeGeneric,
+    "Lazy view of `TypeGeneric` (Kind 0x89)."
+);
 impl<'a> LazyTypeGeneric<'a> {
     /// Bracket style (Angle=0 / Square=1).
     #[inline]
-    pub fn brackets(&self) -> u8 { self.common_data() & 1 }
+    pub fn brackets(&self) -> u8 {
+        self.common_data() & 1
+    }
     /// Whether the generic was written with a leading `.` (Closure form).
     #[inline]
-    pub fn dot(&self) -> bool { (self.common_data() & 0b10) != 0 }
+    pub fn dot(&self) -> bool {
+        (self.common_data() & 0b10) != 0
+    }
     /// Left-hand side type (the parent's first direct child).
     pub fn left(&self) -> Option<LazyTypeNode<'a>> {
         let idx = first_child(self.source_file, self.node_index)?;
@@ -287,22 +316,36 @@ impl<'a> LazyTypeGeneric<'a> {
     }
 }
 
-define_lazy_type_node!(LazyTypeFunction, Kind::TypeFunction, "Lazy view of `TypeFunction` (Kind 0x8A).");
+define_lazy_type_node!(
+    LazyTypeFunction,
+    Kind::TypeFunction,
+    "Lazy view of `TypeFunction` (Kind 0x8A)."
+);
 impl<'a> LazyTypeFunction<'a> {
     /// Constructor flag.
     #[inline]
-    pub fn constructor(&self) -> bool { (self.common_data() & 0b001) != 0 }
+    pub fn constructor(&self) -> bool {
+        (self.common_data() & 0b001) != 0
+    }
     /// Arrow-form flag.
     #[inline]
-    pub fn arrow(&self) -> bool { (self.common_data() & 0b010) != 0 }
+    pub fn arrow(&self) -> bool {
+        (self.common_data() & 0b010) != 0
+    }
     /// Whether parameters were enclosed in parentheses.
     #[inline]
-    pub fn parenthesis(&self) -> bool { (self.common_data() & 0b100) != 0 }
+    pub fn parenthesis(&self) -> bool {
+        (self.common_data() & 0b100) != 0
+    }
     /// Parameter list child.
     pub fn parameters(&self) -> Option<LazyTypeParameterList<'a>> {
         let bitmask = children_bitmask_payload(self.source_file, self.node_index) as u8;
         let idx = child_at_visitor_index(self.source_file, self.node_index, bitmask, 0)?;
-        Some(LazyTypeParameterList::from_index(self.source_file, idx, self.root_index))
+        Some(LazyTypeParameterList::from_index(
+            self.source_file,
+            idx,
+            self.root_index,
+        ))
     }
     /// Return type child.
     pub fn return_type(&self) -> Option<LazyTypeNode<'a>> {
@@ -312,22 +355,36 @@ impl<'a> LazyTypeFunction<'a> {
     pub fn type_parameters(&self) -> Option<LazyTypeParameterList<'a>> {
         let bitmask = children_bitmask_payload(self.source_file, self.node_index) as u8;
         let idx = child_at_visitor_index(self.source_file, self.node_index, bitmask, 2)?;
-        Some(LazyTypeParameterList::from_index(self.source_file, idx, self.root_index))
+        Some(LazyTypeParameterList::from_index(
+            self.source_file,
+            idx,
+            self.root_index,
+        ))
     }
 }
 
-define_lazy_type_node!(LazyTypeObject, Kind::TypeObject, "Lazy view of `TypeObject` (Kind 0x8B).");
+define_lazy_type_node!(
+    LazyTypeObject,
+    Kind::TypeObject,
+    "Lazy view of `TypeObject` (Kind 0x8B)."
+);
 impl<'a> LazyTypeObject<'a> {
     /// Field separator style (`bits[0:2]`).
     #[inline]
-    pub fn separator(&self) -> u8 { self.common_data() & 0b111 }
+    pub fn separator(&self) -> u8 {
+        self.common_data() & 0b111
+    }
     /// Field elements.
     pub fn elements(&self) -> LazyTypeNodeListIter<'a> {
         nodelist_at(self.source_file, self.node_index, self.root_index)
     }
 }
 
-define_lazy_type_node!(LazyTypeTuple, Kind::TypeTuple, "Lazy view of `TypeTuple` (Kind 0x8C).");
+define_lazy_type_node!(
+    LazyTypeTuple,
+    Kind::TypeTuple,
+    "Lazy view of `TypeTuple` (Kind 0x8C)."
+);
 impl<'a> LazyTypeTuple<'a> {
     /// Tuple elements.
     pub fn elements(&self) -> LazyTypeNodeListIter<'a> {
@@ -347,11 +404,17 @@ impl<'a> LazyTypeParenthesis<'a> {
     }
 }
 
-define_lazy_type_node!(LazyTypeNamePath, Kind::TypeNamePath, "Lazy view of `TypeNamePath` (Kind 0x8E).");
+define_lazy_type_node!(
+    LazyTypeNamePath,
+    Kind::TypeNamePath,
+    "Lazy view of `TypeNamePath` (Kind 0x8E)."
+);
 impl<'a> LazyTypeNamePath<'a> {
     /// Path connector category (`bits[0:1]`).
     #[inline]
-    pub fn path_type(&self) -> u8 { self.common_data() & 0b11 }
+    pub fn path_type(&self) -> u8 {
+        self.common_data() & 0b11
+    }
     /// Left-hand side.
     pub fn left(&self) -> Option<LazyTypeNode<'a>> {
         child_type_node(self.source_file, self.node_index, 0, self.root_index)
@@ -370,7 +433,9 @@ macro_rules! define_modifier_type {
         impl<'a> $name<'a> {
             /// Modifier position (Prefix=0 / Suffix=1).
             #[inline]
-            pub fn position(&self) -> u8 { self.common_data() & 1 }
+            pub fn position(&self) -> u8 {
+                self.common_data() & 1
+            }
             /// Wrapped type.
             pub fn element(&self) -> Option<LazyTypeNode<'a>> {
                 child_type_node(self.source_file, self.node_index, 0, self.root_index)
@@ -378,18 +443,38 @@ macro_rules! define_modifier_type {
         }
     };
 }
-define_modifier_type!(LazyTypeNullable, Kind::TypeNullable, "Lazy view of `TypeNullable` (Kind 0x90).");
-define_modifier_type!(LazyTypeNotNullable, Kind::TypeNotNullable, "Lazy view of `TypeNotNullable` (Kind 0x91).");
-define_modifier_type!(LazyTypeOptional, Kind::TypeOptional, "Lazy view of `TypeOptional` (Kind 0x92).");
+define_modifier_type!(
+    LazyTypeNullable,
+    Kind::TypeNullable,
+    "Lazy view of `TypeNullable` (Kind 0x90)."
+);
+define_modifier_type!(
+    LazyTypeNotNullable,
+    Kind::TypeNotNullable,
+    "Lazy view of `TypeNotNullable` (Kind 0x91)."
+);
+define_modifier_type!(
+    LazyTypeOptional,
+    Kind::TypeOptional,
+    "Lazy view of `TypeOptional` (Kind 0x92)."
+);
 
-define_lazy_type_node!(LazyTypeVariadic, Kind::TypeVariadic, "Lazy view of `TypeVariadic` (Kind 0x93).");
+define_lazy_type_node!(
+    LazyTypeVariadic,
+    Kind::TypeVariadic,
+    "Lazy view of `TypeVariadic` (Kind 0x93)."
+);
 impl<'a> LazyTypeVariadic<'a> {
     /// Modifier position.
     #[inline]
-    pub fn position(&self) -> u8 { self.common_data() & 1 }
+    pub fn position(&self) -> u8 {
+        self.common_data() & 1
+    }
     /// Whether the variadic was written with `[]` brackets.
     #[inline]
-    pub fn square_brackets(&self) -> bool { (self.common_data() & 0b10) != 0 }
+    pub fn square_brackets(&self) -> bool {
+        (self.common_data() & 0b10) != 0
+    }
     /// Wrapped type.
     pub fn element(&self) -> Option<LazyTypeNode<'a>> {
         child_type_node(self.source_file, self.node_index, 0, self.root_index)
@@ -432,14 +517,46 @@ macro_rules! define_single_child_type {
         }
     };
 }
-define_single_child_type!(LazyTypeInfer, Kind::TypeInfer, "Lazy view of `TypeInfer` (Kind 0x95).");
-define_single_child_type!(LazyTypeKeyOf, Kind::TypeKeyOf, "Lazy view of `TypeKeyOf` (Kind 0x96).");
-define_single_child_type!(LazyTypeTypeOf, Kind::TypeTypeOf, "Lazy view of `TypeTypeOf` (Kind 0x97).");
-define_single_child_type!(LazyTypeImport, Kind::TypeImport, "Lazy view of `TypeImport` (Kind 0x98).");
-define_single_child_type!(LazyTypeAssertsPlain, Kind::TypeAssertsPlain, "Lazy view of `TypeAssertsPlain` (Kind 0x9B).");
-define_single_child_type!(LazyTypeReadonlyArray, Kind::TypeReadonlyArray, "Lazy view of `TypeReadonlyArray` (Kind 0x9C).");
-define_single_child_type!(LazyTypeIndexedAccessIndex, Kind::TypeIndexedAccessIndex, "Lazy view of `TypeIndexedAccessIndex` (Kind 0xAA).");
-define_single_child_type!(LazyTypeReadonlyProperty, Kind::TypeReadonlyProperty, "Lazy view of `TypeReadonlyProperty` (Kind 0xAC).");
+define_single_child_type!(
+    LazyTypeInfer,
+    Kind::TypeInfer,
+    "Lazy view of `TypeInfer` (Kind 0x95)."
+);
+define_single_child_type!(
+    LazyTypeKeyOf,
+    Kind::TypeKeyOf,
+    "Lazy view of `TypeKeyOf` (Kind 0x96)."
+);
+define_single_child_type!(
+    LazyTypeTypeOf,
+    Kind::TypeTypeOf,
+    "Lazy view of `TypeTypeOf` (Kind 0x97)."
+);
+define_single_child_type!(
+    LazyTypeImport,
+    Kind::TypeImport,
+    "Lazy view of `TypeImport` (Kind 0x98)."
+);
+define_single_child_type!(
+    LazyTypeAssertsPlain,
+    Kind::TypeAssertsPlain,
+    "Lazy view of `TypeAssertsPlain` (Kind 0x9B)."
+);
+define_single_child_type!(
+    LazyTypeReadonlyArray,
+    Kind::TypeReadonlyArray,
+    "Lazy view of `TypeReadonlyArray` (Kind 0x9C)."
+);
+define_single_child_type!(
+    LazyTypeIndexedAccessIndex,
+    Kind::TypeIndexedAccessIndex,
+    "Lazy view of `TypeIndexedAccessIndex` (Kind 0xAA)."
+);
+define_single_child_type!(
+    LazyTypeReadonlyProperty,
+    Kind::TypeReadonlyProperty,
+    "Lazy view of `TypeReadonlyProperty` (Kind 0xAC)."
+);
 
 /// Macro for the "left + right" 2-child types (Predicate / Asserts).
 macro_rules! define_left_right_type {
@@ -457,8 +574,16 @@ macro_rules! define_left_right_type {
         }
     };
 }
-define_left_right_type!(LazyTypePredicate, Kind::TypePredicate, "Lazy view of `TypePredicate` (Kind 0x99).");
-define_left_right_type!(LazyTypeAsserts, Kind::TypeAsserts, "Lazy view of `TypeAsserts` (Kind 0x9A).");
+define_left_right_type!(
+    LazyTypePredicate,
+    Kind::TypePredicate,
+    "Lazy view of `TypePredicate` (Kind 0x99)."
+);
+define_left_right_type!(
+    LazyTypeAsserts,
+    Kind::TypeAsserts,
+    "Lazy view of `TypeAsserts` (Kind 0x9A)."
+);
 
 define_lazy_type_node!(
     LazyTypeObjectField,
@@ -468,13 +593,19 @@ define_lazy_type_node!(
 impl<'a> LazyTypeObjectField<'a> {
     /// `?` modifier flag.
     #[inline]
-    pub fn optional(&self) -> bool { (self.common_data() & 0b0001) != 0 }
+    pub fn optional(&self) -> bool {
+        (self.common_data() & 0b0001) != 0
+    }
     /// `readonly` modifier flag.
     #[inline]
-    pub fn readonly(&self) -> bool { (self.common_data() & 0b0010) != 0 }
+    pub fn readonly(&self) -> bool {
+        (self.common_data() & 0b0010) != 0
+    }
     /// Quote style for the field key (3-state).
     #[inline]
-    pub fn quote(&self) -> u8 { (self.common_data() >> 2) & 0b11 }
+    pub fn quote(&self) -> u8 {
+        (self.common_data() >> 2) & 0b11
+    }
     /// Field key.
     pub fn key(&self) -> Option<LazyTypeNode<'a>> {
         child_type_node(self.source_file, self.node_index, 0, self.root_index)
@@ -510,7 +641,11 @@ macro_rules! define_signature_type {
             pub fn parameters(&self) -> Option<LazyTypeParameterList<'a>> {
                 let bitmask = children_bitmask_payload(self.source_file, self.node_index) as u8;
                 let idx = child_at_visitor_index(self.source_file, self.node_index, bitmask, 0)?;
-                Some(LazyTypeParameterList::from_index(self.source_file, idx, self.root_index))
+                Some(LazyTypeParameterList::from_index(
+                    self.source_file,
+                    idx,
+                    self.root_index,
+                ))
             }
             /// Return type.
             pub fn return_type(&self) -> Option<LazyTypeNode<'a>> {
@@ -520,13 +655,25 @@ macro_rules! define_signature_type {
             pub fn type_parameters(&self) -> Option<LazyTypeParameterList<'a>> {
                 let bitmask = children_bitmask_payload(self.source_file, self.node_index) as u8;
                 let idx = child_at_visitor_index(self.source_file, self.node_index, bitmask, 2)?;
-                Some(LazyTypeParameterList::from_index(self.source_file, idx, self.root_index))
+                Some(LazyTypeParameterList::from_index(
+                    self.source_file,
+                    idx,
+                    self.root_index,
+                ))
             }
         }
     };
 }
-define_signature_type!(LazyTypeCallSignature, Kind::TypeCallSignature, "Lazy view of `TypeCallSignature` (Kind 0xA7).");
-define_signature_type!(LazyTypeConstructorSignature, Kind::TypeConstructorSignature, "Lazy view of `TypeConstructorSignature` (Kind 0xA8).");
+define_signature_type!(
+    LazyTypeCallSignature,
+    Kind::TypeCallSignature,
+    "Lazy view of `TypeCallSignature` (Kind 0xA7)."
+);
+define_signature_type!(
+    LazyTypeConstructorSignature,
+    Kind::TypeConstructorSignature,
+    "Lazy view of `TypeConstructorSignature` (Kind 0xA8)."
+);
 
 define_lazy_type_node!(
     LazyTypeTypeParameter,
@@ -556,14 +703,22 @@ impl<'a> LazyTypeParameterList<'a> {
 // Pattern 3 — Mixed string + children (6 kinds)
 // ===========================================================================
 
-define_lazy_type_node!(LazyTypeKeyValue, Kind::TypeKeyValue, "Lazy view of `TypeKeyValue` (Kind 0xA2).");
+define_lazy_type_node!(
+    LazyTypeKeyValue,
+    Kind::TypeKeyValue,
+    "Lazy view of `TypeKeyValue` (Kind 0xA2)."
+);
 impl<'a> LazyTypeKeyValue<'a> {
     /// `?` modifier flag.
     #[inline]
-    pub fn optional(&self) -> bool { (self.common_data() & 0b01) != 0 }
+    pub fn optional(&self) -> bool {
+        (self.common_data() & 0b01) != 0
+    }
     /// `...` variadic flag.
     #[inline]
-    pub fn variadic(&self) -> bool { (self.common_data() & 0b10) != 0 }
+    pub fn variadic(&self) -> bool {
+        (self.common_data() & 0b10) != 0
+    }
     /// Key string from Extended Data byte 0-5.
     pub fn key(&self) -> &'a str {
         ext_string_leaf(self.source_file, self.node_index)
@@ -619,13 +774,19 @@ define_lazy_type_node!(
 impl<'a> LazyTypeMethodSignature<'a> {
     /// Quote style for the method name (3-state).
     #[inline]
-    pub fn quote(&self) -> u8 { self.common_data() & 0b11 }
+    pub fn quote(&self) -> u8 {
+        self.common_data() & 0b11
+    }
     /// `true` when the parameter NodeList was emitted.
     #[inline]
-    pub fn has_parameters(&self) -> bool { (self.common_data() & 0b0100) != 0 }
+    pub fn has_parameters(&self) -> bool {
+        (self.common_data() & 0b0100) != 0
+    }
     /// `true` when the type-parameter NodeList was emitted.
     #[inline]
-    pub fn has_type_parameters(&self) -> bool { (self.common_data() & 0b1000) != 0 }
+    pub fn has_type_parameters(&self) -> bool {
+        (self.common_data() & 0b1000) != 0
+    }
     /// Method name string.
     pub fn name(&self) -> &'a str {
         ext_string_leaf(self.source_file, self.node_index)
@@ -654,11 +815,17 @@ impl<'a> LazyTypeTemplateLiteral<'a> {
     }
 }
 
-define_lazy_type_node!(LazyTypeSymbol, Kind::TypeSymbol, "Lazy view of `TypeSymbol` (Kind 0x9F).");
+define_lazy_type_node!(
+    LazyTypeSymbol,
+    Kind::TypeSymbol,
+    "Lazy view of `TypeSymbol` (Kind 0x9F)."
+);
 impl<'a> LazyTypeSymbol<'a> {
     /// Whether the call carries an element argument.
     #[inline]
-    pub fn has_element(&self) -> bool { (self.common_data() & 1) != 0 }
+    pub fn has_element(&self) -> bool {
+        (self.common_data() & 1) != 0
+    }
     /// `Symbol(...)` callee text.
     pub fn value(&self) -> &'a str {
         ext_string_leaf(self.source_file, self.node_index)
@@ -676,11 +843,31 @@ impl<'a> LazyTypeSymbol<'a> {
 // ===========================================================================
 // Others — pure leaves (no payload)
 // ===========================================================================
-define_lazy_type_node!(LazyTypeNull, Kind::TypeNull, "Lazy view of `TypeNull` leaf (Kind 0x83).");
-define_lazy_type_node!(LazyTypeUndefined, Kind::TypeUndefined, "Lazy view of `TypeUndefined` leaf (Kind 0x84).");
-define_lazy_type_node!(LazyTypeAny, Kind::TypeAny, "Lazy view of `TypeAny` leaf (Kind 0x85).");
-define_lazy_type_node!(LazyTypeUnknown, Kind::TypeUnknown, "Lazy view of `TypeUnknown` leaf (Kind 0x86).");
-define_lazy_type_node!(LazyTypeUniqueSymbol, Kind::TypeUniqueSymbol, "Lazy view of `TypeUniqueSymbol` leaf (Kind 0x9E).");
+define_lazy_type_node!(
+    LazyTypeNull,
+    Kind::TypeNull,
+    "Lazy view of `TypeNull` leaf (Kind 0x83)."
+);
+define_lazy_type_node!(
+    LazyTypeUndefined,
+    Kind::TypeUndefined,
+    "Lazy view of `TypeUndefined` leaf (Kind 0x84)."
+);
+define_lazy_type_node!(
+    LazyTypeAny,
+    Kind::TypeAny,
+    "Lazy view of `TypeAny` leaf (Kind 0x85)."
+);
+define_lazy_type_node!(
+    LazyTypeUnknown,
+    Kind::TypeUnknown,
+    "Lazy view of `TypeUnknown` leaf (Kind 0x86)."
+);
+define_lazy_type_node!(
+    LazyTypeUniqueSymbol,
+    Kind::TypeUniqueSymbol,
+    "Lazy view of `TypeUniqueSymbol` leaf (Kind 0x9E)."
+);
 
 // ===========================================================================
 // Sum type for any TypeNode variant
@@ -823,7 +1010,10 @@ mod tests {
     fn type_node_lazy_structs_fit_in_16_bytes() {
         macro_rules! assert_size {
             ($t:ty) => {
-                assert!(size_of::<$t>() <= 16, concat!(stringify!($t), " > 16 bytes"));
+                assert!(
+                    size_of::<$t>() <= 16,
+                    concat!(stringify!($t), " > 16 bytes")
+                );
             };
         }
         assert_size!(LazyTypeName<'static>);

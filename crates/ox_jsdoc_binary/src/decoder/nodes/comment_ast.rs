@@ -259,16 +259,14 @@ impl<'a> LazyJsdocTag<'a> {
     /// Raw `{...}` type source.
     pub fn raw_type(&self) -> Option<LazyJsdocTypeSource<'a>> {
         let bitmask = self.children_bitmask();
-        child_at_visitor_index(self.source_file, self.node_index, bitmask, 1).map(|idx| {
-            LazyJsdocTypeSource::from_index(self.source_file, idx, self.root_index)
-        })
+        child_at_visitor_index(self.source_file, self.node_index, bitmask, 1)
+            .map(|idx| LazyJsdocTypeSource::from_index(self.source_file, idx, self.root_index))
     }
     /// Tag-name value (e.g. `id` in `@param id`).
     pub fn name(&self) -> Option<LazyJsdocTagNameValue<'a>> {
         let bitmask = self.children_bitmask();
-        child_at_visitor_index(self.source_file, self.node_index, bitmask, 2).map(|idx| {
-            LazyJsdocTagNameValue::from_index(self.source_file, idx, self.root_index)
-        })
+        child_at_visitor_index(self.source_file, self.node_index, bitmask, 2)
+            .map(|idx| LazyJsdocTagNameValue::from_index(self.source_file, idx, self.root_index))
     }
     /// `parsedType` child (any TypeNode variant).
     pub fn parsed_type(&self) -> Option<LazyTypeNode<'a>> {
@@ -283,8 +281,9 @@ impl<'a> LazyJsdocTag<'a> {
     pub fn body(&self) -> Option<LazyJsdocTagBody<'a>> {
         let bitmask = self.children_bitmask();
         let idx = child_at_visitor_index(self.source_file, self.node_index, bitmask, 4)?;
-        let kind_byte = self.source_file.bytes()
-            [self.source_file.nodes_offset as usize + idx as usize * NODE_RECORD_SIZE + KIND_OFFSET];
+        let kind_byte = self.source_file.bytes()[self.source_file.nodes_offset as usize
+            + idx as usize * NODE_RECORD_SIZE
+            + KIND_OFFSET];
         let kind = Kind::from_u8(kind_byte).ok()?;
         match kind {
             Kind::JsdocGenericTagBody => Some(LazyJsdocTagBody::Generic(
@@ -293,9 +292,11 @@ impl<'a> LazyJsdocTag<'a> {
             Kind::JsdocBorrowsTagBody => Some(LazyJsdocTagBody::Borrows(
                 LazyJsdocBorrowsTagBody::from_index(self.source_file, idx, self.root_index),
             )),
-            Kind::JsdocRawTagBody => Some(LazyJsdocTagBody::Raw(
-                LazyJsdocRawTagBody::from_index(self.source_file, idx, self.root_index),
-            )),
+            Kind::JsdocRawTagBody => Some(LazyJsdocTagBody::Raw(LazyJsdocRawTagBody::from_index(
+                self.source_file,
+                idx,
+                self.root_index,
+            ))),
             _ => None,
         }
     }

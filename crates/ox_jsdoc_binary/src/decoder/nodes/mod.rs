@@ -41,11 +41,7 @@ pub trait LazyNode<'a>: Copy + Clone + Sized {
     ///
     /// Implementations must `debug_assert!` that the Kind byte at
     /// `nodes_offset + node_index * 24` equals `Self::KIND`.
-    fn from_index(
-        source_file: &'a LazySourceFile<'a>,
-        node_index: u32,
-        root_index: u32,
-    ) -> Self;
+    fn from_index(source_file: &'a LazySourceFile<'a>, node_index: u32, root_index: u32) -> Self;
 
     /// Borrow the [`LazySourceFile`] this node came from.
     fn source_file(&self) -> &'a LazySourceFile<'a>;
@@ -61,8 +57,7 @@ pub trait LazyNode<'a>: Copy + Clone + Sized {
     /// Byte offset of this node's record within the Nodes section.
     #[inline]
     fn byte_offset(&self) -> usize {
-        self.source_file().nodes_offset as usize
-            + self.node_index() as usize * NODE_RECORD_SIZE
+        self.source_file().nodes_offset as usize + self.node_index() as usize * NODE_RECORD_SIZE
     }
 
     /// Read the `Kind` byte and decode it via [`Kind::from_u8`].
@@ -187,7 +182,8 @@ impl<'a, T: LazyNode<'a>> Iterator for NodeListIter<'a, T> {
             return None;
         }
         let item = T::from_index(self.source_file, self.current_index, self.root_index);
-        self.current_index = super::helpers::read_next_sibling(self.source_file, self.current_index);
+        self.current_index =
+            super::helpers::read_next_sibling(self.source_file, self.current_index);
         self.remaining -= 1;
         Some(item)
     }

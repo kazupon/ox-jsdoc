@@ -65,10 +65,10 @@ impl fmt::Display for DecodeError {
                 f,
                 "node[{node_index}] uses reserved Node Data type tag 0b{tag:02b}"
             ),
-            DecodeError::UnknownKind { node_index, kind_byte } => write!(
-                f,
-                "node[{node_index}] has unknown Kind 0x{kind_byte:02X}"
-            ),
+            DecodeError::UnknownKind {
+                node_index,
+                kind_byte,
+            } => write!(f, "node[{node_index}] has unknown Kind 0x{kind_byte:02X}"),
         }
     }
 }
@@ -88,8 +88,14 @@ mod tests {
 
     #[test]
     fn display_too_short() {
-        let err = DecodeError::TooShort { actual: 8, required: 40 };
-        assert_eq!(err.to_string(), "input is too short: got 8 bytes, need at least 40");
+        let err = DecodeError::TooShort {
+            actual: 8,
+            required: 40,
+        };
+        assert_eq!(
+            err.to_string(),
+            "input is too short: got 8 bytes, need at least 40"
+        );
     }
 
     #[test]
@@ -106,7 +112,10 @@ mod tests {
 
     #[test]
     fn display_unsupported_type_tag() {
-        let err = DecodeError::UnsupportedTypeTag { node_index: 17, tag: 0b11 };
+        let err = DecodeError::UnsupportedTypeTag {
+            node_index: 17,
+            tag: 0b11,
+        };
         assert_eq!(
             err.to_string(),
             "node[17] uses reserved Node Data type tag 0b11"
@@ -115,7 +124,10 @@ mod tests {
 
     #[test]
     fn display_unknown_kind() {
-        let err = DecodeError::UnknownKind { node_index: 5, kind_byte: 0x40 };
+        let err = DecodeError::UnknownKind {
+            node_index: 5,
+            kind_byte: 0x40,
+        };
         assert_eq!(err.to_string(), "node[5] has unknown Kind 0x40");
     }
 

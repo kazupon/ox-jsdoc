@@ -26,11 +26,13 @@ use ox_jsdoc_binary::format::node_record::{
     COMMON_DATA_MASK, END_OFFSET, KIND_OFFSET, NEXT_SIBLING_OFFSET, NODE_DATA_OFFSET,
     NODE_RECORD_SIZE, PARENT_INDEX_OFFSET, PAYLOAD_MASK, POS_OFFSET, TYPE_TAG_SHIFT, TypeTag,
 };
+use ox_jsdoc_binary::writer::BinaryWriter;
 use ox_jsdoc_binary::writer::nodes::comment_ast::{
     write_jsdoc_block, write_jsdoc_block_compat_tail, write_jsdoc_text,
 };
-use ox_jsdoc_binary::writer::nodes::type_node::{write_type_function, write_type_name, write_type_null};
-use ox_jsdoc_binary::writer::BinaryWriter;
+use ox_jsdoc_binary::writer::nodes::type_node::{
+    write_type_function, write_type_name, write_type_null,
+};
 use oxc_allocator::Allocator;
 use oxc_span::Span;
 
@@ -211,7 +213,10 @@ fn write_jsdoc_block_basic_extended_data_layout() {
 
     // Extended Data should resolve to the start of the section.
     let ext_off = ext_offset(&sf, 1);
-    assert_eq!(ext_off, sf.extended_data_offset, "first record starts at offset 0 of the section");
+    assert_eq!(
+        ext_off, sf.extended_data_offset,
+        "first record starts at offset 0 of the section"
+    );
 
     // Children bitmask byte 0 = 0
     assert_eq!(sf.bytes()[ext_off as usize], 0);
@@ -235,12 +240,27 @@ fn compat_mode_emits_jsdoc_block_tail() {
         Span::new(0, 3),
         0,
         None,
-        s, s, s, s, s, s, s,
+        s,
+        s,
+        s,
+        s,
+        s,
+        s,
+        s,
         0,
     );
 
     // Apply compat tail to the same record using its returned ExtOffset.
-    write_jsdoc_block_compat_tail(&mut writer, block_ext, 12, Some(0), Some(2), Some(2), 1, None);
+    write_jsdoc_block_compat_tail(
+        &mut writer,
+        block_ext,
+        12,
+        Some(0),
+        Some(2),
+        Some(2),
+        1,
+        None,
+    );
 
     let bytes = writer.finish();
     let sf = LazySourceFile::new(&bytes).unwrap();
@@ -329,7 +349,13 @@ fn lazy_decoder_walks_jsdoc_block_via_asts_iterator() {
         Span::new(0, 12),
         0,
         Some(desc),
-        s, s, s, s, s, s, s,
+        s,
+        s,
+        s,
+        s,
+        s,
+        s,
+        s,
         0, // no children
     );
     writer.push_root(block_idx.as_u32(), 0, 50);
@@ -341,7 +367,11 @@ fn lazy_decoder_walks_jsdoc_block_via_asts_iterator() {
     assert_eq!(asts.len(), 1);
     let block = asts[0].expect("root is not a parse failure");
     assert_eq!(block.description(), Some("hi"));
-    assert_eq!(block.range(), [50, 62], "absolute range = base_offset + pos/end");
+    assert_eq!(
+        block.range(),
+        [50, 62],
+        "absolute range = base_offset + pos/end"
+    );
     assert_eq!(block.tags().count(), 0);
     assert_eq!(block.description_lines().count(), 0);
     assert_eq!(block.inline_tags().count(), 0);
@@ -363,7 +393,10 @@ fn lazy_decoder_tag_with_parsed_type_dispatches_correctly() {
         &mut writer,
         Span::new(0, 20),
         0,
-        false, None, None, None,
+        false,
+        None,
+        None,
+        None,
         bitmask,
     );
     let tag = tag_idx.as_u32();
@@ -406,7 +439,10 @@ fn dedup_intern_returns_same_field() {
     // dedup path rather than the fast-path lookup.
     let a = writer.intern_string("custom_xyz");
     let b = writer.intern_string("custom_xyz");
-    assert_eq!(a, b, "intern dedups identical strings to the same StringField");
+    assert_eq!(
+        a, b,
+        "intern dedups identical strings to the same StringField"
+    );
     // The String Data section must contain `"custom_xyz"` only once.
     let bytes = writer.finish();
     let sf = LazySourceFile::new(&bytes).unwrap();
@@ -418,5 +454,8 @@ fn dedup_intern_returns_same_field() {
         .windows(needle.len())
         .filter(|w| *w == needle)
         .count();
-    assert_eq!(occurrences, 1, "dedup must store the unique string only once");
+    assert_eq!(
+        occurrences, 1,
+        "dedup must store the unique string only once"
+    );
 }

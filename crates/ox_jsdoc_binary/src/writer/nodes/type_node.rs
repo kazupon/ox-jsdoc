@@ -67,7 +67,13 @@ pub fn write_type_string_value(
     quote: u8,
     value: StringIndex,
 ) -> NodeIndex {
-    writer.emit_string_node(parent_index, Kind::TypeStringValue, quote & 0b11, span, value)
+    writer.emit_string_node(
+        parent_index,
+        Kind::TypeStringValue,
+        quote & 0b11,
+        span,
+        value,
+    )
 }
 
 /// `TypeProperty` (Kind `0xA3`, Pattern 1; Common Data: bits[0:1] = quote 3-state).
@@ -161,7 +167,13 @@ pub fn write_type_function(
     children_bitmask: u32,
 ) -> NodeIndex {
     let common = (constructor as u8) | ((arrow as u8) << 1) | ((parenthesis as u8) << 2);
-    writer.emit_children_node(parent_index, Kind::TypeFunction, common, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeFunction,
+        common,
+        span,
+        children_bitmask,
+    )
 }
 
 /// `TypeObject` (Kind `0x8B`, Pattern 3).
@@ -174,7 +186,8 @@ pub fn write_type_object(
     separator: u8,
 ) -> (NodeIndex, ExtOffset) {
     let (off, _dst) = writer.extended.reserve_mut(TYPE_LIST_PARENT_SIZE);
-    let idx = writer.emit_extended_node(parent_index, Kind::TypeObject, separator & 0b111, span, off);
+    let idx =
+        writer.emit_extended_node(parent_index, Kind::TypeObject, separator & 0b111, span, off);
     (idx, off)
 }
 
@@ -196,7 +209,13 @@ pub fn write_type_parenthesis(
     parent_index: u32,
     children_bitmask: u32,
 ) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeParenthesis, 0, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeParenthesis,
+        0,
+        span,
+        children_bitmask,
+    )
 }
 
 /// `TypeNamePath` (Kind `0x8E`, Pattern 2).
@@ -209,7 +228,13 @@ pub fn write_type_name_path(
     path_type: u8,
     children_bitmask: u32,
 ) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeNamePath, path_type & 0b11, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeNamePath,
+        path_type & 0b11,
+        span,
+        children_bitmask,
+    )
 }
 
 /// `TypeNullable` (Kind `0x90`, Pattern 2; 1 child).
@@ -220,7 +245,13 @@ pub fn write_type_nullable(
     position: u8,
     children_bitmask: u32,
 ) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeNullable, position & 1, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeNullable,
+        position & 1,
+        span,
+        children_bitmask,
+    )
 }
 
 /// `TypeNotNullable` (Kind `0x91`, Pattern 2; 1 child).
@@ -231,7 +262,13 @@ pub fn write_type_not_nullable(
     position: u8,
     children_bitmask: u32,
 ) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeNotNullable, position & 1, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeNotNullable,
+        position & 1,
+        span,
+        children_bitmask,
+    )
 }
 
 /// `TypeOptional` (Kind `0x92`, Pattern 2; 1 child).
@@ -242,7 +279,13 @@ pub fn write_type_optional(
     position: u8,
     children_bitmask: u32,
 ) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeOptional, position & 1, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeOptional,
+        position & 1,
+        span,
+        children_bitmask,
+    )
 }
 
 /// `TypeVariadic` (Kind `0x93`, Pattern 2; 1 child).
@@ -255,7 +298,13 @@ pub fn write_type_variadic(
     children_bitmask: u32,
 ) -> NodeIndex {
     let common = (position & 1) | ((square_brackets as u8) << 1);
-    writer.emit_children_node(parent_index, Kind::TypeVariadic, common, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeVariadic,
+        common,
+        span,
+        children_bitmask,
+    )
 }
 
 /// `TypeConditional` (Kind `0x94`, Pattern 2; 4 children).
@@ -265,7 +314,13 @@ pub fn write_type_conditional(
     parent_index: u32,
     children_bitmask: u32,
 ) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeConditional, 0, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeConditional,
+        0,
+        span,
+        children_bitmask,
+    )
 }
 
 /// `TypeInfer` (Kind `0x95`, Pattern 2; 1 child).
@@ -335,7 +390,13 @@ pub fn write_type_asserts_plain(
     parent_index: u32,
     children_bitmask: u32,
 ) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeAssertsPlain, 0, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeAssertsPlain,
+        0,
+        span,
+        children_bitmask,
+    )
 }
 
 /// `TypeReadonlyArray` (Kind `0x9C`, Pattern 2; 1 child).
@@ -345,7 +406,13 @@ pub fn write_type_readonly_array(
     parent_index: u32,
     children_bitmask: u32,
 ) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeReadonlyArray, 0, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeReadonlyArray,
+        0,
+        span,
+        children_bitmask,
+    )
 }
 
 /// `TypeObjectField` (Kind `0xA0`, Pattern 2; 1-2 children).
@@ -361,7 +428,13 @@ pub fn write_type_object_field(
     children_bitmask: u32,
 ) -> NodeIndex {
     let common = (optional as u8) | ((readonly as u8) << 1) | ((quote & 0b11) << 2);
-    writer.emit_children_node(parent_index, Kind::TypeObjectField, common, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeObjectField,
+        common,
+        span,
+        children_bitmask,
+    )
 }
 
 /// `TypeJsdocObjectField` (Kind `0xA1`, Pattern 2; 2 children).
@@ -371,7 +444,13 @@ pub fn write_type_jsdoc_object_field(
     parent_index: u32,
     children_bitmask: u32,
 ) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeJsdocObjectField, 0, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeJsdocObjectField,
+        0,
+        span,
+        children_bitmask,
+    )
 }
 
 /// `TypeIndexedAccessIndex` (Kind `0xAA`, Pattern 2; 1 child).
@@ -381,7 +460,13 @@ pub fn write_type_indexed_access_index(
     parent_index: u32,
     children_bitmask: u32,
 ) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeIndexedAccessIndex, 0, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeIndexedAccessIndex,
+        0,
+        span,
+        children_bitmask,
+    )
 }
 
 /// `TypeCallSignature` (Kind `0xA7`, Pattern 2; 3 children).
@@ -391,7 +476,13 @@ pub fn write_type_call_signature(
     parent_index: u32,
     children_bitmask: u32,
 ) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeCallSignature, 0, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeCallSignature,
+        0,
+        span,
+        children_bitmask,
+    )
 }
 
 /// `TypeConstructorSignature` (Kind `0xA8`, Pattern 2; 3 children).
@@ -401,7 +492,13 @@ pub fn write_type_constructor_signature(
     parent_index: u32,
     children_bitmask: u32,
 ) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeConstructorSignature, 0, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeConstructorSignature,
+        0,
+        span,
+        children_bitmask,
+    )
 }
 
 /// `TypeTypeParameter` (Kind `0xA6`, Pattern 3; ED holds list metadata).
@@ -433,7 +530,13 @@ pub fn write_type_readonly_property(
     parent_index: u32,
     children_bitmask: u32,
 ) -> NodeIndex {
-    writer.emit_children_node(parent_index, Kind::TypeReadonlyProperty, 0, span, children_bitmask)
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeReadonlyProperty,
+        0,
+        span,
+        children_bitmask,
+    )
 }
 
 // ===========================================================================
@@ -499,9 +602,8 @@ pub fn write_type_method_signature(
     has_type_parameters: bool,
     name: StringField,
 ) -> NodeIndex {
-    let common = (quote & 0b11)
-        | ((has_parameters as u8) << 2)
-        | ((has_type_parameters as u8) << 3);
+    let common =
+        (quote & 0b11) | ((has_parameters as u8) << 2) | ((has_type_parameters as u8) << 3);
     let (off, dst) = writer.extended.reserve_mut(STRING_FIELD_SIZE);
     name.write_le(dst);
     writer.emit_extended_node(parent_index, Kind::TypeMethodSignature, common, span, off)
@@ -549,11 +651,7 @@ pub fn write_type_symbol(
 // ===========================================================================
 
 /// `TypeNull` (Kind `0x83`, leaf).
-pub fn write_type_null(
-    writer: &mut BinaryWriter<'_>,
-    span: Span,
-    parent_index: u32,
-) -> NodeIndex {
+pub fn write_type_null(writer: &mut BinaryWriter<'_>, span: Span, parent_index: u32) -> NodeIndex {
     let node_data = pack_node_data(TypeTag::Children, 0);
     writer.emit_node_record(parent_index, Kind::TypeNull, 0, span, node_data)
 }
@@ -569,11 +667,7 @@ pub fn write_type_undefined(
 }
 
 /// `TypeAny` (Kind `0x85`, leaf).
-pub fn write_type_any(
-    writer: &mut BinaryWriter<'_>,
-    span: Span,
-    parent_index: u32,
-) -> NodeIndex {
+pub fn write_type_any(writer: &mut BinaryWriter<'_>, span: Span, parent_index: u32) -> NodeIndex {
     let node_data = pack_node_data(TypeTag::Children, 0);
     writer.emit_node_record(parent_index, Kind::TypeAny, 0, span, node_data)
 }
@@ -597,4 +691,3 @@ pub fn write_type_unique_symbol(
     let node_data = pack_node_data(TypeTag::Children, 0);
     writer.emit_node_record(parent_index, Kind::TypeUniqueSymbol, 0, span, node_data)
 }
-

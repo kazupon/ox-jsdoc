@@ -12,8 +12,7 @@
 use std::collections::HashMap;
 
 use ox_jsdoc_binary::decoder::nodes::comment_ast::{
-    LazyJsdocBlock, LazyJsdocDescriptionLine, LazyJsdocTag, LazyJsdocTagName,
-    LazyJsdocTagNameValue,
+    LazyJsdocBlock, LazyJsdocDescriptionLine, LazyJsdocTag, LazyJsdocTagName, LazyJsdocTagNameValue,
 };
 use ox_jsdoc_binary::decoder::nodes::type_node::{
     LazyTypeFunction, LazyTypeName, LazyTypeNumber, LazyTypeParameterList,
@@ -21,15 +20,16 @@ use ox_jsdoc_binary::decoder::nodes::type_node::{
 use ox_jsdoc_binary::decoder::source_file::LazySourceFile;
 use ox_jsdoc_binary::decoder::visitor::LazyJsdocVisitor;
 use ox_jsdoc_binary::format::kind::Kind;
+use ox_jsdoc_binary::writer::BinaryWriter;
 use ox_jsdoc_binary::writer::nodes::comment_ast::{
-    write_jsdoc_block, write_jsdoc_description_line, write_jsdoc_tag, write_jsdoc_tag_name,
-    write_jsdoc_tag_name_value, JSDOC_BLOCK_DESC_LINES_SLOT, JSDOC_BLOCK_TAGS_SLOT,
+    JSDOC_BLOCK_DESC_LINES_SLOT, JSDOC_BLOCK_TAGS_SLOT, write_jsdoc_block,
+    write_jsdoc_description_line, write_jsdoc_tag, write_jsdoc_tag_name,
+    write_jsdoc_tag_name_value,
 };
 use ox_jsdoc_binary::writer::nodes::type_node::{
-    write_type_function, write_type_name, write_type_number, write_type_parameter_list,
-    TYPE_LIST_PARENT_SLOT,
+    TYPE_LIST_PARENT_SLOT, write_type_function, write_type_name, write_type_number,
+    write_type_parameter_list,
 };
-use ox_jsdoc_binary::writer::BinaryWriter;
 use oxc_allocator::Allocator;
 use oxc_span::Span;
 
@@ -100,9 +100,7 @@ impl<'a> LazyJsdocVisitor<'a> for CountVisitor {
 /// - 1 `TypeNumber`           (the `number` return type literal)
 fn build_fixture(arena: &Allocator) -> Vec<u8> {
     let mut w = BinaryWriter::new(arena);
-    let _ = w.append_source_text(
-        "/** description\n * @returns {Function(string): number} ok\n */",
-    );
+    let _ = w.append_source_text("/** description\n * @returns {Function(string): number} ok\n */");
     let empty = w.intern_string("");
     let star = w.intern_string("*");
     let space = w.intern_string(" ");
@@ -121,7 +119,13 @@ fn build_fixture(arena: &Allocator) -> Vec<u8> {
         Span::new(0, 60),
         0,
         None,
-        star, space, close, nl, empty, nl, empty,
+        star,
+        space,
+        close,
+        nl,
+        empty,
+        nl,
+        empty,
         0b011,
     );
     let block = block_idx.as_u32();
@@ -159,7 +163,9 @@ fn build_fixture(arena: &Allocator) -> Vec<u8> {
         &mut w,
         Span::new(28, 51),
         tag,
-        false, false, true, // constructor=false, arrow=false, parenthesis=true
+        false,
+        false,
+        true, // constructor=false, arrow=false, parenthesis=true
         0b011,
     );
     // parameters: TypeParameterList containing 1 TypeName "string".

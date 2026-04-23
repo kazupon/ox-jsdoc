@@ -12,7 +12,7 @@
 
 use crate::format::header::{
     self, COMPAT_MODE_BIT, DIAGNOSTICS_OFFSET_FIELD, EXTENDED_DATA_OFFSET_FIELD, FLAGS_OFFSET,
-    HEADER_SIZE, NODES_OFFSET_FIELD, NODE_COUNT_FIELD, ROOT_ARRAY_OFFSET_FIELD, ROOT_COUNT_FIELD,
+    HEADER_SIZE, NODE_COUNT_FIELD, NODES_OFFSET_FIELD, ROOT_ARRAY_OFFSET_FIELD, ROOT_COUNT_FIELD,
     STRING_DATA_OFFSET_FIELD, STRING_OFFSETS_OFFSET_FIELD,
 };
 use crate::format::node_record::STRING_PAYLOAD_NONE_SENTINEL;
@@ -22,8 +22,8 @@ use crate::format::string_table::{STRING_OFFSET_ENTRY_SIZE, U16_NONE_SENTINEL};
 
 use super::error::DecodeError;
 use super::helpers::read_u32;
-use super::nodes::comment_ast::LazyJsdocBlock;
 use super::nodes::LazyNode;
+use super::nodes::comment_ast::LazyJsdocBlock;
 
 /// Lazy decoder root. Holds the underlying byte slice plus all Header-derived
 /// offsets/counts.

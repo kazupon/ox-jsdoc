@@ -266,7 +266,10 @@ fn common_string_fields() -> &'static [StringField] {
         let mut pos = 0u32;
         for s in COMMON_STRINGS {
             let length = u16::try_from(s.len()).expect("common string longer than u16");
-            fields.push(StringField { offset: pos, length });
+            fields.push(StringField {
+                offset: pos,
+                length,
+            });
             pos += s.len() as u32;
         }
         fields
@@ -426,7 +429,10 @@ impl<'arena> StringTableBuilder<'arena> {
             // promote it now by allocating an offsets-table entry.
             let field = entry.field;
             let idx = self.assign_index(field);
-            let entry = DedupEntry { field, index: Some(idx) };
+            let entry = DedupEntry {
+                field,
+                index: Some(idx),
+            };
             // Re-fetch & write back. (`get_mut` was unavailable while we
             // held the borrow on `assign_index` to mutate offsets_buffer.)
             if let Some(entry_mut) = self.dedup.get_mut(value) {
@@ -439,7 +445,10 @@ impl<'arena> StringTableBuilder<'arena> {
         let field = self.append_no_dedup(value);
         let idx = self.assign_index(field);
         let key: &'arena str = self.arena.alloc_str(value);
-        let entry = DedupEntry { field, index: Some(idx) };
+        let entry = DedupEntry {
+            field,
+            index: Some(idx),
+        };
         self.dedup.insert(key, entry);
         self.update_recent_cache(value, entry);
         idx
@@ -606,13 +615,25 @@ mod tests {
         let prelude_count = COMMON_STRING_COUNT;
         // Intern as field only — must not allocate an offsets entry.
         let _f = builder.intern("custom_xyz");
-        assert_eq!(builder.len(), prelude_count, "no offsets entry for ED-only intern");
+        assert_eq!(
+            builder.len(),
+            prelude_count,
+            "no offsets entry for ED-only intern"
+        );
         // Now ask for the leaf form — that allocates one entry.
         let _idx = builder.intern_for_leaf("custom_xyz");
-        assert_eq!(builder.len(), prelude_count + 1, "leaf intern allocates offsets entry");
+        assert_eq!(
+            builder.len(),
+            prelude_count + 1,
+            "leaf intern allocates offsets entry"
+        );
         // Calling intern_for_leaf again must dedup, no extra allocation.
         let _idx2 = builder.intern_for_leaf("custom_xyz");
-        assert_eq!(builder.len(), prelude_count + 1, "dedup on second leaf intern");
+        assert_eq!(
+            builder.len(),
+            prelude_count + 1,
+            "dedup on second leaf intern"
+        );
     }
 
     #[test]

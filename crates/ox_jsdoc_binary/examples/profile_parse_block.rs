@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Tight loop runner for `samply` to profile `parse_block_into_data`
 //! plus manual sub-phase timing (scanner-only, full-parse) to localize
 //! which part of the parse pipeline dominates.
@@ -12,7 +16,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use ox_jsdoc_binary::parser::{
-    context::parse_block_into_data, scanner::logical_lines, ParseOptions,
+    ParseOptions, context::parse_block_into_data, scanner::logical_lines,
 };
 use oxc_allocator::Allocator;
 
@@ -80,8 +84,7 @@ fn main() {
     for _ in 0..iters {
         let arena = Allocator::default();
         for src in &blocks {
-            let parsed =
-                parse_block_into_data(&arena, src.as_str(), 0, ParseOptions::default());
+            let parsed = parse_block_into_data(&arena, src.as_str(), 0, ParseOptions::default());
             acc_full = acc_full.wrapping_add(parsed.diagnostics().len());
             if parsed.is_failure() {
                 acc_full = acc_full.wrapping_add(1);

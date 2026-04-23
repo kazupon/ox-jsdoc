@@ -15,7 +15,7 @@
 use wasm_bindgen::prelude::*;
 
 use ox_jsdoc_binary::parser::{
-    parse_batch_to_bytes, parse_to_bytes, type_data::ParseMode, BatchItem, ParseOptions,
+    BatchItem, ParseOptions, parse_batch_to_bytes, parse_to_bytes, type_data::ParseMode,
 };
 
 /// Owned binary-AST result. JS reads `buffer_ptr` + `buffer_len` and views
@@ -53,8 +53,12 @@ impl ParseResult {
             .iter()
             .map(|message| {
                 let obj = js_sys::Object::new();
-                js_sys::Reflect::set(&obj, &JsValue::from_str("message"), &JsValue::from_str(message))
-                    .expect("set message");
+                js_sys::Reflect::set(
+                    &obj,
+                    &JsValue::from_str("message"),
+                    &JsValue::from_str(message),
+                )
+                .expect("set message");
                 obj.into()
             })
             .collect()
@@ -134,8 +138,12 @@ impl BatchParseResult {
             .zip(self.diagnostic_root_indices.iter())
             .map(|(message, &root_index)| {
                 let obj = js_sys::Object::new();
-                js_sys::Reflect::set(&obj, &JsValue::from_str("message"), &JsValue::from_str(message))
-                    .expect("set message");
+                js_sys::Reflect::set(
+                    &obj,
+                    &JsValue::from_str("message"),
+                    &JsValue::from_str(message),
+                )
+                .expect("set message");
                 js_sys::Reflect::set(
                     &obj,
                     &JsValue::from_str("rootIndex"),
@@ -198,11 +206,8 @@ pub fn parse_jsdoc_batch(
         .iter()
         .map(|d| d.message.to_string())
         .collect();
-    let diagnostic_root_indices: Vec<u32> = result
-        .diagnostics
-        .iter()
-        .map(|d| d.root_index)
-        .collect();
+    let diagnostic_root_indices: Vec<u32> =
+        result.diagnostics.iter().map(|d| d.root_index).collect();
 
     BatchParseResult {
         bytes: result.binary_bytes.into_boxed_slice(),
