@@ -542,7 +542,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         let mut in_fence = false;
 
         for (idx, line) in lines.iter().enumerate() {
-            let trimmed = line.content.trim_start();
+            let trimmed = trim_start_fast(line.content);
             let trimmed_delta = line.content.len() - trimmed.len();
             let trimmed_start = line.content_start + u32::try_from(trimmed_delta).unwrap();
 
@@ -812,7 +812,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             }
             description_lines.push(DescriptionLineData {
                 span: Span::new(line.content_start, line.content_end()),
-                description: line.content.trim_end(),
+                description: trim_end_fast(line.content),
                 delimiter: margin.delimiter,
                 post_delimiter: margin.post_delimiter,
                 initial: margin.initial,
@@ -915,7 +915,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
 
         if lines.len() == 1 {
             return Some(NormalizedText {
-                text: lines[0].content.trim_end(),
+                text: trim_end_fast(lines[0].content),
                 span,
             });
         }
@@ -928,7 +928,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             if index > 0 {
                 self.scratch.push('\n');
             }
-            self.scratch.push_str(line.content.trim_end());
+            self.scratch.push_str(trim_end_fast(line.content));
         }
         // Allocate a stable copy on the parser's scratch arena. The result
         // lives as long as the parser context; we leak it intentionally
@@ -961,7 +961,7 @@ fn parse_tag_header(line: &str, line_start: u32) -> Option<(&str, u32, Option<(&
         return None;
     }
     let tag_name = &stripped[..name_len];
-    let body = stripped[name_len..].trim_start();
+    let body = trim_start_fast(&stripped[name_len..]);
     let body_start = if body.is_empty() {
         None
     } else {
@@ -972,7 +972,7 @@ fn parse_tag_header(line: &str, line_start: u32) -> Option<(&str, u32, Option<(&
 }
 
 fn parse_inline_tag_header(inside: &str) -> Option<(&str, &str)> {
-    let trimmed = inside.trim();
+    let trimmed = trim_fast(inside);
     let name_len = trimmed
         .as_bytes()
         .iter()
@@ -982,7 +982,7 @@ fn parse_inline_tag_header(inside: &str) -> Option<(&str, &str)> {
         return None;
     }
     let tag_name = &trimmed[..name_len];
-    let body = trimmed[name_len..].trim();
+    let body = trim_fast(&trimmed[name_len..]);
     Some((tag_name, body))
 }
 
@@ -1008,7 +1008,7 @@ fn parse_inline_tag_body(body: &str) -> (Option<&str>, Option<&str>, InlineTagFo
 }
 
 fn non_empty_trimmed(value: &str) -> Option<&str> {
-    let trimmed = value.trim();
+    let trimmed = trim_fast(value);
     if trimmed.is_empty() {
         None
     } else {
@@ -1017,7 +1017,7 @@ fn non_empty_trimmed(value: &str) -> Option<&str> {
 }
 
 fn leading_whitespace_len(value: &str) -> usize {
-    value.len() - value.trim_start().len()
+    value.len() - trim_start_fast(value).len()
 }
 
 fn find_matching_type_end(text: &str, start: usize) -> Option<usize> {
@@ -1184,6 +1184,54 @@ fn relative_span(base: Span, relative_start: u32, relative_end: u32) -> Span {
         start.min(base.end),
         end.min(base.end).max(start.min(base.end)),
     )
+}
+
+// ---------------------------------------------------------------------------
+// Whitespace trim helpers (ASCII fast path + Unicode fallback)
+//
+// JSDoc source is overwhelmingly ASCII, so the byte-based `trim_ascii_*`
+// path covers the common case. We only fall back to the Unicode-aware
+// `trim_*` when the post-trim boundary still touches a non-ASCII byte
+// (i.e. a UTF-8 multi-byte character that might encode Unicode whitespace
+// such as U+00A0 NBSP or U+3000 IDEOGRAPHIC SPACE). UTF-8 invariant
+// guarantees ASCII trimming never bisects a multi-byte character (ASCII
+// whitespace bytes are all < 0x80; multi-byte lead/continuation bytes are
+// all ≥ 0x80).
+// ---------------------------------------------------------------------------
+
+#[inline(always)]
+fn trim_start_fast(s: &str) -> &str {
+    let t = s.trim_ascii_start();
+    if !t.is_empty() && t.as_bytes()[0] >= 0x80 {
+        t.trim_start()
+    } else {
+        t
+    }
+}
+
+#[inline(always)]
+fn trim_end_fast(s: &str) -> &str {
+    let t = s.trim_ascii_end();
+    if !t.is_empty() && t.as_bytes()[t.len() - 1] >= 0x80 {
+        t.trim_end()
+    } else {
+        t
+    }
+}
+
+#[inline(always)]
+fn trim_fast(s: &str) -> &str {
+    let t = s.trim_ascii();
+    let bytes = t.as_bytes();
+    if bytes.is_empty() {
+        return t;
+    }
+    let needs_unicode = bytes[0] >= 0x80 || bytes[bytes.len() - 1] >= 0x80;
+    if needs_unicode {
+        t.trim()
+    } else {
+        t
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1365,7 +1413,7 @@ fn emit_description_line(
     parent_index: u32,
     compat: bool,
 ) -> u32 {
-    // Path A: `line.description` is `line.content.trim_end()`, i.e. a
+    // Path A: `line.description` is `line.content.trim_ascii_end()`, i.e. a
     // sub-slice of the source text that was just appended to `data_buffer`
     // via `append_source_text`. Use the zero-copy intern paths so we
     // register the offsets-only entry without re-copying the bytes — the
