@@ -14,7 +14,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use ox_jsdoc_binary::format::header::{
-    NODES_OFFSET_FIELD, NODE_COUNT_FIELD, STRING_DATA_OFFSET_FIELD, STRING_OFFSETS_OFFSET_FIELD,
+    NODE_COUNT_FIELD, NODES_OFFSET_FIELD, STRING_DATA_OFFSET_FIELD, STRING_OFFSETS_OFFSET_FIELD,
 };
 use ox_jsdoc_binary::format::node_record::{
     NODE_DATA_OFFSET, NODE_RECORD_SIZE, PAYLOAD_MASK, TYPE_TAG_SHIFT, TypeTag,
@@ -95,8 +95,7 @@ fn main() {
 
     // -- 3. iterate nodes, collect lengths of TypeTag::String -------------
     let mut lengths: Vec<usize> = Vec::new();
-    let mut by_kind: std::collections::BTreeMap<u8, Vec<usize>> =
-        std::collections::BTreeMap::new();
+    let mut by_kind: std::collections::BTreeMap<u8, Vec<usize>> = std::collections::BTreeMap::new();
 
     for i in 1..node_count {
         // skip sentinel node 0
@@ -136,8 +135,17 @@ fn main() {
         let idx = ((p / 100.0) * (sorted.len() as f64 - 1.0)).round() as usize;
         sorted[idx]
     };
-    eprintln!("min: {}, p25: {}, p50: {}, p75: {}, p90: {}, p95: {}, p99: {}, max: {}",
-        sorted[0], pct(25.0), pct(50.0), pct(75.0), pct(90.0), pct(95.0), pct(99.0), sorted[sorted.len() - 1]);
+    eprintln!(
+        "min: {}, p25: {}, p50: {}, p75: {}, p90: {}, p95: {}, p99: {}, max: {}",
+        sorted[0],
+        pct(25.0),
+        pct(50.0),
+        pct(75.0),
+        pct(90.0),
+        pct(95.0),
+        pct(99.0),
+        sorted[sorted.len() - 1]
+    );
     let total_bytes: usize = lengths.iter().sum();
     eprintln!(
         "avg: {:.1} byte, total: {} byte",
@@ -177,12 +185,13 @@ fn main() {
 
     eprintln!("");
     eprintln!("=== Top 10 string-leaf Kinds by count ===");
-    let mut kinds: Vec<(u8, usize, &Vec<usize>)> = by_kind
-        .iter()
-        .map(|(k, v)| (*k, v.len(), v))
-        .collect();
+    let mut kinds: Vec<(u8, usize, &Vec<usize>)> =
+        by_kind.iter().map(|(k, v)| (*k, v.len(), v)).collect();
     kinds.sort_by(|a, b| b.1.cmp(&a.1));
-    eprintln!("{:>6} | {:>6} | {:>6} | {:>6} | {:>6} | desc", "kind", "count", "p50", "p95", "max");
+    eprintln!(
+        "{:>6} | {:>6} | {:>6} | {:>6} | {:>6} | desc",
+        "kind", "count", "p50", "p95", "max"
+    );
     for (k, c, lens) in kinds.iter().take(10) {
         let mut s = (*lens).clone();
         s.sort_unstable();
@@ -206,6 +215,9 @@ fn main() {
             0x8F => "TypeSpecialNamePath",
             _ => "?",
         };
-        eprintln!("0x{:02X} | {:>6} | {:>6} | {:>6} | {:>6} | {}", k, c, p50, p95, max, kind_name);
+        eprintln!(
+            "0x{:02X} | {:>6} | {:>6} | {:>6} | {:>6} | {}",
+            k, c, p50, p95, max, kind_name
+        );
     }
 }

@@ -137,8 +137,7 @@ pub fn string_payload<'a>(sf: &LazySourceFile<'a>, node_index: u32) -> Option<&'
     let tag = (nd >> TYPE_TAG_SHIFT) & 0b11;
     let payload = nd & PAYLOAD_MASK;
     if tag == TypeTag::StringInline as u32 {
-        let (offset, length) =
-            crate::format::node_record::unpack_string_inline(payload);
+        let (offset, length) = crate::format::node_record::unpack_string_inline(payload);
         return Some(sf.get_inline_string(offset, length));
     }
     debug_assert_eq!(
