@@ -1217,12 +1217,33 @@ fn opt_source_string(writer: &mut BinaryWriter<'_>, value: Option<&str>) -> Opti
     value.map(|s| writer.intern_source_slice_or_string(s))
 }
 
-fn empty_string(writer: &mut BinaryWriter<'_>) -> StringField {
-    writer.intern_string("")
+fn empty_string(_writer: &mut BinaryWriter<'_>) -> StringField {
+    crate::writer::common_string_field(
+        crate::writer::COMMON_EMPTY,
+    )
 }
 
 fn intern(writer: &mut BinaryWriter<'_>, value: &str) -> StringField {
     writer.intern_string(value)
+}
+
+/// Hot-path resolver for the source-preserving line-end strings
+/// (`""`, `"\n"`, `"\r\n"`) used throughout `emit_block_inner` and
+/// `emit_tag`. Skips the length-bucketed `lookup_common` + 1-slot cache
+/// dance by mapping the three known cases to their pre-computed
+/// `StringField` directly; falls back to the interner for any other value
+/// (e.g. the rare `\r`-only or trimmed line ending).
+#[inline]
+fn intern_line_end(writer: &mut BinaryWriter<'_>, value: &str) -> StringField {
+    use crate::writer::{
+        common_string_field, COMMON_CRLF, COMMON_EMPTY, COMMON_LF,
+    };
+    match value {
+        "" => common_string_field(COMMON_EMPTY),
+        "\n" => common_string_field(COMMON_LF),
+        "\r\n" => common_string_field(COMMON_CRLF),
+        other => writer.intern_string(other),
+    }
 }
 
 fn emit_block_inner<'arena>(
@@ -1238,13 +1259,20 @@ fn emit_block_inner<'arena>(
     } else {
         ""
     };
-    let star = intern(writer, "*");
-    let close = intern(writer, "*/");
-    let post_delim = intern(writer, post_delim_str);
-    let line_end = intern(writer, block.line_end);
-    let initial = empty_string(writer);
-    let dlb = intern(writer, block.delimiter_line_break);
-    let plb = intern(writer, block.preterminal_line_break);
+    use crate::writer::{
+        common_string_field, COMMON_EMPTY, COMMON_SLASH_STAR, COMMON_SPACE, COMMON_STAR,
+    };
+    let star = common_string_field(COMMON_STAR);
+    let close = common_string_field(COMMON_SLASH_STAR);
+    let post_delim = if post_delim_str.is_empty() {
+        common_string_field(COMMON_EMPTY)
+    } else {
+        common_string_field(COMMON_SPACE)
+    };
+    let line_end = intern_line_end(writer, block.line_end);
+    let initial = common_string_field(COMMON_EMPTY);
+    let dlb = intern_line_end(writer, block.delimiter_line_break);
+    let plb = intern_line_end(writer, block.preterminal_line_break);
 
     // Branchless bitmask: each `is_empty()` returns bool, cast to u8 (0 or 1).
     let bitmask: u8 = ((!block.description_lines.is_empty()) as u8)

@@ -85,6 +85,31 @@ impl StringIndex {
 /// Useful for tests that assert against the post-construction state.
 pub const COMMON_STRING_COUNT: u32 = COMMON_STRINGS.len() as u32;
 
+// -- Per-entry [`COMMON_STRINGS`] indices ------------------------------------
+//
+// Hot-path callers (e.g. `parser/context.rs::emit_block_inner`) look up the
+// pre-computed StringField via [`common_string_field`]. Using the named
+// constants instead of the generic [`lookup_common`] / [`StringTableBuilder::intern`]
+// path skips the length-bucketed match + dedup probe entirely (~2% self time
+// in the parse_batch_to_bytes profile).
+
+/// Index of `""` inside [`COMMON_STRINGS`].
+pub const COMMON_EMPTY: u32 = 0;
+/// Index of `" "` (single space) inside [`COMMON_STRINGS`].
+pub const COMMON_SPACE: u32 = 1;
+/// Index of `"*"` (margin delimiter) inside [`COMMON_STRINGS`].
+pub const COMMON_STAR: u32 = 2;
+/// Index of `"*/"` (block terminal) inside [`COMMON_STRINGS`].
+pub const COMMON_SLASH_STAR: u32 = 3;
+/// Index of `"\n"` inside [`COMMON_STRINGS`].
+pub const COMMON_LF: u32 = 4;
+/// Index of `"\t"` inside [`COMMON_STRINGS`].
+pub const COMMON_TAB: u32 = 5;
+/// Index of `"\r\n"` inside [`COMMON_STRINGS`].
+pub const COMMON_CRLF: u32 = 6;
+/// Index of `"/**"` inside [`COMMON_STRINGS`].
+pub const COMMON_SLASH_STAR_STAR: u32 = 7;
+
 /// Strings that the writer pre-interns at construction so the common case
 /// (delimiters, whitespace, well-known tag names) skips the HashMap entirely.
 ///
@@ -252,7 +277,7 @@ fn common_string_fields() -> &'static [StringField] {
 /// fast-path index `idx`. Used by writer combined-intern helpers to
 /// short-circuit the COMMON_STRINGS dedup without copying bytes.
 #[inline]
-pub(crate) fn common_string_field(idx: u32) -> StringField {
+pub fn common_string_field(idx: u32) -> StringField {
     common_string_fields()[idx as usize]
 }
 
