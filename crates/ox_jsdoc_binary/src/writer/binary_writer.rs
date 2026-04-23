@@ -648,7 +648,14 @@ impl<'arena> BinaryWriter<'arena> {
     #[must_use]
     pub fn finish(mut self) -> Vec<u8> {
         // -- 1. sort diagnostics by root_index ascending --------------------
-        self.diagnostics.sort_by_key(|(root_index, _)| *root_index);
+        // Empty skip: most batches finish without diagnostics (parse success
+        // path), so avoid the function-call overhead entirely. Unstable
+        // sort is sufficient because each push is unique enough; the order
+        // among entries with the same root_index is not load-bearing.
+        if !self.diagnostics.is_empty() {
+            self.diagnostics
+                .sort_unstable_by_key(|(root_index, _)| *root_index);
+        }
 
         // -- 2. compute counts and section sizes ----------------------------
         let node_count = self.node_count();
