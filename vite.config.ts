@@ -14,6 +14,7 @@ const ignorePatterns = [
   // own JSDoc types yet. Lint coverage will return once the codegen ships.
   'packages/decoder/**',
   'tasks/**',
+  'scripts/**',
   'refers/**',
   'fixtures/**'
 ]
