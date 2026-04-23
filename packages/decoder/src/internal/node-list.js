@@ -1,9 +1,13 @@
 /**
- * `RemoteNodeList` — Array-compatible view over a NodeList wrapper child.
+ * `RemoteNodeList` — Array-compatible view over a parent's per-list metadata
+ * slot.
  *
- * Mirrors tsgo's RemoteNodeList: a real `Array` subclass populated with
- * lazy class instances pulled out of the NodeList wrapper's `next_sibling`
- * chain. Empty arrays share `EMPTY_NODE_LIST` to avoid per-call allocation.
+ * As of the NodeList-wrapper-elimination format change, every variable-length
+ * child list is represented as an inline `(head_index: u32, count: u16)` pair
+ * stored at a known per-Kind byte offset inside the parent's Extended Data
+ * block. The decoder reads `head` and walks the `next_sibling` chain exactly
+ * `count` times. Empty arrays share `EMPTY_NODE_LIST` to avoid per-call
+ * allocation.
  *
  * @author kazuya kawaguchi (a.k.a. kazupon)
  * @license MIT
@@ -11,14 +15,7 @@
 
 // @ts-check
 
-import {
-  childIndexAtVisitorIndex,
-  childrenBitmaskPayloadOf,
-  extOffsetOf,
-  firstChildIndex,
-  readNextSibling,
-  thisNode
-} from './helpers.js'
+import { extOffsetOf, readNextSibling, thisNode } from './helpers.js'
 
 /**
  * `Array` subclass returned by every "node list" getter. Inheriting from
@@ -34,62 +31,43 @@ export class RemoteNodeList extends Array {}
 export const EMPTY_NODE_LIST = new RemoteNodeList()
 
 /**
- * Build a `RemoteNodeList` containing the children of the NodeList wrapper
- * at the given visitor index of an Extended-type parent (e.g. JsdocBlock,
- * JsdocTag).
+ * Build a `RemoteNodeList` from the per-list metadata slot at byte offset
+ * `slotOffset` inside the parent's Extended Data block. Reads
+ * `(head_index: u32, count: u16)` and walks `count` siblings starting from
+ * `head_index`.
  *
- * Returns `EMPTY_NODE_LIST` when the slot is unset or the wrapper has no
- * children — both encode "empty array" by spec (encoding.md).
+ * Mirrors `decoder::helpers::read_list_metadata` + `NodeListIter::new` on
+ * the Rust side.
  *
  * @param {import('./helpers.js').RemoteInternal} internal
- * @param {number} visitorIndex
+ * @param {number} slotOffset Per-Kind byte offset of the list metadata.
  * @returns {RemoteNodeList}
  */
-export function nodeListAtVisitorIndexExtended(internal, visitorIndex) {
-  const bitmask = internal.view.getUint8(extOffsetOf(internal))
-  const childIdx = childIndexAtVisitorIndex(internal, bitmask, visitorIndex)
-  if (childIdx === 0) {
+export function nodeListAtSlotExtended(internal, slotOffset) {
+  const ext = extOffsetOf(internal) + slotOffset
+  const head = internal.view.getUint32(ext, true)
+  const count = internal.view.getUint16(ext + 4, true)
+  if (head === 0 || count === 0) {
     return EMPTY_NODE_LIST
   }
-  return collectNodeListChildren(internal, childIdx)
+  return collectNodeListChildren(internal, head, count)
 }
 
 /**
- * Same as `nodeListAtVisitorIndexExtended` but for Children-type parents
- * (e.g. TypeUnion) where the bitmask lives in the 30-bit Node Data payload.
- *
- * @param {import('./helpers.js').RemoteInternal} internal
- * @param {number} visitorIndex
- * @returns {RemoteNodeList}
- */
-export function nodeListAtVisitorIndexChildren(internal, visitorIndex) {
-  const bitmask = childrenBitmaskPayloadOf(internal) & 0xff
-  const childIdx = childIndexAtVisitorIndex(internal, bitmask, visitorIndex)
-  if (childIdx === 0) {
-    return EMPTY_NODE_LIST
-  }
-  return collectNodeListChildren(internal, childIdx)
-}
-
-/**
- * Walk the NodeList wrapper at `nodeListIndex` and collect its children
- * into a `RemoteNodeList`. The parent of every collected child is `internal`.
+ * Walk `count` siblings starting at `headIndex` and collect them into a
+ * `RemoteNodeList`. The parent of every collected child is `internal`.
  *
  * @param {import('./helpers.js').RemoteInternal} parentInternal
- * @param {number} nodeListIndex Index of the NodeList wrapper.
+ * @param {number} headIndex   First node index in the list.
+ * @param {number} count       Number of elements to walk.
  * @returns {RemoteNodeList}
  */
-function collectNodeListChildren(parentInternal, nodeListIndex) {
+function collectNodeListChildren(parentInternal, headIndex, count) {
   const { sourceFile, rootIndex } = parentInternal
-  const head = firstChildIndex(sourceFile, nodeListIndex)
-  if (head === 0) {
-    return EMPTY_NODE_LIST
-  }
-
   const list = new RemoteNodeList()
   const parent = thisNode(parentInternal)
-  let cursor = head
-  while (cursor !== 0) {
+  let cursor = headIndex
+  for (let i = 0; i < count && cursor !== 0; i++) {
     list.push(sourceFile.getNode(cursor, parent, rootIndex))
     cursor = readNextSibling(sourceFile, cursor)
   }

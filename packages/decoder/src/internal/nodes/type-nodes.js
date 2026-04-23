@@ -31,7 +31,15 @@ import {
   thisNode
 } from '../helpers.js'
 import { inspectPayload, inspectSymbol } from '../inspect.js'
-import { nodeListAtVisitorIndexChildren } from '../node-list.js'
+import { nodeListAtSlotExtended } from '../node-list.js'
+
+/**
+ * Single per-list metadata slot offset for TypeNode parents that own one
+ * variable-length child list (TypeUnion, TypeIntersection, TypeTuple,
+ * TypeObject, TypeGeneric, TypeTypeParameter, TypeParameterList). Mirrors
+ * `crates/ox_jsdoc_binary/src/writer/nodes/type_node.rs::TYPE_LIST_PARENT_SLOT`.
+ */
+const TYPE_LIST_PARENT_SLOT = 0
 
 function commonData(internal) {
   return internal.view.getUint8(internal.byteIndex + COMMON_DATA_OFFSET) & COMMON_DATA_MASK
@@ -145,7 +153,7 @@ function defineElementsContainer(typeName) {
       return this._internal.parent
     }
     get elements() {
-      return nodeListAtVisitorIndexChildren(this._internal, 0)
+      return nodeListAtSlotExtended(this._internal, TYPE_LIST_PARENT_SLOT)
     }
     toJSON() {
       return {
@@ -307,10 +315,13 @@ export class RemoteTypeGeneric {
     return (commonData(this._internal) & 0b10) !== 0
   }
   get left() {
-    return childNodeAtVisitorIndexChildren(this._internal, 0)
+    const internal = this._internal
+    const childIdx = firstChildIndex(internal.sourceFile, internal.index)
+    if (childIdx === 0) return null
+    return internal.sourceFile.getNode(childIdx, thisNode(internal), internal.rootIndex)
   }
   get elements() {
-    return nodeListAtVisitorIndexChildren(this._internal, 1)
+    return nodeListAtSlotExtended(this._internal, TYPE_LIST_PARENT_SLOT)
   }
   toJSON() {
     return {

@@ -144,27 +144,37 @@ describe('Lazy node dispatch', () => {
   })
 })
 
-describe('JsdocBlock + tags NodeList', () => {
+describe('JsdocBlock + tags list metadata', () => {
+  // Per-Kind Extended Data sizes / list-metadata slot offsets. Mirrors
+  // `crates/ox_jsdoc_binary/src/writer/nodes/comment_ast.rs`.
+  const JSDOC_BLOCK_BASIC_SIZE = 68
+  const JSDOC_BLOCK_TAGS_SLOT = 56
+  const JSDOC_TAG_BASIC_SIZE = 38
+
+  /** Pre-fill an Extended Data block with NONE StringFields. */
+  function fillNoneStringFields(bytes, startByte, count) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    for (let i = 0; i < count; i++) {
+      view.setUint32(startByte + i * 6, 0xffff_ffff, true) // offset = NONE
+      view.setUint16(startByte + i * 6 + 4, 0, true) // length
+    }
+  }
+
   /**
-   * Build a JsdocBlock containing a 1-element tags NodeList wrapping a
-   * minimal JsdocTag (only the mandatory tag-name child). Mirrors the
-   * Rust visitor integration test.
+   * Build a JsdocBlock with a single JsdocTag (no NodeList wrapper). The
+   * tag is a direct sibling of the block's other children; its index is
+   * patched into the block's `tags` list-metadata slot as `(head, count=1)`.
+   * Mirrors the Rust visitor integration test post-format-change.
    */
   function buildBlockWithTag() {
     const b = new FixtureBuilder()
-    // Reserve JsdocBlock Extended Data record (basic 18 bytes).
-    const blockExt = b.reserveExtended(18)
-    const blockExtBytes = new Uint8Array(18)
-    new DataView(blockExtBytes.buffer).setUint8(0, 0b010) // bit1 = tags
-    // Required string fields default to None (0xFFFF).
-    new DataView(blockExtBytes.buffer).setUint16(2, 0xffff, true) // description
-    new DataView(blockExtBytes.buffer).setUint16(4, 0xffff, true) // delimiter
-    new DataView(blockExtBytes.buffer).setUint16(6, 0xffff, true) // post_delimiter
-    new DataView(blockExtBytes.buffer).setUint16(8, 0xffff, true) // terminal
-    new DataView(blockExtBytes.buffer).setUint16(10, 0xffff, true) // line_end
-    new DataView(blockExtBytes.buffer).setUint16(12, 0xffff, true) // initial
-    new DataView(blockExtBytes.buffer).setUint16(14, 0xffff, true) // delimiter_line_break
-    new DataView(blockExtBytes.buffer).setUint16(16, 0xffff, true) // preterminal_line_break
+    // -- JsdocBlock Extended Data (basic 68 bytes) -----------------------
+    const blockExt = b.reserveExtended(JSDOC_BLOCK_BASIC_SIZE)
+    const blockExtBytes = new Uint8Array(JSDOC_BLOCK_BASIC_SIZE)
+    blockExtBytes[0] = 0b010 // bitmask: bit1 = tags (kept for visitor framework)
+    fillNoneStringFields(blockExtBytes, 2, 8) // 8 StringFields, all NONE
+    // List metadata slots stay zero (head=0, count=0); tags slot is patched
+    // after we know the tag's NodeIndex.
     b.writeExtended(blockExt, blockExtBytes)
     const block = b.emitExtendedNode({
       parentIndex: 0,
@@ -173,23 +183,24 @@ describe('JsdocBlock + tags NodeList', () => {
       posStart: 0,
       posEnd: 25
     })
-    // tags NodeList wrapper, parent=block.
-    const tagsList = b.emitNodeList({ parentIndex: block, elementCount: 1 })
-    // JsdocTag with bit0 (tag-name only) bitmask.
-    const tagExt = b.reserveExtended(8)
-    const tagExtBytes = new Uint8Array(8)
-    new DataView(tagExtBytes.buffer).setUint8(0, 0b0000_0001) // bit0 only
-    new DataView(tagExtBytes.buffer).setUint16(2, 0xffff, true) // default_value
-    new DataView(tagExtBytes.buffer).setUint16(4, 0xffff, true) // description
-    new DataView(tagExtBytes.buffer).setUint16(6, 0xffff, true) // raw_body
+    // -- JsdocTag (parent = block directly, no NodeList wrapper) ---------
+    const tagExt = b.reserveExtended(JSDOC_TAG_BASIC_SIZE)
+    const tagExtBytes = new Uint8Array(JSDOC_TAG_BASIC_SIZE)
+    tagExtBytes[0] = 0b0000_0001 // bit0 = tag-name child
+    fillNoneStringFields(tagExtBytes, 2, 3) // 3 StringFields, all NONE
     b.writeExtended(tagExt, tagExtBytes)
     const tag = b.emitExtendedNode({
-      parentIndex: tagsList,
+      parentIndex: block,
       kind: 0x03,
       extOffset: tagExt,
       posStart: 4,
       posEnd: 9
     })
+    // Patch tags list metadata `(head=tag, count=1)` into block's ED.
+    const tagsView = new DataView(blockExtBytes.buffer)
+    tagsView.setUint32(JSDOC_BLOCK_TAGS_SLOT, tag, true)
+    tagsView.setUint16(JSDOC_BLOCK_TAGS_SLOT + 4, 1, true)
+    b.writeExtended(blockExt, blockExtBytes)
     // Tag-name child (visitor index 0, mandatory).
     b.emitStringNode({
       parentIndex: tag,
@@ -202,7 +213,7 @@ describe('JsdocBlock + tags NodeList', () => {
     return b.build()
   }
 
-  it('iterates tags via the NodeList wrapper', () => {
+  it('iterates tags via the per-list ED metadata slot', () => {
     const sf = new RemoteSourceFile(buildBlockWithTag())
     const block = /** @type {RemoteJsdocBlock} */ (sf.asts[0])
     expect(block).toBeInstanceOf(RemoteJsdocBlock)
@@ -218,11 +229,13 @@ describe('JsdocBlock + tags NodeList', () => {
   })
 
   it('returns the same EMPTY_NODE_LIST singleton for empty arrays', () => {
-    // Buffer with no children — descriptionLines, tags, inlineTags all empty.
+    // Buffer with no children — all three list-metadata slots are
+    // (head=0, count=0) → every list yields the EMPTY_NODE_LIST singleton.
     const b = new FixtureBuilder()
-    const ext = b.reserveExtended(18)
-    // Bitmask = 0 → all three NodeList slots unset.
-    b.writeExtended(ext, new Uint8Array(18))
+    const ext = b.reserveExtended(JSDOC_BLOCK_BASIC_SIZE)
+    const bytes = new Uint8Array(JSDOC_BLOCK_BASIC_SIZE)
+    fillNoneStringFields(bytes, 2, 8)
+    b.writeExtended(ext, bytes)
     const block = b.emitExtendedNode({
       parentIndex: 0,
       kind: 0x01,

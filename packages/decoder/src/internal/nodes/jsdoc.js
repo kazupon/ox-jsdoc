@@ -21,7 +21,31 @@ import {
   stringPayloadOf
 } from '../helpers.js'
 import { inspectPayload, inspectSymbol } from '../inspect.js'
-import { nodeListAtVisitorIndexExtended } from '../node-list.js'
+import { nodeListAtSlotExtended } from '../node-list.js'
+
+// ---------------------------------------------------------------------------
+// Per-Kind ED list-metadata slot offsets (see
+// `crates/ox_jsdoc_binary/src/writer/nodes/comment_ast.rs`).
+// ---------------------------------------------------------------------------
+
+/** Size of one `(head: u32, count: u16)` list metadata slot. */
+const LIST_METADATA_SIZE = 6
+
+/** `JsdocBlock.descriptionLines` slot offset (right after 8 StringFields). */
+const JSDOC_BLOCK_DESC_LINES_SLOT = 1 + 1 + 8 * STRING_FIELD_SIZE
+/** `JsdocBlock.tags` slot offset. */
+const JSDOC_BLOCK_TAGS_SLOT = JSDOC_BLOCK_DESC_LINES_SLOT + LIST_METADATA_SIZE
+/** `JsdocBlock.inlineTags` slot offset. */
+const JSDOC_BLOCK_INLINE_TAGS_SLOT = JSDOC_BLOCK_DESC_LINES_SLOT + 2 * LIST_METADATA_SIZE
+/** `JsdocBlock` basic ED size (= start of compat tail). */
+const JSDOC_BLOCK_BASIC_SIZE = JSDOC_BLOCK_DESC_LINES_SLOT + 3 * LIST_METADATA_SIZE
+
+/** `JsdocTag.typeLines` slot offset (right after 3 StringFields). */
+const JSDOC_TAG_TYPE_LINES_SLOT = 1 + 1 + 3 * STRING_FIELD_SIZE
+/** `JsdocTag.descriptionLines` slot offset. */
+const JSDOC_TAG_DESC_LINES_SLOT = JSDOC_TAG_TYPE_LINES_SLOT + LIST_METADATA_SIZE
+/** `JsdocTag.inlineTags` slot offset. */
+const JSDOC_TAG_INLINE_TAGS_SLOT = JSDOC_TAG_TYPE_LINES_SLOT + 2 * LIST_METADATA_SIZE
 
 // ---------------------------------------------------------------------------
 // Local helpers
@@ -161,21 +185,27 @@ export class RemoteJsdocBlock {
     const internal = this.#internal
     const cached = internal.$descriptionLines
     if (cached !== undefined) return cached
-    return (internal.$descriptionLines = nodeListAtVisitorIndexExtended(internal, 0))
+    return (internal.$descriptionLines = nodeListAtSlotExtended(
+      internal,
+      JSDOC_BLOCK_DESC_LINES_SLOT
+    ))
   }
   /** Block tags. */
   get tags() {
     const internal = this.#internal
     const cached = internal.$tags
     if (cached !== undefined) return cached
-    return (internal.$tags = nodeListAtVisitorIndexExtended(internal, 1))
+    return (internal.$tags = nodeListAtSlotExtended(internal, JSDOC_BLOCK_TAGS_SLOT))
   }
   /** Inline tags found inside the top-level description. */
   get inlineTags() {
     const internal = this.#internal
     const cached = internal.$inlineTags
     if (cached !== undefined) return cached
-    return (internal.$inlineTags = nodeListAtVisitorIndexExtended(internal, 2))
+    return (internal.$inlineTags = nodeListAtSlotExtended(
+      internal,
+      JSDOC_BLOCK_INLINE_TAGS_SLOT
+    ))
   }
 
   toJSON() {
@@ -371,26 +401,29 @@ export class RemoteJsdocTag {
     if (cached !== undefined) return cached
     return (internal.$body = childNodeAtVisitorIndex(internal, 4))
   }
-  /** Source-preserving type lines (visitor index 5). */
+  /** Source-preserving type lines. */
   get typeLines() {
     const internal = this.#internal
     const cached = internal.$typeLines
     if (cached !== undefined) return cached
-    return (internal.$typeLines = nodeListAtVisitorIndexExtended(internal, 5))
+    return (internal.$typeLines = nodeListAtSlotExtended(internal, JSDOC_TAG_TYPE_LINES_SLOT))
   }
-  /** Source-preserving description lines (visitor index 6). */
+  /** Source-preserving description lines. */
   get descriptionLines() {
     const internal = this.#internal
     const cached = internal.$descriptionLines
     if (cached !== undefined) return cached
-    return (internal.$descriptionLines = nodeListAtVisitorIndexExtended(internal, 6))
+    return (internal.$descriptionLines = nodeListAtSlotExtended(
+      internal,
+      JSDOC_TAG_DESC_LINES_SLOT
+    ))
   }
-  /** Inline tags found in this tag's description (visitor index 7). */
+  /** Inline tags found in this tag's description. */
   get inlineTags() {
     const internal = this.#internal
     const cached = internal.$inlineTags
     if (cached !== undefined) return cached
-    return (internal.$inlineTags = nodeListAtVisitorIndexExtended(internal, 7))
+    return (internal.$inlineTags = nodeListAtSlotExtended(internal, JSDOC_TAG_INLINE_TAGS_SLOT))
   }
 
   toJSON() {
