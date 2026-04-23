@@ -16,6 +16,62 @@ import {
 // `parseBatch` repeatedly (lint loops, watch mode).
 const utf8Encoder = new TextEncoder()
 
+// ---------------------------------------------------------------------------
+// Module-level buffer pool for parseBatch
+// ---------------------------------------------------------------------------
+//
+// Saves the per-call zero-fill of the worst-case Uint8Array (~80 KB for the
+// typescript-checker.ts fixture) plus the two small Uint32Array allocs.
+// Hot-loop callers (lint runners, watch mode) keep the pool warm; one-shot
+// callers pay the same alloc once and never benefit again — pool is purely
+// additive (never regresses).
+//
+// SAFETY: NAPI calls below are synchronous, so the pool cannot be observed
+// mid-write by another `parseBatch` invocation. The buffers we hand to NAPI
+// are `subarray(0, pos)` views; the Rust side borrows them for the duration
+// of the synchronous call only.
+
+/** Cap to avoid pinning huge buffers from one outlier call. 8 MiB covers
+ *  ~30 × the typescript-checker.ts batch (80 KB). Larger inputs bypass the
+ *  pool entirely so memory is GC-eligible right after the call. */
+const POOL_CONCAT_CAP = 8 * 1024 * 1024
+/** Cap on offsets/baseOffsets buffers (entries, not bytes). Same rationale
+ *  but smaller absolute bound — 1M entries × 4 byte = 4 MiB. */
+const POOL_INDEX_CAP = 1 << 20
+
+/** @type {Uint8Array | null}  Reused concat buffer, monotonically grows up to POOL_CONCAT_CAP. */
+let _concatPool = null
+/** @type {Uint32Array | null} Reused offsets buffer (length = items.length + 1). */
+let _offsetsPool = null
+/** @type {Uint32Array | null} Reused baseOffsets buffer (length = items.length). */
+let _baseOffsetsPool = null
+
+/**
+ * Grow `pool` to at least `need` slots with a 1.5x growth factor.
+ *
+ * @param {Uint8Array | null} pool
+ * @param {number} need
+ * @returns {Uint8Array}
+ */
+function _growU8(pool, need) {
+  const current = pool?.length ?? 0
+  const cap = Math.max(need, (current * 3) >>> 1)
+  return new Uint8Array(cap)
+}
+
+/**
+ * Grow `pool` to at least `need` slots with a 1.5x growth factor.
+ *
+ * @param {Uint32Array | null} pool
+ * @param {number} need
+ * @returns {Uint32Array}
+ */
+function _growU32(pool, need) {
+  const current = pool?.length ?? 0
+  const cap = Math.max(need, (current * 3) >>> 1)
+  return new Uint32Array(cap)
+}
+
 /**
  * Parse a complete `/** ... *​/` JSDoc block comment.
  *
@@ -103,9 +159,45 @@ export function parseBatch(items, options) {
   for (let i = 0; i < n; i++) {
     totalChars += items[i].sourceText.length
   }
-  const concat = new Uint8Array(totalChars * 3)
-  const offsets = new Uint32Array(n + 1)
-  const baseOffsets = new Uint32Array(n)
+  const needConcat = totalChars * 3
+  const needOffsets = n + 1
+  const needBaseOffsets = n
+
+  // Pool acquisition. Outliers larger than the cap bypass pooling so we
+  // don't pin a huge buffer for the rest of the process lifetime.
+  let concat
+  if (needConcat > POOL_CONCAT_CAP) {
+    concat = new Uint8Array(needConcat)
+  } else {
+    if (!_concatPool || _concatPool.length < needConcat) {
+      _concatPool = _growU8(_concatPool, needConcat)
+    }
+    concat = _concatPool
+  }
+  let offsets
+  if (needOffsets > POOL_INDEX_CAP) {
+    offsets = new Uint32Array(needOffsets)
+  } else {
+    if (!_offsetsPool || _offsetsPool.length < needOffsets) {
+      _offsetsPool = _growU32(_offsetsPool, needOffsets)
+    }
+    offsets = _offsetsPool
+  }
+  let baseOffsets
+  if (needBaseOffsets > POOL_INDEX_CAP) {
+    baseOffsets = new Uint32Array(needBaseOffsets)
+  } else {
+    if (!_baseOffsetsPool || _baseOffsetsPool.length < needBaseOffsets) {
+      _baseOffsetsPool = _growU32(_baseOffsetsPool, needBaseOffsets)
+    }
+    baseOffsets = _baseOffsetsPool
+  }
+
+  // `offsets[0]` must be 0 — when the pool is reused, a previous call may
+  // have left a different value in slot 0 (from `pos` at iteration 0 of
+  // the prior batch). Explicit zero is cheaper than a full clear.
+  offsets[0] = 0
+
   let pos = 0
   for (let i = 0; i < n; i++) {
     const { written } = utf8Encoder.encodeInto(items[i].sourceText, concat.subarray(pos))
@@ -115,8 +207,8 @@ export function parseBatch(items, options) {
   }
   const result = parseJsdocBatchRawBinding(
     concat.subarray(0, pos),
-    offsets,
-    baseOffsets,
+    offsets.subarray(0, needOffsets),
+    baseOffsets.subarray(0, needBaseOffsets),
     options ?? {}
   )
   const sourceFile = new RemoteSourceFile(result.buffer)
