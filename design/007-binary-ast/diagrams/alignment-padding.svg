@@ -157,100 +157,101 @@
   <!-- ============================================================ -->
   <text x="40" y="410" font-size="13" font-weight="bold" fill="#444" font-family="-apple-system, system-ui, sans-serif">(3) Concrete example: <tspan font-family="monospace" fill="#7b59ac">JsdocBlock</tspan> Extended Data padding (3 padding insertions, 90 bytes total — incl. 18B list metadata)</text>
 
-  <!-- 1 byte = 11.5 px → 90 byte ≈ 1035 px (margin 12 px); diagram preserved at 72-byte width as a representative example -->
+  <!-- 1 byte = 9.2 px → 90 byte ≈ 828 px (full compat layout fits) -->
   <g transform="translate(40, 425)">
-    <!-- 4-byte boundary lines (vertical ticks at every 4 byte) -->
+    <!-- Key 4-byte / 8-byte boundary lines -->
     <line x1="0"   y1="0" x2="0"   y2="80" stroke="#3da558" stroke-width="1" stroke-dasharray="2,1" opacity="0.4"/>
-    <line x1="46"  y1="0" x2="46"  y2="80" stroke="#3da558" stroke-width="1" stroke-dasharray="2,1" opacity="0.4"/>
-    <line x1="92"  y1="0" x2="92"  y2="80" stroke="#3da558" stroke-width="1" stroke-dasharray="2,1" opacity="0.4"/>
-    <line x1="184" y1="0" x2="184" y2="80" stroke="#3da558" stroke-width="1" stroke-dasharray="2,1" opacity="0.4"/>
-    <line x1="276" y1="0" x2="276" y2="80" stroke="#3da558" stroke-width="1" stroke-dasharray="2,1" opacity="0.4"/>
+    <line x1="74"  y1="0" x2="74"  y2="80" stroke="#3da558" stroke-width="1" stroke-dasharray="2,1" opacity="0.4"/>
+    <line x1="220" y1="0" x2="220" y2="80" stroke="#3da558" stroke-width="1" stroke-dasharray="2,1" opacity="0.4"/>
     <line x1="368" y1="0" x2="368" y2="80" stroke="#3da558" stroke-width="1" stroke-dasharray="2,1" opacity="0.4"/>
-    <line x1="460" y1="0" x2="460" y2="80" stroke="#3da558" stroke-width="1" stroke-dasharray="2,1" opacity="0.4"/>
-    <line x1="552" y1="0" x2="552" y2="80" stroke="#3da558" stroke-width="1" stroke-dasharray="2,1" opacity="0.4"/>
-    <line x1="575" y1="0" x2="575" y2="80" stroke="#3da558" stroke-width="2" stroke-dasharray="2,2" opacity="0.6"/>
-    <line x1="621" y1="0" x2="621" y2="80" stroke="#3da558" stroke-width="2" stroke-dasharray="2,2" opacity="0.6"/>
-    <line x1="667" y1="0" x2="667" y2="80" stroke="#3da558" stroke-width="2" stroke-dasharray="2,2" opacity="0.6"/>
-    <line x1="713" y1="0" x2="713" y2="80" stroke="#3da558" stroke-width="2" stroke-dasharray="2,2" opacity="0.6"/>
-    <line x1="759" y1="0" x2="759" y2="80" stroke="#3da558" stroke-width="2" stroke-dasharray="2,2" opacity="0.6"/>
-    <line x1="828" y1="0" x2="828" y2="80" stroke="#3da558" stroke-width="2" stroke-dasharray="2,2" opacity="0.6"/>
+    <line x1="460" y1="0" x2="460" y2="80" stroke="#3da558" stroke-width="2" stroke-dasharray="2,2" opacity="0.6"/>
+    <line x1="625.6" y1="0" x2="625.6" y2="80" stroke="#3da558" stroke-width="2" stroke-dasharray="2,2" opacity="0.6"/>
+    <line x1="644"  y1="0" x2="644"  y2="80" stroke="#3da558" stroke-width="2" stroke-dasharray="2,2" opacity="0.6"/>
+    <line x1="681"  y1="0" x2="681"  y2="80" stroke="#3da558" stroke-width="1" stroke-dasharray="2,1" opacity="0.4"/>
+    <line x1="791"  y1="0" x2="791"  y2="80" stroke="#3da558" stroke-width="2" stroke-dasharray="2,2" opacity="0.6"/>
+    <line x1="828"  y1="0" x2="828"  y2="80" stroke="#3da558" stroke-width="2" stroke-dasharray="2,2" opacity="0.6"/>
 
     <!-- Selected byte boundary labels (top) -->
     <text x="0" y="-3" text-anchor="middle" font-size="8" fill="#3da558">0</text>
-    <text x="92" y="-3" text-anchor="middle" font-size="8" fill="#3da558">8</text>
-    <text x="276" y="-3" text-anchor="middle" font-size="8" fill="#3da558">24</text>
-    <text x="460" y="-3" text-anchor="middle" font-size="8" fill="#3da558">40</text>
-    <text x="575" y="-3" text-anchor="middle" font-size="8" fill="#3da558">50</text>
-    <text x="621" y="-3" text-anchor="middle" font-size="8" fill="#3da558">52</text>
-    <text x="713" y="-3" text-anchor="middle" font-size="8" fill="#3da558">60</text>
-    <text x="759" y="-3" text-anchor="middle" font-size="8" fill="#3da558">68</text>
-    <text x="828" y="-3" text-anchor="middle" font-size="8" fill="#3da558">72</text>
+    <text x="74" y="-3" text-anchor="middle" font-size="8" fill="#3da558">8</text>
+    <text x="220" y="-3" text-anchor="middle" font-size="8" fill="#3da558">24</text>
+    <text x="368" y="-3" text-anchor="middle" font-size="8" fill="#3da558">40</text>
+    <text x="460" y="-3" text-anchor="middle" font-size="8" fill="#3da558">50</text>
+    <text x="625.6" y="-3" text-anchor="middle" font-size="8" fill="#3da558">68</text>
+    <text x="644" y="-3" text-anchor="middle" font-size="8" fill="#3da558">70</text>
+    <text x="791" y="-3" text-anchor="middle" font-size="8" fill="#3da558">86</text>
+    <text x="828" y="-3" text-anchor="middle" font-size="8" fill="#3da558">90</text>
 
-    <!-- Cells (1 byte ≈ 11.5 px) -->
-    <!-- byte 0: bitmask (u8) — 11.5 px -->
-    <rect x="0" y="10" width="11.5" height="40" fill="url(#gU8)" opacity="0.85" stroke="#7b59ac"/>
-    <text x="5.75" y="33" text-anchor="middle" font-size="7" fill="#fff" font-weight="bold">B</text>
+    <!-- Cells (1 byte ≈ 9.2 px) -->
+    <!-- byte 0: bitmask (u8) — 9.2 px -->
+    <rect x="0" y="10" width="9.2" height="40" fill="url(#gU8)" opacity="0.85" stroke="#7b59ac"/>
+    <text x="4.6" y="33" text-anchor="middle" font-size="7" fill="#fff" font-weight="bold">B</text>
 
-    <!-- byte 1: padding (u8) — 11.5 px -->
-    <rect x="11.5" y="10" width="11.5" height="40" fill="#bbb" opacity="0.6" stroke="#666" stroke-width="1" stroke-dasharray="2,1"/>
-    <text x="17.25" y="33" text-anchor="middle" font-size="7" fill="#444" font-weight="bold">P</text>
+    <!-- byte 1: padding (u8) — 9.2 px -->
+    <rect x="9.2" y="10" width="9.2" height="40" fill="#bbb" opacity="0.6" stroke="#666" stroke-width="1" stroke-dasharray="2,1"/>
+    <text x="13.8" y="33" text-anchor="middle" font-size="7" fill="#444" font-weight="bold">P</text>
 
-    <!-- byte 2-49: 8 × StringField — 8 × 69 px = 552 px -->
-    <rect x="23" y="10" width="552" height="40" fill="url(#gStr)" opacity="0.45" stroke="#3da558"/>
-    <text x="299" y="29" text-anchor="middle" font-size="11" fill="#3da558" font-weight="bold">8 StringFields (description + 7 delimiters)</text>
-    <text x="299" y="43" text-anchor="middle" font-size="9" fill="#3da558">8 × 6 bytes = 48 bytes (bytes 2-49)</text>
+    <!-- byte 2-49: 8 × StringField — 8 × 55.2 px = 441.6 px -->
+    <rect x="18.4" y="10" width="441.6" height="40" fill="url(#gStr)" opacity="0.45" stroke="#3da558"/>
+    <text x="239" y="29" text-anchor="middle" font-size="11" fill="#3da558" font-weight="bold">8 StringFields (description + 7 delimiters)</text>
+    <text x="239" y="43" text-anchor="middle" font-size="9" fill="#3da558">8 × 6 bytes = 48 bytes (bytes 2-49)</text>
 
-    <!-- basic ends at byte 50 -->
-    <line x1="575" y1="0" x2="575" y2="60" stroke="#666" stroke-width="2"/>
-    <text x="575" y="74" text-anchor="middle" font-size="8" fill="#666" font-style="italic">basic ends (byte 50)</text>
+    <!-- byte 50-67: 3 × list metadata (head:u32 + count:u16 = 6B each) — 3 × 55.2 = 165.6 px -->
+    <rect x="460" y="10" width="165.6" height="40" fill="url(#gOk)" opacity="0.45" stroke="#3da558" stroke-width="1.5"/>
+    <text x="542.8" y="29" text-anchor="middle" font-size="10" fill="#2d8b48" font-weight="bold">3 × list metadata (head:u32 + count:u16)</text>
+    <text x="542.8" y="43" text-anchor="middle" font-size="9" fill="#2d8b48">descLines / tags / inlineTags — 3 × 6 = 18 bytes (bytes 50-67)</text>
 
-    <!-- byte 50-51: padding (u16) — 23 px -->
-    <rect x="575" y="10" width="23" height="40" fill="#bbb" opacity="0.6" stroke="#666" stroke-width="1" stroke-dasharray="2,1"/>
-    <text x="586.5" y="33" text-anchor="middle" font-size="8" fill="#444" font-weight="bold">P</text>
+    <!-- basic ends at byte 68 -->
+    <line x1="625.6" y1="0" x2="625.6" y2="60" stroke="#666" stroke-width="2"/>
+    <text x="625.6" y="74" text-anchor="middle" font-size="8" fill="#666" font-style="italic">basic ends (byte 68)</text>
 
-    <!-- byte 52-55: end_line (u32) — 46 px -->
-    <rect x="598" y="10" width="46" height="40" fill="url(#gU32)" opacity="0.85" stroke="#d49520"/>
-    <text x="621" y="29" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">end_line</text>
-    <text x="621" y="42" text-anchor="middle" font-size="7" fill="#fff5e0">u32</text>
+    <!-- byte 68-69: padding (u16) — 18.4 px -->
+    <rect x="625.6" y="10" width="18.4" height="40" fill="#bbb" opacity="0.6" stroke="#666" stroke-width="1" stroke-dasharray="2,1"/>
+    <text x="634.8" y="33" text-anchor="middle" font-size="7" fill="#444" font-weight="bold">P</text>
 
-    <!-- byte 56-67: 3 u32 line indices — 3 × 46 = 138 px -->
-    <rect x="644" y="10" width="138" height="40" fill="url(#gU32)" opacity="0.65" stroke="#d49520"/>
-    <text x="713" y="29" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">3 line indices</text>
-    <text x="713" y="42" text-anchor="middle" font-size="7" fill="#fff5e0">u32 × 3</text>
+    <!-- byte 70-73: end_line (u32) — 36.8 px -->
+    <rect x="644" y="10" width="36.8" height="40" fill="url(#gU32)" opacity="0.85" stroke="#d49520"/>
+    <text x="662.4" y="29" text-anchor="middle" font-size="8" fill="#fff" font-weight="bold">end_line</text>
+    <text x="662.4" y="42" text-anchor="middle" font-size="7" fill="#fff5e0">u32</text>
 
-    <!-- byte 68: Hp (u8) — 11.5 px -->
-    <rect x="782" y="10" width="11.5" height="40" fill="url(#gBad)" opacity="0.7" stroke="#c43e3e"/>
-    <text x="787.75" y="33" text-anchor="middle" font-size="6" fill="#fff" font-weight="bold">Hp</text>
+    <!-- byte 74-85: 3 × u32 line indices — 3 × 36.8 = 110.4 px -->
+    <rect x="680.8" y="10" width="110.4" height="40" fill="url(#gU32)" opacity="0.65" stroke="#d49520"/>
+    <text x="736" y="29" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">3 line indices</text>
+    <text x="736" y="42" text-anchor="middle" font-size="7" fill="#fff5e0">u32 × 3</text>
 
-    <!-- byte 69: Hpt (u8) — 11.5 px -->
-    <rect x="793.5" y="10" width="11.5" height="40" fill="url(#gBad)" opacity="0.6" stroke="#c43e3e"/>
-    <text x="799.25" y="33" text-anchor="middle" font-size="6" fill="#fff" font-weight="bold">Hpt</text>
+    <!-- byte 86: Hp (u8) — 9.2 px -->
+    <rect x="791.2" y="10" width="9.2" height="40" fill="url(#gBad)" opacity="0.7" stroke="#c43e3e"/>
+    <text x="795.8" y="33" text-anchor="middle" font-size="6" fill="#fff" font-weight="bold">Hp</text>
 
-    <!-- byte 70-71: trailing padding (u16) — 23 px -->
-    <rect x="805" y="10" width="23" height="40" fill="#bbb" opacity="0.6" stroke="#666" stroke-width="1" stroke-dasharray="2,1"/>
-    <text x="816.5" y="33" text-anchor="middle" font-size="8" fill="#444" font-weight="bold">P</text>
+    <!-- byte 87: Hpt (u8) — 9.2 px -->
+    <rect x="800.4" y="10" width="9.2" height="40" fill="url(#gBad)" opacity="0.6" stroke="#c43e3e"/>
+    <text x="805" y="33" text-anchor="middle" font-size="6" fill="#fff" font-weight="bold">Hpt</text>
 
-    <!-- compat ends at byte 72 -->
+    <!-- byte 88-89: trailing padding (u16) — 18.4 px -->
+    <rect x="809.6" y="10" width="18.4" height="40" fill="#bbb" opacity="0.6" stroke="#666" stroke-width="1" stroke-dasharray="2,1"/>
+    <text x="818.8" y="33" text-anchor="middle" font-size="7" fill="#444" font-weight="bold">P</text>
+
+    <!-- compat ends at byte 90 -->
     <line x1="828" y1="0" x2="828" y2="60" stroke="#666" stroke-width="2"/>
-    <text x="828" y="74" text-anchor="middle" font-size="8" fill="#666" font-style="italic">compat ends (byte 72)</text>
+    <text x="828" y="74" text-anchor="middle" font-size="8" fill="#666" font-style="italic">compat ends (byte 90)</text>
   </g>
 
   <!-- Padding annotations (under the cells) -->
   <g transform="translate(40, 525)">
     <!-- Padding 1 (byte 1, StringField alignment) -->
-    <line x1="17.25" y1="0" x2="17.25" y2="20" stroke="#666" stroke-width="1" stroke-dasharray="2,1"/>
-    <line x1="17.25" y1="20" x2="120" y2="20" stroke="#666" stroke-width="1"/>
+    <line x1="13.8" y1="0" x2="13.8" y2="20" stroke="#666" stroke-width="1" stroke-dasharray="2,1"/>
+    <line x1="13.8" y1="20" x2="120" y2="20" stroke="#666" stroke-width="1"/>
     <text x="125" y="24" font-size="10" fill="#444" font-family="-apple-system, system-ui, sans-serif">① byte 1 (u8 pad) → places first <tspan font-weight="bold" fill="#3da558">StringField (description)</tspan> at byte 2</text>
 
-    <!-- Padding 2 (bytes 50-51, u32 alignment) -->
-    <line x1="586.5" y1="0" x2="586.5" y2="40" stroke="#666" stroke-width="1" stroke-dasharray="2,1"/>
-    <line x1="586.5" y1="40" x2="650" y2="40" stroke="#666" stroke-width="1"/>
-    <text x="350" y="44" font-size="10" fill="#444" font-family="-apple-system, system-ui, sans-serif">② bytes 50-51 (u16 pad) → aligns first compat <tspan font-weight="bold" fill="#d49520">u32 (end_line)</tspan> at byte 52</text>
+    <!-- Padding 2 (bytes 68-69, u32 alignment) -->
+    <line x1="634.8" y1="0" x2="634.8" y2="40" stroke="#666" stroke-width="1" stroke-dasharray="2,1"/>
+    <line x1="634.8" y1="40" x2="700" y2="40" stroke="#666" stroke-width="1"/>
+    <text x="350" y="44" font-size="10" fill="#444" font-family="-apple-system, system-ui, sans-serif">② bytes 68-69 (u16 pad) → aligns first compat <tspan font-weight="bold" fill="#d49520">u32 (end_line)</tspan> at byte 70</text>
 
-    <!-- Padding 3 (bytes 70-71, trailing) -->
-    <line x1="816.5" y1="0" x2="816.5" y2="60" stroke="#666" stroke-width="1" stroke-dasharray="2,1"/>
-    <line x1="200" y1="60" x2="816.5" y2="60" stroke="#666" stroke-width="1"/>
-    <text x="0" y="64" font-size="10" fill="#444" font-family="-apple-system, system-ui, sans-serif">③ bytes 70-71 (u16 pad) → trailing alignment (next Extended Data record may start at u32 boundary)</text>
+    <!-- Padding 3 (bytes 88-89, trailing) -->
+    <line x1="818.8" y1="0" x2="818.8" y2="60" stroke="#666" stroke-width="1" stroke-dasharray="2,1"/>
+    <line x1="200" y1="60" x2="818.8" y2="60" stroke="#666" stroke-width="1"/>
+    <text x="0" y="64" font-size="10" fill="#444" font-family="-apple-system, system-ui, sans-serif">③ bytes 88-89 (u16 pad) → trailing alignment (next Extended Data record may start at u32 boundary)</text>
   </g>
 
   <!-- ============================================================ -->

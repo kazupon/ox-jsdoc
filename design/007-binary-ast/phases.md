@@ -66,8 +66,10 @@ must pass.
 - **Phase 1.1a**: Rust encoder implementation
   - Implement each `write_node_*()` of `BinaryWriter`, conforming to the Phase
     1.0a format spec
-  - Cover all 62 kinds (60 nodes + Sentinel + NodeList) at once
-    (including the 45 parsedType TypeNode kinds)
+  - Cover all 60 emitted kinds at once (15 comment AST + 45 TypeNode); the
+    62-discriminant total includes 1 Sentinel and 1 reserved-only `NodeList`
+    that the encoder never emits — variable-length child lists use inline
+    `(head_index, count)` metadata in Extended Data instead
   - Implement the String Table with zero-copy source slicing
   - Include compat_mode extension part (writing extra metadata when Header bit0 is ON)
   - Start encoder unit benchmarks with criterion
@@ -106,8 +108,9 @@ must pass.
 
 - **Phase 1.2a**: Parser full implementation (typed AST → binary writer)
   - Implement `crates/ox_jsdoc_binary/src/parser/`, calling the Phase 1.1a `BinaryWriter`
-  - All 62 kinds (60 nodes + Sentinel + NodeList) + all parsedType TypeNodes,
-    single comment (N=1) case
+  - All 60 emitted kinds (15 comment AST + 45 TypeNode) + all parsedType
+    TypeNodes, single comment (N=1) case (Sentinel and reserved-only
+    `NodeList` are not emitted)
   - Copy existing typed AST Rust tests to the `ox_jsdoc_binary` side for
     regression verification (do not add new tests)
 - **Phase 1.2b**: NAPI binding `ox-jsdoc-binary`

@@ -91,13 +91,20 @@ within the single format (Option A: switching via a Header flag):
    - `JsdocDescriptionLine` / `JsdocTypeLine`: delimiter string indices
 3. **The decoder reads or skips the compat region based on the Header flag**
 4. **`empty_string_for_null` is applied on the decoder side**: in the Binary
-   AST it is always represented as `Option` (the sentinel for None depends on
-   the storage location: **30-bit slot in Node Data is `0x3FFFFFFF`**, **6-byte
-   `StringField` slot in Extended Data is `(offset = 0xFFFF_FFFF, length = 0)`**)
-   - Most string fields live in Extended Data as inline `StringField` slots
-     (JsdocBlock, JsdocTag, JsdocInlineTag, etc.)
-   - The 30-bit string index in Node Data is only used by String-type nodes
-     (TypeName, TypeNumber, JsdocText, JsdocTagName, etc.)
+   AST it is always represented as `Option`. The sentinel for None depends on
+   the storage location:
+   - **`StringField` slot in Extended Data** (most string fields live here —
+     JsdocBlock, JsdocTag, JsdocInlineTag, …): `(offset = 0xFFFF_FFFF, length = 0)`
+   - **30-bit Node Data payload, `TypeTag::String` (long-string fallback for
+     string-leaf nodes)**: `0x3FFF_FFFF`
+   - **30-bit Node Data payload, `TypeTag::StringInline` (short-string fast
+     path for string-leaf nodes)**: never None — the encoder only emits
+     `StringInline` for present, in-range values; absent strings stay on
+     `TypeTag::String` (`0x3FFF_FFFF` sentinel) or on the `Extended` path
+     (`StringField::NONE`)
+   - String-leaf node Kinds (TypeName, TypeNumber, JsdocText, JsdocTagName,
+     …) use either `StringInline` or `String` — encoder picks per-emit by
+     length / offset; see `format.md#stringinline-0b11` for the rule
 5. **`include_positions` is always true** (Pos/End are fixed fields)
 6. **The lazy decoder holds the compat flag at the `RemoteSourceFile` (root)**:
    child nodes traverse `parent → root → compat` to look it up
@@ -120,37 +127,57 @@ class RemoteSourceFile {
 }
 
 class RemoteJsdocBlock {
-  // Basic part (always present, offset 0-17)
+  // Basic part (always present, offset 0-67 in basic mode; 0-89 in compat mode)
   get childrenBitmask() {
     return this.view.getUint8(this.extendedDataOffset + 0) // bit0=descLines, bit1=tags, bit2=inlineTags
   }
   // byte 1 is alignment padding
+
+  // String fields: 8 inline `StringField` slots (6 bytes each = u32 offset + u16 length)
+  // at bytes 2-49 — readers slice String Data directly via getStringByField.
   get description() {
-    const idx = this.view.getUint16(this.extendedDataOffset + 2, true)
-    return idx === 0xffff ? null : this.sourceFile.getString(idx)
+    const off = this.extendedDataOffset + 2
+    const offset = this.view.getUint32(off, true)
+    const length = this.view.getUint16(off + 4, true)
+    return offset === 0xffff_ffff ? null : this.sourceFile.getStringByField(offset, length)
   }
   get delimiter() {
-    const idx = this.view.getUint16(this.extendedDataOffset + 4, true)
-    return this.sourceFile.getString(idx)
+    const off = this.extendedDataOffset + 8
+    const offset = this.view.getUint32(off, true)
+    const length = this.view.getUint16(off + 4, true)
+    return this.sourceFile.getStringByField(offset, length) ?? ''
   }
-  // post_delimiter at +6, terminal +8, line_end +10, initial +12,
-  // delimiter_line_break +14, preterminal_line_break +16
+  // post_delimiter at +14, terminal +20, line_end +26, initial +32,
+  // delimiter_line_break +38, preterminal_line_break +44 (each StringField is 6 bytes)
 
-  // compat extension part (only present when compat_mode; actual data at offset 20-39, 18-19 is alignment)
-  // The compat flag is referenced through sourceFile
+  // List metadata: 3 × 6-byte (head_index: u32, count: u16) slots at bytes 50-67.
+  // descriptionLines metadata at +50, tags at +56, inlineTags at +62.
+  get tags() {
+    const off = this.extendedDataOffset + 56 // JSDOC_BLOCK_TAGS_SLOT
+    const head = this.view.getUint32(off, true)
+    const count = this.view.getUint16(off + 4, true)
+    return head === 0 || count === 0
+      ? EMPTY_NODE_LIST
+      : nodeListFromMetadata(this.sourceFile, head, count, /* parent */ this)
+  }
+  // descriptionLines and inlineTags follow the same pattern at +50 and +62.
+
+  // Compat extension part (only present when compat_mode; basic ends at byte 68;
+  // bytes 68-69 are alignment padding for the compat tail)
+  // The compat flag is referenced through sourceFile.
   get endLine() {
     if (!this.sourceFile.compatMode) return undefined
-    return this.view.getUint32(this.extendedDataOffset + 20, true)
+    return this.view.getUint32(this.extendedDataOffset + 70, true)
   }
   get descriptionStartLine() {
     if (!this.sourceFile.compatMode) return undefined
-    const v = this.view.getUint32(this.extendedDataOffset + 24, true)
-    return v === 0xffffffff ? undefined : v // Sentinel represents None
+    const v = this.view.getUint32(this.extendedDataOffset + 74, true)
+    return v === 0xffff_ffff ? undefined : v // sentinel represents None
   }
-  // descriptionEndLine: +28, lastDescriptionLine: +32
-  // hasPreterminalDescription: +36 (u8)
-  // hasPreterminalTagDescription: +37 (u8, 0xFF = None)
-  // ...
+  // descriptionEndLine: +78, lastDescriptionLine: +82
+  // hasPreterminalDescription: +86 (u8)
+  // hasPreterminalTagDescription: +87 (u8, 0xFF = None)
+  // bytes 88-89 are trailing alignment padding (compat ED ends at byte 90)
 }
 ```
 

@@ -150,18 +150,19 @@ This verifies the precondition that Rust's crates/ox_jsdoc_binary uses the same 
 
 Place the following under `fixtures/edge_cases/`:
 
-| Fixture                      | Verification target                                                    |
-| ---------------------------- | ---------------------------------------------------------------------- |
-| `empty_comment.jsdoc`        | `/** */` (minimum)                                                     |
-| `single_tag.jsdoc`           | Single tag                                                             |
-| `unicode_heavy.jsdoc`        | Strings with UTF-16 surrogates (UTF-8 → UTF-16 conversion boundary)    |
-| `parse_failure.jsdoc`        | Invalid JSDoc (root index = 0 sentinel)                                |
-| `large_batch_100.json`       | 100-comment batch                                                      |
-| `string_table_overflow.json` | 64K+ unique strings (overflow test)                                    |
-| `compat_mode_block.jsdoc`    | compat_mode with all fields populated                                  |
-| `empty_arrays.jsdoc`         | All array fields empty (NodeList skip verification)                    |
-| `deep_nesting.jsdoc`         | Deeply nested TypeNode (Union of Generic of ...)                       |
-| `all_kinds.jsdoc`            | Large comment containing all 62 kinds (60 nodes + Sentinel + NodeList) |
+| Fixture                        | Verification target                                                                                                                            |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `empty_comment.jsdoc`          | `/** */` (minimum)                                                                                                                             |
+| `single_tag.jsdoc`             | Single tag                                                                                                                                     |
+| `unicode_heavy.jsdoc`          | Strings with UTF-16 surrogates (UTF-8 → UTF-16 conversion boundary)                                                                            |
+| `parse_failure.jsdoc`          | Invalid JSDoc (root index = 0 sentinel)                                                                                                        |
+| `large_batch_100.json`         | 100-comment batch                                                                                                                              |
+| `string_table_overflow.json`   | 64K+ unique strings (overflow test)                                                                                                            |
+| `compat_mode_block.jsdoc`      | compat_mode with all fields populated                                                                                                          |
+| `empty_arrays.jsdoc`           | All array fields empty (verifies ED list metadata `(head=0, count=0)` correctly yields `EMPTY_NODE_LIST`)                                      |
+| `deep_nesting.jsdoc`           | Deeply nested TypeNode (Union of Generic of ...)                                                                                               |
+| `all_kinds.jsdoc`              | Large comment containing all 60 node kinds (`NodeList` Kind 0x7F is reserved-only and intentionally absent — encoder never emits it)           |
+| `string_inline_boundary.jsdoc` | String-leaf nodes around the 256-byte boundary — verifies `TypeTag::StringInline` (≤ 255) vs `TypeTag::String` (≥ 256) selection (Path B-leaf) |
 
 ## 9. Visitor traversal tests
 
@@ -315,10 +316,11 @@ fn children_bitmask_jsdoctag_8_bits() {
 Coverage targets:
 
 - Each node type and each bit of Common Data (6-bit) (every entry in the table at [format.md "Usage per node kind"](./format.md#per-node-kind-usage))
-- All 4 Node Data type tags (Children/String/Extended/Reserved); Reserved triggers a decoder error
+- All 4 Node Data type tags (`Children` / `String` / `Extended` / `StringInline`); the encoder picks `StringInline` (0b11) for short string-leaf values and `String` (0b01) only when the value exceeds the inline encoding limits (length > 255 OR offset > 4 MB-1)
 - Children bitmask (JsdocTag 8 bits / JsdocBlock 3 bits / JsdocGenericTagBody 2 bits)
-- u16 string index sentinel (`0xFFFF`, used by diagnostics) and u32 sentinels (`0x3FFF_FFFF` for the Node-Data String payload, `0xFFFFFFFF` for compat line indices)
+- u32 sentinels: `0x3FFF_FFFF` for the Node-Data `TypeTag::String` payload (None marker) and `0xFFFFFFFF` for compat line indices
 - StringField NONE sentinel (`offset = 0xFFFF_FFFF, length = 0`) for absent Extended Data string slots
+- `TypeTag::StringInline` boundary: round-trip strings of length 254 / 255 (inline) and 256 / 257 (fallback to `String`); also verify that String Data offsets > 4 MB fall back to `String` even for short values
 
 ## 15. Lazy / cache behavior verification
 
@@ -375,7 +377,9 @@ fn compat_mode_changes_extended_data_size() {
     assert_eq!(basic[1] & 0x01, 0);
     assert_eq!(compat[1] & 0x01, 1);
 
-    // JsdocBlock Extended Data size difference: basic 50 / compat 72 bytes
+    // JsdocBlock Extended Data size difference: basic 68 / compat 90 bytes
+    // (68 = 1 bitmask + 1 padding + 8 × StringField (6B) + 3 × list metadata (6B);
+    //  compat tail adds 22B for end_line + 3 × line indices + 2 × u8 flag + padding)
     let basic_sf  = LazySourceFile::new(&basic).unwrap();
     let compat_sf = LazySourceFile::new(&compat).unwrap();
     assert!(compat_sf.extended_data_size() > basic_sf.extended_data_size());
@@ -395,8 +399,8 @@ fn compat_mode_round_trips_line_metadata() {
 
 Verification targets:
 
-- `JsdocBlock`: 50 / 72 bytes (+22 bytes for compat)
-- `JsdocTag`: 20 / 62 bytes (+42 bytes for compat — 7 × StringField)
+- `JsdocBlock`: 68 / 90 bytes (basic = 1 bitmask + 1 padding + 8 × StringField + 3 × list metadata = 68; compat adds 22 bytes for 4 line indices + 2 × u8 flag + alignment padding)
+- `JsdocTag`: 38 / 80 bytes (basic = 1 bitmask + 1 padding + 3 × StringField + 3 × list metadata = 38; compat adds 42 bytes for 7 × StringField delimiter slots)
 - `JsdocDescriptionLine` / `JsdocTypeLine`: 0 / 24 bytes (switches to Extended type only when compat — 4 × StringField)
 - Output sentinels (`0xFFFFFFFF` for `Option<u32>` such as `description_start_line`; `(offset 0xFFFF_FFFF, length 0)` for `StringField::NONE`)
 

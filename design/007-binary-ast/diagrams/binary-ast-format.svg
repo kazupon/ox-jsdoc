@@ -160,7 +160,7 @@
   <!-- Node Data field encoding -->
   <g transform="translate(55, 906)">
     <text x="0" y="14" fill="#7b59ac" font-size="11" font-weight="bold">Node Data field encoding (32 bits):</text>
-    <text x="0" y="32" fill="#555" font-size="10">[31:30] type tag — 0b00=Children (30-bit child bitmask) | 0b01=String (30-bit string idx) | 0b10=Extended (30-bit byte offset) | 0b11=reserved</text>
+    <text x="0" y="32" fill="#555" font-size="10">[31:30] type tag — 0b00=Children (30-bit bitmask) | 0b01=String (30-bit Offsets idx, long fallback) | 0b10=Extended (30-bit byte offset) | 0b11=StringInline (offset:u22+length:u8, short)</text>
     <text x="0" y="48" fill="#555" font-size="10">[29:0]  payload (30 bit, type-dependent) — Children bitmask of JsdocBlock/JsdocTag is in Extended Data byte 0 (NOT here, since they are Extended type)</text>
   </g>
 </svg>

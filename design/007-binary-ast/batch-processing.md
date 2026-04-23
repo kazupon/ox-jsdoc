@@ -85,6 +85,10 @@ Reasons:
 - Pros: No Header change required
 - Cons: Single comments must go through the virtual NodeList -> unnatural in ESTree
   terms, plus 24 bytes overhead
+- Note: NodeList wrappers are no longer emitted anywhere in the live design
+  (variable-length child lists use inline `(head_index, count)` metadata in
+  the parent's Extended Data block); this option is preserved here as
+  historical context only
 
 ---
 

@@ -67,7 +67,7 @@ order during implementation:
    - Nodes section (24 bytes/node, flat array)
    - Node Data bit packing (32 bit, 4 type tags)
    - Common Data (6-bit, small per-kind data)
-   - Node catalog matrix (all 62 kinds = 60 nodes + Sentinel + NodeList)
+   - Node catalog matrix (60 nodes + 1 Sentinel + 1 reserved-only `NodeList` discriminant = 62 entries; `NodeList` is reserved-only and never emitted by the encoder)
 
    Each section follows the unified structure of "Design overview / Layout /
    Field details / Implementation sketch / Size and performance / Differences
@@ -76,7 +76,7 @@ order during implementation:
 4. [Encoding (Tree, Variant, compat_mode)](./encoding.md)
    - Handling nodes with variants
    - Relationship with compat_mode
-   - Tree encoding (NodeList optimization)
+   - Tree encoding (variable-length child lists via inline `(head_index, count)` metadata in Extended Data — no NodeList wrapper)
 
 ### Lazy decoder implementation
 

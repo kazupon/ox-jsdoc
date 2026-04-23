@@ -113,8 +113,10 @@ impl<'a> LazyJsdocBlock<'a> {
     }
 
     pub fn tags(&self) -> NodeListIter<'a, LazyJsdocTag<'a>> {
-        // Look at the Children bitmask to locate the NodeList for tags
-        // The iterator is also implemented as a value-type struct (not a closure)
+        // Read `(head_index: u32, count: u16)` from the parent's Extended Data
+        // block at JSDOC_BLOCK_TAGS_SLOT (byte 56) — list children are direct
+        // siblings under the parent (no NodeList wrapper). The iterator walks
+        // `next_sibling` exactly `count` times.
     }
 }
 
@@ -125,20 +127,35 @@ pub struct LazyJsdocTag<'a> {
     source_file: &'a LazySourceFile<'a>,
 }
 
-// The iterator is also a value type (struct-based, not a closure)
+// The iterator is a value type (struct-based, not a closure). Carries an
+// explicit `remaining` count read from the parent's ED list-metadata slot
+// (NodeList-wrapper-elimination format change).
 pub struct NodeListIter<'a, T> {
     bytes: &'a [u8],
     current_index: u32,
+    remaining: u32,            // decremented per `next()`; reaching 0 ends iteration
     source_file: &'a LazySourceFile<'a>,
     _marker: std::marker::PhantomData<T>,
+}
+
+impl<'a, T: LazyNode<'a>> NodeListIter<'a, T> {
+    /// Construct an iterator over `count` siblings starting at `head_index`.
+    /// Either `head_index == 0` or `count == 0` produces an immediately-empty
+    /// iterator.
+    pub fn new(
+        source_file: &'a LazySourceFile<'a>,
+        head_index: u32,
+        count: u32,
+    ) -> Self { /* ... */ }
 }
 
 impl<'a, T: LazyNode<'a>> Iterator for NodeListIter<'a, T> {
     type Item = T;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_index == 0 { return None; }
+        if self.remaining == 0 { return None; }
         let item = T::from_index(self.bytes, self.current_index, self.source_file);
         self.current_index = /* read next sibling */;
+        self.remaining -= 1;
         Some(item)
     }
 }
@@ -188,17 +205,30 @@ impl<'a> LazySourceFile<'a> {
     }
 
     /// String Offsets[idx] -> String Data slice (zero-copy &str reconstruction).
-    /// Used by string-leaf nodes (TypeTag::String payload) and the
-    /// diagnostics section's `message_index`.
+    /// Used by string-leaf nodes whose Node Data carries a `TypeTag::String`
+    /// payload (long-string fallback path) and the diagnostics section's
+    /// `message_index`. Short strings take the inline `TypeTag::StringInline`
+    /// path instead — see `get_inline_string` below.
     #[inline]
     pub fn get_string(&self, idx: u32) -> Option<&'a str> {
-        if idx == 0xFFFF || idx == 0x3FFF_FFFF { return None; }
+        if idx == 0x3FFF_FFFF { return None; }
         let so = (self.string_offsets_offset + idx * 8) as usize;
         let start = read_u32(self.bytes, so) as usize;
         let end   = read_u32(self.bytes, so + 4) as usize;
         let sd = self.string_data_offset as usize;
         // Zero-copy slice as UTF-8 (encoder guarantees valid UTF-8)
         Some(unsafe { std::str::from_utf8_unchecked(&self.bytes[sd + start .. sd + end]) })
+    }
+
+    /// Resolve a Path B-leaf inline `(offset, length)` pair into the
+    /// underlying string. Always returns a real `&str` — encoders only emit
+    /// `TypeTag::StringInline` for present, in-range short strings.
+    #[inline]
+    pub fn get_inline_string(&self, offset: u32, length: u8) -> &'a str {
+        let sd = self.string_data_offset as usize;
+        let start = sd + offset as usize;
+        let end = start + length as usize;
+        unsafe { std::str::from_utf8_unchecked(&self.bytes[start..end]) }
     }
 
     /// `StringField` -> String Data slice (zero-copy &str reconstruction).
@@ -302,6 +332,11 @@ pub enum Kind {
     JsdocDescriptionLine  = 0x02,
     JsdocTag              = 0x03,
     // ... 15 comment AST kinds
+    /// Reserved discriminant kept for legacy buffer compatibility. The
+    /// encoder no longer emits NodeList nodes — variable-length child lists
+    /// are now expressed via inline `(head_index, count)` metadata stored
+    /// at known per-Kind byte offsets in the parent's Extended Data block
+    /// (see `crate::format::extended_data::LIST_METADATA_SIZE`).
     NodeList              = 0x7F,
     TypeName              = 0x80,
     TypeNumber            = 0x81,
@@ -438,18 +473,45 @@ itself.
    d. Pack node-specific data into Common Data + Node Data
    e. If Extended Data is needed, append to the Extended Data buffer
    f. Append the 24-byte node record to the Nodes buffer (written as LE u32)
-5. Wrap array fields in a NodeList (Kind 0x7F) just like tsgo.
-   However, **for empty arrays, do not emit a NodeList and set the corresponding bit
-   in the parent's Children bitmask to 0** (Option A2 optimization, reduces overhead at batch time)
-6. Resolve forward references for parent-child links via backpatching:
+5. **Variable-length child arrays use inline list metadata in Extended Data**
+   (NodeList-wrapper-elimination format change). For each list field on the
+   parent (e.g. `JsdocBlock.tags`, `JsdocTag.descriptionLines`,
+   `TypeUnion.elements`):
+   a. Reserve a 6-byte slot at a known per-Kind byte offset in the parent's
+      Extended Data block (`JSDOC_BLOCK_TAGS_SLOT = 56`,
+      `JSDOC_BLOCK_DESC_LINES_SLOT = 50`,
+      `JSDOC_BLOCK_INLINE_TAGS_SLOT = 62`, `JSDOC_TAG_TYPE_LINES_SLOT = 20`,
+      `JSDOC_TAG_DESC_LINES_SLOT = 26`, `JSDOC_TAG_INLINE_TAGS_SLOT = 32`,
+      `TYPE_LIST_PARENT_SLOT = 0`)
+   b. Open a `ListInProgress` cursor via `BinaryWriter::begin_node_list_at(parent_ext, slot_offset)`
+   c. Emit each list child as a **direct sibling under the parent** (no
+      intermediate NodeList wrapper); record each child's index via
+      `BinaryWriter::record_list_child(&mut list, child_index)` so the
+      cursor's running `(head_index, count)` stays in sync
+   d. After the last child, call `BinaryWriter::finalize_node_list(list)`
+      which patches `(head_index: u32, count: u16)` into the parent ED slot
+   e. **Empty lists** simply leave the slot at its zero-initialized state
+      `(head=0, count=0)`; the decoder treats either condition as
+      `EMPTY_NODE_LIST`. The Children bitmask bit for the list slot is
+      retained on the parent for the visitor framework but is no longer
+      consulted by the lazy decoder
+6. **String-leaf nodes pick `TypeTag::StringInline (0b11)` when the value
+   fits the inline encoding** (length ≤ 255 byte AND String Data offset ≤
+   4 MB-1) — packs `(offset:u22, length:u8)` directly into the 30-bit Node
+   Data payload, skipping the String Offsets table indirection. Long /
+   distant values fall back to `TypeTag::String (0b01)` + `StringIndex`.
+   See `BinaryWriter::intern_string_payload` and the `intern_*_for_leaf_payload`
+   helpers (Path B-leaf optimization)
+7. Resolve forward references for parent-child links via backpatching:
    - parent index: At child write time, the parent's index is already known, so set it
    - next sibling: When the next node is written, patch the corresponding bytes of the previous node
-7. Write the root metadata for each BatchItem (node_index, source_offset, base_offset)
+8. Write the root metadata for each BatchItem (node_index, source_offset, base_offset)
    into the Root Index Array
-8. Sort diagnostics in ascending root_index order and write into the Diagnostics section
-9. Concatenate all sections:
-   Header + RootIndexArray + StringOffsets + StringData + ExtData + Diagnostics + Nodes
-10. Write back each offset in the Header (LE u32)
+9. Sort diagnostics in ascending root_index order and write into the Diagnostics section
+   (empty-skip: when no diagnostics were emitted, skip the sort entirely)
+10. Concatenate all sections:
+    Header + RootIndexArray + StringOffsets + StringData + ExtData + Diagnostics + Nodes
+11. Write back each offset in the Header (LE u32)
 ```
 
 ### Backpatching details (parent / next_sibling)

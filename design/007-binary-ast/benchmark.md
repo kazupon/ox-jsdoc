@@ -270,13 +270,14 @@ bench('size: compat', () => encode(source, { compat_mode: true }).byteLength)
 
 **Expected values** (see [the Extended Data section size table in format.md](./format.md#extended-data-section)):
 
-- `JsdocBlock`: 50 -> 72 bytes (Extended Data adds 22 bytes for the compat tail)
-- `JsdocTag`: 20 -> 62 bytes (adds 42 bytes for compat — 7 × StringField)
+- `JsdocBlock`: 68 -> 90 bytes (basic = 1 bitmask + 1 padding + 8 × StringField + 3 × list metadata = 68; compat adds 22 bytes for end_line + 3 × line indices + 2 × u8 flag + alignment padding)
+- `JsdocTag`: 38 -> 80 bytes (basic = 1 bitmask + 1 padding + 3 × StringField + 3 × list metadata = 38; compat adds 42 bytes — 7 × StringField)
 - For large fixtures (typescript-checker.ts), expect a **+30-50% buffer size increase**
 
 ### Scenario G: Isolated measurement of batch dedup effects
 
-Independently measure the **String dedup** and **NodeList skipping** effects, both
+Independently measure the **String dedup** and **inline list metadata** effects
+(NodeList wrapper elimination + Path B-leaf inline string-leaf), both
 emphasized in format.md / encoding.md:
 
 ```text

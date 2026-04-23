@@ -58,9 +58,9 @@
     <text x="625" y="54" text-anchor="middle" fill="#e8f5ec" font-size="9">8 bytes</text>
 
     <!-- Limit annotation -->
-    <text x="730" y="22" fill="#666" font-size="11" font-family="-apple-system, system-ui, sans-serif" font-style="italic">K ≤ 65,535</text>
-    <text x="730" y="40" fill="#666" font-size="10" font-family="-apple-system, system-ui, sans-serif" font-style="italic">(u16 limit when</text>
-    <text x="730" y="54" fill="#666" font-size="10" font-family="-apple-system, system-ui, sans-serif" font-style="italic">indexed by Ext Data)</text>
+    <text x="730" y="22" fill="#666" font-size="11" font-family="-apple-system, system-ui, sans-serif" font-style="italic">K ≤ 2^30</text>
+    <text x="730" y="40" fill="#666" font-size="10" font-family="-apple-system, system-ui, sans-serif" font-style="italic">(30-bit Node Data</text>
+    <text x="730" y="54" fill="#666" font-size="10" font-family="-apple-system, system-ui, sans-serif" font-style="italic">String idx limit)</text>
   </g>
 
   <!-- ============================================================ -->
@@ -159,7 +159,7 @@
     <text x="15" y="65" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan fill="#a87515" font-weight="bold">unique strings region</tspan>: only strings that don't match a source position (escape-resolved, etc.) are appended afterward</text>
     <text x="15" y="85" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">batch dedup</tspan>: frequent tag names like <tspan font-family="monospace">@param</tspan> / <tspan font-family="monospace">@returns</tspan> consolidate into 1 entry across N comments (encoder dedupes)</text>
     <text x="15" y="105" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">JS decoder optimization</tspan>: <tspan font-family="monospace">TextDecoder</tspan> converts entire StrData in one pass → subsequent reads are zero-alloc substring</text>
-    <text x="15" y="125" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">None representation</tspan>: u16 string index <tspan font-family="monospace">0xFFFF</tspan> = None (for Optional fields in Extended Data)</text>
-    <text x="15" y="145" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">Upper limit</tspan>: max 65,535 unique strings per buffer (u16 string index limit in Extended Data)</text>
+    <text x="15" y="125" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">None representation</tspan>: <tspan font-family="monospace">StringField</tspan> (offset:u32+length:u16, ED inline) None = <tspan font-family="monospace">offset == 0xFFFF_FFFF</tspan>; <tspan font-family="monospace">TypeTag::String</tspan> Node Data None = <tspan font-family="monospace">0x3FFF_FFFF</tspan></text>
+    <text x="15" y="145" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">Bypassed by Path B-leaf</tspan>: short string-leaf nodes (length ≤ 255 byte AND offset ≤ 4 MB-1) skip this table entirely via <tspan font-family="monospace">TypeTag::StringInline (0b11)</tspan> — payload packs (offset:u22, length:u8) directly</text>
   </g>
 </svg>
