@@ -121,22 +121,32 @@ pub fn read_list_metadata(
     (head, count)
 }
 
-/// Resolve the 30-bit String payload of a String-type node into its
-/// underlying string. `None` when the writer used the
-/// [`crate::format::node_record::STRING_PAYLOAD_NONE_SENTINEL`] sentinel.
+/// Resolve the 30-bit String payload of a String-type or StringInline-type
+/// node into its underlying string. `None` when the writer used the
+/// [`crate::format::node_record::STRING_PAYLOAD_NONE_SENTINEL`] sentinel
+/// (only meaningful for `TypeTag::String`).
 ///
-/// Used by string-leaf Kinds whose Node Data carries a `TypeTag::String`
-/// payload (cheaper than allocating an Extended Data record).
+/// Used by string-leaf Kinds whose Node Data carries either a
+/// `TypeTag::String` payload (legacy String Offsets table indirection) or
+/// a `TypeTag::StringInline` payload (Path B-leaf inline `(offset, length)`
+/// pack). Dispatches on the tag.
 #[inline]
 #[must_use]
 pub fn string_payload<'a>(sf: &LazySourceFile<'a>, node_index: u32) -> Option<&'a str> {
     let nd = read_node_data(sf, node_index);
+    let tag = (nd >> TYPE_TAG_SHIFT) & 0b11;
+    let payload = nd & PAYLOAD_MASK;
+    if tag == TypeTag::StringInline as u32 {
+        let (offset, length) =
+            crate::format::node_record::unpack_string_inline(payload);
+        return Some(sf.get_inline_string(offset, length));
+    }
     debug_assert_eq!(
-        TypeTag::from_u32((nd >> TYPE_TAG_SHIFT) & 0b11),
+        TypeTag::from_u32(tag),
         Ok(TypeTag::String),
-        "string_payload called on a non-String node"
+        "string_payload called on a non-String/StringInline node"
     );
-    sf.get_string(nd & PAYLOAD_MASK)
+    sf.get_string(payload)
 }
 
 /// Resolve the leading [`StringField`] of an Extended-type node whose

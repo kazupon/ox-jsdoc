@@ -28,5 +28,6 @@ pub use extended_data::{ExtOffset, ExtendedDataBuilder};
 pub use nodes::NodeIndex;
 pub use string_table::{
     COMMON_CRLF, COMMON_EMPTY, COMMON_LF, COMMON_SLASH_STAR, COMMON_SLASH_STAR_STAR, COMMON_SPACE,
-    COMMON_STAR, COMMON_TAB, StringIndex, StringTableBuilder, common_string_field,
+    COMMON_STAR, COMMON_TAB, LeafStringPayload, StringIndex, StringTableBuilder,
+    common_string_field,
 };

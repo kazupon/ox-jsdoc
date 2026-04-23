@@ -16,14 +16,17 @@ use crate::format::header::{
 };
 use crate::format::kind::Kind;
 use crate::format::node_record::{
-    COMMON_DATA_MASK, NEXT_SIBLING_OFFSET, NODE_RECORD_SIZE, TypeTag, pack_node_data,
+    COMMON_DATA_MASK, NEXT_SIBLING_OFFSET, NODE_RECORD_SIZE, STRING_INLINE_LENGTH_MAX,
+    STRING_INLINE_OFFSET_MAX, TypeTag, pack_node_data, pack_string_inline,
 };
 use crate::format::root_index::ROOT_INDEX_ENTRY_SIZE;
 use crate::format::string_field::StringField;
 
 use super::extended_data::{ExtOffset, ExtendedDataBuilder};
 use super::nodes::NodeIndex;
-use super::string_table::{StringIndex, StringTableBuilder, common_string_field, lookup_common};
+use super::string_table::{
+    LeafStringPayload, StringIndex, StringTableBuilder, common_string_field, lookup_common,
+};
 
 /// Tracks one in-progress NodeList — the head index and element count that
 /// will be patched into the owning parent's Extended Data block when the
@@ -234,6 +237,12 @@ impl<'arena> BinaryWriter<'arena> {
     /// where embedding the index in Node Data is cheaper than allocating a
     /// 6-byte Extended Data record.
     ///
+    /// Dispatches on the [`LeafStringPayload`] variant to pick the right
+    /// `TypeTag`: `Inline` short strings pack `(offset, length)` directly into
+    /// the 30-bit Node Data payload (`TypeTag::StringInline`), `Index`
+    /// fallback uses the legacy String Offsets table indirection
+    /// (`TypeTag::String`).
+    ///
     /// `#[inline(always)]` because the only work this fn does on top of
     /// `emit_node_record` is one `pack_node_data` call; `#[inline]` alone
     /// is not enough to convince LLVM to inline through the per-Kind
@@ -245,9 +254,14 @@ impl<'arena> BinaryWriter<'arena> {
         kind: Kind,
         common_data: u8,
         span: Span,
-        string_index: StringIndex,
+        payload: LeafStringPayload,
     ) -> NodeIndex {
-        let node_data = pack_node_data(TypeTag::String, string_index.as_u32());
+        let node_data = match payload {
+            LeafStringPayload::Inline { offset, length } => {
+                pack_node_data(TypeTag::StringInline, pack_string_inline(offset, length))
+            }
+            LeafStringPayload::Index(idx) => pack_node_data(TypeTag::String, idx.as_u32()),
+        };
         self.emit_node_record(parent_index, kind, common_data, span, node_data)
     }
 
@@ -349,6 +363,29 @@ impl<'arena> BinaryWriter<'arena> {
         self.strings.intern_for_leaf(value)
     }
 
+    /// Intern a string and return a [`LeafStringPayload`] suitable for
+    /// [`Self::emit_string_node`]. Picks the inline path when both
+    /// `value.len() <= 255` and the resulting String Data offset fits in
+    /// 22 bits; otherwise falls back to the legacy [`StringIndex`] path.
+    ///
+    /// This is the Path B-leaf entry point: it elides the 8-byte append to
+    /// `offsets_buffer` for short strings, replacing it with a pure
+    /// `(offset, length)` pack into Node Data. See
+    /// `tasks/benchmark/results/2026-04-23-…` for the design rationale.
+    pub fn intern_string_payload(&mut self, value: &str) -> LeafStringPayload {
+        let field = self.strings.intern(value);
+        if (value.len() as u32) <= STRING_INLINE_LENGTH_MAX
+            && field.offset <= STRING_INLINE_OFFSET_MAX
+        {
+            LeafStringPayload::Inline {
+                offset: field.offset,
+                length: value.len() as u8,
+            }
+        } else {
+            LeafStringPayload::Index(self.strings.intern_for_leaf(value))
+        }
+    }
+
     /// Skip-dedup variant of [`Self::intern_string`] for callers who know
     /// their string is dominated by per-call unique content (description
     /// text, raw type source). Trades a small amount of binary growth
@@ -447,6 +484,43 @@ impl<'arena> BinaryWriter<'arena> {
             .intern_at_offset_for_leaf(absolute_start, absolute_end)
     }
 
+    /// Path B-leaf variant of [`Self::intern_source_slice_for_leaf`]: when
+    /// the source slice is short enough (length ≤ 255 and offset ≤ 4 MB),
+    /// returns a [`LeafStringPayload::Inline`] that packs `(offset, length)`
+    /// directly into Node Data — skipping the 8-byte append to
+    /// `offsets_buffer` and the [`StringIndex`] payload allocation entirely.
+    /// Long slices fall back to the legacy `intern_at_offset_for_leaf` path.
+    #[inline]
+    pub fn intern_source_slice_for_leaf_payload(
+        &mut self,
+        source_byte_start: u32,
+        source_byte_end: u32,
+    ) -> LeafStringPayload {
+        debug_assert!(
+            source_byte_end <= self.current_source_length,
+            "intern_source_slice_for_leaf_payload end {source_byte_end} > current source length {}",
+            self.current_source_length
+        );
+        let absolute_start = self
+            .current_source_data_offset
+            .saturating_add(source_byte_start);
+        let absolute_end = self
+            .current_source_data_offset
+            .saturating_add(source_byte_end);
+        let length = absolute_end - absolute_start;
+        if length <= STRING_INLINE_LENGTH_MAX && absolute_start <= STRING_INLINE_OFFSET_MAX {
+            LeafStringPayload::Inline {
+                offset: absolute_start,
+                length: length as u8,
+            }
+        } else {
+            LeafStringPayload::Index(
+                self.strings
+                    .intern_at_offset_for_leaf(absolute_start, absolute_end),
+            )
+        }
+    }
+
     /// Intern `value` choosing the cheapest of three paths automatically,
     /// using the supplied `span` as a hint for the zero-copy case.
     ///
@@ -501,6 +575,52 @@ impl<'arena> BinaryWriter<'arena> {
             return self.intern_source_slice_for_leaf(span.start, span.end);
         }
         self.strings.intern_for_leaf(value)
+    }
+
+    /// Path B-leaf variant of [`Self::intern_source_or_string_for_leaf`].
+    ///
+    /// Returns a [`LeafStringPayload`] that picks the inline path
+    /// (`TypeTag::StringInline`) when the resulting string fits the
+    /// `(offset ≤ 4 MB, length ≤ 255)` constraints, falling back to the
+    /// legacy `StringIndex` path (`TypeTag::String`) otherwise.
+    ///
+    /// Implements the same three-path decision tree as the non-payload
+    /// sibling: common-string fast path, zero-copy source slice, dedup'd
+    /// unique entry. Each path is short-circuited to inline when the slot
+    /// fits the inline encoding.
+    #[inline]
+    pub fn intern_source_or_string_for_leaf_payload(
+        &mut self,
+        value: &str,
+        span: Span,
+    ) -> LeafStringPayload {
+        if let Some(idx) = lookup_common(value) {
+            // COMMON_STRINGS live at the start of the data buffer (well
+            // within 4 MB) and are all <= 10 bytes, so they always inline.
+            let field = common_string_field(idx);
+            return LeafStringPayload::Inline {
+                offset: field.offset,
+                length: field.length as u8,
+            };
+        }
+        let span_len = span.end.saturating_sub(span.start);
+        if span_len as usize == value.len() && span.end <= self.current_source_length {
+            return self.intern_source_slice_for_leaf_payload(span.start, span.end);
+        }
+        // Synthesized / quote-stripped value → dedup via HashMap. Inline
+        // when the dedup'd field fits the (offset ≤ 4 MB, length ≤ 255)
+        // window; otherwise fall back to the legacy leaf path.
+        let field = self.strings.intern(value);
+        if (value.len() as u32) <= STRING_INLINE_LENGTH_MAX
+            && field.offset <= STRING_INLINE_OFFSET_MAX
+        {
+            LeafStringPayload::Inline {
+                offset: field.offset,
+                length: value.len() as u8,
+            }
+        } else {
+            LeafStringPayload::Index(self.strings.intern_for_leaf(value))
+        }
     }
 
     /// Span-less sibling of [`Self::intern_source_or_string`] for callers that

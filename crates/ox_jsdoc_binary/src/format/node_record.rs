@@ -71,23 +71,66 @@ pub const PAYLOAD_MAX: u32 = PAYLOAD_MASK;
 /// Type tag values stored in the upper 2 bits of Node Data.
 ///
 /// Discriminants are stable per the format spec. String-leaf nodes use
-/// `TypeTag::String` with a 30-bit String Offsets index in the payload;
-/// Extended-type records reach their string slots via inline
-/// [`crate::format::string_field::StringField`] entries (no offsets-table
-/// indirection).
+/// `TypeTag::String` (long strings, via String Offsets table) or
+/// `TypeTag::StringInline` (short strings ≤ 255 bytes, payload packed as
+/// `(offset: u22, length: u8)`); Extended-type records reach their string
+/// slots via inline [`crate::format::string_field::StringField`] entries
+/// (no offsets-table indirection).
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TypeTag {
     /// `0b00` - payload is a 30-bit Children bitmask (visitor order).
     Children = 0b00,
     /// `0b01` - payload is a 30-bit String Offsets index. Used for
-    /// string-leaf nodes; ED-internal string slots embed StringField
-    /// directly instead.
+    /// string-leaf nodes whose value is too long (≥ 256 bytes) or whose
+    /// String Data offset exceeds the inline 22-bit range; ED-internal
+    /// string slots embed StringField directly instead.
     String = 0b01,
     /// `0b10` - payload is a 30-bit byte offset into the Extended Data section.
     Extended = 0b10,
-    /// `0b11` - reserved for future use; decoders must error.
-    Reserved = 0b11,
+    /// `0b11` - payload is a packed `(offset: u22, length: u8)` directly
+    /// pointing into the String Data section. Skips the String Offsets table
+    /// indirection; preferred for short string-leaf values when the offset
+    /// fits the 22-bit range. See [`pack_string_inline`] / [`unpack_string_inline`].
+    StringInline = 0b11,
+}
+
+// ---------------------------------------------------------------------------
+// StringInline payload bit packing (within the 30-bit Node Data payload).
+// ---------------------------------------------------------------------------
+
+/// Number of bits the inline String payload reserves for the data-buffer
+/// offset (high portion of the 30-bit payload).
+pub const STRING_INLINE_OFFSET_BITS: u32 = 22;
+/// Number of bits the inline String payload reserves for the UTF-8 byte
+/// length (low portion of the 30-bit payload).
+pub const STRING_INLINE_LENGTH_BITS: u32 = 8;
+/// Maximum offset that fits in the inline-payload offset field (4 MB - 1).
+pub const STRING_INLINE_OFFSET_MAX: u32 = (1u32 << STRING_INLINE_OFFSET_BITS) - 1;
+/// Maximum UTF-8 byte length that fits in the inline-payload length field
+/// (255). Strings of length 256 or more must take the String Offsets path.
+pub const STRING_INLINE_LENGTH_MAX: u32 = (1u32 << STRING_INLINE_LENGTH_BITS) - 1;
+/// Bit mask isolating the length portion of an inline payload.
+pub const STRING_INLINE_LENGTH_MASK: u32 = STRING_INLINE_LENGTH_MAX;
+
+/// Pack `(offset, length)` into the 30-bit inline-payload layout.
+///
+/// `offset` MUST be ≤ [`STRING_INLINE_OFFSET_MAX`] (caller-checked).
+/// Length is stored in the low 8 bits, offset in the upper 22 bits.
+#[inline]
+#[must_use]
+pub const fn pack_string_inline(offset: u32, length: u8) -> u32 {
+    debug_assert!(offset <= STRING_INLINE_OFFSET_MAX);
+    (offset << STRING_INLINE_LENGTH_BITS) | (length as u32)
+}
+
+/// Unpack a 30-bit inline payload into `(offset, length)`.
+#[inline]
+#[must_use]
+pub const fn unpack_string_inline(payload: u32) -> (u32, u8) {
+    let offset = payload >> STRING_INLINE_LENGTH_BITS;
+    let length = (payload & STRING_INLINE_LENGTH_MASK) as u8;
+    (offset, length)
 }
 
 /// Error returned by [`TypeTag::from_u32`] when the value is outside `0b00 - 0b11`.
@@ -108,7 +151,7 @@ impl TypeTag {
             0b00 => Ok(TypeTag::Children),
             0b01 => Ok(TypeTag::String),
             0b10 => Ok(TypeTag::Extended),
-            0b11 => Ok(TypeTag::Reserved),
+            0b11 => Ok(TypeTag::StringInline),
             other => Err(InvalidTypeTag(other)),
         }
     }
@@ -188,7 +231,7 @@ mod tests {
             TypeTag::Children,
             TypeTag::String,
             TypeTag::Extended,
-            TypeTag::Reserved,
+            TypeTag::StringInline,
         ] {
             for &payload_value in &[0u32, 1, 0xABCD, PAYLOAD_MAX, PAYLOAD_MAX - 1] {
                 let nd = pack_node_data(tag, payload_value);

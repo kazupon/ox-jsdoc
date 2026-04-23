@@ -31,28 +31,28 @@ pub fn emit_type_node(
 ) -> u32 {
     match node {
         TypeNodeData::Name(n) => {
-            let v = writer.intern_source_or_string_for_leaf(n.value, n.span);
+            let v = writer.intern_source_or_string_for_leaf_payload(n.value, n.span);
             write_type_name(writer, n.span, parent_index, v).as_u32()
         }
         TypeNodeData::Number(n) => {
-            let v = writer.intern_source_or_string_for_leaf(n.value, n.span);
+            let v = writer.intern_source_or_string_for_leaf_payload(n.value, n.span);
             write_type_number(writer, n.span, parent_index, v).as_u32()
         }
         TypeNodeData::StringValue(n) => {
-            let v = writer.intern_source_or_string_for_leaf(n.value, n.span);
+            let v = writer.intern_source_or_string_for_leaf_payload(n.value, n.span);
             write_type_string_value(writer, n.span, parent_index, quote_to_u8(Some(n.quote)), v)
                 .as_u32()
         }
         TypeNodeData::Property(n) => {
             // length-mismatch fallback handles the unquoted-property case
             // (`"foo"` → value `foo`, span `"foo"`).
-            let v = writer.intern_source_or_string_for_leaf(n.value, n.span);
+            let v = writer.intern_source_or_string_for_leaf_payload(n.value, n.span);
             write_type_property(writer, n.span, parent_index, quote_to_u8(n.quote), v).as_u32()
         }
         TypeNodeData::SpecialNamePath(n) => {
             // Span here covers `module:foo` while value is just `foo` →
             // length-mismatch fallback.
-            let v = writer.intern_source_or_string_for_leaf(n.value, n.span);
+            let v = writer.intern_source_or_string_for_leaf_payload(n.value, n.span);
             let st = match n.special_type {
                 SpecialPathType::Module => 0,
                 SpecialPathType::Event => 1,

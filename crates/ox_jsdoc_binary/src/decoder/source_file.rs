@@ -128,6 +128,22 @@ impl<'a> LazySourceFile<'a> {
         Some(unsafe { core::str::from_utf8_unchecked(slice) })
     }
 
+    /// Resolve a Path B-leaf inline `(offset, length)` pair into the
+    /// underlying string slice. Always returns a valid `&str` (no NONE
+    /// sentinel for inline payloads — encoders only emit StringInline when
+    /// the string is real and short).
+    #[inline]
+    #[must_use]
+    pub fn get_inline_string(&self, offset: u32, length: u8) -> &'a str {
+        let sd_offset = self.string_data_offset as usize;
+        let start = sd_offset + offset as usize;
+        let end = start + length as usize;
+        let slice = &self.bytes[start..end];
+        // SAFETY: writers only accept `&str` inputs and feed them
+        // verbatim into String Data, so the slice is guaranteed UTF-8.
+        unsafe { core::str::from_utf8_unchecked(slice) }
+    }
+
     /// Resolve a [`StringField`] into the underlying string (`None` when
     /// the field equals [`StringField::NONE`]).
     ///

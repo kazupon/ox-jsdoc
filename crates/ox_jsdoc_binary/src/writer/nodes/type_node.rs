@@ -23,7 +23,7 @@ use crate::format::kind::Kind;
 use crate::format::node_record::{TypeTag, pack_node_data};
 use crate::format::string_field::{STRING_FIELD_SIZE, StringField};
 
-use super::super::{BinaryWriter, ExtOffset, StringIndex};
+use super::super::{BinaryWriter, ExtOffset, LeafStringPayload};
 use super::NodeIndex;
 
 /// Single per-list metadata slot offset for TypeNode parents that own
@@ -44,7 +44,7 @@ pub fn write_type_name(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    value: StringIndex,
+    value: LeafStringPayload,
 ) -> NodeIndex {
     writer.emit_string_node(parent_index, Kind::TypeName, 0, span, value)
 }
@@ -54,7 +54,7 @@ pub fn write_type_number(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    value: StringIndex,
+    value: LeafStringPayload,
 ) -> NodeIndex {
     writer.emit_string_node(parent_index, Kind::TypeNumber, 0, span, value)
 }
@@ -65,7 +65,7 @@ pub fn write_type_string_value(
     span: Span,
     parent_index: u32,
     quote: u8,
-    value: StringIndex,
+    value: LeafStringPayload,
 ) -> NodeIndex {
     writer.emit_string_node(
         parent_index,
@@ -82,7 +82,7 @@ pub fn write_type_property(
     span: Span,
     parent_index: u32,
     quote: u8,
-    value: StringIndex,
+    value: LeafStringPayload,
 ) -> NodeIndex {
     writer.emit_string_node(parent_index, Kind::TypeProperty, quote & 0b11, span, value)
 }
@@ -96,7 +96,7 @@ pub fn write_type_special_name_path(
     parent_index: u32,
     special_type: u8,
     quote: u8,
-    value: StringIndex,
+    value: LeafStringPayload,
 ) -> NodeIndex {
     let common = (special_type & 0b11) | ((quote & 0b11) << 2);
     writer.emit_string_node(parent_index, Kind::TypeSpecialNamePath, common, span, value)

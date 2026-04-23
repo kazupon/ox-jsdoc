@@ -28,7 +28,7 @@ use crate::format::extended_data::LIST_METADATA_SIZE;
 use crate::format::kind::Kind;
 use crate::format::string_field::{STRING_FIELD_SIZE, StringField};
 
-use super::super::{BinaryWriter, ExtOffset, StringIndex};
+use super::super::{BinaryWriter, ExtOffset, LeafStringPayload};
 use super::NodeIndex;
 
 // ---------------------------------------------------------------------------
@@ -184,7 +184,7 @@ pub fn write_jsdoc_description_line(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    description: StringIndex,
+    description: LeafStringPayload,
 ) -> NodeIndex {
     writer.emit_string_node(
         parent_index,
@@ -333,7 +333,7 @@ pub fn write_jsdoc_tag_name(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    value: StringIndex,
+    value: LeafStringPayload,
 ) -> NodeIndex {
     writer.emit_string_node(parent_index, Kind::JsdocTagName, 0, span, value)
 }
@@ -347,7 +347,7 @@ pub fn write_jsdoc_tag_name_value(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    raw: StringIndex,
+    raw: LeafStringPayload,
 ) -> NodeIndex {
     writer.emit_string_node(parent_index, Kind::JsdocTagNameValue, 0, span, raw)
 }
@@ -361,7 +361,7 @@ pub fn write_jsdoc_type_source(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    raw: StringIndex,
+    raw: LeafStringPayload,
 ) -> NodeIndex {
     writer.emit_string_node(parent_index, Kind::JsdocTypeSource, 0, span, raw)
 }
@@ -381,7 +381,7 @@ pub fn write_jsdoc_type_line(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    raw_type: StringIndex,
+    raw_type: LeafStringPayload,
 ) -> NodeIndex {
     writer.emit_string_node(parent_index, Kind::JsdocTypeLine, 0, span, raw_type)
 }
@@ -507,7 +507,7 @@ pub fn write_jsdoc_raw_tag_body(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    raw: StringIndex,
+    raw: LeafStringPayload,
 ) -> NodeIndex {
     writer.emit_string_node(parent_index, Kind::JsdocRawTagBody, 0, span, raw)
 }
@@ -552,7 +552,7 @@ pub fn write_jsdoc_namepath_source(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    raw: StringIndex,
+    raw: LeafStringPayload,
 ) -> NodeIndex {
     writer.emit_string_node(parent_index, Kind::JsdocNamepathSource, 0, span, raw)
 }
@@ -566,7 +566,7 @@ pub fn write_jsdoc_identifier(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    name: StringIndex,
+    name: LeafStringPayload,
 ) -> NodeIndex {
     writer.emit_string_node(parent_index, Kind::JsdocIdentifier, 0, span, name)
 }
@@ -580,7 +580,7 @@ pub fn write_jsdoc_text(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
-    value: StringIndex,
+    value: LeafStringPayload,
 ) -> NodeIndex {
     writer.emit_string_node(parent_index, Kind::JsdocText, 0, span, value)
 }

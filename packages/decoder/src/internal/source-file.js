@@ -223,6 +223,36 @@ export class RemoteSourceFile {
   }
 
   /**
+   * Resolve a Path B-leaf inline `(offset, length)` pair into the underlying
+   * string. Always returns a real `&str` (never `null`) — encoders only
+   * emit `TypeTag::StringInline` for present, non-empty short strings.
+   *
+   * Reuses the same cache-key disambiguation as `getStringByField` (offset
+   * is tagged with the sign bit) so inline-path lookups never collide with
+   * String-Offsets-table lookups.
+   *
+   * @param {number} offset Byte offset within the String Data section (≤ 4 MB).
+   * @param {number} length UTF-8 byte length (≤ 255).
+   * @returns {string}
+   */
+  getStringByOffsetAndLength(offset, length) {
+    const cacheKey = -(offset + 1)
+    const cached = this.#internal.stringCache.get(cacheKey)
+    if (cached !== undefined) {
+      return cached
+    }
+    const { view, stringDataOffset } = this.#internal
+    const bytes = new Uint8Array(
+      view.buffer,
+      view.byteOffset + stringDataOffset + offset,
+      length
+    )
+    const str = utf8Decoder.decode(bytes)
+    this.#internal.stringCache.set(cacheKey, str)
+    return str
+  }
+
+  /**
    * Get the `base_offset` for the i-th root (used to compute absolute ranges).
    *
    * @param {number} rootIndex

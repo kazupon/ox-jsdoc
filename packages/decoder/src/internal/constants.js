@@ -59,15 +59,24 @@ export const PAYLOAD_MASK = 0x3fff_ffff
 
 /** TypeTag: payload is a 30-bit Children bitmask (visitor order). */
 export const TYPE_TAG_CHILDREN = 0b00
-/** TypeTag: payload is a 30-bit String Offsets index (string-leaf nodes). */
+/** TypeTag: payload is a 30-bit String Offsets index (string-leaf nodes,
+ *  fallback for length >= 256 or offset > 4 MB). */
 export const TYPE_TAG_STRING = 0b01
 /** TypeTag: payload is a 30-bit byte offset into the Extended Data section. */
 export const TYPE_TAG_EXTENDED = 0b10
-/** TypeTag: reserved for future use; decoders must error. */
-export const TYPE_TAG_RESERVED = 0b11
+/** TypeTag: payload is a packed `(offset: u22, length: u8)` pointing into
+ *  String Data directly (Path B-leaf inline path for short strings). */
+export const TYPE_TAG_STRING_INLINE = 0b11
 
 /** Sentinel for "absent" stored in a 30-bit String payload. */
 export const STRING_PAYLOAD_NONE_SENTINEL = 0x3fff_ffff
+
+/** Number of bits the inline-String payload reserves for the offset. */
+export const STRING_INLINE_OFFSET_BITS = 22
+/** Number of bits the inline-String payload reserves for the length (low bits). */
+export const STRING_INLINE_LENGTH_BITS = 8
+/** Mask isolating the length portion of an inline payload. */
+export const STRING_INLINE_LENGTH_MASK = (1 << STRING_INLINE_LENGTH_BITS) - 1
 
 // ---------------------------------------------------------------------------
 // Root Index entry (12 bytes)

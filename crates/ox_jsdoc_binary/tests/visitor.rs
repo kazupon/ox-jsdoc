@@ -107,11 +107,11 @@ fn build_fixture(arena: &Allocator) -> Vec<u8> {
     let close = w.intern_string("*/");
     let nl = w.intern_string("\n");
     // String-leaf nodes need a StringIndex (TypeTag::String payload).
-    let desc_str = w.intern_string_index("description");
-    let returns_str = w.intern_string_index("returns");
-    let ok_str = w.intern_string_index("ok");
-    let string_str = w.intern_string_index("string");
-    let number_lit = w.intern_string_index("number");
+    let desc_str = w.intern_string_payload("description");
+    let returns_str = w.intern_string_payload("returns");
+    let ok_str = w.intern_string_payload("ok");
+    let string_str = w.intern_string_payload("string");
+    let number_lit = w.intern_string_payload("number");
 
     // JsdocBlock with bit0 (descriptionLines) + bit1 (tags) = 0b011.
     let (block_idx, block_ext) = write_jsdoc_block(

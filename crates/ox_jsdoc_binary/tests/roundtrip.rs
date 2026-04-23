@@ -105,7 +105,7 @@ fn header_carries_version_and_section_offsets() {
 fn write_jsdoc_text_leaf_roundtrips() {
     let arena = Allocator::default();
     let mut writer = BinaryWriter::new(&arena);
-    let value = writer.intern_string_index("hello");
+    let value = writer.intern_string_payload("hello");
     let node = write_jsdoc_text(&mut writer, Span::new(0, 5), 0, value);
     assert_eq!(node.as_u32(), 1, "first non-sentinel node lands at index 1");
 
@@ -120,24 +120,32 @@ fn write_jsdoc_text_leaf_roundtrips() {
     assert_eq!(node_parent(&sf, 1), 0, "root parent = sentinel");
     assert_eq!(node_next_sibling(&sf, 1), 0, "no sibling");
 
+    // Path B-leaf: short string ("hello", 5 bytes) takes the inline path.
     let nd = node_data(&sf, 1);
-    assert_eq!(type_tag(nd), TypeTag::String);
-    assert_eq!(sf.get_string(payload(nd)), Some("hello"));
+    assert_eq!(type_tag(nd), TypeTag::StringInline);
+    assert_eq!(
+        ox_jsdoc_binary::decoder::helpers::string_payload(&sf, 1),
+        Some("hello")
+    );
 }
 
 #[test]
 fn write_type_name_string_payload_round_trips() {
     let arena = Allocator::default();
     let mut writer = BinaryWriter::new(&arena);
-    let value = writer.intern_string_index("Foo");
+    let value = writer.intern_string_payload("Foo");
     let _ = write_type_name(&mut writer, Span::new(0, 3), 0, value);
 
     let bytes = writer.finish();
     let sf = LazySourceFile::new(&bytes).unwrap();
     assert_eq!(node_kind(&sf, 1), Kind::TypeName.as_u8());
     let nd = node_data(&sf, 1);
-    assert_eq!(type_tag(nd), TypeTag::String);
-    assert_eq!(sf.get_string(payload(nd)), Some("Foo"));
+    // Path B-leaf: short string ("Foo", 3 bytes) takes the inline path.
+    assert_eq!(type_tag(nd), TypeTag::StringInline);
+    assert_eq!(
+        ox_jsdoc_binary::decoder::helpers::string_payload(&sf, 1),
+        Some("Foo")
+    );
 }
 
 #[test]
@@ -293,8 +301,8 @@ fn next_sibling_backpatch_links_two_children() {
     assert_eq!(parent, 1);
 
     // Two children of `parent` (parent_index = 1).
-    let v1 = writer.intern_string_index("string");
-    let v2 = writer.intern_string_index("number");
+    let v1 = writer.intern_string_payload("string");
+    let v2 = writer.intern_string_payload("number");
     let c1 = write_type_name(&mut writer, Span::new(0, 6), parent, v1);
     let c2 = write_type_name(&mut writer, Span::new(7, 13), parent, v2);
     assert_eq!(c1.as_u32(), 2);
@@ -319,7 +327,7 @@ fn lazy_decoder_reads_jsdoc_text_value() {
 
     let arena = Allocator::default();
     let mut writer = BinaryWriter::new(&arena);
-    let value = writer.intern_string_index("hello world");
+    let value = writer.intern_string_payload("hello world");
     let _ = write_jsdoc_text(&mut writer, Span::new(0, 11), 0, value);
     writer.push_root(1, 0, 100);
 
@@ -384,8 +392,8 @@ fn lazy_decoder_tag_with_parsed_type_dispatches_correctly() {
     let arena = Allocator::default();
     let mut writer = BinaryWriter::new(&arena);
 
-    let tag_name_str = writer.intern_string_index("param");
-    let type_str = writer.intern_string_index("string");
+    let tag_name_str = writer.intern_string_payload("param");
+    let type_str = writer.intern_string_payload("string");
 
     // JsdocTag with bit0 (tag) + bit3 (parsedType) bitmask.
     let bitmask = 0b0000_1001u8;

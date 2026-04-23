@@ -81,6 +81,28 @@ impl StringIndex {
     }
 }
 
+/// String-leaf payload — selects between the inline `(offset, length)` packing
+/// (fast path, `TypeTag::StringInline`) and the legacy `StringIndex` (fallback,
+/// `TypeTag::String`). Used by `emit_string_node` to pick the right Node Data
+/// tag at write time.
+///
+/// **Selection rule**: short strings (`length <= 255`) whose data-buffer
+/// offset fits in 22 bits use [`Self::Inline`]; everything else falls back to
+/// [`Self::Index`]. The decoder dispatches on the same boundary.
+#[derive(Debug, Clone, Copy)]
+pub enum LeafStringPayload {
+    /// Short string packed directly into Node Data (`TypeTag::StringInline`).
+    Inline {
+        /// Byte offset within the String Data section. Must fit in 22 bits.
+        offset: u32,
+        /// UTF-8 byte length (0..=255).
+        length: u8,
+    },
+    /// Long string or out-of-range offset; resolved through the String
+    /// Offsets table (`TypeTag::String`).
+    Index(StringIndex),
+}
+
 /// Number of common strings pre-interned by [`StringTableBuilder::new`].
 /// Useful for tests that assert against the post-construction state.
 pub const COMMON_STRING_COUNT: u32 = COMMON_STRINGS.len() as u32;

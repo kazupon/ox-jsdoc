@@ -16,9 +16,12 @@ import {
   NODE_RECORD_SIZE,
   PAYLOAD_MASK,
   POS_OFFSET,
+  STRING_INLINE_LENGTH_BITS,
+  STRING_INLINE_LENGTH_MASK,
   STRING_PAYLOAD_NONE_SENTINEL,
   TYPE_TAG_EXTENDED,
-  TYPE_TAG_SHIFT
+  TYPE_TAG_SHIFT,
+  TYPE_TAG_STRING_INLINE
 } from './constants.js'
 
 /**
@@ -71,9 +74,15 @@ export function extOffsetOf(internal) {
 }
 
 /**
- * Read the 30-bit String payload of a String-type node, returning the
- * resolved string or `null` if the writer used the None sentinel. Used by
- * string-leaf Kinds whose Node Data carries a `TypeTag::String` payload.
+ * Read the 30-bit String payload of a string-leaf node, dispatching on the
+ * 2-bit TypeTag:
+ *
+ * - `TypeTag::String` (`0b01`): payload is a String Offsets table index;
+ *   resolves via `getString`. Returns `null` when the payload equals the
+ *   None sentinel.
+ * - `TypeTag::StringInline` (`0b11`): payload is a packed `(offset, length)`
+ *   pair pointing directly into String Data. Resolves via
+ *   `getStringByOffsetAndLength` (zero-copy slice, no Offsets-table hop).
  *
  * @param {RemoteInternal} internal
  * @returns {string | null}
@@ -81,7 +90,13 @@ export function extOffsetOf(internal) {
 export function stringPayloadOf(internal) {
   const { byteIndex, sourceFile } = internal
   const nodeData = readU32Aligned(sourceFile, byteIndex + NODE_DATA_OFFSET)
+  const tag = (nodeData >>> TYPE_TAG_SHIFT) & 0b11
   const payload = nodeData & PAYLOAD_MASK
+  if (tag === TYPE_TAG_STRING_INLINE) {
+    const length = payload & STRING_INLINE_LENGTH_MASK
+    const offset = payload >>> STRING_INLINE_LENGTH_BITS
+    return sourceFile.getStringByOffsetAndLength(offset, length)
+  }
   if (payload === STRING_PAYLOAD_NONE_SENTINEL) {
     return null
   }

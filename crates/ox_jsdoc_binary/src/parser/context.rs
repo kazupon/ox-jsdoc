@@ -1442,7 +1442,7 @@ fn emit_description_line(
         )
         .as_u32()
     } else {
-        let desc_idx = writer.intern_source_slice_for_leaf(line.span.start, desc_byte_end);
+        let desc_idx = writer.intern_source_slice_for_leaf_payload(line.span.start, desc_byte_end);
         write_jsdoc_description_line(writer, line.span, parent_index, desc_idx).as_u32()
     }
 }
@@ -1510,15 +1510,15 @@ fn emit_tag(
 
     // Mandatory tag-name child (visitor index 0). Common tag names hit
     // COMMON_STRINGS via the helper; uncommon ones zero-copy off the source.
-    let tn_idx = writer.intern_source_or_string_for_leaf(tag.tag_name, tag.tag_name_span);
+    let tn_idx = writer.intern_source_or_string_for_leaf_payload(tag.tag_name, tag.tag_name_span);
     let _ = write_jsdoc_tag_name(writer, tag.tag_name_span, tag_parent, tn_idx);
 
     if let Some(rt) = tag.raw_type.as_ref() {
-        let raw_idx = writer.intern_source_or_string_for_leaf(rt.raw, rt.span);
+        let raw_idx = writer.intern_source_or_string_for_leaf_payload(rt.raw, rt.span);
         let _ = write_jsdoc_type_source(writer, rt.span, tag_parent, raw_idx);
     }
     if let Some(name) = tag.name.as_ref() {
-        let raw_idx = writer.intern_source_or_string_for_leaf(name.raw, name.span);
+        let raw_idx = writer.intern_source_or_string_for_leaf_payload(name.raw, name.span);
         let _ = write_jsdoc_tag_name_value(writer, name.span, tag_parent, raw_idx);
     }
     if let Some(pt) = parsed_type {
@@ -1544,7 +1544,7 @@ fn emit_tag(
             )
             .as_u32()
         } else {
-            let raw_idx = writer.intern_source_or_string_for_leaf(tl.raw_type, tl.span);
+            let raw_idx = writer.intern_source_or_string_for_leaf_payload(tl.raw_type, tl.span);
             write_jsdoc_type_line(writer, tl.span, tag_parent, raw_idx).as_u32()
         };
         writer.record_list_child(&mut type_list, child_idx);
@@ -1591,7 +1591,7 @@ fn emit_tag_body(writer: &mut BinaryWriter<'_>, body: &TagBodyData<'_>, parent_i
             let body_parent = body_idx.as_u32();
 
             if let Some(ts) = g.type_source.as_ref() {
-                let raw_idx = writer.intern_source_or_string_for_leaf(ts.raw, ts.span);
+                let raw_idx = writer.intern_source_or_string_for_leaf_payload(ts.raw, ts.span);
                 let _ = write_jsdoc_type_source(writer, ts.span, body_parent, raw_idx);
             }
             if let Some(v) = g.value.as_ref() {
@@ -1621,15 +1621,15 @@ fn emit_tag_value(writer: &mut BinaryWriter<'_>, value: &TagValueData<'_>, paren
             );
         }
         TagValueData::Namepath { span, raw } => {
-            let raw_idx = writer.intern_source_or_string_for_leaf(raw, *span);
+            let raw_idx = writer.intern_source_or_string_for_leaf_payload(raw, *span);
             let _ = write_jsdoc_namepath_source(writer, *span, parent_index, raw_idx);
         }
         TagValueData::Identifier { span, name } => {
-            let name_idx = writer.intern_source_or_string_for_leaf(name, *span);
+            let name_idx = writer.intern_source_or_string_for_leaf_payload(name, *span);
             let _ = write_jsdoc_identifier(writer, *span, parent_index, name_idx);
         }
         TagValueData::Raw { span, value } => {
-            let val_idx = writer.intern_source_or_string_for_leaf(value, *span);
+            let val_idx = writer.intern_source_or_string_for_leaf_payload(value, *span);
             let _ = write_jsdoc_text(writer, *span, parent_index, val_idx);
         }
     }
