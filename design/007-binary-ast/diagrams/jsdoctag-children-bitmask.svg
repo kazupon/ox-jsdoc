@@ -96,7 +96,7 @@
     <text x="842" y="22" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">bit 7</text>
     <text x="842" y="48" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">inline-</text>
     <text x="842" y="62" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">Tags</text>
-    <text x="842" y="78" text-anchor="middle" font-size="8" fill="#fff5e0">JsdocInline...[]</text>
+    <text x="842" y="78" text-anchor="middle" font-size="7" fill="#fff5e0">JsdocInline...[]</text>
     <line x1="815" y1="88" x2="870" y2="88" stroke="#fff" stroke-width="0.5" opacity="0.5"/>
     <text x="842" y="107" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">ED b 32-37</text>
     <text x="842" y="123" text-anchor="middle" font-size="8" fill="#fff5e0">(head,count)</text>

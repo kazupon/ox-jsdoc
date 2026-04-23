@@ -57,7 +57,7 @@
     <text x="185" y="22" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">node[1]</text>
     <text x="185" y="40" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">★ root</text>
     <text x="185" y="55" text-anchor="middle" fill="#efeaf5" font-size="9">parent = 0</text>
-    <text x="185" y="65" text-anchor="middle" fill="#efeaf5" font-size="8">first comment's JsdocBlock</text>
+    <text x="185" y="65" text-anchor="middle" fill="#efeaf5" font-size="7">first comment's JsdocBlock</text>
 
     <!-- node[2] child -->
     <rect x="250" width="120" height="70" rx="6" fill="url(#gNd)" opacity="0.7" stroke="#7b59ac" stroke-width="1.5"/>
@@ -112,15 +112,17 @@
     <text x="17" y="18" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">b 0</text>
     <text x="17" y="42" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">Kind</text>
     <text x="17" y="60" text-anchor="middle" fill="#e0f5f8" font-size="8">u8</text>
-    <text x="17" y="73" text-anchor="middle" fill="#e0f5f8" font-size="7">node type</text>
+    <text x="17" y="68" text-anchor="middle" fill="#e0f5f8" font-size="7">node</text>
+    <text x="17" y="76" text-anchor="middle" fill="#e0f5f8" font-size="7">type</text>
 
     <!-- byte 1: Common Data (u8) -->
     <rect x="35" y="0" width="35" height="80" rx="4" fill="url(#gKind)" opacity="0.6" stroke="#2a8d9c" stroke-width="1.5"/>
     <text x="52" y="18" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">b 1</text>
     <text x="52" y="36" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">Common</text>
     <text x="52" y="48" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">Data</text>
-    <text x="52" y="63" text-anchor="middle" fill="#e0f5f8" font-size="8">u8 (6b)</text>
-    <text x="52" y="74" text-anchor="middle" fill="#e0f5f8" font-size="7">flags/enum</text>
+    <text x="52" y="60" text-anchor="middle" fill="#e0f5f8" font-size="8">u8 (6b)</text>
+    <text x="52" y="70" text-anchor="middle" fill="#e0f5f8" font-size="7">flags</text>
+    <text x="52" y="78" text-anchor="middle" fill="#e0f5f8" font-size="7">/enum</text>
 
     <!-- byte 2-3: padding (u16) -->
     <rect x="70" y="0" width="70" height="80" rx="4" fill="#bbb" opacity="0.5" stroke="#888" stroke-width="1" stroke-dasharray="3,2"/>
@@ -194,13 +196,13 @@
     <rect x="40" y="128" width="340" height="32" rx="4" fill="url(#gNd)" opacity="0.7" stroke="#7b59ac" stroke-width="1"/>
     <text x="50" y="148" fill="#fff" font-size="11" font-weight="bold">node[3]</text>
     <text x="120" y="148" fill="#fff" font-size="11">JsdocTagName "param"</text>
-    <text x="250" y="148" fill="#efeaf5" font-size="10">parent=2  next=4</text>
+    <text x="270" y="148" fill="#efeaf5" font-size="10">parent=2  next=4</text>
 
     <!-- node[4] JsdocTagNameValue "x" -->
     <rect x="40" y="164" width="340" height="32" rx="4" fill="url(#gNd)" opacity="0.7" stroke="#7b59ac" stroke-width="1"/>
     <text x="50" y="184" fill="#fff" font-size="11" font-weight="bold">node[4]</text>
     <text x="120" y="184" fill="#fff" font-size="11">JsdocTagNameValue "x"</text>
-    <text x="250" y="184" fill="#efeaf5" font-size="10">parent=2  next=0</text>
+    <text x="270" y="184" fill="#efeaf5" font-size="10">parent=2  next=0</text>
 
     <!-- annotation: tags list metadata source -->
     <text x="0" y="222" fill="#888" font-size="9" font-style="italic">(JsdocBlock's `tags` list metadata in ED bytes 56-61 = (head=2, count=1))</text>
