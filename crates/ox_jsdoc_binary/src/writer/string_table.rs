@@ -490,8 +490,7 @@ impl<'arena> StringTableBuilder<'arena> {
             self.data_buffer.len()
         );
         debug_assert!(start <= end, "intern_at_offset_for_leaf start > end");
-        self.offsets_buffer.extend_from_slice(&start.to_le_bytes());
-        self.offsets_buffer.extend_from_slice(&end.to_le_bytes());
+        push_offset_pair(&mut self.offsets_buffer, start, end);
         let idx = StringIndex::from_u32(self.count).expect("string index overflow");
         self.count = self.count.checked_add(1).expect("string table overflow");
         idx
@@ -555,10 +554,21 @@ impl<'arena> StringTableBuilder<'arena> {
         let idx = StringIndex::from_u32(self.count).expect("string index overflow");
         self.count = self.count.checked_add(1).expect("string table overflow");
         let end = field.offset + field.length as u32;
-        self.offsets_buffer.extend_from_slice(&field.offset.to_le_bytes());
-        self.offsets_buffer.extend_from_slice(&end.to_le_bytes());
+        push_offset_pair(&mut self.offsets_buffer, field.offset, end);
         idx
     }
+}
+
+/// Append an `(start, end)` u32-LE pair to the offsets buffer as a single
+/// 8-byte write. Combines the two `extend_from_slice(&[u8; 4])` calls into
+/// one realloc-check + one 8-byte memcpy — cuts `intern_at_offset_for_leaf`
+/// self time roughly in half on `parse_batch_to_bytes`.
+#[inline]
+fn push_offset_pair(buf: &mut ArenaVec<'_, u8>, start: u32, end: u32) {
+    let mut bytes = [0u8; 8];
+    bytes[..4].copy_from_slice(&start.to_le_bytes());
+    bytes[4..].copy_from_slice(&end.to_le_bytes());
+    buf.extend_from_slice(&bytes);
 }
 
 #[cfg(test)]
