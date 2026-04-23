@@ -555,10 +555,13 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                     }
                     let mut body_lines = Vec::new();
                     if let Some((body, body_abs_start)) = body_start {
+                        // `body` is `trim_start`ed by `parse_tag_header`, so it
+                        // begins with a non-whitespace byte and is therefore
+                        // never whitespace-only.
                         body_lines.push(scanner::LogicalLine {
                             content: body,
                             content_start: body_abs_start,
-                            content_end: line.content_end,
+                            is_content_empty: false,
                         });
                     }
                     let m = &margins[idx];
@@ -567,7 +570,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                         tag_name_start,
                         tag_name_end: tag_name_start + u32::try_from(tag_name.len()).unwrap(),
                         body_lines,
-                        end: line.content_end,
+                        end: line.content_end(),
                         header_initial: m.initial,
                         header_delimiter: m.delimiter,
                         header_post_delimiter: m.post_delimiter,
@@ -575,13 +578,13 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                     });
                 } else if let Some(section) = current_tag.as_mut() {
                     section.body_lines.push(*line);
-                    section.end = line.content_end;
+                    section.end = line.content_end();
                 } else {
                     desc_end = idx + 1;
                 }
             } else if let Some(section) = current_tag.as_mut() {
                 section.body_lines.push(*line);
-                section.end = line.content_end;
+                section.end = line.content_end();
             } else {
                 desc_end = idx + 1;
             }
@@ -808,7 +811,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 continue;
             }
             description_lines.push(DescriptionLineData {
-                span: Span::new(line.content_start, line.content_end),
+                span: Span::new(line.content_start, line.content_end()),
                 description: line.content.trim_end(),
                 delimiter: margin.delimiter,
                 post_delimiter: margin.post_delimiter,
@@ -903,16 +906,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
     }
 
     fn normalize_lines(&mut self, lines: &[scanner::LogicalLine<'a>]) -> Option<NormalizedText<'a>> {
-        let first_index = lines
-            .iter()
-            .position(|line| !line.content.bytes().all(|b| b == b' ' || b == b'\t'))?;
-        let last_index = lines
-            .iter()
-            .rposition(|line| !line.content.bytes().all(|b| b == b' ' || b == b'\t'))?;
+        let first_index = lines.iter().position(|line| !line.is_content_empty)?;
+        let last_index = lines.iter().rposition(|line| !line.is_content_empty)?;
         let lines = &lines[first_index..=last_index];
         let first = &lines[0];
         let last = &lines[lines.len() - 1];
-        let span = Span::new(first.content_start, last.content_end);
+        let span = Span::new(first.content_start, last.content_end());
 
         if lines.len() == 1 {
             return Some(NormalizedText {

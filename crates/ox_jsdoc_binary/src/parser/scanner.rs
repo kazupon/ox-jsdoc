@@ -11,16 +11,38 @@
 
 /// One source line after stripping the comment prefix syntax.
 ///
-/// Kept small (24 bytes) so that `Copy` in hot loops is cheap.
-/// Margin metadata lives in the parallel `MarginInfo` array.
+/// Kept small (24 bytes) so that `Copy` in hot loops is cheap; doubling
+/// to 32 bytes regresses parse_batch by ~30 %, so any new field has to
+/// either replace an existing slot or live in the parallel `MarginInfo`
+/// array.
+///
+/// The `is_content_empty` flag is mirrored here (rather than only in
+/// `MarginInfo`) because it is read by callers that iterate only the
+/// lines array (`normalize_lines`, `partition_sections`); we save 4
+/// bytes by deriving the line-end offset from `content_start +
+/// content.len()` instead of storing it.
 #[derive(Debug, Clone, Copy)]
 pub struct LogicalLine<'a> {
     /// Content after removing the visual JSDoc margin.
     pub content: &'a str,
     /// Absolute byte offset where `content` starts.
     pub content_start: u32,
-    /// Absolute byte offset where the original physical line ends.
-    pub content_end: u32,
+    /// `true` when `content` contains only ASCII space/tab (or is empty).
+    /// Mirrored from [`MarginInfo::is_content_empty`] so consumers iterating
+    /// only the lines array can shortcut whitespace-only checks.
+    pub is_content_empty: bool,
+}
+
+impl<'a> LogicalLine<'a> {
+    /// Absolute byte offset where the original physical line ends. Equal to
+    /// `content_start + content.len()` because `content` is a sub-slice of
+    /// `raw_line` that runs to the line's end (the scanner does not trim
+    /// trailing whitespace from `content`).
+    #[inline]
+    #[must_use]
+    pub fn content_end(&self) -> u32 {
+        self.content_start + self.content.len() as u32
+    }
 }
 
 /// Source-preserving margin metadata for one logical line.
@@ -147,12 +169,11 @@ pub fn logical_lines(source_text: &str, base_offset: u32) -> ScanResult<'_> {
         // Source offsets fit in u32 by encoder precondition; skip the
         // `try_from(...).unwrap()` panic check.
         let absolute_content_start = base_offset + (raw_start + content_start) as u32;
-        let absolute_content_end = base_offset + (raw_start + raw_line.len()) as u32;
 
         lines.push(LogicalLine {
             content,
             content_start: absolute_content_start,
-            content_end: absolute_content_end,
+            is_content_empty,
         });
         margins.push(MarginInfo {
             initial,
