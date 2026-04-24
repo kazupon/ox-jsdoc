@@ -25,7 +25,7 @@
 //! Phase 1.2a-cont will add the `parsed_type` emission once
 //! `parser/type_parse.rs` lands.
 
-use oxc_allocator::{Allocator, Vec as ArenaVec};
+use oxc_allocator::{Allocator, StringBuilder, Vec as ArenaVec};
 use oxc_span::Span;
 
 /// Path C-2: arena-allocated inline-tag list. Was `SmallVec<[_; 2]>` but
@@ -263,9 +263,6 @@ pub struct ParserContext<'arena, 'a> {
     pub(crate) quote: Option<QuoteKind>,
     /// Active fenced code context for speculative scanners.
     pub(crate) fence: Option<FenceState>,
-    /// Scratch buffer for joining multi-line content. Kept between calls
-    /// so we avoid reallocating on each tag body.
-    scratch: String,
 }
 
 impl<'arena, 'a> ParserContext<'arena, 'a> {
@@ -289,7 +286,6 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             paren_depth: 0,
             quote: None,
             fence: None,
-            scratch: String::new(),
         }
     }
 
@@ -959,36 +955,35 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             });
         }
 
-        // Pre-compute capacity to avoid reallocations of the staging buffer.
+        // Build the joined text directly in the arena via `StringBuilder`
+        // — single copy of each line's bytes, no heap-side staging buffer.
+        // Pre-compute the exact capacity so the builder never resizes
+        // (resize on bumpalo means re-alloc + copy, defeating the purpose).
+        //
+        // `+ 1` per line covers the inter-line `\n` separator; the count
+        // overshoots by 1 (no separator after the last line) but
+        // pre-allocating one extra byte is cheaper than a branch in the
+        // hot loop.
         let capacity: usize = lines.iter().map(|l| l.content.len() + 1).sum();
-        self.scratch.clear();
-        self.scratch.reserve(capacity);
+        let mut builder = StringBuilder::with_capacity_in(capacity, self.arena);
         for (index, line) in lines.iter().enumerate() {
             if index > 0 {
-                self.scratch.push('\n');
+                builder.push_str("\n");
             }
-            self.scratch.push_str(trim_end_fast(line.content));
+            builder.push_str(trim_end_fast(line.content));
         }
-        // Copy the joined bytes into the arena so the resulting `&str`
-        // outlives every subsequent `normalize_lines` call (and survives
-        // the eventual drop of `ParserContext`/`self.scratch`). The arena
-        // is owned by the caller of `parse_block_into_data` and outlives
-        // both the parsed `BlockData` and the writer's `emit_block` walk.
-        //
-        // Previously this returned a transmuted `&'a str` borrow of
-        // `self.scratch.as_str()`. That was a use-after-free: the next
-        // `normalize_lines` call would `clear()` + `push_str()` over the
-        // same heap buffer (or reallocate it via `reserve()`), making
-        // every prior borrow read garbage / freed bytes — observable as
-        // corrupted `description` / `rawType` strings on multi-line input.
-        let arena_str: &str = self.arena.alloc_str(&self.scratch);
-        // SAFETY: widening `&'arena str` to `&'a str` is sound here
-        // because the arena is the lifetime upper bound on every borrow
-        // in `BlockData<'arena, 'a>` — anything that consumes the
-        // returned text is itself bounded by the arena, so the bytes are
-        // guaranteed to remain valid for the duration of every read. This
-        // mirrors how source slices (`&'a str` from `source_text`) flow
-        // through the same fields.
+        // `into_str()` finalizes the builder and yields a `&'arena str`
+        // that lives as long as the allocator. This replaces the prior
+        // `scratch: String` + `arena.alloc_str(&scratch)` two-step
+        // (which itself replaced an unsound `unsafe transmute` of a
+        // reused heap String — the original UAF).
+        let arena_str: &str = builder.into_str();
+        // SAFETY: widening `&'arena str` to `&'a str` is sound because the
+        // arena is the lifetime upper bound on every borrow in
+        // `BlockData<'arena, 'a>` — anything that consumes the returned
+        // text is itself bounded by the arena, so the bytes remain valid
+        // for the duration of every read. Mirrors how source slices
+        // (`&'a str` from `source_text`) flow through the same fields.
         let widened: &'a str = unsafe { std::mem::transmute::<&str, &'a str>(arena_str) };
         Some(NormalizedText { text: widened, span })
     }
