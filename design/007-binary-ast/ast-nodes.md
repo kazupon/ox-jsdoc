@@ -1,8 +1,11 @@
 # AST Nodes (Catalog of target nodes)
 
 ox-jsdoc has two AST families — **comment AST (15 kinds)** and **TypeNode AST
-(45 kinds)** — for a total of 60 kinds, plus 2 structural special nodes
-(`Sentinel` / `NodeList`) in the Kind space, handling **62 kinds in total**
+(45 kinds)** — for a total of 60 kinds, plus 1 structural special node
+(`Sentinel`) and 1 reserved-only discriminant (`NodeList`, kept for legacy
+buffer compatibility but **never emitted by the encoder** — variable-length
+child lists are now expressed via inline `(head_index, count)` metadata in
+the parent's Extended Data block), handling **62 discriminants in total**
 within a single Kind space (u8, 0x00-0xFF).
 
 ## Design overview
@@ -18,9 +21,12 @@ Main design goals:
 - **Cluster TypeNode in MSB-set range (0x80-0xFF)**: the most frequent TypeNode
   check can run in a **single instruction** with `(kind & 0x80) != 0` (hot path
   for ESLint plugins / Rust walkers)
-- **Pin NodeList to 0x7F**: placing it on the **boundary** between TypeNode
-  (upper half) and comment AST (lower half) keeps debug visibility clear and
-  enables a single-instruction check of `kind == 0x7F`
+- **Reserve 0x7F as the `NodeList` discriminant — never emitted**: kept on
+  the **boundary** between TypeNode (upper half) and comment AST (lower half)
+  so the slot stays clearly visible in debug output. The encoder no longer
+  emits NodeList wrappers (variable-length lists use inline ED metadata
+  `(head_index, count)` at known per-Kind byte offsets); the discriminant is
+  retained purely for legacy-buffer compatibility
 - **Pin Sentinel to 0x00**: dedicated to `node[0]`, used so that
   `parent_index = 0` / `next_sibling = 0` mean "no link" (see the format.md
   Nodes section)
@@ -100,15 +106,15 @@ Small enums attached to TypeNodes (storable in 6-bit common data):
 
 ## Kind number space
 
-60 kinds + Sentinel + NodeList = 62 kinds total. We partition `u8` (0-255) as
-follows so that **the hot-path TypeNode check completes in a single
-instruction**:
+60 kinds + Sentinel + 1 reserved-only `NodeList` discriminant = 62 discriminants.
+We partition `u8` (0-255) as follows so that **the hot-path TypeNode check
+completes in a single instruction**:
 
 ```text
 0x00         Sentinel               (1)
 0x01 - 0x3F  Comment AST            (63 slots: 15 kinds + 48 spare)
 0x40 - 0x7E  Globally reserved      (63 slots, for new categories)
-0x7F         NodeList               (1)
+0x7F         NodeList               (1, reserved-only boundary slot — never emitted)
 0x80 - 0xFF  TypeNode               (128 slots: 45 kinds + 83 spare)
 ```
 
@@ -123,9 +129,7 @@ Design decisions:
 - **Comment AST 48 spare slots**: leaves room for Markdown extensions
   (headings, lists, tables, etc.), Diagnostic-related additions, multi-comment
   containers, and so on
-- **Place NodeList at 0x7F**: while tsgo uses 0xFFFFFFFF (max u32), ox-jsdoc
-  uses u8 with 0xFF inside the TypeNode region, so we place NodeList at 0x7F as
-  the boundary between globally reserved and TypeNode (also clear in debug)
+- **Reserve 0x7F as the NodeList slot — kept for legacy buffer compatibility but never emitted**: variable-length child lists are stored as inline `(head_index, count)` metadata at known per-Kind byte offsets in the parent's Extended Data block (NodeList-wrapper-elimination format change). The discriminant is reserved on the boundary between globally reserved and TypeNode (also clear in debug)
 
 ### Category check implementation
 
@@ -214,7 +218,7 @@ pub const KIND_NAMES: [&str; 256] = [
     // ...
     "",                // gap (empty string)
     // ...
-    "NodeList",        // 0x7F
+    "NodeList",        // 0x7F (reserved-only — encoder never emits this kind)
     "TypeName",        // 0x80
     // ...
 ];

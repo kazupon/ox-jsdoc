@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Node kinds (62 in total) and category checks.
 //!
 //! See `design/007-binary-ast/ast-nodes.md#kind-number-space` for the full
@@ -68,6 +72,14 @@ pub enum Kind {
 
     // -- Special list wrapper ---------------------------------------------
     /// Special wrapper for variable-length child arrays.
+    ///
+    /// **Deprecated** as of the NodeList-elimination format change. Lists
+    /// are now stored as direct children of the parent, with
+    /// `(head_index: u32, count: u16)` metadata embedded inline in the
+    /// parent's Extended Data block (see
+    /// [`crate::format::extended_data::LIST_METADATA_SIZE`]). The discriminant
+    /// `0x7F` remains reserved so legacy buffers still parse, but encoders
+    /// no longer emit nodes of this Kind.
     NodeList = 0x7F,
 
     // -- TypeNode (45 kinds, 0x80 - 0xAC) ---------------------------------
@@ -408,7 +420,10 @@ mod tests {
         for byte in 0u8..=u8::MAX {
             if Kind::from_u8(byte).is_ok() {
                 assert!(
-                    is_sentinel(byte) || is_node_list(byte) || is_comment_ast(byte) || is_type_node(byte),
+                    is_sentinel(byte)
+                        || is_node_list(byte)
+                        || is_comment_ast(byte)
+                        || is_type_node(byte),
                     "known Kind 0x{byte:02X} fell into reserved range"
                 );
                 assert!(!is_reserved(byte));
@@ -429,6 +444,9 @@ mod tests {
         assert_eq!(Kind::JsdocText.as_u8(), LAST_COMMENT_AST_KIND_IN_USE);
         assert_eq!(Kind::NodeList.as_u8(), NODE_LIST_KIND);
         assert_eq!(Kind::TypeName.as_u8(), FIRST_TYPE_NODE_KIND);
-        assert_eq!(Kind::TypeReadonlyProperty.as_u8(), LAST_TYPE_NODE_KIND_IN_USE);
+        assert_eq!(
+            Kind::TypeReadonlyProperty.as_u8(),
+            LAST_TYPE_NODE_KIND_IN_USE
+        );
     }
 }

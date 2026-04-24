@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Header section (40 bytes, fixed).
 //!
 //! See `design/007-binary-ast/format.md#header-40-bytes` for the full layout.

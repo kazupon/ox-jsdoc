@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Binary AST format specification (constants, layouts, type definitions).
 //!
 //! The format is documented in detail in
@@ -20,4 +24,5 @@ pub mod header;
 pub mod kind;
 pub mod node_record;
 pub mod root_index;
+pub mod string_field;
 pub mod string_table;

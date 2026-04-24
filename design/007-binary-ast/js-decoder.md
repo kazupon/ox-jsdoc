@@ -22,8 +22,8 @@ Key decisions:
 - **`RemoteNodeList extends Array`** + **`EMPTY_NODE_LIST` shared singleton**: array fields expose an
   `Array`-compatible API; empty arrays use a singleton for memory efficiency
 - **Kind dispatch is code-generated in Phase 4**: a flat 256-entry `KIND_TABLE` for O(1) lookup. Single-instruction
-  category checks leverage the Kind numbering constraints (Sentinel 0x00 / NodeList 0x7F /
-  TypeNode 0x80-0xFF) ([ast-nodes.md "Implementation of category checks"](./ast-nodes.md#category-check-implementation))
+  category checks leverage the Kind numbering constraints (Sentinel 0x00 / NodeList 0x7F (reserved-only,
+  never emitted) / TypeNode 0x80-0xFF) ([ast-nodes.md "Implementation of category checks"](./ast-nodes.md#category-check-implementation))
 
 This document explains the **Lazy node classes** (`#internal` pattern + main examples + helpers + RemoteSourceFile +
 Kind dispatch) → **Eager conversion** → **Array fields** → **Visitor Keys** → **JS Public API**, in that order.
@@ -60,16 +60,22 @@ Contents of `#internal` (common to all node classes):
 ```javascript
 const inspectSymbol = Symbol.for('nodejs.util.inspect.custom')
 
-// JsdocTag Extended Data layout (basic 8 bytes, see format.md):
-//   byte 0: Children bitmask (u8)
+// JsdocTag Extended Data layout (basic 38 bytes, see format.md):
+//   byte 0: Children bitmask (u8) — retained for the visitor framework
 //     bit0=tag, bit1=rawType, bit2=name, bit3=parsedType, bit4=body,
 //     bit5=typeLines, bit6=descLines, bit7=inlineTags
 //   byte 1: padding
-//   byte 2-3: default_value string index (u16, 0xFFFF=None)
-//   byte 4-5: description  string index (u16, 0xFFFF=None)
-//   byte 6-7: raw_body     string index (u16, 0xFFFF=None)
+//   byte 2-7  : default_value StringField (offset u32 + length u16)
+//                                          NONE = (offset=0xFFFF_FFFF, length=0)
+//   byte 8-13 : description   StringField  (NONE if absent)
+//   byte 14-19: raw_body      StringField  (NONE if absent)
+//   byte 20-25: typeLines       list metadata (head_index: u32, count: u16)
+//   byte 26-31: descriptionLines list metadata (ditto)
+//   byte 32-37: inlineTags      list metadata (ditto)
 // tag/rawType/name/parsedType/body are span-bearing structs and are placed as **child nodes**
 // → check the corresponding bit in the Children bitmask; if bit=1, fetch the child at the matching visitor index
+// The 3 list slots (typeLines / descriptionLines / inlineTags) live as direct
+// siblings under the parent and are walked via `(head_index, count)` per-list metadata.
 
 export class RemoteJsdocTag {
   type = 'JsdocTag'
@@ -97,15 +103,15 @@ export class RemoteJsdocTag {
     return (this.#internal.$parsedType = this.#childAt(3)) // TypeNode (Kind 0x80-0xFF)
   }
 
-  // Pure string fields stored directly inside Extended Data
+  // Pure string fields stored as inline 6-byte StringField slots in Extended Data
   get defaultValue() {
-    return this.#u16StringAt(2)
+    return this.#stringFieldAt(2)
   }
   get description() {
-    return this.#u16StringAt(4)
+    return this.#stringFieldAt(8)
   }
   get rawBody() {
-    return this.#u16StringAt(6)
+    return this.#stringFieldAt(14)
   }
 
   get range() {
@@ -130,9 +136,12 @@ export class RemoteJsdocTag {
   #childAt(visitorIndex) {
     return childAtVisitorIndex(this.#internal, visitorIndex)
   }
-  #u16StringAt(o) {
-    const idx = this.#internal.view.getUint16(this.#extOffset() + o, true)
-    return idx === 0xffff ? null : this.#internal.sourceFile.getString(idx)
+  #stringFieldAt(o) {
+    // Read 6-byte StringField inline: u32 offset at +0, u16 length at +4.
+    const ext = this.#extOffset() + o
+    const offset = this.#internal.view.getUint32(ext, true)
+    const length = this.#internal.view.getUint16(ext + 4, true)
+    return this.#internal.sourceFile.getStringByField(offset, length)
   }
 
   // ECMA standard: invoked by JSON.stringify
@@ -202,12 +211,36 @@ export function childAtVisitorIndex(internal, visitorIndex) {
   return null
 }
 
-// 3) Walk a NodeList and build a RemoteNodeList (empty arrays share EMPTY_NODE_LIST)
-export function nodeListAtVisitorIndex(internal, visitorIndex) {
-  const child = childAtVisitorIndex(internal, visitorIndex)
-  if (child === null) return EMPTY_NODE_LIST // bit=0 is synonymous with "empty array" (encoding.md)
-  // child is a Kind=0x7F (NodeList) wrapper; its children are packed into a RemoteNodeList
-  return wrapNodeListChildren(child)
+// 3) Read per-list `(head_index, count)` metadata from the parent's Extended Data
+//    block at `slotOffset` and build a RemoteNodeList. List children are direct
+//    siblings under the parent (no NodeList wrapper); the iterator walks
+//    `next_sibling` exactly `count` times. Empty lists share EMPTY_NODE_LIST.
+export function nodeListAtSlotExtended(internal, slotOffset) {
+  const ext = extOffsetOf(internal) + slotOffset
+  const head = internal.view.getUint32(ext, true)
+  const count = internal.view.getUint16(ext + 4, true)
+  if (head === 0 || count === 0) return EMPTY_NODE_LIST
+  return collectNodeListChildren(internal, head, count)
+}
+
+// 4) Resolve the 30-bit Node Data string-leaf payload into a string.
+//    Dispatches on the 2-bit TypeTag:
+//    - 0b01 (`String`)       → 30-bit String Offsets index, fallback for long strings
+//    - 0b11 (`StringInline`) → packed `(offset:u22, length:u8)` directly into String Data
+export function stringPayloadOf(internal) {
+  const { view, byteIndex, sourceFile } = internal
+  const nodeData = view.getUint32(byteIndex + 12, true)
+  const tag = (nodeData >>> 30) & 0b11
+  const payload = nodeData & 0x3fff_ffff
+  if (tag === 0b11) {
+    // StringInline: low 8 bits = length, upper 22 bits = offset
+    const length = payload & 0xff
+    const offset = payload >>> 8
+    return sourceFile.getStringByOffsetAndLength(offset, length)
+  }
+  // String (0b01): None sentinel = 0x3FFF_FFFF
+  if (payload === 0x3fff_ffff) return null
+  return sourceFile.getString(payload)
 }
 ```
 
@@ -259,9 +292,12 @@ export class RemoteSourceFile {
     return this.#internal.rootCount
   }
 
-  // String Offsets[idx] → String Data slice (UTF-8 → UTF-16 via TextDecoder)
+  // String Offsets[idx] → String Data slice (UTF-8 → UTF-16 via TextDecoder).
+  // Used by string-leaf nodes whose Node Data carries a `TypeTag::String`
+  // payload (long-string fallback path) and the diagnostics section's
+  // `message_index`.
   getString(idx) {
-    if (idx === 0xffff || idx === 0x3fff_ffff) return null
+    if (idx === 0x3fff_ffff) return null
     const cached = this.#internal.stringCache.get(idx)
     if (cached !== undefined) return cached
     const { view, stringOffsetsOffset, stringDataOffset } = this.#internal
@@ -270,6 +306,32 @@ export class RemoteSourceFile {
     const bytes = new Uint8Array(view.buffer, stringDataOffset + start, end - start)
     const str = utf8Decoder.decode(bytes)
     this.#internal.stringCache.set(idx, str)
+    return str
+  }
+
+  // Inline `StringField` `(offset, length)` → String Data slice. Used by
+  // Extended Data string slots which embed `(offset, length)` directly
+  // without going through the offsets table.
+  // None sentinel: `offset === 0xFFFF_FFFF` (length is 0).
+  getStringByField(offset, length) {
+    if (offset === 0xffff_ffff) return null
+    return this.getStringByOffsetAndLength(offset, length)
+  }
+
+  // Resolve a Path B-leaf inline `(offset, length)` pair into the underlying
+  // string. Used by both `TypeTag::StringInline` (Node Data) and
+  // `StringField` (Extended Data) when the slot is non-NONE. Always returns
+  // a real string — neither encoding emits this for absent values.
+  getStringByOffsetAndLength(offset, length) {
+    // Cache key: high-bit-set form so it never collides with index-keyed
+    // entries from getString().
+    const cacheKey = -(offset + 1)
+    const cached = this.#internal.stringCache.get(cacheKey)
+    if (cached !== undefined) return cached
+    const { view, stringDataOffset } = this.#internal
+    const bytes = new Uint8Array(view.buffer, stringDataOffset + offset, length)
+    const str = utf8Decoder.decode(bytes)
+    this.#internal.stringCache.set(cacheKey, str)
     return str
   }
 
@@ -337,7 +399,12 @@ KIND_TABLE[0x01] = RemoteJsdocBlock
 KIND_TABLE[0x02] = RemoteJsdocDescriptionLine
 KIND_TABLE[0x03] = RemoteJsdocTag
 // ... 0x04-0x0F (remaining comment AST)
-KIND_TABLE[0x7f] = RemoteNodeListNode // NodeList wrapper
+// NodeList (Kind 0x7F) is a reserved discriminant kept for legacy buffer
+// compatibility but the encoder no longer emits it (lists are stored as
+// inline `(head_index, count)` metadata in the parent's Extended Data).
+// Mapped to a class purely as a defensive fallback for older buffers; the
+// hot path never reaches this entry.
+KIND_TABLE[0x7f] = RemoteNodeListNode
 KIND_TABLE[0x80] = RemoteTypeName
 KIND_TABLE[0x81] = RemoteTypeNumber
 // ... 0x82-0xFF (remaining TypeNodes)

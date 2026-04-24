@@ -80,17 +80,17 @@
     <text x="472" y="58" text-anchor="middle" fill="#e6f4f7" font-size="10">e.g. TypeFunction: bit0=parameters, bit1=return_type, bit2=type_parameters → mask 0b111</text>
   </g>
 
-  <!-- Variant 0b01: String -->
+  <!-- Variant 0b01: String (long-string fallback) -->
   <g transform="translate(40, 359)">
     <rect width="100" height="74" rx="5" fill="url(#gTag)" stroke="#a83838" stroke-width="1.5"/>
     <text x="50" y="22" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">0b01</text>
     <text x="50" y="42" text-anchor="middle" fill="#fce8e8" font-size="10">String</text>
-    <text x="50" y="60" text-anchor="middle" fill="#fce8e8" font-size="9">tag</text>
+    <text x="50" y="60" text-anchor="middle" fill="#fce8e8" font-size="9">(fallback)</text>
 
     <rect x="105" width="735" height="74" rx="5" fill="url(#gString)" opacity="0.85" stroke="#3da558" stroke-width="1.5"/>
-    <text x="472" y="22" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">String Offsets index (30 bit)</text>
+    <text x="472" y="22" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">String Offsets index (30 bit) — long-string fallback path (2-hop)</text>
     <text x="472" y="40" text-anchor="middle" fill="#e6f5ea" font-size="10">index into String Offsets table → resolved to (offset, length) → slice from String Data</text>
-    <text x="472" y="58" text-anchor="middle" fill="#e6f5ea" font-size="10">leaf nodes: JsdocText, JsdocTagName, TypeName, TypeNumber etc. — max 1G entries</text>
+    <text x="472" y="58" text-anchor="middle" fill="#e6f5ea" font-size="10">used when length ≥ 256 byte OR offset &gt; 4 MB-1; also diagnostics message_index</text>
   </g>
 
   <!-- Variant 0b10: Extended -->
@@ -106,17 +106,17 @@
     <text x="472" y="58" text-anchor="middle" fill="#fff5e0" font-size="10">composite nodes: JsdocBlock, JsdocTag, TypeKeyValue, TypeMappedType etc. — max 1GB</text>
   </g>
 
-  <!-- Variant 0b11: Reserved -->
+  <!-- Variant 0b11: StringInline (Path B-leaf short-string fast path) -->
   <g transform="translate(40, 527)">
     <rect width="100" height="74" rx="5" fill="url(#gTag)" stroke="#a83838" stroke-width="1.5"/>
     <text x="50" y="22" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">0b11</text>
-    <text x="50" y="42" text-anchor="middle" fill="#fce8e8" font-size="10">Reserved</text>
-    <text x="50" y="60" text-anchor="middle" fill="#fce8e8" font-size="9">tag</text>
+    <text x="50" y="42" text-anchor="middle" fill="#fce8e8" font-size="10">StringInline</text>
+    <text x="50" y="60" text-anchor="middle" fill="#fce8e8" font-size="9">(fast path)</text>
 
-    <rect x="105" width="735" height="74" rx="5" fill="url(#gRes)" opacity="0.6" stroke="#777" stroke-width="1.5" stroke-dasharray="5,3"/>
-    <text x="472" y="22" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">Reserved (unused, decoder error)</text>
-    <text x="472" y="40" text-anchor="middle" fill="#f0f0f0" font-size="10">future use: eager-mode flags, inline literal payload (short string / numeric constant), new meta nodes</text>
-    <text x="472" y="58" text-anchor="middle" fill="#f0f0f0" font-size="10">Phase 1: decoder returns "unsupported" error if Type Tag = 0b11</text>
+    <rect x="105" width="735" height="74" rx="5" fill="url(#gString)" opacity="0.6" stroke="#3da558" stroke-width="1.5"/>
+    <text x="472" y="22" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold">Inline (offset:u22, length:u8) — short-string fast path (1-hop)</text>
+    <text x="472" y="40" text-anchor="middle" fill="#e6f5ea" font-size="10">payload [29:8] = offset (max 4 MB-1), payload [7:0] = length (max 255 byte)</text>
+    <text x="472" y="58" text-anchor="middle" fill="#e6f5ea" font-size="10">slice String Data directly (skips String Offsets indirection); never None — encoder picks String (0b01) for longer values</text>
   </g>
 
   <!-- ============================================================ -->
@@ -129,18 +129,18 @@
     <g>
       <rect width="265" height="100" rx="6" fill="url(#gChildren)" opacity="0.18" stroke="#2a8d9c" stroke-width="1.5"/>
       <text x="132" y="22" text-anchor="middle" font-size="12" font-weight="bold" fill="#2a8d9c" font-family="-apple-system, system-ui, sans-serif">Children → Tree walk</text>
-      <text x="132" y="44" text-anchor="middle" font-size="10" fill="#444">decoder reads bits left-to-right (visitor order)</text>
-      <text x="132" y="62" text-anchor="middle" font-size="10" fill="#444">each set bit advances next-sibling pointer</text>
-      <text x="132" y="84" text-anchor="middle" font-size="10" fill="#666" font-style="italic">child nodes are stored consecutively in Nodes</text>
+      <text x="132" y="44" text-anchor="middle" font-size="9" fill="#444">decoder reads bits left-to-right (visitor order)</text>
+      <text x="132" y="62" text-anchor="middle" font-size="9" fill="#444">each set bit advances next-sibling pointer</text>
+      <text x="132" y="84" text-anchor="middle" font-size="9" fill="#666" font-style="italic">child nodes are stored consecutively in Nodes</text>
     </g>
 
-    <!-- String → String Offsets / Data -->
+    <!-- String → String Offsets / Data (long fallback) -->
     <g transform="translate(285, 0)">
       <rect width="265" height="100" rx="6" fill="url(#gString)" opacity="0.18" stroke="#3da558" stroke-width="1.5"/>
-      <text x="132" y="22" text-anchor="middle" font-size="12" font-weight="bold" fill="#3da558" font-family="-apple-system, system-ui, sans-serif">String → String Table</text>
-      <text x="132" y="44" text-anchor="middle" font-size="10" fill="#444">payload[29:0] = index into String Offsets</text>
-      <text x="132" y="62" text-anchor="middle" font-size="10" fill="#444">stringOffsets[idx] → (offset, length)</text>
-      <text x="132" y="84" text-anchor="middle" font-size="10" fill="#666" font-style="italic">UTF-8 slice from String Data (zero-copy)</text>
+      <text x="132" y="22" text-anchor="middle" font-size="12" font-weight="bold" fill="#3da558" font-family="-apple-system, system-ui, sans-serif">String / StringInline → String Data</text>
+      <text x="132" y="44" text-anchor="middle" font-size="10" fill="#444">0b01 String: payload = idx → Offsets[idx]</text>
+      <text x="132" y="62" text-anchor="middle" font-size="10" fill="#444">0b11 StringInline: payload = (offset,len) inline</text>
+      <text x="132" y="84" text-anchor="middle" font-size="10" fill="#666" font-style="italic">both yield a UTF-8 slice from String Data</text>
     </g>
 
     <!-- Extended → Extended Data -->

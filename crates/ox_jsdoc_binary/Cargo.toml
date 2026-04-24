@@ -12,5 +12,23 @@ missing_docs = "warn"
 unused_must_use = "warn"
 
 [dependencies]
+memchr = "2"
+oxc_allocator.workspace = true
+oxc_span.workspace = true
+rustc-hash = "2"
+smallvec = { version = "1.15.1", features = ["union"] }
 
 [dev-dependencies]
+criterion2 = { version = "3.0.2", default-features = false }
+
+[[bench]]
+name = "encoder"
+harness = false
+
+[[bench]]
+name = "decoder"
+harness = false
+
+[[bench]]
+name = "parser"
+harness = false

@@ -451,20 +451,16 @@ fn write_comma_separated(buf: &mut String, elements: &[oxc_allocator::Box<'_, Ty
 
 #[cfg(test)]
 mod tests {
-    use oxc_allocator::Allocator;
+    use super::*;
     use crate::parser::{ParseOptions, ParserContext};
     use crate::type_parser::ast::ParseMode;
-    use super::*;
+    use oxc_allocator::Allocator;
 
     fn roundtrip(source: &str, mode: ParseMode) -> String {
         let allocator = Allocator::default();
-        let mut ctx = ParserContext::new(
-            &allocator,
-            "/** */",
-            0,
-            ParseOptions::default(),
-        );
-        let node = ctx.parse_type_expression(source, 0, mode)
+        let mut ctx = ParserContext::new(&allocator, "/** */", 0, ParseOptions::default());
+        let node = ctx
+            .parse_type_expression(source, 0, mode)
             .expect(&format!("failed to parse: {source}"));
         stringify_type(&node)
     }
@@ -476,7 +472,10 @@ mod tests {
 
     #[test]
     fn stringify_union() {
-        assert_eq!(roundtrip("string | number", ParseMode::Typescript), "string | number");
+        assert_eq!(
+            roundtrip("string | number", ParseMode::Typescript),
+            "string | number"
+        );
     }
 
     #[test]
@@ -486,12 +485,18 @@ mod tests {
 
     #[test]
     fn stringify_generic_angle() {
-        assert_eq!(roundtrip("Array<string>", ParseMode::Typescript), "Array<string>");
+        assert_eq!(
+            roundtrip("Array<string>", ParseMode::Typescript),
+            "Array<string>"
+        );
     }
 
     #[test]
     fn stringify_generic_dot_angle() {
-        assert_eq!(roundtrip("Array.<string>", ParseMode::Jsdoc), "Array.<string>");
+        assert_eq!(
+            roundtrip("Array.<string>", ParseMode::Jsdoc),
+            "Array.<string>"
+        );
     }
 
     #[test]
@@ -546,12 +551,18 @@ mod tests {
 
     #[test]
     fn stringify_parenthesis() {
-        assert_eq!(roundtrip("(string | number)", ParseMode::Typescript), "(string | number)");
+        assert_eq!(
+            roundtrip("(string | number)", ParseMode::Typescript),
+            "(string | number)"
+        );
     }
 
     #[test]
     fn stringify_function_closure_style() {
-        assert_eq!(roundtrip("function(string): number", ParseMode::Jsdoc), "function(string): number");
+        assert_eq!(
+            roundtrip("function(string): number", ParseMode::Jsdoc),
+            "function(string): number"
+        );
     }
 
     #[test]
@@ -561,12 +572,18 @@ mod tests {
 
     #[test]
     fn stringify_typeof() {
-        assert_eq!(roundtrip("typeof myVar", ParseMode::Typescript), "typeof myVar");
+        assert_eq!(
+            roundtrip("typeof myVar", ParseMode::Typescript),
+            "typeof myVar"
+        );
     }
 
     #[test]
     fn stringify_keyof() {
-        assert_eq!(roundtrip("keyof MyType", ParseMode::Typescript), "keyof MyType");
+        assert_eq!(
+            roundtrip("keyof MyType", ParseMode::Typescript),
+            "keyof MyType"
+        );
     }
 
     #[test]
@@ -584,7 +601,10 @@ mod tests {
 
     #[test]
     fn stringify_predicate() {
-        assert_eq!(roundtrip("x is string", ParseMode::Typescript), "x is string");
+        assert_eq!(
+            roundtrip("x is string", ParseMode::Typescript),
+            "x is string"
+        );
     }
 
     #[test]
@@ -602,12 +622,18 @@ mod tests {
 
     #[test]
     fn stringify_readonly_array() {
-        assert_eq!(roundtrip("readonly string[]", ParseMode::Typescript), "readonly string[]");
+        assert_eq!(
+            roundtrip("readonly string[]", ParseMode::Typescript),
+            "readonly string[]"
+        );
     }
 
     #[test]
     fn stringify_unique_symbol() {
-        assert_eq!(roundtrip("unique symbol", ParseMode::Typescript), "unique symbol");
+        assert_eq!(
+            roundtrip("unique symbol", ParseMode::Typescript),
+            "unique symbol"
+        );
     }
 
     #[test]
@@ -617,12 +643,18 @@ mod tests {
 
     #[test]
     fn stringify_name_path_hash() {
-        assert_eq!(roundtrip("MyClass#method", ParseMode::Jsdoc), "MyClass#method");
+        assert_eq!(
+            roundtrip("MyClass#method", ParseMode::Jsdoc),
+            "MyClass#method"
+        );
     }
 
     #[test]
     fn stringify_name_path_tilde() {
-        assert_eq!(roundtrip("MyModule~inner", ParseMode::Jsdoc), "MyModule~inner");
+        assert_eq!(
+            roundtrip("MyModule~inner", ParseMode::Jsdoc),
+            "MyModule~inner"
+        );
     }
 
     #[test]
@@ -632,21 +664,33 @@ mod tests {
 
     #[test]
     fn stringify_tuple() {
-        assert_eq!(roundtrip("[string, number]", ParseMode::Typescript), "[string, number]");
+        assert_eq!(
+            roundtrip("[string, number]", ParseMode::Typescript),
+            "[string, number]"
+        );
     }
 
     #[test]
     fn stringify_object() {
-        assert_eq!(roundtrip("{key: string}", ParseMode::Typescript), "{key: string}");
+        assert_eq!(
+            roundtrip("{key: string}", ParseMode::Typescript),
+            "{key: string}"
+        );
     }
 
     #[test]
     fn stringify_import() {
-        assert_eq!(roundtrip("import('./module')", ParseMode::Typescript), "import('./module')");
+        assert_eq!(
+            roundtrip("import('./module')", ParseMode::Typescript),
+            "import('./module')"
+        );
     }
 
     #[test]
     fn stringify_generic_multi_params() {
-        assert_eq!(roundtrip("Map<string, number>", ParseMode::Typescript), "Map<string, number>");
+        assert_eq!(
+            roundtrip("Map<string, number>", ParseMode::Typescript),
+            "Map<string, number>"
+        );
     }
 }

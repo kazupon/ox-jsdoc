@@ -510,6 +510,7 @@ dependencies = [
  "ox_jsdoc",
  "oxc_allocator",
  "oxc_ast",
+ "oxc_jsdoc",
  "oxc_parser",
  "oxc_span",
 ]
@@ -517,6 +518,34 @@ dependencies = [
 [[package]]
 name = "ox_jsdoc_binary"
 version = "0.0.0"
+dependencies = [
+ "criterion2",
+ "memchr",
+ "oxc_allocator",
+ "oxc_span",
+ "rustc-hash",
+ "smallvec",
+]
+
+[[package]]
+name = "ox_jsdoc_binary_napi"
+version = "0.0.0"
+dependencies = [
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "ox_jsdoc_binary",
+]
+
+[[package]]
+name = "ox_jsdoc_binary_wasm"
+version = "0.0.0"
+dependencies = [
+ "js-sys",
+ "ox_jsdoc_binary",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+]
 
 [[package]]
 name = "ox_jsdoc_napi"
@@ -654,6 +683,17 @@ checksum = "eb3e6120999627ec9703025eab7c9f410ebb7e95557632a8902ca48210416c2b"
 dependencies = [
  "nonmax",
  "serde",
+]
+
+[[package]]
+name = "oxc_jsdoc"
+version = "0.123.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6a72c269d21ff0cb66006f947929f9ebd9f839b708c0cbabe5057293d70edba"
+dependencies = [
+ "oxc_ast",
+ "oxc_span",
+ "rustc-hash",
 ]
 
 [[package]]
@@ -912,6 +952,12 @@ name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
+
+[[package]]
+name = "smallvec"
+version = "1.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "smawk"

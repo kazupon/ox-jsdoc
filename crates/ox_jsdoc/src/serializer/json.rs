@@ -419,11 +419,9 @@ impl<'a> SerTag<'a> {
             } else {
                 raw_type_val
             },
-            parsed_type: tag.parsed_type.as_ref().and_then(|pt| {
-                match pt.as_ref() {
-                    JsdocType::Parsed(node) => Some(serialize_type_node(node)),
-                    JsdocType::Raw(_) => None,
-                }
+            parsed_type: tag.parsed_type.as_ref().and_then(|pt| match pt.as_ref() {
+                JsdocType::Parsed(node) => Some(serialize_type_node(node)),
+                JsdocType::Raw(_) => None,
             }),
             name: if null_to_empty {
                 Some(name_val.unwrap_or(""))
@@ -692,7 +690,11 @@ fn meta_obj(fields: Vec<(&str, serde_json::Value)>) -> Option<serde_json::Value>
             map.insert(key.into(), value);
         }
     }
-    if map.is_empty() { None } else { Some(serde_json::Value::Object(map)) }
+    if map.is_empty() {
+        None
+    } else {
+        Some(serde_json::Value::Object(map))
+    }
 }
 
 fn serialize_type_node(node: &TypeNode<'_>) -> serde_json::Value {
@@ -806,9 +808,11 @@ fn serialize_type_node(node: &TypeNode<'_>) -> serde_json::Value {
                     SpecialPathType::External => "external",
                 },
             });
-            if let Some(meta) = meta_obj(vec![
-                ("quote", n.quote.map_or(serde_json::Value::Null, |q| json!(quote_str(q)))),
-            ]) {
+            if let Some(meta) = meta_obj(vec![(
+                "quote",
+                n.quote
+                    .map_or(serde_json::Value::Null, |q| json!(quote_str(q))),
+            )]) {
                 obj["meta"] = meta;
             }
             obj
@@ -836,10 +840,12 @@ fn serialize_type_node(node: &TypeNode<'_>) -> serde_json::Value {
             if let Some(ref element) = n.element {
                 obj["element"] = serialize_type_node(element);
             }
-            let pos_val = n.position.map_or(serde_json::Value::Null, |p| json!(match p {
-                VariadicPosition::Prefix => "prefix",
-                VariadicPosition::Suffix => "suffix",
-            }));
+            let pos_val = n.position.map_or(serde_json::Value::Null, |p| {
+                json!(match p {
+                    VariadicPosition::Prefix => "prefix",
+                    VariadicPosition::Suffix => "suffix",
+                })
+            });
             if let Some(meta) = meta_obj(vec![
                 ("position", pos_val),
                 ("squareBrackets", json!(n.square_brackets)),
@@ -924,9 +930,11 @@ fn serialize_type_node(node: &TypeNode<'_>) -> serde_json::Value {
             if let Some(ref right) = n.right {
                 obj["right"] = serialize_type_node(right);
             }
-            if let Some(meta) = meta_obj(vec![
-                ("quote", n.quote.map_or(serde_json::Value::Null, |q| json!(quote_str(q)))),
-            ]) {
+            if let Some(meta) = meta_obj(vec![(
+                "quote",
+                n.quote
+                    .map_or(serde_json::Value::Null, |q| json!(quote_str(q))),
+            )]) {
                 obj["meta"] = meta;
             }
             obj
@@ -953,9 +961,11 @@ fn serialize_type_node(node: &TypeNode<'_>) -> serde_json::Value {
                 "type": "JsdocTypeProperty",
                 "value": n.value,
             });
-            if let Some(meta) = meta_obj(vec![
-                ("quote", n.quote.map_or(serde_json::Value::Null, |q| json!(quote_str(q)))),
-            ]) {
+            if let Some(meta) = meta_obj(vec![(
+                "quote",
+                n.quote
+                    .map_or(serde_json::Value::Null, |q| json!(quote_str(q))),
+            )]) {
                 obj["meta"] = meta;
             }
             obj
@@ -1003,9 +1013,11 @@ fn serialize_type_node(node: &TypeNode<'_>) -> serde_json::Value {
                 "returnType": serialize_type_node(&n.return_type),
                 "typeParameters": n.type_parameters.iter().map(|e| serialize_type_node(e)).collect::<Vec<_>>(),
             });
-            if let Some(meta) = meta_obj(vec![
-                ("quote", n.quote.map_or(serde_json::Value::Null, |q| json!(quote_str(q)))),
-            ]) {
+            if let Some(meta) = meta_obj(vec![(
+                "quote",
+                n.quote
+                    .map_or(serde_json::Value::Null, |q| json!(quote_str(q))),
+            )]) {
                 obj["meta"] = meta;
             }
             obj
@@ -1204,7 +1216,10 @@ mod tests {
         let json = serialize_comment_json(&comment, None, None);
 
         assert!(json.contains("\"JsdocTypeUnion\""), "JSON: {json}");
-        assert!(json.contains("\"parsedType\""), "parsedType missing from JSON: {json}");
+        assert!(
+            json.contains("\"parsedType\""),
+            "parsedType missing from JSON: {json}"
+        );
     }
 
     #[test]

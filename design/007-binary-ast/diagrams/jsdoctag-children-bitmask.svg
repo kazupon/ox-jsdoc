@@ -72,34 +72,34 @@
     <text x="515" y="105" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">Option</text>
     <text x="515" y="122" text-anchor="middle" font-size="9" fill="#e6f0fa">(0 or 1)</text>
 
-    <!-- bit 5: typeLines NodeList -->
+    <!-- bit 5: typeLines (list metadata in ED bytes 20-25) -->
     <rect x="575" width="110" height="135" rx="6" fill="url(#gNL)" opacity="0.85" stroke="#d49520" stroke-width="1.5"/>
     <text x="630" y="22" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">bit 5</text>
     <text x="630" y="55" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold">typeLines</text>
     <text x="630" y="74" text-anchor="middle" font-size="9" fill="#fff5e0">JsdocTypeLine[]</text>
     <line x1="585" y1="85" x2="675" y2="85" stroke="#fff" stroke-width="0.5" opacity="0.5"/>
-    <text x="630" y="105" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">NodeList</text>
-    <text x="630" y="122" text-anchor="middle" font-size="9" fill="#fff5e0">(skip if empty)</text>
+    <text x="630" y="105" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">ED b 20-25</text>
+    <text x="630" y="122" text-anchor="middle" font-size="9" fill="#fff5e0">(head, count)</text>
 
-    <!-- bit 6: descriptionLines NodeList -->
+    <!-- bit 6: descriptionLines (list metadata in ED bytes 26-31) -->
     <rect x="690" width="110" height="135" rx="6" fill="url(#gNL)" opacity="0.85" stroke="#d49520" stroke-width="1.5"/>
     <text x="745" y="22" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">bit 6</text>
     <text x="745" y="50" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">description-</text>
     <text x="745" y="64" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">Lines</text>
     <text x="745" y="78" text-anchor="middle" font-size="9" fill="#fff5e0">JsdocDesc...[]</text>
     <line x1="700" y1="88" x2="790" y2="88" stroke="#fff" stroke-width="0.5" opacity="0.5"/>
-    <text x="745" y="107" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">NodeList</text>
-    <text x="745" y="123" text-anchor="middle" font-size="9" fill="#fff5e0">(skip if empty)</text>
+    <text x="745" y="107" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">ED b 26-31</text>
+    <text x="745" y="123" text-anchor="middle" font-size="9" fill="#fff5e0">(head, count)</text>
 
-    <!-- bit 7: inlineTags NodeList -->
+    <!-- bit 7: inlineTags (list metadata in ED bytes 32-37) -->
     <rect x="805" width="75" height="135" rx="6" fill="url(#gNL)" opacity="0.85" stroke="#d49520" stroke-width="1.5"/>
     <text x="842" y="22" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">bit 7</text>
     <text x="842" y="48" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">inline-</text>
     <text x="842" y="62" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">Tags</text>
-    <text x="842" y="78" text-anchor="middle" font-size="8" fill="#fff5e0">JsdocInline...[]</text>
+    <text x="842" y="78" text-anchor="middle" font-size="7" fill="#fff5e0">JsdocInline...[]</text>
     <line x1="815" y1="88" x2="870" y2="88" stroke="#fff" stroke-width="0.5" opacity="0.5"/>
-    <text x="842" y="107" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">NodeList</text>
-    <text x="842" y="123" text-anchor="middle" font-size="8" fill="#fff5e0">(skip empty)</text>
+    <text x="842" y="107" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">ED b 32-37</text>
+    <text x="842" y="123" text-anchor="middle" font-size="8" fill="#fff5e0">(head,count)</text>
   </g>
 
   <!-- Visitor order arrow -->
@@ -188,7 +188,7 @@
 
     <text x="15" y="46" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan fill="#3da558" font-weight="bold">bit 0 (tag)</tspan>: <tspan font-weight="bold">always 1</tspan> — tag is required, never absent (still occupies a bit for uniformity)</text>
     <text x="15" y="64" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan fill="#357abd" font-weight="bold">bits 1-4 (Option fields)</tspan>: 1 = Some (child emitted), 0 = None (child absent)</text>
-    <text x="15" y="82" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan fill="#d49520" font-weight="bold">bits 5-7 (NodeList fields)</tspan>: 1 = NodeList emitted, 0 = empty array (NodeList skipped, "Option A2" optimization)</text>
+    <text x="15" y="82" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan fill="#d49520" font-weight="bold">bits 5-7 (list metadata flags)</tspan>: 1 = list non-empty (head/count slot in ED bytes 20-37 has count &gt; 0); 0 = list empty (slot is (head=0, count=0))</text>
     <text x="15" y="100" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• <tspan font-weight="bold">DFS pre-order</tspan>: child nodes appear in the node tree in bit-position order (bit 0 first, bit 7 last)</text>
     <text x="15" y="118" font-size="11" fill="#444" font-family="-apple-system, system-ui, sans-serif">• Decoder: <tspan font-family="monospace">if (mask &amp; (1 &lt;&lt; bitN)) {{ /* read child N */ }}</tspan> — sequential walk via parent/sibling indices</text>
     <text x="15" y="136" font-size="10" fill="#666" font-family="-apple-system, system-ui, sans-serif" font-style="italic">Why Extended Data byte 0 (not Node Data)? — JsdocTag uses Extended type (0b10) Node Data, whose payload is the offset, not a bitmask</text>

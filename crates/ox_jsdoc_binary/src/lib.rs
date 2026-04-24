@@ -1,3 +1,7 @@
+// @author kazuya kawaguchi (a.k.a. kazupon)
+// @license MIT
+//
+
 //! Binary AST for ox_jsdoc.
 //!
 //! This crate hosts the Binary AST format specification (`format`), the
@@ -11,11 +15,12 @@
 //! `design/007-binary-ast/format.md`; this crate aims to be the single Rust
 //! reference implementation for that spec.
 //!
-//! The crate is currently in **Phase 1.0a** (skeleton construction): only the
-//! `format` module is populated, and even that only provides type definitions
-//! and layout constants. Encoder, decoder, parser, and visitor modules will
-//! land in subsequent sub-phases.
+//! Phase **1.1c** complete: the `format`, `writer`, and `decoder` modules
+//! ship working implementations including the [`decoder::LazyJsdocVisitor`]
+//! depth-first walker. The `parser` module is still skeletal; real bodies
+//! land in Phase 1.2a.
 
-#![cfg_attr(not(test), no_std)]
-
+pub mod decoder;
 pub mod format;
+pub mod parser;
+pub mod writer;

@@ -20,9 +20,14 @@ Key decisions:
 - **compat_mode is handled within the single format (Header bit0)**: no
   separate format or section; switches between basic / compat via a Header
   flag. Binary compatibility is preserved
-- **Empty NodeLists are not emitted (Option A2)**: bit=0 in the parent's
-  Children bitmask is treated semantically as "empty array". A reduction of
-  about 1100 nodes / about 26 KB per 100-batch
+- **Variable-length child lists live as direct children of the parent**:
+  each list owns a 6-byte `(head_index: u32, count: u16)` metadata slot
+  inside the parent's Extended Data block (see
+  [format.md](./format.md#list-metadata-in-extended-data)). Decoders read
+  `(head, count)` and walk `next_sibling` exactly `count` times
+- **Empty lists are encoded as `(head=0, count=0)`**: the parent's Children
+  bitmask bit for that list is also cleared so visitor frameworks can
+  shortcut empty traversals before reading the metadata slot
 - **The lazy decoder holds the compat flag at the root (`RemoteSourceFile`)**:
   child nodes traverse `parent → root → compat` to look it up; no flag is held
   per node (memory efficient)
@@ -62,7 +67,7 @@ Exception: `JsdocType` (Parsed|Raw) does not get a wrapper Kind:
 - For `JsdocType::Parsed`: `JsdocTag.parsedType` directly points to a TypeNode
   (one of Kind 0x80-0xFF)
 - For `JsdocType::Raw`: the parsedType field itself is omitted (rawType is
-  held separately as a string index in Extended Data)
+  held separately as a child `JsdocTypeSource` string-leaf node)
 
 ---
 
@@ -86,13 +91,20 @@ within the single format (Option A: switching via a Header flag):
    - `JsdocDescriptionLine` / `JsdocTypeLine`: delimiter string indices
 3. **The decoder reads or skips the compat region based on the Header flag**
 4. **`empty_string_for_null` is applied on the decoder side**: in the Binary
-   AST it is always represented as `Option` (the sentinel for None depends on
-   the storage location: **30-bit slot in Node Data is `0x3FFFFFFF`**, **u16
-   slot in Extended Data is `0xFFFF`**)
-   - Most fields live in Extended Data (string fields of JsdocBlock, JsdocTag,
-     JsdocInlineTag, etc., are all u16)
-   - The 30-bit string index in Node Data is only used by String-type nodes
-     (TypeName, TypeNumber, etc.)
+   AST it is always represented as `Option`. The sentinel for None depends on
+   the storage location:
+   - **`StringField` slot in Extended Data** (most string fields live here —
+     JsdocBlock, JsdocTag, JsdocInlineTag, …): `(offset = 0xFFFF_FFFF, length = 0)`
+   - **30-bit Node Data payload, `TypeTag::String` (long-string fallback for
+     string-leaf nodes)**: `0x3FFF_FFFF`
+   - **30-bit Node Data payload, `TypeTag::StringInline` (short-string fast
+     path for string-leaf nodes)**: never None — the encoder only emits
+     `StringInline` for present, in-range values; absent strings stay on
+     `TypeTag::String` (`0x3FFF_FFFF` sentinel) or on the `Extended` path
+     (`StringField::NONE`)
+   - String-leaf node Kinds (TypeName, TypeNumber, JsdocText, JsdocTagName,
+     …) use either `StringInline` or `String` — encoder picks per-emit by
+     length / offset; see `format.md#stringinline-0b11` for the rule
 5. **`include_positions` is always true** (Pos/End are fixed fields)
 6. **The lazy decoder holds the compat flag at the `RemoteSourceFile` (root)**:
    child nodes traverse `parent → root → compat` to look it up
@@ -115,37 +127,57 @@ class RemoteSourceFile {
 }
 
 class RemoteJsdocBlock {
-  // Basic part (always present, offset 0-17)
+  // Basic part (always present, offset 0-67 in basic mode; 0-89 in compat mode)
   get childrenBitmask() {
     return this.view.getUint8(this.extendedDataOffset + 0) // bit0=descLines, bit1=tags, bit2=inlineTags
   }
   // byte 1 is alignment padding
+
+  // String fields: 8 inline `StringField` slots (6 bytes each = u32 offset + u16 length)
+  // at bytes 2-49 — readers slice String Data directly via getStringByField.
   get description() {
-    const idx = this.view.getUint16(this.extendedDataOffset + 2, true)
-    return idx === 0xffff ? null : this.sourceFile.getString(idx)
+    const off = this.extendedDataOffset + 2
+    const offset = this.view.getUint32(off, true)
+    const length = this.view.getUint16(off + 4, true)
+    return offset === 0xffff_ffff ? null : this.sourceFile.getStringByField(offset, length)
   }
   get delimiter() {
-    const idx = this.view.getUint16(this.extendedDataOffset + 4, true)
-    return this.sourceFile.getString(idx)
+    const off = this.extendedDataOffset + 8
+    const offset = this.view.getUint32(off, true)
+    const length = this.view.getUint16(off + 4, true)
+    return this.sourceFile.getStringByField(offset, length) ?? ''
   }
-  // post_delimiter at +6, terminal +8, line_end +10, initial +12,
-  // delimiter_line_break +14, preterminal_line_break +16
+  // post_delimiter at +14, terminal +20, line_end +26, initial +32,
+  // delimiter_line_break +38, preterminal_line_break +44 (each StringField is 6 bytes)
 
-  // compat extension part (only present when compat_mode; actual data at offset 20-39, 18-19 is alignment)
-  // The compat flag is referenced through sourceFile
+  // List metadata: 3 × 6-byte (head_index: u32, count: u16) slots at bytes 50-67.
+  // descriptionLines metadata at +50, tags at +56, inlineTags at +62.
+  get tags() {
+    const off = this.extendedDataOffset + 56 // JSDOC_BLOCK_TAGS_SLOT
+    const head = this.view.getUint32(off, true)
+    const count = this.view.getUint16(off + 4, true)
+    return head === 0 || count === 0
+      ? EMPTY_NODE_LIST
+      : nodeListFromMetadata(this.sourceFile, head, count, /* parent */ this)
+  }
+  // descriptionLines and inlineTags follow the same pattern at +50 and +62.
+
+  // Compat extension part (only present when compat_mode; basic ends at byte 68;
+  // bytes 68-69 are alignment padding for the compat tail)
+  // The compat flag is referenced through sourceFile.
   get endLine() {
     if (!this.sourceFile.compatMode) return undefined
-    return this.view.getUint32(this.extendedDataOffset + 20, true)
+    return this.view.getUint32(this.extendedDataOffset + 70, true)
   }
   get descriptionStartLine() {
     if (!this.sourceFile.compatMode) return undefined
-    const v = this.view.getUint32(this.extendedDataOffset + 24, true)
-    return v === 0xffffffff ? undefined : v // Sentinel represents None
+    const v = this.view.getUint32(this.extendedDataOffset + 74, true)
+    return v === 0xffff_ffff ? undefined : v // sentinel represents None
   }
-  // descriptionEndLine: +28, lastDescriptionLine: +32
-  // hasPreterminalDescription: +36 (u8)
-  // hasPreterminalTagDescription: +37 (u8, 0xFF = None)
-  // ...
+  // descriptionEndLine: +78, lastDescriptionLine: +82
+  // hasPreterminalDescription: +86 (u8)
+  // hasPreterminalTagDescription: +87 (u8, 0xFF = None)
+  // bytes 88-89 are trailing alignment padding (compat ED ends at byte 90)
 }
 ```
 
@@ -164,26 +196,31 @@ the same rules as tsgo:
 3. The first child of `node[i]` is `node[i+1]` (when `node[i+1].parent == i`)
 4. Siblings are linked via the `next_sibling` field
 5. When there is no child or no sibling, the value is 0 (= points to the sentinel)
-6. Following the tsgo `NodeList` (Kind 0x7F in ox-jsdoc) pattern, array fields
-   are wrapped in a single node (`tags[]`, `description_lines[]`, etc.)
+6. Variable-length child lists (`tags[]`, `description_lines[]`,
+   `interpolations[]`, etc.) are stored as direct children of the parent. Each
+   list has a 6-byte `(head_index: u32, count: u16)` slot in the parent's
+   Extended Data block — see [List metadata in Extended Data](./format.md#list-metadata-in-extended-data)
 
-### NodeList optimization: skip empty arrays (Option A2)
+### List metadata: empty-list encoding
 
-Because NodeList overhead accumulates during batch processing (empty arrays
-in JSDoc comments can account for more than half of the node count), we adopt
-the rule of **not emitting NodeLists for empty arrays**:
+Each variable-length child list has its metadata stored inline in the
+parent's Extended Data block:
 
 ```text
-Parent node's Children bitmask:
-  bit n = 1 → emit NodeList (length=0 is allowed but rare)
-  bit n = 0 → do not emit NodeList (= treated as empty array)
+Per list (6 bytes):
+  byte 0-3: head_index (u32) — node index of the list's first element
+  byte 4-5: count      (u16) — number of elements (0 for empty)
 ```
+
+Empty lists are encoded as `(head=0, count=0)`; the parent's Children bitmask
+bit for that list is also cleared so a fast `(bitmask & X) != 0` check can
+shortcut the metadata read.
 
 **Semantic unification**:
 
 - In the ox-jsdoc Rust AST, `tags: Vec<JsdocTag>` (not Option, can be empty)
-- In the Binary AST, "**empty array**" and "**field absent**" are **treated
-  identically** (represented by bit 0)
+- In the Binary AST, an absent or empty list is encoded the same way
+  (`count = 0`); decoders return an immediately-empty iterator
 - From the ESLint plugin's perspective, the behavior with `tags.length === 0`
   is the same
 
@@ -192,25 +229,15 @@ Parent node's Children bitmask:
 ```javascript
 class RemoteJsdocBlock {
   get tags() {
-    if (!(this.childMask & TAGS_BIT)) return EMPTY_NODE_LIST // bit 0 → shared empty NodeList
-    return this.#getNodeList(TAGS_NODE_INDEX) // bit 1 → RemoteNodeList instance
+    const bitmask = this.#readExtByte(0)
+    if (!(bitmask & TAGS_BIT)) return EMPTY_NODE_LIST
+    const head = this.#readExtU32(JSDOC_BLOCK_TAGS_SLOT)
+    const count = this.#readExtU16(JSDOC_BLOCK_TAGS_SLOT + 4)
+    return new RemoteNodeList(this.bytes, head, count, this.rootIndex)
   }
 }
 ```
 
-The return type is `RemoteNodeList extends Array` (see [js-decoder.md](./js-decoder.md)
-"Return type for array fields" for details).
-Empty arrays are represented by a shared singleton (`EMPTY_NODE_LIST`,
-`length === 0`).
-
-**Effect**: a 100-comment batch removes about 1100 empty-array NodeLists
-(~600 `inlineTags` + ~500 `typeLines`, etc.) → **about 26 KB reduction**.
-
-**Exception**: cases where the NodeList must always be emitted (noted as
-future extension room):
-
-- Cases where the array length is "0 but not empty" (no such case in the
-  current ox-jsdoc AST)
-- When the existence of the empty NodeList itself carries meaning
-- This exception is not currently needed (extend the spec if it becomes
-  necessary)
+`RemoteNodeList extends Array` (see [js-decoder.md](./js-decoder.md)
+"Return type for array fields" for details). Empty arrays are represented by
+a shared singleton (`EMPTY_NODE_LIST`, `length === 0`).

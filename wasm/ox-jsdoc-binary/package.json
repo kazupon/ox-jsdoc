@@ -1,0 +1,35 @@
+{
+  "name": "@ox-jsdoc/wasm-binary",
+  "version": "0.0.0",
+  "private": true,
+  "description": "WebAssembly build of the binary AST flavor of ox-jsdoc.",
+  "files": [
+    "src-js/index.js",
+    "src-js/index.d.ts",
+    "pkg/ox_jsdoc_binary_wasm_bg.wasm",
+    "pkg/ox_jsdoc_binary_wasm_bg.wasm.d.ts",
+    "pkg/ox_jsdoc_binary_wasm.d.ts",
+    "pkg/ox_jsdoc_binary_wasm.js"
+  ],
+  "type": "module",
+  "main": "src-js/index.js",
+  "types": "src-js/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src-js/index.d.ts",
+      "default": "./src-js/index.js"
+    }
+  },
+  "scripts": {
+    "build": "wasm-pack build --target web --out-dir pkg",
+    "build:release": "wasm-pack build --target web --out-dir pkg --release",
+    "test": "vp test run"
+  },
+  "dependencies": {
+    "@ox-jsdoc/decoder": "workspace:*"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:",
+    "wasm-pack": "^0.14.0"
+  }
+}
