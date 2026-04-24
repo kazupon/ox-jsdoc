@@ -635,7 +635,21 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         section: &TagSection<'a>,
     ) -> (TagData<'arena, 'a>, Option<Box<TypeNodeData<'a>>>) {
         let normalized = self.normalize_lines(&section.body_lines);
-        let parsed_body = normalized.map(|n| self.parse_generic_tag_body(n));
+        // Note 4 (compat-mode only): jsdoccomment customizes per-tag tokenization
+        // — `defaultNoTypes` skips the `{type}` step and `defaultNoNames` skips
+        // the name token. Mirror those rules so compat-mode AST shape matches
+        // `commentParserToESTree()`. Outside compat mode keep the uniform
+        // behavior (parser shape contract for non-jsdoccomment users).
+        let (skip_types, skip_names) = if self.options.compat_mode {
+            (
+                jsdoccomment_no_type(section.tag_name),
+                jsdoccomment_no_name(section.tag_name),
+            )
+        } else {
+            (false, false)
+        };
+        let parsed_body =
+            normalized.map(|n| self.parse_generic_tag_body(n, skip_types, skip_names));
 
         let (
             raw_type,
@@ -716,6 +730,8 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
     fn parse_generic_tag_body(
         &mut self,
         normalized: NormalizedText<'a>,
+        skip_types: bool,
+        skip_names: bool,
     ) -> ParsedTagBody<'arena, 'a> {
         let mut cursor = 0usize;
         let bytes = normalized.text.as_bytes();
@@ -723,7 +739,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             cursor += 1;
         }
 
-        let type_source = if bytes.get(cursor) == Some(&b'{') {
+        let type_source = if !skip_types && bytes.get(cursor) == Some(&b'{') {
             match find_matching_type_end(normalized.text, cursor) {
                 Some(end) => {
                     let raw = &normalized.text[cursor + 1..end];
@@ -755,14 +771,23 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             cursor += 1;
         }
 
-        let token_end = find_value_end(normalized.text, cursor);
-        let value = if token_end > cursor {
-            let token = &normalized.text[cursor..token_end];
-            let span = relative_span(normalized.span, cursor as u32, token_end as u32);
-            cursor = token_end;
-            Some(parse_tag_value_token(token, span))
-        } else {
+        // jsdoccomment's `@see {@link ...}` rule: when the body after `{type}`
+        // starts with an inline `{@link ...}`, skip name extraction so the
+        // link expression stays in the description.
+        let see_with_link = skip_names || see_starts_with_link(&normalized.text[cursor..]);
+
+        let value = if see_with_link {
             None
+        } else {
+            let token_end = find_value_end(normalized.text, cursor);
+            if token_end > cursor {
+                let token = &normalized.text[cursor..token_end];
+                let span = relative_span(normalized.span, cursor as u32, token_end as u32);
+                cursor = token_end;
+                Some(parse_tag_value_token(token, span))
+            } else {
+                None
+            }
         };
         let (name, optional, default_value) = tag_value_name(value.as_ref());
 
@@ -1194,6 +1219,80 @@ fn relative_span(base: Span, relative_start: u32, relative_end: u32) -> Span {
         start.min(base.end),
         end.min(base.end).max(start.min(base.end)),
     )
+}
+
+// ---------------------------------------------------------------------------
+// jsdoccomment compatibility: per-tag tokenization rules (Note 4)
+// ---------------------------------------------------------------------------
+//
+// Mirrors `defaultNoTypes` / `defaultNoNames` / `hasSeeWithLink` from
+// `@es-joy/jsdoccomment/src/parseComment.js`. Only consulted when
+// `ParseOptions::compat_mode` is enabled — basic-mode parses keep the
+// uniform `{type} name description` extraction that downstream typed
+// consumers rely on.
+
+/// Tags whose body has no `{type}` segment in jsdoccomment. Sorted for
+/// `binary_search` (the lookup runs once per block tag in compat mode).
+const NO_TYPE_TAGS: &[&str] = &[
+    "default",
+    "defaultvalue",
+    "description",
+    "example",
+    "file",
+    "fileoverview",
+    "license",
+    "overview",
+    "see",
+    "summary",
+];
+
+/// Tags whose body has no `name` segment in jsdoccomment. Sorted.
+const NO_NAME_TAGS: &[&str] = &[
+    "access",
+    "author",
+    "default",
+    "defaultvalue",
+    "description",
+    "example",
+    "exception",
+    "file",
+    "fileoverview",
+    "kind",
+    "license",
+    "overview",
+    "return",
+    "returns",
+    "since",
+    "summary",
+    "throws",
+    "variation",
+    "version",
+];
+
+/// `defaultNoTypes` lookup.
+fn jsdoccomment_no_type(tag: &str) -> bool {
+    NO_TYPE_TAGS.binary_search(&tag).is_ok()
+}
+
+/// `defaultNoNames` lookup.
+fn jsdoccomment_no_name(tag: &str) -> bool {
+    NO_NAME_TAGS.binary_search(&tag).is_ok()
+}
+
+/// jsdoccomment's `hasSeeWithLink` rule: when a body starts with
+/// `{@link <name>}`, skip name extraction so the inline-tag stays in the
+/// description. The match is intentionally conservative — only fires on
+/// the literal `{@link …}` prefix, leaving `@see {Foo}` / `@see Foo`
+/// alone (parsed normally).
+fn see_starts_with_link(after_type: &str) -> bool {
+    let trimmed = after_type.trim_start();
+    let Some(rest) = trimmed.strip_prefix("{@link") else {
+        return false;
+    };
+    let Some(closing_offset) = rest.find('}') else {
+        return false;
+    };
+    closing_offset > 0
 }
 
 // ---------------------------------------------------------------------------

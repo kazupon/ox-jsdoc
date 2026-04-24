@@ -26,12 +26,25 @@ export class RemoteNodeList extends Array<RemoteNode> {}
 /** Empty-array singleton (use `length === 0` to branch). */
 export const EMPTY_NODE_LIST: RemoteNodeList
 
+/** Construction options for {@link RemoteSourceFile}. */
+export interface RemoteSourceFileOptions {
+  /**
+   * When the buffer's `compat_mode` flag is set, switch `toJSON()` and
+   * compat-mode-only field accessors to emit `""` instead of `null` for
+   * absent optional strings (rawType, name, namepathOrURL, text). Mirrors
+   * the Rust serializer's `SerializeOptions.empty_string_for_null` for
+   * jsdoccomment parity. Has no effect on basic-mode buffers.
+   */
+  emptyStringForNull?: boolean
+}
+
 /** Root of the decoder; constructed once per Binary AST buffer. */
 export class RemoteSourceFile {
-  constructor(buffer: ArrayBuffer | ArrayBufferView)
+  constructor(buffer: ArrayBuffer | ArrayBufferView, options?: RemoteSourceFileOptions)
 
   readonly view: DataView
   readonly compatMode: boolean
+  readonly emptyStringForNull: boolean
   readonly extendedDataOffset: number
   readonly nodesOffset: number
   readonly nodeCount: number
@@ -67,6 +80,14 @@ export class RemoteJsdocBlock implements RemoteNode {
   readonly descriptionLines: RemoteNodeList
   readonly tags: RemoteNodeList
   readonly inlineTags: RemoteNodeList
+  // compat-mode-only line metadata (jsdoccomment compatibility). Each is
+  // `null` when the buffer is not in compat mode; absent indices use `null`.
+  readonly endLine: number | null
+  readonly descriptionStartLine: number | null
+  readonly descriptionEndLine: number | null
+  readonly lastDescriptionLine: number | null
+  readonly hasPreterminalDescription: number | null
+  readonly hasPreterminalTagDescription: number | null
   toJSON(): Record<string, unknown>
 }
 
@@ -75,6 +96,10 @@ export class RemoteJsdocDescriptionLine implements RemoteNode {
   readonly range: Range
   readonly parent: RemoteNode | null
   readonly description: string
+  // compat-mode-only delimiter trio. `null` outside compat mode.
+  readonly delimiter: string | null
+  readonly postDelimiter: string | null
+  readonly initial: string | null
   toJSON(): Record<string, unknown>
 }
 
@@ -94,6 +119,14 @@ export class RemoteJsdocTag implements RemoteNode {
   readonly typeLines: RemoteNodeList
   readonly descriptionLines: RemoteNodeList
   readonly inlineTags: RemoteNodeList
+  // compat-mode-only delimiter strings. `null` outside compat mode.
+  readonly delimiter: string | null
+  readonly postDelimiter: string | null
+  readonly postTag: string | null
+  readonly postType: string | null
+  readonly postName: string | null
+  readonly initial: string | null
+  readonly lineEnd: string | null
   toJSON(): Record<string, unknown>
 }
 
@@ -126,6 +159,10 @@ export class RemoteJsdocTypeLine implements RemoteNode {
   readonly range: Range
   readonly parent: RemoteNode | null
   readonly rawType: string
+  // compat-mode-only delimiter trio. `null` outside compat mode.
+  readonly delimiter: string | null
+  readonly postDelimiter: string | null
+  readonly initial: string | null
   toJSON(): Record<string, unknown>
 }
 

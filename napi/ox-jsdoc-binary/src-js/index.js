@@ -86,6 +86,7 @@ function _growU32(pool, need) {
  *   parseTypes?: boolean,
  *   typeParseMode?: 'jsdoc' | 'closure' | 'typescript',
  *   compatMode?: boolean,
+ *   emptyStringForNull?: boolean,
  *   baseOffset?: number,
  * }} [options]
  * @returns {{
@@ -114,7 +115,9 @@ export function parse(sourceText, options) {
     }
   }
   const result = parseJsdocBinding(sourceText, bindingOptions)
-  const sourceFile = new RemoteSourceFile(result.buffer)
+  const sourceFile = new RemoteSourceFile(result.buffer, {
+    emptyStringForNull: options?.emptyStringForNull
+  })
   const root = sourceFile.asts[0] ?? null
   return {
     ast: /** @type {import('@ox-jsdoc/decoder').RemoteJsdocBlock | null} */ (root),
@@ -134,6 +137,7 @@ export function parse(sourceText, options) {
  *   parseTypes?: boolean,
  *   typeParseMode?: 'jsdoc' | 'closure' | 'typescript',
  *   compatMode?: boolean,
+ *   emptyStringForNull?: boolean,
  * }} [options]
  * @returns {{
  *   asts: Array<import('@ox-jsdoc/decoder').RemoteJsdocBlock | null>,
@@ -211,7 +215,9 @@ export function parseBatch(items, options) {
     baseOffsets.subarray(0, needBaseOffsets),
     options ?? {}
   )
-  const sourceFile = new RemoteSourceFile(result.buffer)
+  const sourceFile = new RemoteSourceFile(result.buffer, {
+    emptyStringForNull: options?.emptyStringForNull
+  })
   const asts = /** @type {Array<import('@ox-jsdoc/decoder').RemoteJsdocBlock | null>} */ (
     sourceFile.asts
   )

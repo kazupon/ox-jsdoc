@@ -14,6 +14,11 @@ export interface ParseOptions {
   typeParseMode?: 'jsdoc' | 'closure' | 'typescript'
   /** Enable jsdoccomment-compat extension fields. Default: false. */
   compatMode?: boolean
+  /** Convert absent optional strings (rawType, name, namepathOrURL, text)
+   *  to `""` in `toJSON()` output. Only effective when `compatMode` is on.
+   *  Mirrors the Rust serializer's `SerializeOptions.empty_string_for_null`
+   *  for jsdoccomment parity. Default: false. */
+  emptyStringForNull?: boolean
   /** Original-file absolute byte offset of `sourceText`. Default: 0. */
   baseOffset?: number
 }
@@ -61,6 +66,8 @@ export interface BatchParseOptions {
   typeParseMode?: 'jsdoc' | 'closure' | 'typescript'
   /** Enable jsdoccomment-compat extension fields. Default: false. */
   compatMode?: boolean
+  /** See `ParseOptions.emptyStringForNull`. */
+  emptyStringForNull?: boolean
 }
 
 /**

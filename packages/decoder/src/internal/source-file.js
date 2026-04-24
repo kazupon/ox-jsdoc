@@ -67,8 +67,14 @@ export class RemoteSourceFile {
    * - the major version disagrees with {@link SUPPORTED_MAJOR}
    *
    * @param {ArrayBuffer | ArrayBufferView} buffer
+   * @param {{ emptyStringForNull?: boolean }} [options]
+   *   `emptyStringForNull`: only effective when the buffer's `compat_mode`
+   *   flag is set. Switches `toJSON()` and compat-mode field accessors to
+   *   emit `""` instead of `null` for absent optional strings (rawType,
+   *   name, namepathOrURL, text). Mirrors the Rust serializer's
+   *   `SerializeOptions.empty_string_for_null` for jsdoccomment parity.
    */
-  constructor(buffer) {
+  constructor(buffer, options) {
     const view =
       buffer instanceof ArrayBuffer
         ? new DataView(buffer)
@@ -101,11 +107,15 @@ export class RemoteSourceFile {
     const uint32View = new Uint32Array(view.buffer, view.byteOffset, view.byteLength >>> 2)
     const flags = view.getUint8(FLAGS_OFFSET)
     const nodeCount = uint32View[NODE_COUNT_FIELD >>> 2]
+    const compatMode = (flags & COMPAT_MODE_BIT) !== 0
     this.#internal = {
       view,
       uint32View,
       version: versionByte,
-      compatMode: (flags & COMPAT_MODE_BIT) !== 0,
+      compatMode,
+      // Only effective when compatMode; basic-mode buffers have no
+      // jsdoccomment-shape consumers so the toggle is meaningless there.
+      emptyStringForNull: compatMode && options !== undefined && options.emptyStringForNull === true,
       rootArrayOffset: uint32View[ROOT_ARRAY_OFFSET_FIELD >>> 2],
       stringOffsetsOffset: uint32View[STRING_OFFSETS_OFFSET_FIELD >>> 2],
       stringDataOffset: uint32View[STRING_DATA_OFFSET_FIELD >>> 2],
@@ -136,6 +146,10 @@ export class RemoteSourceFile {
   /** Whether the buffer's `compat_mode` flag bit is set. */
   get compatMode() {
     return this.#internal.compatMode
+  }
+  /** Whether `null` optional strings are emitted as `""` in compat-mode. */
+  get emptyStringForNull() {
+    return this.#internal.emptyStringForNull
   }
   /** Byte offset of the Extended Data section. */
   get extendedDataOffset() {

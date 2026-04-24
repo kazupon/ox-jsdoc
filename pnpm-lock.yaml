@@ -58,6 +58,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/decoder
     devDependencies:
+      '@es-joy/jsdoccomment':
+        specifier: ^0.50.1
+        version: 0.50.2
       '@napi-rs/cli':
         specifier: ^3.6.1
         version: 3.6.1(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)

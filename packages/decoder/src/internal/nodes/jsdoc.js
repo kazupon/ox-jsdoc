@@ -18,6 +18,8 @@ import {
   childNodeAtVisitorIndex,
   extStringField,
   extStringFieldRequired,
+  extU32,
+  extU8,
   stringPayloadOf
 } from '../helpers.js'
 import { inspectPayload, inspectSymbol } from '../inspect.js'
@@ -40,12 +42,198 @@ const JSDOC_BLOCK_INLINE_TAGS_SLOT = JSDOC_BLOCK_DESC_LINES_SLOT + 2 * LIST_META
 /** `JsdocBlock` basic ED size (= start of compat tail). */
 const JSDOC_BLOCK_BASIC_SIZE = JSDOC_BLOCK_DESC_LINES_SLOT + 3 * LIST_METADATA_SIZE
 
+// JsdocBlock compat tail (only present when sourceFile.compatMode is true).
+// Layout mirrors `crates/ox_jsdoc_binary/src/writer/nodes/comment_ast.rs`:
+//   byte 68-69 : padding
+//   byte 70-73 : end_line (u32)
+//   byte 74-77 : description_start_line (u32, 0xFFFFFFFF = None)
+//   byte 78-81 : description_end_line   (u32, 0xFFFFFFFF = None)
+//   byte 82-85 : last_description_line  (u32, 0xFFFFFFFF = None)
+//   byte 86    : has_preterminal_description (u8)
+//   byte 87    : has_preterminal_tag_description (u8, 0xFF = None)
+const JSDOC_BLOCK_END_LINE_OFFSET = JSDOC_BLOCK_BASIC_SIZE + 2
+const JSDOC_BLOCK_DESC_START_LINE_OFFSET = JSDOC_BLOCK_END_LINE_OFFSET + 4
+const JSDOC_BLOCK_DESC_END_LINE_OFFSET = JSDOC_BLOCK_DESC_START_LINE_OFFSET + 4
+const JSDOC_BLOCK_LAST_DESC_LINE_OFFSET = JSDOC_BLOCK_DESC_END_LINE_OFFSET + 4
+const JSDOC_BLOCK_HAS_PRETERMINAL_DESC_OFFSET = JSDOC_BLOCK_LAST_DESC_LINE_OFFSET + 4
+const JSDOC_BLOCK_HAS_PRETERMINAL_TAG_DESC_OFFSET = JSDOC_BLOCK_HAS_PRETERMINAL_DESC_OFFSET + 1
+/** `0xFFFFFFFF` sentinel for `Option<u32>` line indices in compat mode. */
+const COMPAT_LINE_NONE = 0xff_ff_ff_ff
+/** `0xFF` sentinel for `Option<u8>` flags in compat mode. */
+const COMPAT_U8_NONE = 0xff
+
 /** `JsdocTag.typeLines` slot offset (right after 3 StringFields). */
 const JSDOC_TAG_TYPE_LINES_SLOT = 1 + 1 + 3 * STRING_FIELD_SIZE
 /** `JsdocTag.descriptionLines` slot offset. */
 const JSDOC_TAG_DESC_LINES_SLOT = JSDOC_TAG_TYPE_LINES_SLOT + LIST_METADATA_SIZE
 /** `JsdocTag.inlineTags` slot offset. */
 const JSDOC_TAG_INLINE_TAGS_SLOT = JSDOC_TAG_TYPE_LINES_SLOT + 2 * LIST_METADATA_SIZE
+/** `JsdocTag` basic ED size (= start of compat tail). */
+const JSDOC_TAG_BASIC_SIZE = JSDOC_TAG_TYPE_LINES_SLOT + 3 * LIST_METADATA_SIZE
+
+// JsdocTag compat tail (7 StringFields, 42 bytes, basic+38..=basic+79):
+//   delimiter, post_delimiter, post_tag, post_type, post_name, initial, line_end
+const JSDOC_TAG_COMPAT_DELIMITER = JSDOC_TAG_BASIC_SIZE
+const JSDOC_TAG_COMPAT_POST_DELIMITER = JSDOC_TAG_COMPAT_DELIMITER + STRING_FIELD_SIZE
+const JSDOC_TAG_COMPAT_POST_TAG = JSDOC_TAG_COMPAT_POST_DELIMITER + STRING_FIELD_SIZE
+const JSDOC_TAG_COMPAT_POST_TYPE = JSDOC_TAG_COMPAT_POST_TAG + STRING_FIELD_SIZE
+const JSDOC_TAG_COMPAT_POST_NAME = JSDOC_TAG_COMPAT_POST_TYPE + STRING_FIELD_SIZE
+const JSDOC_TAG_COMPAT_INITIAL = JSDOC_TAG_COMPAT_POST_NAME + STRING_FIELD_SIZE
+const JSDOC_TAG_COMPAT_LINE_END = JSDOC_TAG_COMPAT_INITIAL + STRING_FIELD_SIZE
+
+// JsdocDescriptionLine / JsdocTypeLine compat tail (3 optional StringFields,
+// after the leading `description` / `raw_type` StringField at byte 0-5).
+const COMPAT_LINE_DELIMITER = STRING_FIELD_SIZE
+const COMPAT_LINE_POST_DELIMITER = 2 * STRING_FIELD_SIZE
+const COMPAT_LINE_INITIAL = 3 * STRING_FIELD_SIZE
+
+// ---------------------------------------------------------------------------
+// Phase 6: source[]/tokens[] reconstruction (compat-mode only)
+// ---------------------------------------------------------------------------
+//
+// jsdoccomment's `JsdocBlock.source[]` mirrors comment-parser's `Block.source`:
+// one entry per source line, each with a `tokens` object holding 12 fields
+// (start, delimiter, postDelimiter, tag, postTag, type, postType, name,
+// postName, description, end, lineEnd). Many eslint-plugin-jsdoc fixer
+// rules mutate these fields directly, so faithful reconstruction is on
+// the critical path for using this AST as a jsdoccomment drop-in.
+//
+// The reconstruction here is a *skeleton* (Phase 6 v1): it walks the
+// existing JsdocBlock fields + descriptionLines + tags + per-tag
+// descriptionLines and stitches an entry per logical source line. Edge
+// cases that depend on parser/writer fixes (block.delimiter currently
+// stores "*" instead of "/**", empty descriptionLines are dropped at
+// parse time, content on opening/closing line) produce close-but-imperfect
+// output and are tracked alongside the Level 2 dynamic comparison test.
+
+/** Empty `tokens` template — every key present so consumers can index by
+ * field name without truthy checks. Mirrors comment-parser's
+ * `seedTokens()`. */
+function emptyTokens() {
+  return {
+    start: '',
+    delimiter: '',
+    postDelimiter: '',
+    tag: '',
+    postTag: '',
+    name: '',
+    postName: '',
+    type: '',
+    postType: '',
+    description: '',
+    end: '',
+    lineEnd: ''
+  }
+}
+
+/** Concatenate every token field (in jsdoccomment order) to rebuild the
+ * `source` string for one line. Mirrors `comment-parser.stringify()` for
+ * a single Line. */
+function tokensToSource(t) {
+  return (
+    t.start +
+    t.delimiter +
+    t.postDelimiter +
+    t.tag +
+    t.postTag +
+    t.type +
+    t.postType +
+    t.name +
+    t.postName +
+    t.description +
+    t.end +
+    t.lineEnd
+  )
+}
+
+/** Build one source-array entry from a `JsdocDescriptionLine`. The entry
+ * carries no tag/type/name segments; only the line's prose. */
+function descriptionLineToSourceEntry(descLine, number) {
+  const tokens = emptyTokens()
+  tokens.start = descLine.initial ?? ''
+  tokens.delimiter = descLine.delimiter ?? ''
+  tokens.postDelimiter = descLine.postDelimiter ?? ''
+  tokens.description = descLine.description ?? ''
+  return { number, source: tokensToSource(tokens), tokens }
+}
+
+/** Build the per-tag header entry (the line carrying `@name {type} value …`). */
+function tagHeaderToSourceEntry(tag, number) {
+  const tokens = emptyTokens()
+  tokens.start = tag.initial ?? ''
+  tokens.delimiter = tag.delimiter ?? ''
+  tokens.postDelimiter = tag.postDelimiter ?? ''
+  tokens.tag = tag.tag ? '@' + tag.tag.value : ''
+  tokens.postTag = tag.postTag ?? ''
+  // jsdoccomment keeps the surrounding braces in `type`; ox-jsdoc's
+  // RemoteJsdocTypeSource strips them, so wrap them back.
+  if (tag.rawType) {
+    tokens.type = '{' + tag.rawType.raw + '}'
+  }
+  tokens.postType = tag.postType ?? ''
+  if (tag.name) {
+    tokens.name = tag.name.raw
+  }
+  tokens.postName = tag.postName ?? ''
+  tokens.description = tag.description ?? ''
+  tokens.lineEnd = tag.lineEnd ?? ''
+  return { number, source: tokensToSource(tokens), tokens }
+}
+
+/** Build the `source[]` array for a JsdocBlock. */
+function buildBlockSource(block) {
+  const out = []
+  let number = 0
+
+  // Opening `/**` line. ox-jsdoc currently stores `block.delimiter` as the
+  // per-line `*` marker (see KNOWN_DIFFERENCES), so we override here with
+  // the literal `/**` to match jsdoccomment's expectation.
+  const openingTokens = emptyTokens()
+  openingTokens.start = block.initial ?? ''
+  openingTokens.delimiter = '/**'
+  openingTokens.postDelimiter = block.postDelimiter ?? ''
+  out.push({ number: number++, source: tokensToSource(openingTokens), tokens: openingTokens })
+
+  // Block-level description lines.
+  for (const descLine of block.descriptionLines) {
+    out.push(descriptionLineToSourceEntry(descLine, number++))
+  }
+
+  // Tags. Each tag contributes a header line + one continuation entry
+  // per *additional* descriptionLine. The first descriptionLine shares
+  // the same source line as the tag header (jsdoccomment treats them as
+  // one source row), so we skip index 0. (typeLines beyond the first
+  // are an edge case we collapse into the description for v1; revisit
+  // alongside the parser multi-line type fix.)
+  for (const tag of block.tags) {
+    out.push(tagHeaderToSourceEntry(tag, number++))
+    for (let i = 1; i < tag.descriptionLines.length; i++) {
+      out.push(descriptionLineToSourceEntry(tag.descriptionLines[i], number++))
+    }
+  }
+
+  // Closing `*/` line.
+  const closingTokens = emptyTokens()
+  closingTokens.start = block.initial ?? ''
+  closingTokens.end = block.terminal ?? '*/'
+  out.push({ number, source: tokensToSource(closingTokens), tokens: closingTokens })
+
+  return out
+}
+
+/** Build the per-tag `source[]` subset (every line that belongs to this
+ * tag — header + descriptionLines beyond the first). The `number` field
+ * is left tag-local (as if the tag stood alone). */
+function buildTagSource(tag) {
+  const out = []
+  let number = 0
+  out.push(tagHeaderToSourceEntry(tag, number++))
+  // Skip descriptionLines[0] — same source row as the tag header.
+  for (let i = 1; i < tag.descriptionLines.length; i++) {
+    out.push(descriptionLineToSourceEntry(tag.descriptionLines[i], number++))
+  }
+  return out
+}
 
 // ---------------------------------------------------------------------------
 // Local helpers
@@ -123,7 +311,8 @@ export class RemoteJsdocBlock {
     return this.#internal.parent
   }
 
-  /** Top-level description string (`null` when absent). */
+  /** Top-level description string (`null` when absent). The
+   * `emptyStringForNull` option only affects `toJSON()` output. */
   get description() {
     const internal = this.#internal
     const cached = internal.$description
@@ -180,6 +369,54 @@ export class RemoteJsdocBlock {
     return (internal.$preterminalLineBreak = extStringFieldRequired(internal, 44))
   }
 
+  // -- compat-only line metadata -------------------------------------------
+  // The following 6 fields exist only when `sourceFile.compatMode` is true
+  // (basic-mode ED records stop at byte 68; reading further would walk into
+  // the next node's bytes). Each getter returns `null` outside compat mode.
+
+  /** Total number of LogicalLines in this comment (compat-mode only). */
+  get endLine() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    return extU32(internal, JSDOC_BLOCK_END_LINE_OFFSET)
+  }
+  /** Index of the first description line, or `null` when absent. */
+  get descriptionStartLine() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    const v = extU32(internal, JSDOC_BLOCK_DESC_START_LINE_OFFSET)
+    return v === COMPAT_LINE_NONE ? null : v
+  }
+  /** Index of the last description line, or `null` when absent. */
+  get descriptionEndLine() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    const v = extU32(internal, JSDOC_BLOCK_DESC_END_LINE_OFFSET)
+    return v === COMPAT_LINE_NONE ? null : v
+  }
+  /** Description-boundary index (jsdoccomment's `lastDescriptionLine` —
+   * actually the index of the first tag/end line). `null` when absent. */
+  get lastDescriptionLine() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    const v = extU32(internal, JSDOC_BLOCK_LAST_DESC_LINE_OFFSET)
+    return v === COMPAT_LINE_NONE ? null : v
+  }
+  /** `1` when block description text exists on the `*​/` line. */
+  get hasPreterminalDescription() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    return extU8(internal, JSDOC_BLOCK_HAS_PRETERMINAL_DESC_OFFSET)
+  }
+  /** `1` when tag description text exists on the `*​/` line; `null` when not
+   * applicable (no active lastTag at end). */
+  get hasPreterminalTagDescription() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    const v = extU8(internal, JSDOC_BLOCK_HAS_PRETERMINAL_TAG_DESC_OFFSET)
+    return v === COMPAT_U8_NONE ? null : v
+  }
+
   /** Top-level description lines. */
   get descriptionLines() {
     const internal = this.#internal
@@ -209,10 +446,12 @@ export class RemoteJsdocBlock {
   }
 
   toJSON() {
-    return {
+    const internal = this.#internal
+    const nullToEmpty = internal.sourceFile.emptyStringForNull
+    const json = {
       type: this.type,
       range: this.range,
-      description: this.description,
+      description: nullToEmpty ? (this.description ?? '') : this.description,
       delimiter: this.delimiter,
       postDelimiter: this.postDelimiter,
       terminal: this.terminal,
@@ -224,6 +463,23 @@ export class RemoteJsdocBlock {
       tags: this.tags.map(n => n.toJSON()),
       inlineTags: this.inlineTags.map(n => n.toJSON())
     }
+    if (internal.sourceFile.compatMode) {
+      // Match jsdoccomment's optional-field serialization: omit absent
+      // line indices (Rust serializer uses `skip_serializing_if = "Option::is_none"`).
+      json.endLine = this.endLine
+      const dsl = this.descriptionStartLine
+      if (dsl !== null) json.descriptionStartLine = dsl
+      const del = this.descriptionEndLine
+      if (del !== null) json.descriptionEndLine = del
+      const ldl = this.lastDescriptionLine
+      if (ldl !== null) json.lastDescriptionLine = ldl
+      json.hasPreterminalDescription = this.hasPreterminalDescription
+      const hptd = this.hasPreterminalTagDescription
+      if (hptd !== null) json.hasPreterminalTagDescription = hptd
+      // Phase 6: comment-parser-shape source[] array.
+      json.source = buildBlockSource(this)
+    }
+    return json
   }
 
   [inspectSymbol]() {
@@ -281,8 +537,36 @@ export class RemoteJsdocDescriptionLine {
     return (internal.$description = value)
   }
 
+  // -- compat-only delimiter trio ------------------------------------------
+  // Stored in ED bytes 6-23 only when sourceFile.compatMode is true.
+
+  /** Source-preserving `*` line-prefix (compat-mode only; `null` otherwise). */
+  get delimiter() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    return extStringField(internal, COMPAT_LINE_DELIMITER)
+  }
+  /** Source-preserving space after `*` (compat-mode only). */
+  get postDelimiter() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    return extStringField(internal, COMPAT_LINE_POST_DELIMITER)
+  }
+  /** Indentation before the leading `*` (compat-mode only). */
+  get initial() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    return extStringField(internal, COMPAT_LINE_INITIAL)
+  }
+
   toJSON() {
-    return { type: this.type, range: this.range, description: this.description }
+    const json = { type: this.type, range: this.range, description: this.description }
+    if (this.#internal.sourceFile.compatMode) {
+      json.delimiter = this.delimiter ?? ''
+      json.postDelimiter = this.postDelimiter ?? ''
+      json.initial = this.initial ?? ''
+    }
+    return json
   }
   [inspectSymbol]() {
     return inspectPayload(this.toJSON(), 'JsdocDescriptionLine')
@@ -426,7 +710,107 @@ export class RemoteJsdocTag {
     return (internal.$inlineTags = nodeListAtSlotExtended(internal, JSDOC_TAG_INLINE_TAGS_SLOT))
   }
 
+  // -- compat-only delimiter strings ---------------------------------------
+  // Stored in ED bytes 38-79 (7 StringFields) only when compatMode is true.
+
+  /** Source-preserving `*` line-prefix (compat-mode only). */
+  get delimiter() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    return extStringFieldRequired(internal, JSDOC_TAG_COMPAT_DELIMITER)
+  }
+  /** Source-preserving space after `*` (compat-mode only). */
+  get postDelimiter() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    return extStringFieldRequired(internal, JSDOC_TAG_COMPAT_POST_DELIMITER)
+  }
+  /** Whitespace after the `@name` token (compat-mode only). */
+  get postTag() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    return extStringFieldRequired(internal, JSDOC_TAG_COMPAT_POST_TAG)
+  }
+  /** Whitespace after the `{type}` source (compat-mode only). */
+  get postType() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    return extStringFieldRequired(internal, JSDOC_TAG_COMPAT_POST_TYPE)
+  }
+  /** Whitespace after the name token (compat-mode only). */
+  get postName() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    return extStringFieldRequired(internal, JSDOC_TAG_COMPAT_POST_NAME)
+  }
+  /** Indentation before the line's `*` (compat-mode only). */
+  get initial() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    return extStringFieldRequired(internal, JSDOC_TAG_COMPAT_INITIAL)
+  }
+  /** Line ending of the tag's first line (compat-mode only). */
+  get lineEnd() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    return extStringFieldRequired(internal, JSDOC_TAG_COMPAT_LINE_END)
+  }
+
   toJSON() {
+    const internal = this.#internal
+    const compat = internal.sourceFile.compatMode
+    const nullToEmpty = internal.sourceFile.emptyStringForNull
+
+    if (compat) {
+      // jsdoccomment-shape: omit ox-jsdoc-specific fields (optional,
+      // defaultValue, rawBody, body) and surface delimiter strings + lineEnd.
+      const tagNode = this.tag?.toJSON() ?? null
+      const tagName = tagNode?.value ?? ''
+      const rawTypeNode = this.rawType?.toJSON() ?? null
+      const rawTypeRaw = rawTypeNode?.raw ?? null
+      const nameNode = this.name?.toJSON() ?? null
+      const nameValue = nameNode?.raw ?? null
+      // Build a synthetic facade so buildTagSource() can read camelCase
+      // fields without re-rolling the StringField lookups for every tag
+      // entry. Only the keys consumed by tagHeaderToSourceEntry need to
+      // be present.
+      const tagFacade = {
+        tag: tagNode ? { value: tagName } : null,
+        rawType: rawTypeNode ? { raw: rawTypeRaw ?? '' } : null,
+        name: nameNode ? { raw: nameValue ?? '' } : null,
+        description: this.description,
+        initial: this.initial,
+        delimiter: this.delimiter,
+        postDelimiter: this.postDelimiter,
+        postTag: this.postTag,
+        postType: this.postType,
+        postName: this.postName,
+        lineEnd: this.lineEnd,
+        descriptionLines: this.descriptionLines
+      }
+      return {
+        type: this.type,
+        range: this.range,
+        tag: tagName,
+        rawType: nullToEmpty ? (rawTypeRaw ?? '') : rawTypeRaw,
+        name: nullToEmpty ? (nameValue ?? '') : nameValue,
+        description: this.description ?? (nullToEmpty ? '' : null),
+        delimiter: this.delimiter,
+        postDelimiter: this.postDelimiter,
+        postTag: this.postTag,
+        postType: this.postType,
+        postName: this.postName,
+        initial: this.initial,
+        lineEnd: this.lineEnd,
+        parsedType: this.parsedType?.toJSON() ?? null,
+        typeLines: this.typeLines.map(n => n.toJSON()),
+        descriptionLines: this.descriptionLines.map(n => n.toJSON()),
+        inlineTags: this.inlineTags.map(n => n.toJSON()),
+        // Phase 6: per-tag source[] subset (the lines that belong to this
+        // tag — header + description continuation).
+        source: buildTagSource(tagFacade)
+      }
+    }
     return {
       type: this.type,
       range: this.range,
@@ -568,8 +952,35 @@ export class RemoteJsdocTypeLine {
     return (internal.$rawType = value)
   }
 
+  // -- compat-only delimiter trio (same layout as JsdocDescriptionLine) ----
+
+  /** Source-preserving `*` line-prefix (compat-mode only; `null` otherwise). */
+  get delimiter() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    return extStringField(internal, COMPAT_LINE_DELIMITER)
+  }
+  /** Source-preserving space after `*` (compat-mode only). */
+  get postDelimiter() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    return extStringField(internal, COMPAT_LINE_POST_DELIMITER)
+  }
+  /** Indentation before the leading `*` (compat-mode only). */
+  get initial() {
+    const internal = this.#internal
+    if (!internal.sourceFile.compatMode) return null
+    return extStringField(internal, COMPAT_LINE_INITIAL)
+  }
+
   toJSON() {
-    return { type: this.type, range: this.range, rawType: this.rawType }
+    const json = { type: this.type, range: this.range, rawType: this.rawType }
+    if (this.#internal.sourceFile.compatMode) {
+      json.delimiter = this.delimiter ?? ''
+      json.postDelimiter = this.postDelimiter ?? ''
+      json.initial = this.initial ?? ''
+    }
+    return json
   }
   [inspectSymbol]() {
     return inspectPayload(this.toJSON(), 'JsdocTypeLine')
@@ -617,9 +1028,12 @@ export class RemoteJsdocInlineTag {
     return this.#internal.parent
   }
 
-  /** Inline tag format string (`'plain' | 'pipe' | 'space' | 'prefix' | 'unknown'`). */
+  /** Inline tag format string. In compat mode the `'unknown'` variant is
+   * mapped to `'plain'` to mirror jsdoccomment's behavior. */
   get format() {
-    return INLINE_TAG_FORMATS[commonData(this.#internal) & 0b0000_0111] ?? 'unknown'
+    const internal = this.#internal
+    const raw = INLINE_TAG_FORMATS[commonData(internal) & 0b0000_0111] ?? 'unknown'
+    return raw === 'unknown' && internal.sourceFile.compatMode ? 'plain' : raw
   }
   /** Optional name path or URL portion. */
   get namepathOrURL() {
@@ -644,14 +1058,23 @@ export class RemoteJsdocInlineTag {
   }
 
   toJSON() {
-    return {
+    const internal = this.#internal
+    const compat = internal.sourceFile.compatMode
+    const nullToEmpty = internal.sourceFile.emptyStringForNull
+    // NOTE: jsdoccomment's `JsdocInlineTag` exposes a `tag` field (the inline
+    // tag name without `@`, e.g. "link"). The binary writer does not currently
+    // serialize this value (`emit_inline_tag` discards `inline.tag_name`), so
+    // we cannot reproduce it here. Track as a future binary-format extension.
+    const json = {
       type: this.type,
       range: this.range,
       format: this.format,
-      namepathOrURL: this.namepathOrURL,
-      text: this.text,
-      rawBody: this.rawBody
+      namepathOrURL: nullToEmpty ? (this.namepathOrURL ?? '') : this.namepathOrURL,
+      text: nullToEmpty ? (this.text ?? '') : this.text
     }
+    // jsdoccomment excludes rawBody from inline-tag output.
+    if (!compat) json.rawBody = this.rawBody
+    return json
   }
   [inspectSymbol]() {
     return inspectPayload(this.toJSON(), 'JsdocInlineTag')

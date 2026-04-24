@@ -261,6 +261,32 @@ export function extStringFieldRequired(internal, fieldOffset) {
 }
 
 /**
+ * Read a little-endian u32 at `fieldOffset` inside this node's Extended Data.
+ *
+ * Used by compat-mode tail fields (line indices). Caller is responsible for
+ * gating reads on `sourceFile.compatMode` since basic-mode ED records do not
+ * reserve these bytes.
+ *
+ * @param {RemoteInternal} internal
+ * @param {number} fieldOffset Byte offset within the Extended Data record.
+ * @returns {number}
+ */
+export function extU32(internal, fieldOffset) {
+  return internal.view.getUint32(extOffsetOf(internal) + fieldOffset, true)
+}
+
+/**
+ * Read a u8 at `fieldOffset` inside this node's Extended Data.
+ *
+ * @param {RemoteInternal} internal
+ * @param {number} fieldOffset
+ * @returns {number}
+ */
+export function extU8(internal, fieldOffset) {
+  return internal.view.getUint8(extOffsetOf(internal) + fieldOffset)
+}
+
+/**
  * Compute the absolute `[start, end]` range of a node by adding the root's
  * `base_offset` to the relative Pos/End fields.
  *
