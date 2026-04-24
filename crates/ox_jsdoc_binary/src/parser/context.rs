@@ -959,7 +959,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             });
         }
 
-        // Pre-compute capacity to avoid reallocations.
+        // Pre-compute capacity to avoid reallocations of the staging buffer.
         let capacity: usize = lines.iter().map(|l| l.content.len() + 1).sum();
         self.scratch.clear();
         self.scratch.reserve(capacity);
@@ -969,17 +969,28 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             }
             self.scratch.push_str(trim_end_fast(line.content));
         }
-        // Allocate a stable copy on the parser's scratch arena. The result
-        // lives as long as the parser context; we leak it intentionally
-        // since `ParserContext` is short-lived.
-        // SAFETY: we transmute the lifetime to 'a; the scratch String
-        // outlives the returned NormalizedText because `normalize_lines`
-        // is only called from the same `parse_block_into_data` call frame
-        // and the returned `&str` is consumed before `self.scratch` is
-        // mutated again in the same frame.
-        let leaked: &'a str =
-            unsafe { std::mem::transmute::<&str, &'a str>(self.scratch.as_str()) };
-        Some(NormalizedText { text: leaked, span })
+        // Copy the joined bytes into the arena so the resulting `&str`
+        // outlives every subsequent `normalize_lines` call (and survives
+        // the eventual drop of `ParserContext`/`self.scratch`). The arena
+        // is owned by the caller of `parse_block_into_data` and outlives
+        // both the parsed `BlockData` and the writer's `emit_block` walk.
+        //
+        // Previously this returned a transmuted `&'a str` borrow of
+        // `self.scratch.as_str()`. That was a use-after-free: the next
+        // `normalize_lines` call would `clear()` + `push_str()` over the
+        // same heap buffer (or reallocate it via `reserve()`), making
+        // every prior borrow read garbage / freed bytes — observable as
+        // corrupted `description` / `rawType` strings on multi-line input.
+        let arena_str: &str = self.arena.alloc_str(&self.scratch);
+        // SAFETY: widening `&'arena str` to `&'a str` is sound here
+        // because the arena is the lifetime upper bound on every borrow
+        // in `BlockData<'arena, 'a>` — anything that consumes the
+        // returned text is itself bounded by the arena, so the bytes are
+        // guaranteed to remain valid for the duration of every read. This
+        // mirrors how source slices (`&'a str` from `source_text`) flow
+        // through the same fields.
+        let widened: &'a str = unsafe { std::mem::transmute::<&str, &'a str>(arena_str) };
+        Some(NormalizedText { text: widened, span })
     }
 }
 

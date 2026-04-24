@@ -20,10 +20,10 @@ export const FIXTURES: ReadonlyArray<Fixture> = [
     name: 'description-only single line',
     source: '/** Hello world */'
   },
-  // TODO(compat): "description-only multi-line" is intentionally omitted
-  // — exposes the same pre-existing parser/writer multi-line bug as the
-  // tag variant (JsdocBlock.description returns corrupted bytes when the
-  // source has multiple description lines). Tracked separately.
+  {
+    name: 'description-only multi-line',
+    source: '/**\n * Hello\n * world\n */'
+  },
   {
     name: 'param tag with type and name',
     source: '/**\n * @param {string} id - User ID\n */'
@@ -45,10 +45,10 @@ export const FIXTURES: ReadonlyArray<Fixture> = [
     name: 'no description, single tag',
     source: '/** @returns void */'
   },
-  // TODO(compat): "tag with multi-line description" is intentionally
-  // omitted — exposes a pre-existing parser/writer bug where the second
-  // description line corrupts JsdocTag.rawType / JsdocTag.description
-  // bytes. Tracked separately; restore once the upstream fix lands.
+  {
+    name: 'tag with multi-line description',
+    source: '/**\n * @param {string} id - User ID\n *   continued on next line\n */'
+  },
   {
     name: 'returns void (defaultNoNames)',
     source: '/** @returns void */'
