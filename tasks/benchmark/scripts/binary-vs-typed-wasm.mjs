@@ -14,7 +14,11 @@ import { fileURLToPath } from 'node:url'
 
 import { parseSync } from 'oxc-parser'
 import { initWasm as initTypedWasm, parse as parseTypedWasm } from '@ox-jsdoc/wasm'
-import { initWasm as initBinaryWasm, parse as parseBinaryWasm } from '@ox-jsdoc/wasm-binary'
+import {
+  initWasm as initBinaryWasm,
+  parse as parseBinaryWasm,
+  parseBatch as parseBatchBinaryWasm
+} from '@ox-jsdoc/wasm-binary'
 
 import { compareRobust, fmtDuration } from './lib/measure.mjs'
 
@@ -134,6 +138,41 @@ const scenarios = [
     }
   }
 ]
+
+// Pre-build the BatchItem arrays once so the parseBatch scenarios measure
+// the call cost itself rather than the per-iteration JS-side fixup work.
+const batch100Items = batch100.map(sourceText => ({ sourceText, baseOffset: 0 }))
+const allItems = allComments.map(sourceText => ({ sourceText, baseOffset: 0 }))
+
+// parseBatch comparisons. The typed binding has no batch entry, so we
+// compare against the typed loop — this exposes the additional speedup
+// available once a caller switches from per-comment loops to a single
+// batched call (one wasm-bindgen crossing instead of N).
+const batchScenarios = [
+  {
+    label: 'Batch 100 (parseBatch)',
+    typed: () => {
+      for (const c of batch100) void parseTypedWasm(c).ast
+    },
+    binary: () => {
+      const r = parseBatchBinaryWasm(batch100Items)
+      void r.asts
+      r.free()
+    }
+  },
+  {
+    label: `Full file ${allComments.length} (parseBatch)`,
+    typed: () => {
+      for (const c of allComments) void parseTypedWasm(c).ast
+    },
+    binary: () => {
+      const r = parseBatchBinaryWasm(allItems)
+      void r.asts
+      r.free()
+    }
+  }
+]
+scenarios.push(...batchScenarios)
 
 const benches = []
 for (const s of scenarios) {

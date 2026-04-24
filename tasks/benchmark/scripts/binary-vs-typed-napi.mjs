@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url'
 
 import { parseSync } from 'oxc-parser'
 import { parse as parseTyped } from 'ox-jsdoc'
-import { parse as parseBinary } from 'ox-jsdoc-binary'
+import { parse as parseBinary, parseBatch as parseBatchBinary } from 'ox-jsdoc-binary'
 
 import { compareRobust, fmtDuration } from './lib/measure.mjs'
 
@@ -115,6 +115,37 @@ const scenarios = [
     }
   }
 ]
+
+// Pre-build the BatchItem arrays once so the parseBatch scenarios measure
+// the call cost itself rather than the per-iteration JS-side fixup work.
+const batch100Items = batch100.map(sourceText => ({ sourceText, baseOffset: 0 }))
+const allItems = allComments.map(sourceText => ({ sourceText, baseOffset: 0 }))
+
+// parseBatch comparisons. parseTyped has no batch entry, so the typed
+// column reports the per-comment loop cost — the gap exposes the win
+// available to callers who switch a per-comment loop to a single batched
+// call (one NAPI crossing instead of N).
+const batchScenarios = [
+  {
+    label: 'Batch 100 (parseBatch)',
+    typed: () => {
+      for (const c of batch100) void parseTyped(c).ast
+    },
+    binary: () => {
+      void parseBatchBinary(batch100Items).asts
+    }
+  },
+  {
+    label: `Full file ${allComments.length} (parseBatch)`,
+    typed: () => {
+      for (const c of allComments) void parseTyped(c).ast
+    },
+    binary: () => {
+      void parseBatchBinary(allItems).asts
+    }
+  }
+]
+scenarios.push(...batchScenarios)
 
 const benches = []
 for (const s of scenarios) {

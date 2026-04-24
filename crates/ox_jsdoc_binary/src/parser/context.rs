@@ -985,7 +985,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         // for the duration of every read. Mirrors how source slices
         // (`&'a str` from `source_text`) flow through the same fields.
         let widened: &'a str = unsafe { std::mem::transmute::<&str, &'a str>(arena_str) };
-        Some(NormalizedText { text: widened, span })
+        Some(NormalizedText {
+            text: widened,
+            span,
+        })
     }
 }
 

@@ -215,3 +215,79 @@ pub fn parse_jsdoc_batch(
         diagnostic_root_indices,
     }
 }
+
+/// Parse N JSDoc block comments where the JS-side has already concatenated
+/// every `source_text` into a single UTF-8 byte buffer.
+///
+/// This avoids the per-item `Vec<String>` JS→Wasm marshalling that
+/// dominates the [`parse_jsdoc_batch`] entry's cross-boundary cost (each
+/// `String` element pays a separate JS string → wasm linear-memory copy +
+/// `String` wrapper allocation). Three slice handles replace 226 ×
+/// `(String, u32)` element conversions:
+///
+/// - `concat`: every `source_text` UTF-8 byte concatenated, no separators.
+/// - `offsets`: length `N + 1`. `concat[offsets[i]..offsets[i+1]]` is the
+///   bytes for input item `i`.
+/// - `base_offsets`: length `N`. Per-item `base_offset`.
+///
+/// Mirrors the NAPI binding's `parse_jsdoc_batch_raw`. The JS wrapper
+/// (`parseBatch` in `index.js`) builds these via `TextEncoder`. Callers
+/// that need the original ergonomic API can keep using
+/// [`parse_jsdoc_batch`].
+#[wasm_bindgen]
+pub fn parse_jsdoc_batch_raw(
+    concat: &[u8],
+    offsets: &[u32],
+    base_offsets: &[u32],
+    fence_aware: Option<bool>,
+    parse_types: Option<bool>,
+    type_parse_mode: Option<String>,
+    compat_mode: Option<bool>,
+) -> BatchParseResult {
+    let mode = match type_parse_mode.as_deref() {
+        Some("typescript") => ParseMode::Typescript,
+        Some("closure") => ParseMode::Closure,
+        _ => ParseMode::Jsdoc,
+    };
+    let options = ParseOptions {
+        compat_mode: compat_mode.unwrap_or(false),
+        base_offset: 0,
+        fence_aware: fence_aware.unwrap_or(true),
+        parse_types: parse_types.unwrap_or(false),
+        type_parse_mode: mode,
+    };
+
+    let n = base_offsets.len();
+    debug_assert_eq!(offsets.len(), n + 1, "offsets must be length N + 1");
+
+    let items: Vec<BatchItem<'_>> = (0..n)
+        .map(|i| {
+            let start = offsets[i] as usize;
+            let end = offsets[i + 1] as usize;
+            // SAFETY: the JS wrapper produces these bytes via `TextEncoder`,
+            // which always emits well-formed UTF-8. Skipping the
+            // `from_utf8` validation step matches the NAPI raw entry and
+            // keeps the per-item conversion branch-free.
+            BatchItem {
+                source_text: unsafe { std::str::from_utf8_unchecked(&concat[start..end]) },
+                base_offset: base_offsets[i],
+            }
+        })
+        .collect();
+
+    let result = parse_batch_to_bytes(&items, options);
+
+    let diagnostic_messages: Vec<String> = result
+        .diagnostics
+        .iter()
+        .map(|d| d.message.to_string())
+        .collect();
+    let diagnostic_root_indices: Vec<u32> =
+        result.diagnostics.iter().map(|d| d.root_index).collect();
+
+    BatchParseResult {
+        bytes: result.binary_bytes.into_boxed_slice(),
+        diagnostic_messages,
+        diagnostic_root_indices,
+    }
+}
