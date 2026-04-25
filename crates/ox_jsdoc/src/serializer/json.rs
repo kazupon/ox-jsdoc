@@ -671,17 +671,6 @@ impl<'a> From<&'a JsdocTagValue<'a>> for SerTagValue<'a> {
 // TypeNode serialization — jsdoc-type-pratt-parser compatible JSON
 // ---------------------------------------------------------------------------
 
-/// Build a JSON object, omitting any fields with null values.
-fn json_obj(fields: Vec<(&str, serde_json::Value)>) -> serde_json::Value {
-    let mut map = serde_json::Map::new();
-    for (key, value) in fields {
-        if !value.is_null() {
-            map.insert(key.into(), value);
-        }
-    }
-    serde_json::Value::Object(map)
-}
-
 /// Build a meta object, omitting null fields. Returns None if empty.
 fn meta_obj(fields: Vec<(&str, serde_json::Value)>) -> Option<serde_json::Value> {
     let mut map = serde_json::Map::new();

@@ -40,7 +40,7 @@ export default defineConfig({
           browser: {
             enabled: true,
             headless: true,
-            provider: playwright() as any, // FIXME: The type of `provider` is not correctly inferred. It should be `PlaywrightProvider` instead of `BrowserProvider`.
+            provider: playwright() as any, // NOTE(vitest): The type of `provider` is not correctly inferred. It should be `PlaywrightProvider` instead of `BrowserProvider`.
             instances: [{ browser: 'chromium' }]
           }
         }
@@ -50,7 +50,7 @@ export default defineConfig({
   fmt: defineFmtConfig({
     ignorePatterns
   }),
-  // @ts-expect-error -- FIXME: The type of `lint` is not correctly inferred. It should be `LintConfig` instead of `LintConfig[]`.
+  // @ts-expect-error -- TODO(vp-config): The type of `lint` is not correctly inferred. It should be `LintConfig` instead of `LintConfig[]`.
   lint: defineLintConfig({
     ignorePatterns,
     comments: {

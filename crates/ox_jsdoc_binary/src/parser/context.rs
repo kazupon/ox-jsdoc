@@ -1378,10 +1378,6 @@ fn opt_source_string(writer: &mut BinaryWriter<'_>, value: Option<&str>) -> Opti
     value.map(|s| writer.intern_source_slice_or_string(s))
 }
 
-fn empty_string(_writer: &mut BinaryWriter<'_>) -> StringField {
-    crate::writer::common_string_field(crate::writer::COMMON_EMPTY)
-}
-
 fn intern(writer: &mut BinaryWriter<'_>, value: &str) -> StringField {
     writer.intern_string(value)
 }

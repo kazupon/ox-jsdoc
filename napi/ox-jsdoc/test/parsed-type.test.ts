@@ -7,14 +7,14 @@
 
 import { describe, expect, it } from 'vite-plus/test'
 import { parse } from '../src-js/index.js'
-import { parse as jtpParse, tryParse as jtpTryParse } from 'jsdoc-type-pratt-parser'
+import { parse as jtpParse } from 'jsdoc-type-pratt-parser'
 
 type Mode = 'jsdoc' | 'closure' | 'typescript'
 
 /**
  * Parse a type expression with ox-jsdoc and return the parsedType AST.
  */
-function oxParse(typeExpr: string, mode: Mode): unknown | null {
+function oxParse(typeExpr: string, mode: Mode): unknown {
   const source = `/** @param {${typeExpr}} x */`
   const result = parse(source, { parseTypes: true, typeParseMode: mode })
   if (!result.ast || result.ast.tags.length === 0) {
@@ -26,7 +26,7 @@ function oxParse(typeExpr: string, mode: Mode): unknown | null {
 /**
  * Parse a type expression with jsdoc-type-pratt-parser.
  */
-function refParse(typeExpr: string, mode: Mode): unknown | null {
+function refParse(typeExpr: string, mode: Mode): unknown {
   try {
     return jtpParse(typeExpr, mode)
   } catch {
