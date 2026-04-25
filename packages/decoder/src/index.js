@@ -84,6 +84,112 @@ export {
 export { RemoteNodeListNode } from './internal/nodes/node-list-node.js'
 
 /**
+ * Visitor keys for every Remote* node kind (60 = 15 Comment AST + 45 TypeNode).
+ *
+ * Each entry maps a node `type` name to the **traversable child property
+ * names** in canonical visit order. Mirrors the jsdoccomment / ESLint
+ * `visitorKeys` convention — frameworks that depend on it (`estraverse`,
+ * `eslint-visitor-keys`, etc.) can spread this object directly into their
+ * own key map.
+ *
+ * **Differences from jsdoccomment**: ox-jsdoc emits `JsdocTag.tag` /
+ * `rawType` / `name` / `body` as actual child nodes (`RemoteJsdocTagName`,
+ * `RemoteJsdocTypeSource`, `RemoteJsdocTagNameValue`, `RemoteJsdocTagBody`)
+ * instead of flattening them to strings, so those property names appear in
+ * `JsdocTag`'s key list. Strict-jsdoccomment consumers can filter the list
+ * down to `['parsedType', 'typeLines', 'descriptionLines', 'inlineTags']`.
+ *
+ * **Reserved kinds** (`JsdocBorrowsTagBody`, `JsdocRawTagBody`) are listed
+ * for future use; the parser does not currently emit them
+ * (see `design/007-binary-ast/ast-nodes.md` "Reserved Kinds").
+ */
+export const jsdocVisitorKeys = Object.freeze({
+  // Comment AST (15)
+  JsdocBlock: ['descriptionLines', 'tags', 'inlineTags'],
+  JsdocDescriptionLine: [],
+  JsdocTag: [
+    'tag',
+    'rawType',
+    'name',
+    'parsedType',
+    'body',
+    'typeLines',
+    'descriptionLines',
+    'inlineTags'
+  ],
+  JsdocTagName: [],
+  JsdocTagNameValue: [],
+  JsdocTypeSource: [],
+  JsdocTypeLine: [],
+  JsdocInlineTag: [],
+  JsdocGenericTagBody: ['typeSource', 'value'],
+  JsdocBorrowsTagBody: ['source', 'target'],
+  JsdocRawTagBody: [],
+  JsdocParameterName: [],
+  JsdocNamepathSource: [],
+  JsdocIdentifier: [],
+  JsdocText: [],
+
+  // TypeNode — leaves (10)
+  TypeName: [],
+  TypeNumber: [],
+  TypeStringValue: [],
+  TypeProperty: [],
+  TypeSpecialNamePath: [],
+  TypeNull: [],
+  TypeUndefined: [],
+  TypeAny: [],
+  TypeUnknown: [],
+  TypeUniqueSymbol: [],
+
+  // TypeNode — elements containers (6)
+  TypeUnion: ['elements'],
+  TypeIntersection: ['elements'],
+  TypeObject: ['elements'],
+  TypeTuple: ['elements'],
+  TypeTypeParameter: ['elements'],
+  TypeParameterList: ['elements'],
+
+  // TypeNode — single-child containers (13)
+  TypeParenthesis: ['element'],
+  TypeInfer: ['element'],
+  TypeKeyOf: ['element'],
+  TypeTypeOf: ['element'],
+  TypeImport: ['element'],
+  TypeAssertsPlain: ['element'],
+  TypeReadonlyArray: ['element'],
+  TypeIndexedAccessIndex: ['element'],
+  TypeReadonlyProperty: ['element'],
+  TypeNullable: ['element'],
+  TypeNotNullable: ['element'],
+  TypeOptional: ['element'],
+  TypeVariadic: ['element'],
+
+  // TypeNode — left+right (3)
+  TypePredicate: ['left', 'right'],
+  TypeAsserts: ['left', 'right'],
+  TypeNamePath: ['left', 'right'],
+
+  // TypeNode — mixed shapes (13)
+  TypeGeneric: ['left', 'elements'],
+  TypeFunction: ['parameters', 'returnType', 'typeParameters'],
+  TypeConditional: ['checkType', 'extendsType', 'trueType', 'falseType'],
+  TypeObjectField: ['key', 'right'],
+  TypeJsdocObjectField: ['key', 'right'],
+  TypeKeyValue: ['right'],
+  TypeIndexSignature: ['right'],
+  TypeMappedType: ['right'],
+  TypeMethodSignature: ['parameters', 'returnType', 'typeParameters'],
+  TypeCallSignature: ['parameters', 'returnType', 'typeParameters'],
+  TypeConstructorSignature: ['parameters', 'returnType', 'typeParameters'],
+  // TypeTemplateLiteral interpolations are stored as direct children but
+  // are not exposed via a named property on the lazy class today; consumers
+  // that need to walk them should iterate the node's children directly.
+  TypeTemplateLiteral: [],
+  TypeSymbol: ['element']
+})
+
+/**
  * Recursively convert a Remote* lazy node into a plain JSON object.
  * Handy for browser DevTools (where `Symbol.for('nodejs.util.inspect.custom')`
  * has no effect) and for general logging.

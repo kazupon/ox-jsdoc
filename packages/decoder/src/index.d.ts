@@ -610,3 +610,14 @@ export class RemoteNodeListNode implements RemoteNode {
   readonly children: RemoteNode[]
   toJSON(): Record<string, unknown>
 }
+
+/**
+ * Visitor keys for every Remote* node kind (60 = 15 Comment AST + 45
+ * TypeNode). Maps each `type` name to the traversable child property names
+ * in canonical visit order; spread directly into ESLint / `estraverse`
+ * key maps. See the JS doc-comment in `index.js` for ox-jsdoc-vs-jsdoccomment
+ * differences (notably `JsdocTag.tag` / `rawType` / `name` / `body` are
+ * child nodes here, not strings).
+ */
+export const jsdocVisitorKeys: Readonly<Record<string, readonly string[]>>
+

@@ -15,7 +15,15 @@ import {
  * Parse a complete `/** ... *​/` JSDoc block comment.
  *
  * @param {string} sourceText
- * @param {{ fenceAware?: boolean, parseTypes?: boolean, typeParseMode?: string }} [options]
+ * @param {{
+ *   fenceAware?: boolean,
+ *   parseTypes?: boolean,
+ *   typeParseMode?: 'jsdoc' | 'closure' | 'typescript',
+ *   compatMode?: boolean,
+ *   emptyStringForNull?: boolean,
+ *   includePositions?: boolean,
+ *   spacing?: 'compact' | 'preserve'
+ * }} [options]
  * @returns {{ ast: any, diagnostics: Array<{ message: string }> }}
  */
 export function parse(sourceText, options) {
@@ -29,6 +37,18 @@ export function parse(sourceText, options) {
     }
     if (options.typeParseMode !== undefined) {
       bindingOptions.typeParseMode = options.typeParseMode
+    }
+    if (options.compatMode !== undefined) {
+      bindingOptions.compatMode = options.compatMode
+    }
+    if (options.emptyStringForNull !== undefined) {
+      bindingOptions.emptyStringForNull = options.emptyStringForNull
+    }
+    if (options.includePositions !== undefined) {
+      bindingOptions.includePositions = options.includePositions
+    }
+    if (options.spacing !== undefined) {
+      bindingOptions.spacing = options.spacing
     }
   }
   const result = parseBinding(sourceText, bindingOptions)

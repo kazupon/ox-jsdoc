@@ -35,7 +35,15 @@ export async function initWasm(wasmUrl) {
  * Parse a complete `/** ... *​/` JSDoc block comment.
  *
  * @param {string} sourceText
- * @param {{ fenceAware?: boolean, parseTypes?: boolean, typeParseMode?: 'jsdoc' | 'closure' | 'typescript' }} [options]
+ * @param {{
+ *   fenceAware?: boolean,
+ *   parseTypes?: boolean,
+ *   typeParseMode?: 'jsdoc' | 'closure' | 'typescript',
+ *   compatMode?: boolean,
+ *   emptyStringForNull?: boolean,
+ *   includePositions?: boolean,
+ *   spacing?: 'compact' | 'preserve'
+ * }} [options]
  * @returns {{ ast: any, diagnostics: Array<{ message: string }> }}
  */
 export function parse(sourceText, options) {
@@ -46,7 +54,11 @@ export function parse(sourceText, options) {
     sourceText,
     options?.fenceAware,
     options?.parseTypes,
-    options?.typeParseMode
+    options?.typeParseMode,
+    options?.compatMode,
+    options?.emptyStringForNull,
+    options?.includePositions,
+    options?.spacing
   )
   return {
     get ast() {

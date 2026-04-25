@@ -12,6 +12,8 @@ import init, {
   parse_jsdoc_batch_raw as parseJsdocBatchRawWasm
 } from '../pkg/ox_jsdoc_binary_wasm.js'
 
+export { jsdocVisitorKeys } from '@ox-jsdoc/decoder'
+
 // Reused encoder cuts allocation churn on hot-loop callers (lint runners).
 const utf8Encoder = new TextEncoder()
 

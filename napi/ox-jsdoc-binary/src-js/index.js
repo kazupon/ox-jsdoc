@@ -12,6 +12,8 @@ import {
   parseJsdocBatchRaw as parseJsdocBatchRawBinding
 } from './bindings.js'
 
+export { jsdocVisitorKeys } from '@ox-jsdoc/decoder'
+
 // Reused encoder cuts allocation churn when the same caller fires
 // `parseBatch` repeatedly (lint loops, watch mode).
 const utf8Encoder = new TextEncoder()

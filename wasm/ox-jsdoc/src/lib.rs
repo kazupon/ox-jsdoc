@@ -9,17 +9,28 @@ use wasm_bindgen::prelude::*;
 use oxc_allocator::Allocator;
 
 use ox_jsdoc::type_parser::stringify::stringify_type;
-use ox_jsdoc::{ParseMode, ParseOptions, parse_comment, parse_type, serialize_comment_json};
+use ox_jsdoc::{
+    ParseMode, ParseOptions, SerializeOptions, SpacingMode, parse_comment, parse_type,
+    serialize_comment_json_with_options,
+};
 
 /// Parse a JSDoc block comment.
 ///
 /// Returns an object with `astJson` (string) and `diagnostics` (array).
+///
+/// `compat_mode` / `empty_string_for_null` / `include_positions` / `spacing`
+/// control the JSON shape (see [`ox_jsdoc::SerializeOptions`]).
 #[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
 pub fn parse(
     source_text: &str,
     fence_aware: Option<bool>,
     parse_types: Option<bool>,
     type_parse_mode: Option<String>,
+    compat_mode: Option<bool>,
+    empty_string_for_null: Option<bool>,
+    include_positions: Option<bool>,
+    spacing: Option<String>,
 ) -> JsValue {
     let allocator = Allocator::default();
     let mode = match type_parse_mode.as_deref() {
@@ -35,8 +46,25 @@ pub fn parse(
     };
     let output = parse_comment(&allocator, source_text, 0, options);
 
+    let mut serialize_opts = SerializeOptions::default();
+    if let Some(value) = compat_mode {
+        serialize_opts.compat_mode = value;
+    }
+    if let Some(value) = empty_string_for_null {
+        serialize_opts.empty_string_for_null = value;
+    }
+    if let Some(value) = include_positions {
+        serialize_opts.include_positions = value;
+    }
+    serialize_opts.spacing = match spacing.as_deref() {
+        Some("preserve") => SpacingMode::Preserve,
+        _ => SpacingMode::Compact,
+    };
+
     let ast_json = match output.comment {
-        Some(ref comment) => serialize_comment_json(comment, None, None),
+        Some(ref comment) => {
+            serialize_comment_json_with_options(comment, None, None, &serialize_opts)
+        }
         None => "null".to_string(),
     };
 

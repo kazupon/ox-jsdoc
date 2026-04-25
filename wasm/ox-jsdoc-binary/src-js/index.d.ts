@@ -91,3 +91,9 @@ export function parse(sourceText: string, options?: ParseOptions): ParseResult
  * all comments.
  */
 export function parseBatch(items: BatchItem[], options?: BatchParseOptions): BatchParseResult
+
+/**
+ * Visitor keys for every Remote* node kind. Re-exported from
+ * `@ox-jsdoc/decoder` for ergonomics (single import for the whole binding).
+ */
+export { jsdocVisitorKeys } from '@ox-jsdoc/decoder'

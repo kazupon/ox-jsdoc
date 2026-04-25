@@ -77,3 +77,60 @@ describe('parse', () => {
     expect(result.ast!.tags.length).toBe(0)
   })
 })
+
+describe('parse with serialize options', () => {
+  it('emits compat-mode delimiter / line metadata when compatMode is true', () => {
+    const source = '/**\n * @param {string} id\n */'
+    const result = parse(source, { compatMode: true })
+    expect(result.diagnostics).toEqual([])
+    const block = result.ast!
+    expect(block.delimiter).toBe('/**')
+    expect(block.terminal).toBe('*/')
+    expect(typeof block.endLine).toBe('number')
+    expect(typeof block.hasPreterminalDescription).toBe('number')
+    const tag = block.tags[0]
+    expect(tag.tag).toBe('param')
+    expect(tag).not.toHaveProperty('optional')
+    expect(tag).not.toHaveProperty('defaultValue')
+    expect(tag).not.toHaveProperty('rawBody')
+    expect(tag).not.toHaveProperty('body')
+    expect(tag.delimiter).toBe('*')
+    expect(typeof tag.postDelimiter).toBe('string')
+  })
+
+  it('omits compat-only fields by default', () => {
+    const result = parse('/**\n * @param {string} id\n */')
+    const block = result.ast!
+    expect(block).not.toHaveProperty('delimiter')
+    expect(block).not.toHaveProperty('endLine')
+    const tag = block.tags[0]
+    expect(tag).toHaveProperty('optional', false)
+    expect(tag).not.toHaveProperty('postDelimiter')
+  })
+
+  it('converts null optional strings to "" when emptyStringForNull is true', () => {
+    const result = parse('/** @author */', {
+      compatMode: true,
+      emptyStringForNull: true
+    })
+    const tag = result.ast!.tags[0]
+    expect(tag.tag).toBe('author')
+    expect(tag.rawType).toBe('') // would be null without emptyStringForNull
+    expect(tag.name).toBe('') // ditto
+  })
+
+  it('keeps null optional strings as null when emptyStringForNull is false', () => {
+    const result = parse('/** @author */', { compatMode: true })
+    const tag = result.ast!.tags[0]
+    expect(tag.rawType).toBeNull()
+    expect(tag.name).toBeNull()
+  })
+
+  it('drops position fields when includePositions is false', () => {
+    const result = parse('/** @param x */', { includePositions: false })
+    const block = result.ast!
+    expect(block).not.toHaveProperty('start')
+    expect(block).not.toHaveProperty('end')
+    expect(block).not.toHaveProperty('range')
+  })
+})
