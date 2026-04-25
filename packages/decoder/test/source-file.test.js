@@ -48,12 +48,6 @@ describe('RemoteSourceFile.getString', () => {
     expect(sf.getString(idx)).toBe('hello world')
   })
 
-  it('returns null for the u16 None sentinel', () => {
-    const b = new FixtureBuilder()
-    const sf = new RemoteSourceFile(b.build())
-    expect(sf.getString(0xffff)).toBeNull()
-  })
-
   it('returns null for the 30-bit None sentinel', () => {
     const b = new FixtureBuilder()
     const sf = new RemoteSourceFile(b.build())

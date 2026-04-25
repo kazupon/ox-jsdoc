@@ -18,7 +18,7 @@ use crate::format::header::{
 use crate::format::node_record::STRING_PAYLOAD_NONE_SENTINEL;
 use crate::format::root_index::{BASE_OFFSET_FIELD, NODE_INDEX_OFFSET, ROOT_INDEX_ENTRY_SIZE};
 use crate::format::string_field::StringField;
-use crate::format::string_table::{STRING_OFFSET_ENTRY_SIZE, U16_NONE_SENTINEL};
+use crate::format::string_table::STRING_OFFSET_ENTRY_SIZE;
 
 use super::error::DecodeError;
 use super::helpers::read_u32;
@@ -106,15 +106,15 @@ impl<'a> LazySourceFile<'a> {
         self.bytes
     }
 
-    /// Resolve the string at `idx` (None when `idx` is the u16 None
-    /// sentinel `0xFFFF` or the 30-bit `0x3FFF_FFFF`). Used by
+    /// Resolve the string at `idx` (None when `idx` is the
+    /// [`STRING_PAYLOAD_NONE_SENTINEL`] (`0x3FFF_FFFF`)). Used by
     /// string-leaf nodes (`TypeTag::String` payload) and the diagnostics
     /// section.
     ///
     /// Performs a zero-copy slice from String Data via the offsets table.
     #[must_use]
     pub fn get_string(&self, idx: u32) -> Option<&'a str> {
-        if idx == STRING_PAYLOAD_NONE_SENTINEL || idx == U16_NONE_SENTINEL as u32 {
+        if idx == STRING_PAYLOAD_NONE_SENTINEL {
             return None;
         }
         let so_offset =

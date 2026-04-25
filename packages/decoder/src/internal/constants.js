@@ -92,7 +92,6 @@ export const BASE_OFFSET_FIELD = 8
 // ---------------------------------------------------------------------------
 
 export const STRING_OFFSET_ENTRY_SIZE = 8
-export const U16_NONE_SENTINEL = 0xffff
 
 // ---------------------------------------------------------------------------
 // String field (6 bytes per slot, inlined in Extended Data)

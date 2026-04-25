@@ -30,15 +30,14 @@ use oxc_allocator::{Allocator, Vec as ArenaVec};
 use rustc_hash::FxHashMap;
 
 use crate::format::string_field::StringField;
-use crate::format::string_table::{STRING_TABLE_MAX_INDEX, U16_NONE_SENTINEL};
 
 /// Index into the **String Offsets** table.
 ///
 /// Newtype wrapper so a string index cannot accidentally be confused with a
-/// node index, an extended-data offset, or a raw `u32`. The maximum value
-/// fits in a `u16` for legacy Extended Data slots
-/// (see `format::string_table::STRING_TABLE_MAX_INDEX`); String-type Node
-/// Data leaves can reference up to 30 bits.
+/// node index, an extended-data offset, or a raw `u32`. String-type Node
+/// Data leaves can reference up to 30 bits (the
+/// [`crate::format::node_record::STRING_PAYLOAD_NONE_SENTINEL`] reserves
+/// the last value).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct StringIndex(NonZeroU32);
 
@@ -62,22 +61,6 @@ impl StringIndex {
     #[must_use]
     pub const fn as_u32(self) -> u32 {
         self.0.get() - 1
-    }
-
-    /// Get the raw value as `u16`. Returns [`U16_NONE_SENTINEL`] when the
-    /// index exceeds [`STRING_TABLE_MAX_INDEX`].
-    ///
-    /// Realistic encoders never overflow because the writer caps the
-    /// string table at [`STRING_TABLE_MAX_INDEX`] entries.
-    #[inline]
-    #[must_use]
-    pub const fn as_u16(self) -> u16 {
-        let raw = self.as_u32();
-        if raw <= STRING_TABLE_MAX_INDEX as u32 {
-            raw as u16
-        } else {
-            U16_NONE_SENTINEL
-        }
     }
 }
 

@@ -39,7 +39,6 @@ import {
   STRING_OFFSETS_OFFSET_FIELD,
   STRING_PAYLOAD_NONE_SENTINEL,
   SUPPORTED_MAJOR,
-  U16_NONE_SENTINEL,
   VERSION_OFFSET
 } from './constants.js'
 
@@ -169,9 +168,10 @@ export class RemoteSourceFile {
   }
 
   /**
-   * Resolve the string at `idx` (returns `null` for the None sentinels).
-   * Used by string-leaf nodes (TypeTag::String payload) and the
-   * diagnostics section.
+   * Resolve the string at `idx` (returns `null` for the
+   * `STRING_PAYLOAD_NONE_SENTINEL` (`0x3FFF_FFFF`) sentinel). Used by
+   * string-leaf nodes (TypeTag::String payload) and the diagnostics
+   * section.
    *
    * Cached on first lookup so repeated reads are O(1).
    *
@@ -179,7 +179,7 @@ export class RemoteSourceFile {
    * @returns {string | null}
    */
   getString(idx) {
-    if (idx === U16_NONE_SENTINEL || idx === STRING_PAYLOAD_NONE_SENTINEL) {
+    if (idx === STRING_PAYLOAD_NONE_SENTINEL) {
       return null
     }
     const cached = this.#internal.stringCache.get(idx)
