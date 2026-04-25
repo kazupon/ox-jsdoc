@@ -9,13 +9,14 @@
 //!
 //! The writer is invoked from inside the parser as it produces nodes. It
 //! emits Binary AST bytes directly into an arena-backed buffer per section
-//! ([`BinaryWriter`]), then concatenates them into the final
-//! `Vec<u8>` at [`BinaryWriter::finish`]. There is no separate encoder pass;
-//! parsing and encoding happen in lockstep.
+//! ([`BinaryWriter`]), then concatenates them into the final `Vec<u8>` at
+//! [`BinaryWriter::finish`]. There is no separate encoder pass; parsing
+//! and encoding happen in lockstep.
 //!
-//! This module is currently a **Phase 1.0b skeleton**: the public surface
-//! (struct, types, signatures) is in place but every implementation body is
-//! `unimplemented!()`. The first real bodies land in Phase 1.1a.
+//! Per-Kind emit helpers live in [`nodes`]; the top-level orchestration
+//! (section buffers, header patching, root array, diagnostics, UTF-16
+//! position conversion via [`crate::utf16::Utf16PositionMap`]) lives in
+//! [`BinaryWriter`].
 
 mod binary_writer;
 mod extended_data;

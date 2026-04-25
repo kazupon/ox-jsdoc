@@ -541,11 +541,17 @@ for (const tag of tags) {
 
 ## Visitor Keys
 
-Visitor keys for use by ESLint plugins are **code-generated** from the AST schema. Manual maintenance cannot
-keep up with the 60 kinds.
+Visitor keys for use by ESLint plugins are **planned** to be code-generated
+from the AST schema. Manual maintenance cannot keep up with the 60 kinds,
+so the export below is the **target shape**, not a currently-shipped
+artifact: as of this writing `@ox-jsdoc/decoder` does **not** export
+`jsdocVisitorKeys`. Consumers that need a visitor key map today should
+inline the table below or wait for the codegen rollout (tracked alongside
+the Phase 4 codegen work — see
+[`README.md`](./README.md) "Code generation").
 
 ```javascript
-// generated/visitor-keys.js
+// generated/visitor-keys.js (planned export — not yet shipped)
 export const jsdocVisitorKeys = {
   JsdocBlock: ['descriptionLines', 'tags', 'inlineTags'],
   // parsedType points directly to a TypeNode (TypeName, etc.)
@@ -563,8 +569,13 @@ export const jsdocVisitorKeys = {
   ],
   JsdocDescriptionLine: [],
   JsdocTypeLine: [],
-  JsdocInlineTag: ['tag'],
+  // `JsdocInlineTag.tag` (the inline-tag name) is reserved — the parser
+  // currently drops it during emit, so the visitor key list is empty.
+  JsdocInlineTag: [],
   JsdocGenericTagBody: ['typeSource', 'value'],
+  // `JsdocBorrowsTagBody` (Kind 0x0A) and `JsdocRawTagBody` (Kind 0x0B)
+  // are reserved discriminants; the parser never emits them. These keys
+  // are kept for the future `@borrows` / raw-body specialization.
   JsdocBorrowsTagBody: ['source', 'target'],
   JsdocRawTagBody: [],
   JsdocParameterName: [],
@@ -603,6 +614,12 @@ interface Diagnostic {
 interface ParseResult {
   ast: RemoteJsdocBlock | null  // Internally backed by the lazy decoder
   diagnostics: Diagnostic[]      // message only (no rootIndex needed since it's a single result)
+  sourceFile: RemoteSourceFile   // Hold this alive while accessing `ast` getters
+                                 // (lazy fields read through it)
+  free?: () => void              // WASM only: release the wasm.memory.buffer
+                                 // backing this result; NAPI manages the
+                                 // buffer lifetime via Uint8Array refcounting
+                                 // and does not expose `free`
 }
 
 // New batch API
@@ -617,6 +634,8 @@ interface BatchItem {
 interface BatchResult {
   asts: (RemoteJsdocBlock | null)[]  // Corresponds to each item; null = parse failed
   diagnostics: BatchDiagnostic[]      // Across all items
+  sourceFile: RemoteSourceFile        // Same lifetime contract as ParseResult.sourceFile
+  free?: () => void                   // WASM only (see ParseResult.free)
 }
 
 interface BatchDiagnostic extends Diagnostic {
@@ -624,16 +643,25 @@ interface BatchDiagnostic extends Diagnostic {
 }
 ```
 
-### Unified internal implementation
+### Wrapper internal shape
 
-`parse()` internally calls `parseBatchInternal([{sourceText: text}])` and converts the result into the single-result form:
+`parse()` and `parseBatch()` are thin JS wrappers over two distinct Rust
+entry points (`parse_to_bytes` / `parse_batch_to_bytes`); the wrapper does
+not route single-comment calls through the batch path. The wrapper's only
+job is to construct the `RemoteSourceFile` from the returned bytes and
+forward `diagnostics` (with `rootIndex` only on the batch side):
 
 ```typescript
 function parse(text: string, options?: ParseOptions): ParseResult {
-  const result = parseBatchInternal([{ sourceText: text }], options)
+  const { buffer, diagnostics } = parseJsdocBinding(text, options)
+  const sourceFile = new RemoteSourceFile(buffer, {
+    emptyStringForNull: options?.emptyStringForNull
+  })
   return {
-    ast: result.asts[0],
-    diagnostics: result.diagnostics.map(d => ({ message: d.message }))
+    ast: sourceFile.asts[0] ?? null,
+    diagnostics,
+    sourceFile
+    // free?: () => void  // WASM only; the WASM wrapper appends `() => handle.free()`
   }
 }
 ```
@@ -675,10 +703,11 @@ Binary AST + lazy decoder path**. No coexistence.
 // API after 1.0 (signature is preserved; the contents of the return value change)
 parse(text: string, options?: ParseOptions): ParseResult
 
-interface ParseResult {
-  ast: RemoteJsdocBlock | null  // Old: plain object → New: lazy class
-  diagnostics: Diagnostic[]
-}
+// See "JS Public API (`parse` / `parseBatch`)" above for the full ParseResult
+// interface (ast / diagnostics / sourceFile / free?). Compared to the
+// pre-Binary-AST shape, `ast` switches from a plain object to a
+// `RemoteJsdocBlock` lazy class and the new `sourceFile` field anchors the
+// underlying buffer's lifetime.
 ```
 
 **The API surface is unchanged**: function signatures and property access patterns

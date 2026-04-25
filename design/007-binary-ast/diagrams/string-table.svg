@@ -58,9 +58,9 @@
     <text x="625" y="54" text-anchor="middle" fill="#e8f5ec" font-size="9">8 bytes</text>
 
     <!-- Limit annotation -->
-    <text x="730" y="22" fill="#666" font-size="11" font-family="-apple-system, system-ui, sans-serif" font-style="italic">K ≤ 2^30</text>
+    <text x="730" y="22" fill="#666" font-size="11" font-family="-apple-system, system-ui, sans-serif" font-style="italic">K ≤ 2³⁰ − 2</text>
     <text x="730" y="40" fill="#666" font-size="10" font-family="-apple-system, system-ui, sans-serif" font-style="italic">(30-bit Node Data</text>
-    <text x="730" y="54" fill="#666" font-size="10" font-family="-apple-system, system-ui, sans-serif" font-style="italic">String idx limit)</text>
+    <text x="730" y="54" fill="#666" font-size="10" font-family="-apple-system, system-ui, sans-serif" font-style="italic">String idx limit; -1 None)</text>
   </g>
 
   <!-- ============================================================ -->

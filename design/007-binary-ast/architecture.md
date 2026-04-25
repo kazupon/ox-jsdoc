@@ -127,18 +127,21 @@ Shares the Rust Binary AST from JS within the same process. Passed
 
 ![in-process Sharing (NAPI / WASM)](./diagrams/in-process-sharing.svg)
 
-#### IPC / network (Phase 2 onward) — Secondary use case
+#### IPC / network — Secondary use case
 
 Sends bytes to other processes, other machines, files, etc. The receiving side
-decodes independently in its own language.
+decodes independently in its own language. The encoder entry points
+(`parse_to_bytes` / `parse_batch_to_bytes`) are shipped today; the
+cross-language **decoder** (`decode_binary`) is still planned (see
+[rust-impl.md](./rust-impl.md#public-rust-api)).
 
-![IPC / network sharing (Phase 2 onward)](./diagrams/ipc-network-sharing.svg)
+![IPC / network sharing](./diagrams/ipc-network-sharing.svg)
 
-| Layer                            | Sharing strategy              | Details                                                                                                                                                                                                                                |
-| -------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **NAPI**                         | zero-copy reference           | Bytes in the arena are passed directly to JS via NAPI Buffer. No memcpy                                                                                                                                                                |
-| **WASM**                         | wasm.memory.buffer view       | JS uses `new Uint8Array(wasm.memory.buffer, offset, length)` to view the arena directly                                                                                                                                                |
-| **IPC/network** (Phase 2 onward) | owned via `parse_to_binary()` | Pass sourceText directly, produce a `Vec<u8>`, and send it. The receiving side reads it with its language's decoder (see [rust-impl.md "Public Rust API (Phase 2 onward)"](./rust-impl.md#public-rust-api-phase-2-onward) for details) |
+| Layer           | Sharing strategy                                        | Details                                                                                                                                                                                                                                                       |
+| --------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **NAPI**        | zero-copy reference                                     | Bytes in the arena are passed directly to JS via NAPI Buffer. No memcpy                                                                                                                                                                                       |
+| **WASM**        | wasm.memory.buffer view                                 | JS uses `new Uint8Array(wasm.memory.buffer, offset, length)` to view the arena directly                                                                                                                                                                       |
+| **IPC/network** | owned via `parse_to_bytes()` / `parse_batch_to_bytes()` | Pass sourceText directly, produce a `Vec<u8>` (single comment) or `Vec<u8>` carrying N roots (batch), and send it. The receiving side reads it with its language's decoder (see [rust-impl.md "Public Rust API"](./rust-impl.md#public-rust-api) for details) |
 
 A single format specification supports both in-process (NAPI/WASM) and
 out-of-process (IPC/network/file). In-process uses the JS decoder; out-of-process
@@ -251,10 +254,16 @@ for tag in block.tags() {  // ← Allocates LazyJsdocTag on the Rust heap on acc
 }
 // Once walking finishes and lazy nodes are dropped, the heap is freed too
 
-// IPC / network use case (Phase 2 onward)
-let owned: Vec<u8> = parse_to_binary(&[item], options);
+// IPC / network use case (single comment)
+let result: ParseBytesResult = parse_to_bytes(source_text, options);
+let owned: Vec<u8> = result.binary_bytes;
 //     ↑ Pass sourceText directly and return an independent owned byte buffer
 //       (No API to encode from the typed AST. The Binary AST is always the source of truth.)
+
+// IPC / network use case (batch)
+let result: ParseBatchBytesResult = parse_batch_to_bytes(&items, options);
+let owned: Vec<u8> = result.binary_bytes;
+//     ↑ One buffer carries N roots; cross-comment string dedup applies.
 
 // Reading from another language (Phase 3 onward, ox-jsdoc itself does not use this)
 let decoded = decode_binary(&bytes)?;

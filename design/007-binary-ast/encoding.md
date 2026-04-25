@@ -41,15 +41,23 @@ The Rust enums (`JsdocType`, `JsdocTagBody`, `JsdocTagValue`) have few
 variants, but each variant has a very different field structure. Policy:
 **make each variant its own Kind**:
 
-| Rust enum                        | Binary AST Kind                   |
-| -------------------------------- | --------------------------------- |
-| `JsdocTagBody::Generic(...)`     | `JsdocGenericTagBody` (Kind 0x09) |
-| `JsdocTagBody::Borrows(...)`     | `JsdocBorrowsTagBody` (Kind 0x0A) |
-| `JsdocTagBody::Raw(...)`         | `JsdocRawTagBody` (Kind 0x0B)     |
-| `JsdocTagValue::Parameter(...)`  | `JsdocParameterName` (Kind 0x0C)  |
-| `JsdocTagValue::Namepath(...)`   | `JsdocNamepathSource` (Kind 0x0D) |
-| `JsdocTagValue::Identifier(...)` | `JsdocIdentifier` (Kind 0x0E)     |
-| `JsdocTagValue::Raw(...)`        | `JsdocText` (Kind 0x0F)           |
+| Rust enum                        | Binary AST Kind                                  |
+| -------------------------------- | ------------------------------------------------ |
+| `JsdocTagBody::Generic(...)`     | `JsdocGenericTagBody` (Kind 0x09)                |
+| `JsdocTagBody::Borrows(...)`     | `JsdocBorrowsTagBody` (Kind 0x0A) — **reserved** |
+| `JsdocTagBody::Raw(...)`         | `JsdocRawTagBody` (Kind 0x0B) — **reserved**     |
+| `JsdocTagValue::Parameter(...)`  | `JsdocParameterName` (Kind 0x0C)                 |
+| `JsdocTagValue::Namepath(...)`   | `JsdocNamepathSource` (Kind 0x0D)                |
+| `JsdocTagValue::Identifier(...)` | `JsdocIdentifier` (Kind 0x0E)                    |
+| `JsdocTagValue::Raw(...)`        | `JsdocText` (Kind 0x0F)                          |
+
+> **Reserved Kinds**: `JsdocBorrowsTagBody` (0x0A) / `JsdocRawTagBody` (0x0B)
+> are reserved discriminants — neither the typed parser nor the binary
+> parser currently produces `JsdocTagBody::Borrows` or `JsdocTagBody::Raw`.
+> `@borrows source as target` and similar bodies are emitted as
+> `JsdocGenericTagBody` (0x09). The Kinds, the writer helpers
+> (`write_jsdoc_borrows_tag_body` / `write_jsdoc_raw_tag_body`) and the
+> decoder classes are kept as scaffolding for a future specialization.
 
 Reasons:
 
@@ -73,9 +81,12 @@ Exception: `JsdocType` (Parsed|Raw) does not get a wrapper Kind:
 
 ## Relationship with compat_mode
 
-The current serializer has `SerializeOptions { compat_mode,
-empty_string_for_null, include_positions }`. The Binary AST handles this
-within the single format (Option A: switching via a Header flag):
+The compat-mode toggle lives on the parser side as
+`ParseOptions::compat_mode` (binary AST writer / decoder) and on the
+typed-AST serializer side as `SerializeOptions::compat_mode` plus its
+companion fields `empty_string_for_null`, `include_positions`, `spacing`,
+and `position_map`. The Binary AST handles compat-mode within the single
+format (Option A: switching via a Header flag):
 
 ### Adoption policy
 

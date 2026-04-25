@@ -163,27 +163,28 @@ Add a `JsdocDiagnostic` Kind and place it as a virtual child of each root.
 **Current design (approach c-1)**: The parser builds the Binary AST directly into the
 arena (the typed AST is removed). The JS side shares the binary on the arena via
 zero-copy (NAPI Buffer / WASM memory.buffer). The Rust walker also reads the binary
-through the lazy decoder. The encoder is a secondary use case for IPC/network and
-ships in Phase 2 onward.
+through the lazy decoder. The bytes-only encoder entry points
+(`parse_to_bytes` / `parse_batch_to_bytes`) ship today and target IPC/network
+adoption as a secondary use case (see "Decisions" table below).
 
 ### Decisions
 
-| Item                             | Decision                                                                                                                                                     |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **How to build the Binary AST**  | **Approach c-1**: Modify the parser to write Binary AST directly into the arena without going through a typed AST. The typed AST struct hierarchy is removed |
-| **Rust public API**              | `parse()` returns `binary_bytes: &[u8]` (Binary AST) and `lazy_root: LazyJsdocBlock<'_>` (for the Rust walker). No typed AST is provided                     |
-| **NAPI sharing**                 | (c) zero-copy: pass the binary on the arena to JS via NAPI Buffer (no memcpy)                                                                                |
-| **WASM sharing**                 | JS views the arena region directly with `new Uint8Array(wasm.memory.buffer, offset, length)`                                                                 |
-| **Rust walker**                  | Walks the Binary AST **via the lazy decoder** (Copy-able value structs such as `LazyJsdocBlock`). There is no typed AST                                      |
-| **JS walker (linters, etc.)**    | Reads the Uint8Array (binary on the arena) lazily and only materializes nodes as JS objects on demand (allocated on the JS heap, not the arena)              |
-| **`parse_to_binary` public API** | Implemented in **Phase 2 onward**. Targeted at IPC/network use (no API encodes from a typed AST; the input is `&str`)                                        |
-| **`decode_binary` public API**   | For access from other languages (Go/Python/Rust). ox-jsdoc itself does not use it                                                                            |
+| Item                                                     | Decision                                                                                                                                                      |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **How to build the Binary AST**                          | **Approach c-1**: Modify the parser to write Binary AST directly into the arena without going through a typed AST. The typed AST struct hierarchy is removed  |
+| **Rust public API**                                      | `parse()` returns `binary_bytes: &[u8]` (Binary AST) and `lazy_root: LazyJsdocBlock<'_>` (for the Rust walker). No typed AST is provided                      |
+| **NAPI sharing**                                         | (c) zero-copy: pass the binary on the arena to JS via NAPI Buffer (no memcpy)                                                                                 |
+| **WASM sharing**                                         | JS views the arena region directly with `new Uint8Array(wasm.memory.buffer, offset, length)`                                                                  |
+| **Rust walker**                                          | Walks the Binary AST **via the lazy decoder** (Copy-able value structs such as `LazyJsdocBlock`). There is no typed AST                                       |
+| **JS walker (linters, etc.)**                            | Reads the Uint8Array (binary on the arena) lazily and only materializes nodes as JS objects on demand (allocated on the JS heap, not the arena)               |
+| **`parse_to_bytes` / `parse_batch_to_bytes` public API** | Shipped. Targets IPC/network use (no API encodes from a typed AST; the input is `&str`). See [rust-impl.md "Public Rust API"](./rust-impl.md#public-rust-api) |
+| **`decode_binary` public API**                           | For access from other languages (Go/Python/Rust). ox-jsdoc itself does not use it. Tracked for a future phase                                                 |
 
-### API shape if exposed in Phase 2 onward (Option 2B adopted)
+### Shipped API shape (Option 2C adopted)
 
 Because the typed AST is removed (approach c-1), the API takes `&str` (sourceText)
 directly, runs the parser internally, and produces the Binary AST byte stream
-(see [rust-impl.md "Public Rust API (Phase 2 onward)"](./rust-impl.md#public-rust-api-phase-2-onward)):
+(see [rust-impl.md "Public Rust API"](./rust-impl.md#public-rust-api)):
 
 ```rust
 pub struct BatchItem<'a> {
@@ -191,27 +192,30 @@ pub struct BatchItem<'a> {
     pub base_offset: u32,         // absolute offset within the original file (default 0)
 }
 
-/// Produce a Binary AST in batch (internally calls parser_into_binary)
-pub fn parse_to_binary<'a>(
-    items: &[BatchItem<'a>],
-    options: SerializeOptions,
-) -> Vec<u8>
+/// Produce a Binary AST byte stream for one comment.
+pub fn parse_to_bytes(source: &str, options: ParseOptions) -> ParseBytesResult
 
-/// Re-serialize an existing Binary AST byte stream (for persistent caches; usually a no-op)
-pub fn reserialize_binary(bytes: &[u8]) -> Vec<u8>
+/// Produce a Binary AST byte stream for N comments (single shared buffer +
+/// cross-comment string dedup). N=1 yields a buffer that is byte-for-byte
+/// equivalent to `parse_to_bytes` only if the inputs match.
+pub fn parse_batch_to_bytes(items: &[BatchItem<'_>], options: ParseOptions) -> ParseBatchBytesResult
 ```
 
 Note: The "encode from typed AST to Binary AST" use case **does not exist**
 (after removing the typed AST, the source of truth is always the Binary AST byte stream).
 
-Reason for adoption (rationale for rejecting Option 2A/2C):
+The implementation kept Option 2C ("separate functions for single and batch")
+rather than the originally-planned Option 2B (single `parse_to_binary` taking
+`&[BatchItem]`) because:
 
-- **Room for extension**: We can add fields to `BatchItem` later (e.g., `language_mode`)
-- **Readability**: The struct name `BatchItem` makes intent obvious
-- **API unification**: A single comment can be passed as `&[item][..]`, so one
-  `parse_to_binary` function handles both cases
-- **Smooth napi integration**: It is easy to map directly to a JS-side `BatchItem` type
-  later via `#[napi(object)]`
+- **Result-type clarity**: `ParseBytesResult` (one root) vs
+  `ParseBatchBytesResult` (N roots, per-diagnostic `root_index`) need
+  different result shapes anyway.
+- **Caller ergonomics**: passing `&[item; 1]` for a single comment was
+  awkward in practice, especially from NAPI/WASM bindings.
+- **Naming**: `_to_bytes` is more accurate than `_to_binary` because the
+  return value is a byte stream (`Vec<u8>` / `Box<[u8]>`), not a Rust
+  "binary" struct.
 
 ### Other options considered (not adopted)
 
@@ -220,22 +224,22 @@ Reason for adoption (rationale for rejecting Option 2A/2C):
 ```rust
 pub fn parse_to_binary<'a>(
     items: &[(&'a str, u32)],  // (source_text, base_offset)
-    options: SerializeOptions,
+    options: ParseOptions,
 ) -> Vec<u8>
 ```
 
 Reason for non-adoption: Tuples make intent unclear, and adding fields would be a
 breaking change.
 
-**Option 2C: Separate functions for single and batch**
+**Option 2B: Single function taking `&[BatchItem]` for both single and batch**
 
 ```rust
-pub fn parse_to_binary_single<'a>(...) -> Vec<u8>
-pub fn parse_to_binary_batch<'a>(...) -> Vec<u8>
+pub fn parse_to_binary<'a>(items: &[BatchItem<'a>], options: ParseOptions) -> Vec<u8>
 ```
 
-Reason for non-adoption: There is no need to split the API into two; a single comment
-can be expressed as `&[item; 1]`.
+Reason for non-adoption (in favor of the shipped Option 2C above): single
+and batch results need different shapes, and single-comment callers should
+not be forced to wrap one item in a slice.
 
 ---
 
@@ -276,18 +280,22 @@ interface BatchDiagnostic extends Diagnostic {
 }
 ```
 
-### Internal implementation unification
+### Wrapper internal shape
 
-`parse()` internally calls `parseBatchInternal([{sourceText: text}])` and converts
-the result into the single-item form:
+`parse()` and `parseBatch()` are thin JS wrappers over two distinct Rust
+entry points (`parse_to_bytes` / `parse_batch_to_bytes`) — single-comment
+calls do **not** route through the batch path. Both wrappers construct a
+`RemoteSourceFile` from the returned bytes and forward `diagnostics`
+(`rootIndex` is added on the batch side only):
 
 ```typescript
 function parse(text: string, options?: ParseOptions): ParseResult {
-  const result = parseBatchInternal([{ sourceText: text }], options)
-  return {
-    ast: result.asts[0],
-    diagnostics: result.diagnostics.map(d => ({ message: d.message })) // strip rootIndex
-  }
+  const { buffer, diagnostics } = parseJsdocBinding(text, options)
+  const sourceFile = new RemoteSourceFile(buffer, {
+    emptyStringForNull: options?.emptyStringForNull
+  })
+  return { ast: sourceFile.asts[0] ?? null, diagnostics, sourceFile }
+  // WASM wrapper additionally returns `free: () => handle.free()`.
 }
 ```
 
@@ -456,10 +464,10 @@ hurts usability.
 
 ## Summary of decisions
 
-| Point               | Decision                                                                                                                                              |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1: Diagnostic array | Option 1A (Diagnostics section in the Header, ordered by root_index, 8 bytes fixed)                                                                   |
-| 2: Rust encoder API | **Approach c-1** (parser writes Binary AST directly into the arena, typed AST removed); `parse_to_binary` exposed in Phase 2 onward (Option 2B shape) |
-| 3: JS API naming    | Option 3A (split `parse` and `parseBatch`, maintain API compatibility, provide `baseOffset`)                                                          |
-| 4: Empty comments   | Option 4A (root index = 0 sentinel) plus a required diagnostic on failure; failure location is reconstructed from the input                           |
-| 5: Source text      | Option 5C (each BatchItem owns its sourceText, root array 12B/root, Pos/End relative)                                                                 |
+| Point               | Decision                                                                                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1: Diagnostic array | Option 1A (Diagnostics section in the Header, ordered by root_index, 8 bytes fixed)                                                                                             |
+| 2: Rust encoder API | **Approach c-1** (parser writes Binary AST directly into the arena, typed AST removed); shipped as `parse_to_bytes` (single) + `parse_batch_to_bytes` (batch) — Option 2C shape |
+| 3: JS API naming    | Option 3A (split `parse` and `parseBatch`, maintain API compatibility, provide `baseOffset`)                                                                                    |
+| 4: Empty comments   | Option 4A (root index = 0 sentinel) plus a required diagnostic on failure; failure location is reconstructed from the input                                                     |
+| 5: Source text      | Option 5C (each BatchItem owns its sourceText, root array 12B/root, Pos/End relative)                                                                                           |

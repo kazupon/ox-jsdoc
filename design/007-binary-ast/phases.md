@@ -190,8 +190,12 @@ pub fn validate_comment(comment: &JsdocBlock<'_>, options: ValidationOptions) ->
         if let Some(body) = tag.body.as_ref() {
             match body.as_ref() {
                 JsdocTagBody::Generic(g) => { /* g.value, g.description */ }
-                JsdocTagBody::Borrows(_) => { /* */ }
-                JsdocTagBody::Raw(_) => { /* */ }
+                // `Borrows` / `Raw` arms are listed for exhaustiveness — the
+                // parser does not currently emit these variants (see
+                // `ast-nodes.md` "Reserved Kinds"). Concrete consumers can
+                // treat them as no-ops until a future specialization ships.
+                JsdocTagBody::Borrows(_) => { /* reserved */ }
+                JsdocTagBody::Raw(_) => { /* reserved */ }
             }
         }
     }
@@ -205,8 +209,8 @@ pub fn validate_comment(comment: LazyJsdocBlock<'_>, options: ValidationOptions)
         if let Some(body) = tag.body() {
             match body {
                 LazyJsdocTagBody::Generic(g) => { /* g.value(), g.description() */ }
-                LazyJsdocTagBody::Borrows(_) => { /* */ }
-                LazyJsdocTagBody::Raw(_) => { /* */ }
+                LazyJsdocTagBody::Borrows(_) => { /* reserved */ }
+                LazyJsdocTagBody::Raw(_) => { /* reserved */ }
             }
         }
     }
@@ -232,11 +236,12 @@ externally-public APIs.
 - **Batch support**: Root Index Array, Diagnostics section, `parseBatch()`
   API, `BatchItem` struct
 - **Public Rust API** (post-typed-AST API; see
-  [rust-impl.md "Public Rust API (Phase 2 onward)"](./rust-impl.md#public-rust-api-phase-2-onward)):
-  - `parse_to_binary(items: &[BatchItem<'_>], options) -> Vec<u8>` — for
-    IPC/network use cases; input is `&str` (sourceText)
-  - `reserialize_binary(bytes: &[u8]) -> Vec<u8>` — for persistent caches,
-    etc. (typically a no-op)
+  [rust-impl.md "Public Rust API"](./rust-impl.md#public-rust-api)):
+  - `parse_to_bytes(source: &str, options) -> ParseBytesResult` — single
+    comment, returns `binary_bytes: Vec<u8>` + diagnostics
+  - `parse_batch_to_bytes(items: &[BatchItem<'_>], options) -> ParseBatchBytesResult`
+    — N comments in one buffer with cross-comment string dedup, returns
+    `binary_bytes: Box<[u8]>` + per-item diagnostics
   - No API to encode from the typed AST to binary (the source of truth is
     always the Binary AST)
 - Full operation of batch benchmarks (scenarios B / G) (single → batch 1000

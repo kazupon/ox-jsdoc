@@ -562,58 +562,85 @@ The **parent index** does not need backpatching because the parent's index is
 already known when the child is written. **next_sibling** is patched into bytes
 20-23 of the previous sibling at the moment the next sibling is emitted.
 
-### PositionMap (UTF-8 -> UTF-16 conversion)
+### Utf16PositionMap (UTF-8 → UTF-16 conversion)
 
-A table that converts the UTF-8 byte offset of each sourceText to a UTF-16 code
-unit offset. Equivalent to tsgo's `PositionMap`.
+Converts each sourceText's UTF-8 byte offset to a UTF-16 code unit
+offset for the wire format's Pos/End fields. Lives at
+[`crate::utf16::Utf16PositionMap`] and is rebuilt per root via
+[`BinaryWriter::set_source_for_root`] before the matching `emit_block`
+walk. The algorithm mirrors tsgo's `internal/ast/positionmap.go` —
+sparse delta table per non-ASCII character + binary search lookup.
 
 ```rust
-pub struct PositionMap {
-    /// None: ASCII-only (identity map, no table needed)
-    /// Some: mapping table from UTF-8 byte offset to UTF-16 code unit offset (sparse)
-    table: Option<Vec<(u32, u32)>>,  // sorted array of (utf8_offset, utf16_offset)
+pub struct Utf16PositionMap {
+    /// True when the source contains no byte ≥ 0x80, so byte and UTF-16
+    /// offsets coincide and no table lookup is required.
+    ascii_only: bool,
+    /// Sparse — one entry per multi-byte character. Empty for
+    /// ASCII-only sources.
+    entries: Vec<Entry>,
 }
 
-impl PositionMap {
-    /// Build the map by scanning sourceText once
-    pub fn build(source: &str) -> Self {
-        // ASCII-only fast path: if every byte is < 0x80, use the identity map
-        if source.bytes().all(|b| b < 0x80) {
-            return PositionMap { table: None };
-        }
+#[derive(Copy, Clone)]
+struct Entry {
+    /// UTF-8 byte offset right after the multi-byte character.
+    utf8_pos: u32,
+    /// Cumulative `(utf8 − utf16)` delta after this character.
+    delta: u32,
+}
 
-        // If non-ASCII characters are included: record (utf8_pos, utf16_pos) for each char
-        let mut table = Vec::new();
-        let mut utf8_pos = 0u32;
-        let mut utf16_pos = 0u32;
-        for ch in source.chars() {
-            table.push((utf8_pos, utf16_pos));
-            utf8_pos += ch.len_utf8() as u32;
-            utf16_pos += ch.len_utf16() as u32;
+impl Utf16PositionMap {
+    /// Build a map for the given source text. ASCII-only sources allocate
+    /// nothing; sources with K multi-byte characters allocate K × 8 bytes.
+    pub fn build(source: &str) -> Self {
+        // SIMD-vectorized fast pre-check (`str::is_ascii`).
+        if source.is_ascii() {
+            return Self { ascii_only: true, entries: Vec::new() };
         }
-        table.push((utf8_pos, utf16_pos));  // sentinel (end)
-        PositionMap { table: Some(table) }
+        // Walk the source and record one entry per multi-byte character.
+        let bytes = source.as_bytes();
+        let mut entries = Vec::with_capacity(bytes.len() / 4);
+        let mut delta: u32 = 0;
+        let mut i = 0usize;
+        while i < bytes.len() {
+            if bytes[i] < 0x80 { i += 1; continue; }
+            let ch = source[i..].chars().next().unwrap();
+            let utf8_size = ch.len_utf8() as u32;
+            delta += utf8_size - ch.len_utf16() as u32;
+            i += utf8_size as usize;
+            entries.push(Entry { utf8_pos: i as u32, delta });
+        }
+        Self { ascii_only: false, entries }
     }
 
-    /// UTF-8 byte offset -> UTF-16 code unit offset
-    /// Identity (no cost) if ASCII-only; binary search O(log N) for non-ASCII
+    /// Identity map for the "no source set yet" initial state.
+    pub const fn identity() -> Self {
+        Self { ascii_only: true, entries: Vec::new() }
+    }
+
+    /// O(log K) lookup; identity for ASCII-only sources.
     #[inline]
-    pub fn to_utf16(&self, utf8_offset: u32) -> u32 {
-        match &self.table {
-            None => utf8_offset,  // identity (ASCII-only)
-            Some(table) => {
-                let i = table.partition_point(|(u8_off, _)| *u8_off <= utf8_offset);
-                table[i.saturating_sub(1)].1
-            }
-        }
+    pub fn utf8_to_utf16(&self, byte_offset: u32) -> u32 {
+        if self.ascii_only { return byte_offset; }
+        let pos = self.entries.partition_point(|e| e.utf8_pos <= byte_offset);
+        if pos == 0 { byte_offset } else { byte_offset - self.entries[pos - 1].delta }
     }
 }
 ```
 
-**Effect of the ASCII-only optimization**: In practice, most JSDoc comments
-consist of ASCII only, so both table construction and lookup cost are zero.
-`PositionMap::build` itself completes with a single full byte scan (the ASCII
-check).
+Per-character delta rules (mirrors tsgo `PositionMap`):
+
+| Code point        | UTF-8 bytes |  UTF-16 code units | delta |
+| ----------------- | ----------: | -----------------: | ----: |
+| U+0000..U+007F    |           1 |                  1 |     0 |
+| U+0080..U+07FF    |           2 |                  1 |    +1 |
+| U+0800..U+FFFF    |           3 |                  1 |    +2 |
+| U+10000..U+10FFFF |           4 | 2 (surrogate pair) |    +2 |
+
+**Effect of the ASCII-only optimization**: In practice, most JSDoc
+comments consist of ASCII only, so both table construction and lookup
+cost are zero — `Utf16PositionMap::build` returns the identity map after
+a single SIMD-accelerated `str::is_ascii()` scan.
 
 ## Code generation
 
@@ -649,12 +676,13 @@ positions, etc.), the same decoder classes work as-is. Only binding-specific
 code (buffer acquisition, initialization, lifecycle) is implemented in
 separate packages.
 
-## Public Rust API (Phase 2 onward)
+## Public Rust API
 
-For ancillary use cases such as IPC / over-the-network / persistent caches, a
-public encoder API is provided in Phase 2 onward. Because the typed AST is
-already removed (Approach c-1), the input directly takes **`&str` (sourceText)**
-and internally launches the parser to generate Binary AST bytes:
+The `ox_jsdoc_binary` crate exposes four entry points (Approach c-1: the
+typed AST is removed and the parser writes Binary AST bytes directly).
+Each function takes **`&str` (sourceText)** as input — there is no
+"encode from typed AST" path because the Binary AST byte stream is the
+source of truth.
 
 ```rust
 pub struct BatchItem<'a> {
@@ -662,23 +690,53 @@ pub struct BatchItem<'a> {
     pub base_offset: u32,        // absolute offset within the original file (default 0)
 }
 
-/// Generate Binary AST per batch (internally calls parser_into_binary)
-pub fn parse_to_binary<'a>(
-    items: &[BatchItem<'a>],
-    options: SerializeOptions,
-) -> Vec<u8>
+pub struct ParseOptions {
+    pub compat_mode: bool,             // jsdoccomment-compatible AST shape; sets Header bit0
+    pub base_offset: u32,              // absolute byte offset of `source` in the original file
+    pub fence_aware: bool,             // suppress @tag recognition inside fenced code blocks
+    pub parse_types: bool,             // enable type expression parser for `{...}`
+    pub type_parse_mode: type_data::ParseMode, // jsdoc | closure | typescript (only when parse_types)
+}
 
-/// Re-serialize an existing lazy_root (no typed AST is involved)
-pub fn reserialize_binary(bytes: &[u8]) -> Vec<u8>  // typically close to a no-op
+// --- Single comment ---------------------------------------------------------
+
+/// Parse one comment and return the lazy `RemoteJsdocBlock` plus the byte
+/// stream. `binary_bytes` is `&'arena [u8]` (no extra copy beyond the
+/// arena allocation).
+pub fn parse<'arena>(
+    arena: &'arena Allocator,
+    source: &'arena str,
+    options: ParseOptions,
+) -> ParseResult<'arena>
+
+/// Bytes-only sibling for binding code (NAPI `Uint8Array`, WASM
+/// `Box<[u8]>`). Skips the arena copy and returns an owned `Vec<u8>`.
+pub fn parse_to_bytes(source: &str, options: ParseOptions) -> ParseBytesResult
+
+// --- Batch ------------------------------------------------------------------
+
+/// Parse N comments into a single shared buffer with cross-comment
+/// string dedup. Per-comment diagnostics carry `root_index` so callers
+/// can attribute them back to `items[i]`.
+pub fn parse_batch<'arena>(
+    arena: &'arena Allocator,
+    items: &[BatchItem<'_>],
+    options: ParseOptions,
+) -> BatchResult<'arena>
+
+/// Bytes-only sibling of [`parse_batch`].
+pub fn parse_batch_to_bytes(
+    items: &[BatchItem<'_>],
+    options: ParseOptions,
+) -> ParseBatchBytesResult
 ```
 
-Note: A use case of "encoding from typed AST to Binary AST" **does not exist**
-(because, with the typed AST removed, the source of truth is always the Binary
-AST byte stream). To reuse byte streams for persistent caches and the like,
-simply save the parser output as-is.
-
-The implementation just calls the internal binary writer. No implementation is
-required in Phase 1.
+The split into single + batch (Option 2C in
+[batch-processing.md](./batch-processing.md#shipped-api-shape-option-2c-adopted))
+matches the typical usage shape: tools that parse one comment at a time
+(LSP hover, fixers) prefer `parse` / `parse_to_bytes`; lint runners that
+walk every comment in a file prefer `parse_batch` / `parse_batch_to_bytes`
+to amortize the NAPI/WASM crossing cost across all comments.
 
 ## Public Rust API (Phase 3 onward)
 

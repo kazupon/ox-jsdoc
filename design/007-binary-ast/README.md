@@ -103,7 +103,7 @@ order during implementation:
    - Lazy Visitor trait
    - Sharing with NAPI/WASM
    - Code generation
-   - Phase 2/3 public Rust API (`parse_to_binary`, `reserialize_binary`)
+   - Public Rust API (`parse` / `parse_to_bytes` / `parse_batch` / `parse_batch_to_bytes`)
    - Performance expectations
 
 ### Process

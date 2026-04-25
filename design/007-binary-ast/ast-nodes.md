@@ -49,27 +49,44 @@ Notes:
 
 ## Comment AST (`crates/ox_jsdoc/src/ast.rs`)
 
-| #   | Kind                   | Main fields                                                                                                                                                                                  | Notes                       |
-| --- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
-| 1   | `JsdocBlock`           | `description?`, `tags[]`, `description_lines[]`, `inline_tags[]`, delimiter group (7), line index group (6, for compat)                                                                      | Root                        |
-| 2   | `JsdocDescriptionLine` | `description`, delimiter group (3: `delimiter`, `post_delimiter`, `initial`)                                                                                                                 |                             |
-| 3   | `JsdocTag`             | `tag`, `raw_type?`, `parsed_type?`, `name?`, `optional`, `default_value?`, `description?`, `raw_body?`, `body?`, `type_lines[]`, `description_lines[]`, `inline_tags[]`, delimiter group (7) | 20 fields                   |
-| 4   | `JsdocTagName`         | `value`                                                                                                                                                                                      |                             |
-| 5   | `JsdocTagNameValue`    | `raw`                                                                                                                                                                                        |                             |
-| 6   | `JsdocTypeSource`      | `raw`                                                                                                                                                                                        | Text inside `{...}`         |
-| 7   | `JsdocTypeLine`        | `raw_type`, delimiter group (3: `delimiter`, `post_delimiter`, `initial`)                                                                                                                    |                             |
-| 8   | `JsdocInlineTag`       | `tag`, `namepath_or_url?`, `text?`, `format`, `raw_body?`                                                                                                                                    |                             |
-| 9   | `JsdocGenericTagBody`  | `type_source?`, `value?`, `separator?`, `description?`                                                                                                                                       |                             |
-| 10  | `JsdocBorrowsTagBody`  | `source`, `target`                                                                                                                                                                           |                             |
-| 11  | `JsdocRawTagBody`      | `raw`                                                                                                                                                                                        |                             |
-| 12  | `JsdocParameterName`   | `path`, `optional`, `default_value?`                                                                                                                                                         | `JsdocTagValue::Parameter`  |
-| 13  | `JsdocNamepathSource`  | `raw`                                                                                                                                                                                        | `JsdocTagValue::Namepath`   |
-| 14  | `JsdocIdentifier`      | `name`                                                                                                                                                                                       | `JsdocTagValue::Identifier` |
-| 15  | `JsdocText`            | `value`                                                                                                                                                                                      | `JsdocTagValue::Raw`        |
+| #   | Kind                   | Main fields                                                                                                                                                                                  | Notes                        |
+| --- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| 1   | `JsdocBlock`           | `description?`, `tags[]`, `description_lines[]`, `inline_tags[]`, delimiter group (7), line index group (6, for compat)                                                                      | Root                         |
+| 2   | `JsdocDescriptionLine` | `description`, delimiter group (3: `delimiter`, `post_delimiter`, `initial`)                                                                                                                 |                              |
+| 3   | `JsdocTag`             | `tag`, `raw_type?`, `parsed_type?`, `name?`, `optional`, `default_value?`, `description?`, `raw_body?`, `body?`, `type_lines[]`, `description_lines[]`, `inline_tags[]`, delimiter group (7) | 20 fields                    |
+| 4   | `JsdocTagName`         | `value`                                                                                                                                                                                      |                              |
+| 5   | `JsdocTagNameValue`    | `raw`                                                                                                                                                                                        |                              |
+| 6   | `JsdocTypeSource`      | `raw`                                                                                                                                                                                        | Text inside `{...}`          |
+| 7   | `JsdocTypeLine`        | `raw_type`, delimiter group (3: `delimiter`, `post_delimiter`, `initial`)                                                                                                                    |                              |
+| 8   | `JsdocInlineTag`       | `namepath_or_url?`, `text?`, `format`, `raw_body?`                                                                                                                                           | `tag` is reserved (see note) |
+| 9   | `JsdocGenericTagBody`  | `type_source?`, `value?`, `separator?`, `description?`                                                                                                                                       |                              |
+| 10  | `JsdocBorrowsTagBody`  | `source`, `target`                                                                                                                                                                           | Reserved (see note)          |
+| 11  | `JsdocRawTagBody`      | `raw`                                                                                                                                                                                        | Reserved (see note)          |
+| 12  | `JsdocParameterName`   | `path`, `optional`, `default_value?`                                                                                                                                                         | `JsdocTagValue::Parameter`   |
+| 13  | `JsdocNamepathSource`  | `raw`                                                                                                                                                                                        | `JsdocTagValue::Namepath`    |
+| 14  | `JsdocIdentifier`      | `name`                                                                                                                                                                                       | `JsdocTagValue::Identifier`  |
+| 15  | `JsdocText`            | `value`                                                                                                                                                                                      | `JsdocTagValue::Raw`         |
 
 Notes: the Rust enums `JsdocTagBody` (Generic|Borrows|Raw) and `JsdocTagValue`
 (Parameter|Namepath|Identifier|Raw) are expanded so that **each variant becomes
 an independent Kind** (see "Handling nodes with variants" below).
+
+**Reserved Kinds (currently never emitted by the parser):**
+
+- **`JsdocInlineTag.tag`** — the inline-tag name (`link`, `tutorial`, …) is
+  parsed but **not preserved in the binary AST**. The Kind 0x04
+  (`JsdocTagName`) record that the spec previously placed as a child of
+  `JsdocInlineTag` is intentionally dropped during emit. Consumers that
+  need the inline-tag name should derive it from the source `range`
+  rather than the AST.
+- **`JsdocBorrowsTagBody` (Kind 0x0A)** — the typed AST defines a
+  `JsdocTagBody::Borrows` variant for `@borrows source as target`, but no
+  parser path currently produces it; `@borrows` bodies are emitted as
+  `JsdocGenericTagBody`. Kind 0x0A and the `RemoteJsdocBorrowsTagBody`
+  decoder class are kept reserved for a future `@borrows` specialization.
+- **`JsdocRawTagBody` (Kind 0x0B)** — same status: `JsdocTagBody::Raw` is
+  defined but never produced. Reserved for future specialization.
+
 `JsdocType` (Parsed|Raw) does not get a wrapper; instead, `JsdocTag.parsedType`
 points directly to a TypeNode (rationale: 1:1 correspondence with the existing
 JSON output).

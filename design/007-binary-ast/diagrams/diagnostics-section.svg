@@ -125,7 +125,7 @@
     <text x="160" y="60" text-anchor="middle" font-size="10" fill="#666" font-style="italic">(stringOffsets[message_index])</text>
     <line x1="20" y1="72" x2="300" y2="72" stroke="#888" stroke-dasharray="2,2"/>
     <text x="160" y="89" text-anchor="middle" font-size="10" fill="#666" font-weight="bold">Range:</text>
-    <text x="160" y="105" text-anchor="middle" font-size="10" fill="#444">0 ≤ message_index ≤ 65,535 (u16 limit)</text>
+    <text x="160" y="105" text-anchor="middle" font-size="10" fill="#444">0 ≤ message_index ≤ 2³⁰ − 2 (u32 wire field; shared String Offsets cap)</text>
   </g>
 
   <!-- ============================================================ -->

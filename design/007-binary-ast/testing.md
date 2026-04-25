@@ -30,7 +30,7 @@ Key decisions:
 - `format/header.rs`: Header is 40 bytes, Major+Minor 4-bit packing works correctly
 - `format/kind.rs`: single-instruction optimization checks (`is_type_node` etc.) are correct for all 256 values
 - `format/node_record.rs`: 24-byte layout, offsets of each field
-- `format/string_table.rs`: u16 upper bound, overflow detection
+- `format/string_table.rs`: 8-byte entry layout, u32 capacity bound (`STRING_PAYLOAD_NONE_SENTINEL` reserved)
 - Covered exhaustively via `#[cfg(test)] mod tests` inside each module
 
 ## 2. Encoder tests (writer → expected byte sequence)
