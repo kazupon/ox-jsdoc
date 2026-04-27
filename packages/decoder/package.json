@@ -1,12 +1,12 @@
 {
   "name": "@ox-jsdoc/decoder",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Lazy JS decoder for the ox-jsdoc Binary AST format. Shared by NAPI and WASM bindings.",
   "keywords": [
-    "jsdoc",
-    "parser",
+    "binary-ast",
     "decoder",
-    "binary-ast"
+    "jsdoc",
+    "parser"
   ],
   "license": "MIT",
   "author": {
@@ -39,10 +39,10 @@
   "scripts": {
     "test": "vp test run --config vitest.config.ts"
   },
-  "engines": {
-    "node": "^20.19.0 || >=22.12.0"
-  },
   "devDependencies": {
     "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   }
 }
