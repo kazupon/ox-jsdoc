@@ -199,6 +199,20 @@ jobs:
       - name: Smoke test published packages
         run: |
           version=$(node -p "require('./napi/ox-jsdoc/package.json').version")
+          for package_name in ox-jsdoc ox-jsdoc-binary; do
+            for attempt in {1..12}; do
+              if npm view "${package_name}@${version}" version >/dev/null 2>&1; then
+                echo "${package_name}@${version} is available on npm"
+                break
+              fi
+              if [[ "${attempt}" == "12" ]]; then
+                echo "${package_name}@${version} is not available on npm after waiting" >&2
+                exit 1
+              fi
+              echo "Waiting for ${package_name}@${version} to become available on npm (${attempt}/12)"
+              sleep 10
+            done
+          done
           tmpdir=$(mktemp -d)
           cd "${tmpdir}"
           npm init -y
