@@ -1,0 +1,2 @@
+# Intentionally present so npm does not fall back to the repository .gitignore.
+# The generated src-js/bindings.* loader is gitignored but must be published.
