@@ -1,6 +1,6 @@
 {
   "name": "ox-jsdoc-binary",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "High-performance JSDoc parser that returns a lazy Binary AST decoder.",
   "keywords": [
     "binary-ast",

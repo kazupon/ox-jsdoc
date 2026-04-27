@@ -1,6 +1,6 @@
 {
   "name": "@ox-jsdoc/decoder",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Lazy JS decoder for the ox-jsdoc Binary AST format. Shared by NAPI and WASM bindings.",
   "keywords": [
     "binary-ast",

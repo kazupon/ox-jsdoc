@@ -129,7 +129,10 @@ jobs:
         with:
           if-no-files-found: error
           name: ${{ matrix.package_name }}-${{ matrix.target }}
-          path: ${{ matrix.package_path }}/**/*.node
+          path: |
+            ${{ matrix.package_path }}/**/*.node
+            ${{ matrix.package_path }}/**/bindings.js
+            ${{ matrix.package_path }}/**/bindings.d.ts
 
   publish:
     name: Publish NAPI packages
@@ -180,8 +183,12 @@ jobs:
           pnpm -C "${package_path}" exec napi create-npm-dirs --package-json-path ../../${package_path}/package.json --npm-dir ../../${npm_dir}
           pnpm -C "${package_path}" exec napi artifacts --package-json-path ../../${package_path}/package.json --output-dir ../../artifacts --npm-dir ../../${npm_dir}
           pnpm -C "${package_path}" exec napi pre-publish --no-gh-release -t npm --package-json-path ../../${package_path}/package.json --npm-dir ../../${npm_dir}
+          cp artifacts/ox-jsdoc-x86_64-unknown-linux-gnu/src-js/bindings.js "${package_path}/src-js/bindings.js"
+          cp artifacts/ox-jsdoc-x86_64-unknown-linux-gnu/src-js/bindings.d.ts "${package_path}/src-js/bindings.d.ts"
           cd "${package_path}"
           node -e 'const fs = require("node:fs"); const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")); const required = ["src-js/bindings.js", "src-js/bindings.d.ts", "src-js/index.js", "src-js/index.d.ts"]; pkg.files = [...new Set([...(pkg.files || []), ...required])]; fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");'
+          node -e 'const fs = require("node:fs"); for (const file of ["src-js/bindings.js", "src-js/bindings.d.ts", "src-js/index.js", "src-js/index.d.ts"]) { if (!fs.existsSync(file)) throw new Error(file + " is missing"); }'
+          npm pack --dry-run --json | node -e 'const fs = require("node:fs"); const [{ files }] = JSON.parse(fs.readFileSync(0, "utf8")); const paths = new Set(files.map(file => file.path)); for (const file of ["src-js/bindings.js", "src-js/bindings.d.ts", "src-js/index.js", "src-js/index.d.ts"]) { if (!paths.has(file)) throw new Error(file + " is missing from npm pack"); }'
           publish_flags=(--access public --no-git-checks)
           pnpm publish "${publish_flags[@]}"
 
@@ -193,8 +200,12 @@ jobs:
           pnpm -C "${package_path}" exec napi create-npm-dirs --package-json-path ../../${package_path}/package.json --npm-dir ../../${npm_dir}
           pnpm -C "${package_path}" exec napi artifacts --package-json-path ../../${package_path}/package.json --output-dir ../../artifacts --npm-dir ../../${npm_dir}
           pnpm -C "${package_path}" exec napi pre-publish --no-gh-release -t npm --package-json-path ../../${package_path}/package.json --npm-dir ../../${npm_dir}
+          cp artifacts/ox-jsdoc-binary-x86_64-unknown-linux-gnu/src-js/bindings.js "${package_path}/src-js/bindings.js"
+          cp artifacts/ox-jsdoc-binary-x86_64-unknown-linux-gnu/src-js/bindings.d.ts "${package_path}/src-js/bindings.d.ts"
           cd "${package_path}"
           node -e 'const fs = require("node:fs"); const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")); const required = ["src-js/bindings.js", "src-js/bindings.d.ts", "src-js/index.js", "src-js/index.d.ts"]; pkg.files = [...new Set([...(pkg.files || []), ...required])]; fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");'
+          node -e 'const fs = require("node:fs"); for (const file of ["src-js/bindings.js", "src-js/bindings.d.ts", "src-js/index.js", "src-js/index.d.ts"]) { if (!fs.existsSync(file)) throw new Error(file + " is missing"); }'
+          npm pack --dry-run --json | node -e 'const fs = require("node:fs"); const [{ files }] = JSON.parse(fs.readFileSync(0, "utf8")); const paths = new Set(files.map(file => file.path)); for (const file of ["src-js/bindings.js", "src-js/bindings.d.ts", "src-js/index.js", "src-js/index.d.ts"]) { if (!paths.has(file)) throw new Error(file + " is missing from npm pack"); }'
           publish_flags=(--access public --no-git-checks)
           pnpm publish "${publish_flags[@]}"
 
