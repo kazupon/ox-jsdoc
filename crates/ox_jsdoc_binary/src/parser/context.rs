@@ -22,8 +22,9 @@
 //! while still allowing the parser to make local decisions (e.g. drop
 //! empty lists).
 //!
-//! Phase 1.2a-cont will add the `parsed_type` emission once
-//! `parser/type_parse.rs` lands.
+//! `parsed_type` emission is already integrated through the side-table path
+//! used by `TagData`; ongoing work here is about keeping the structural parse
+//! and emit layers aligned with the format and typed-AST behavior.
 
 use oxc_allocator::{Allocator, StringBuilder, Vec as ArenaVec};
 use oxc_span::Span;

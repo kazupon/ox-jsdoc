@@ -12,12 +12,13 @@
 //! [`super::writer`] that appends bytes directly into the arena-backed
 //! Binary AST buffer. There is no intermediate typed AST.
 //!
-//! Phase 1.2a — port-in-progress.
+//! Phase 1.2 parser path.
 //!
-//! `scanner` / `checkpoint` / `diagnostics` are verbatim ports from the
-//! typed-AST parser; they have no AST dependency. The structural parser
-//! (`context`) and the type expression parser (`type_parse`) land in
-//! follow-up commits inside this same Phase.
+//! `scanner` / `checkpoint` / `diagnostics` are ports from the typed-AST
+//! parser with no AST dependency. The structural parser (`context`) and the
+//! type expression parser (`type_parse`) are wired into this Binary AST path;
+//! ongoing Phase 1.2 work is focused on parity, cleanup, and binding/benchmark
+//! follow-through rather than on landing the basic parser skeleton itself.
 
 pub mod checkpoint;
 pub mod context;
@@ -167,9 +168,10 @@ pub struct ParseBytesResult {
 /// (the byte buffer, intern table, diagnostics) so the caller does not need
 /// to free anything explicitly.
 ///
-/// Phase 1.2a structural port: emits all 60 comment-AST kinds and the
-/// scalar string fields. The `parsedType` slot is currently always omitted;
-/// Phase 1.2a-cont (type_parse port) will enable it.
+/// Phase 1.2 parser path: emits the full comment AST plus optional
+/// `parsedType` children when [`ParseOptions::parse_types`] is enabled.
+/// The resulting bytes are the canonical binding-facing output for the
+/// Binary AST flavor.
 pub fn parse<'arena>(
     arena: &'arena Allocator,
     source: &'arena str,
