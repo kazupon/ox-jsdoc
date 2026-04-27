@@ -1,8 +1,24 @@
 {
   "name": "@ox-jsdoc/decoder",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.0.3",
   "description": "Lazy JS decoder for the ox-jsdoc Binary AST format. Shared by NAPI and WASM bindings.",
+  "keywords": [
+    "jsdoc",
+    "parser",
+    "decoder",
+    "binary-ast"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "kazuya kawaguchi",
+    "email": "kawakazu80@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kazupon/ox-jsdoc",
+    "directory": "packages/decoder"
+  },
+  "funding": "https://github.com/sponsors/kazupon",
   "files": [
     "src/**/*.js",
     "src/**/*.d.ts"
@@ -16,8 +32,15 @@
       "default": "./src/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "test": "vp test run --config vitest.config.ts"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   },
   "devDependencies": {
     "vite-plus": "catalog:"
