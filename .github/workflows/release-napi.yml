@@ -181,6 +181,7 @@ jobs:
           pnpm -C "${package_path}" exec napi artifacts --package-json-path ../../${package_path}/package.json --output-dir ../../artifacts --npm-dir ../../${npm_dir}
           pnpm -C "${package_path}" exec napi pre-publish --no-gh-release -t npm --package-json-path ../../${package_path}/package.json --npm-dir ../../${npm_dir}
           cd "${package_path}"
+          node -e 'const fs = require("node:fs"); const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")); const required = ["src-js/bindings.js", "src-js/bindings.d.ts", "src-js/index.js", "src-js/index.d.ts"]; pkg.files = [...new Set([...(pkg.files || []), ...required])]; fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");'
           publish_flags=(--access public --no-git-checks)
           pnpm publish "${publish_flags[@]}"
 
@@ -193,6 +194,7 @@ jobs:
           pnpm -C "${package_path}" exec napi artifacts --package-json-path ../../${package_path}/package.json --output-dir ../../artifacts --npm-dir ../../${npm_dir}
           pnpm -C "${package_path}" exec napi pre-publish --no-gh-release -t npm --package-json-path ../../${package_path}/package.json --npm-dir ../../${npm_dir}
           cd "${package_path}"
+          node -e 'const fs = require("node:fs"); const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")); const required = ["src-js/bindings.js", "src-js/bindings.d.ts", "src-js/index.js", "src-js/index.d.ts"]; pkg.files = [...new Set([...(pkg.files || []), ...required])]; fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");'
           publish_flags=(--access public --no-git-checks)
           pnpm publish "${publish_flags[@]}"
 
