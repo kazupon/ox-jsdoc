@@ -209,6 +209,7 @@ fn write_jsdoc_block_basic_extended_data_layout() {
         lbreak,
         pre_lbreak,
         0b000, // bitmask: no children
+        None,  // description_raw_span — Phase 5 opt-in, off here
     )
     .0;
 
@@ -256,6 +257,7 @@ fn compat_mode_emits_jsdoc_block_tail() {
         s,
         s,
         0,
+        None, // description_raw_span — Phase 5 opt-in, off here
     );
 
     // Apply compat tail to the same record using its returned ExtOffset.
@@ -364,7 +366,8 @@ fn lazy_decoder_walks_jsdoc_block_via_asts_iterator() {
         s,
         s,
         s,
-        0, // no children
+        0,    // no children
+        None, // description_raw_span — Phase 5 opt-in, off here
     );
     writer.push_root(block_idx.as_u32(), 0, 50);
 
@@ -406,6 +409,7 @@ fn lazy_decoder_tag_with_parsed_type_dispatches_correctly() {
         None,
         None,
         bitmask,
+        None, // description_raw_span — Phase 5 opt-in, off here
     );
     let tag = tag_idx.as_u32();
     let _ = ox_jsdoc_binary::writer::nodes::comment_ast::write_jsdoc_tag_name(

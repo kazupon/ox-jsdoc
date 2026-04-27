@@ -223,6 +223,8 @@ impl<'a> ParserContext<'a> {
             }
         }
 
+        let description_raw = self.slice_description_raw(&description.lines);
+
         let comment = ArenaBox::new_in(
             JsdocBlock {
                 span: Span::new(self.base_offset, end),
@@ -238,6 +240,7 @@ impl<'a> ParserContext<'a> {
                 delimiter_line_break,
                 preterminal_line_break,
                 description: description.text,
+                description_raw,
                 description_lines: description.lines,
                 tags,
                 inline_tags: description.inline_tags,
@@ -260,6 +263,27 @@ impl<'a> ParserContext<'a> {
     fn absolute_end(&self) -> Option<u32> {
         let len = u32::try_from(self.source_text.len()).ok()?;
         self.base_offset.checked_add(len)
+    }
+
+    /// Compute the `description_raw` slice for a node from its
+    /// `description_lines`. Returns `None` when the line list is empty.
+    ///
+    /// The slice runs from the first description line's `span.start` to
+    /// the last line's `span.end` — see
+    /// `design/008-oxlint-oxfmt-support/README.md` §4.1 for the rationale
+    /// (boundary covers blank intermediate lines + their `*` prefixes).
+    fn slice_description_raw(
+        &self,
+        description_lines: &[crate::ast::JsdocDescriptionLine<'a>],
+    ) -> Option<&'a str> {
+        let first = description_lines.first()?;
+        let last = description_lines.last()?;
+        let start = first.span.start.checked_sub(self.base_offset)? as usize;
+        let end = last.span.end.checked_sub(self.base_offset)? as usize;
+        if start > end || end > self.source_text.len() {
+            return None;
+        }
+        Some(&self.source_text[start..end])
     }
 
     /// Partition logical lines into description range + tag sections.
@@ -362,18 +386,43 @@ impl<'a> ParserContext<'a> {
             optional,
             default_value,
             description,
+            description_raw,
             type_lines,
             description_lines,
             inline_tags,
             body,
             raw_body,
         ) = if let Some(parsed_body) = parsed_body {
+            // The synthetic `description.lines[0].span` (built via
+            // `relative_span` in `parse_generic_tag_body`) has the correct
+            // START offset but its END is short by `(line_breaks * margin_chars_lost)`
+            // bytes for multi-line bodies (because `normalize_lines`
+            // joins lines with single `\n`, dropping the original `\n  *  `
+            // margin). For `description_raw` we therefore take START from
+            // the synthetic line but END from the last non-blank
+            // `body_line.content_end` to slice the correct original-source
+            // range (boundary per design `008-…/README.md` §4.1).
+            let description_raw = parsed_body.description.lines.first().and_then(|first| {
+                let last_body_end = section
+                    .body_lines
+                    .iter()
+                    .rev()
+                    .find(|line| !line.content.bytes().all(|b| b == b' ' || b == b'\t'))?
+                    .content_end;
+                let s = first.span.start.checked_sub(self.base_offset)? as usize;
+                let e = last_body_end.checked_sub(self.base_offset)? as usize;
+                if s > e || e > self.source_text.len() {
+                    return None;
+                }
+                Some(&self.source_text[s..e])
+            });
             (
                 parsed_body.raw_type,
                 parsed_body.name,
                 parsed_body.optional,
                 parsed_body.default_value,
                 parsed_body.description.text,
+                description_raw,
                 parsed_body.type_lines,
                 parsed_body.description.lines,
                 parsed_body.description.inline_tags,
@@ -388,6 +437,7 @@ impl<'a> ParserContext<'a> {
                 None,
                 None,
                 false,
+                None,
                 None,
                 None,
                 ArenaVec::new_in(self.allocator),
@@ -421,6 +471,7 @@ impl<'a> ParserContext<'a> {
             optional,
             default_value,
             description,
+            description_raw,
             raw_body,
             delimiter: section.header_delimiter,
             post_delimiter: section.header_post_delimiter,

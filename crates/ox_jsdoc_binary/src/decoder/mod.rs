@@ -23,6 +23,7 @@ pub mod error;
 pub mod helpers;
 pub mod nodes;
 pub mod source_file;
+pub mod text;
 pub mod visitor;
 
 pub use error::DecodeError;

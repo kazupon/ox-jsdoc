@@ -88,6 +88,22 @@ export class RemoteJsdocBlock implements RemoteNode {
   readonly lastDescriptionLine: number | null
   readonly hasPreterminalDescription: number | null
   readonly hasPreterminalTagDescription: number | null
+  /**
+   * Raw description slice (with `*` prefix and blank lines intact).
+   * `null` outside compat mode (the wire field doesn't exist) or when
+   * the block has no description.
+   * See `design/008-oxlint-oxfmt-support/README.md` §4.3.
+   */
+  readonly descriptionRaw: string | null
+  /**
+   * Description text. When `preserveWhitespace` is `true`, blank lines
+   * and indentation past the `* ` prefix are preserved (algorithm: see
+   * design §3). When `false` (default), returns the compact view (same
+   * as `description`).
+   * Returns `null` when no description is present, or when
+   * `preserveWhitespace=true` is requested on a basic-mode buffer.
+   */
+  descriptionText(preserveWhitespace?: boolean): string | null
   toJSON(): Record<string, unknown>
 }
 
@@ -127,6 +143,22 @@ export class RemoteJsdocTag implements RemoteNode {
   readonly postName: string | null
   readonly initial: string | null
   readonly lineEnd: string | null
+  /**
+   * Raw description slice (with `*` prefix and blank lines intact).
+   * `null` outside compat mode (the wire field doesn't exist) or when
+   * the tag has no description body.
+   * See `design/008-oxlint-oxfmt-support/README.md` §4.3.
+   */
+  readonly descriptionRaw: string | null
+  /**
+   * Description text. When `preserveWhitespace` is `true`, blank lines
+   * and indentation past the `* ` prefix are preserved (algorithm: see
+   * design §3). When `false` (default), returns the compact view (same
+   * as `description`).
+   * Returns `null` when no description is present, or when
+   * `preserveWhitespace=true` is requested on a basic-mode buffer.
+   */
+  descriptionText(preserveWhitespace?: boolean): string | null
   toJSON(): Record<string, unknown>
 }
 

@@ -103,3 +103,47 @@ export const STRING_FIELD_SIZE = 6
 export const STRING_FIELD_NONE_OFFSET = 0xffff_ffff
 /** Length value used by the `None` sentinel (always 0). */
 export const STRING_FIELD_NONE_LENGTH = 0
+
+// ---------------------------------------------------------------------------
+// description_raw_span (Phase 5: opt-in via per-node Common Data bit)
+// ---------------------------------------------------------------------------
+// See `design/008-oxlint-oxfmt-support/README.md` §4.2 for the wire layout.
+//
+// `description_raw_span` is `(u32 start, u32 end)` UTF-8 byte offsets
+// relative to the root's source text region (resolve via
+// `root.source_offset_in_data + start`). When the per-node
+// `has_description_raw_span` Common Data bit is set, the 8-byte span sits
+// at the **end** of the Extended Data record (basic ED tail or compat ED
+// tail, depending on whether compat_mode is on).
+//
+// Per-mode total ED sizes (matrix from §5.2):
+//   Block | preserve=false | preserve=true
+//   basic | 68             | 76 (= basic 68 + 8)
+//   compat| 90 (basic 68 + compat tail 22) | 98 (compat 90 + 8)
+//   Tag   | preserve=false | preserve=true
+//   basic | 38             | 46 (= basic 38 + 8)
+//   compat| 80 (basic 38 + compat tail 42) | 88 (compat 80 + 8)
+//
+// span offset within the ED record = the corresponding base size:
+//   Block: compat ? 90 : 68     Tag: compat ? 80 : 38
+
+/** Basic-mode Extended Data size for JsdocBlock (also the span offset
+ *  within ED when compat_mode = false). */
+export const JSDOC_BLOCK_BASIC_SIZE = 68
+/** Compat-mode Extended Data size for JsdocBlock (also the span offset
+ *  within ED when compat_mode = true). */
+export const JSDOC_BLOCK_COMPAT_SIZE = 90
+/** Common Data bit signalling presence of `description_raw_span` on a
+ *  JsdocBlock ED record. Bit 0 of the 6-bit Common Data field. */
+export const JSDOC_BLOCK_HAS_DESCRIPTION_RAW_SPAN_BIT = 1 << 0
+
+/** Basic-mode Extended Data size for JsdocTag (also the span offset
+ *  within ED when compat_mode = false). */
+export const JSDOC_TAG_BASIC_SIZE = 38
+/** Compat-mode Extended Data size for JsdocTag (also the span offset
+ *  within ED when compat_mode = true). */
+export const JSDOC_TAG_COMPAT_SIZE = 80
+/** Common Data bit signalling presence of `description_raw_span` on a
+ *  JsdocTag ED record. Bit 1 of the 6-bit Common Data field
+ *  (bit 0 = optional). */
+export const JSDOC_TAG_HAS_DESCRIPTION_RAW_SPAN_BIT = 1 << 1

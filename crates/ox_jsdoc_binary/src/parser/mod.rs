@@ -71,6 +71,19 @@ pub struct ParseOptions {
     /// Parse mode for the type expression sub-parser. Only used when
     /// `parse_types` is `true`. Defaults to [`type_data::ParseMode::Jsdoc`].
     pub type_parse_mode: type_data::ParseMode,
+    /// When `true`, the writer emits an 8-byte `description_raw_span`
+    /// (UTF-8 byte offsets) at the **end** of every `JsdocBlock` /
+    /// `JsdocTag` Extended Data record that has a description. Presence
+    /// is signalled by the `has_description_raw_span` Common Data bit
+    /// (bit 0 for `JsdocBlock`, bit 1 for `JsdocTag`).
+    ///
+    /// Required for the JS decoder's `descriptionRaw` getter and
+    /// `descriptionText(true)` method to work — without it both return
+    /// `null`. Fully orthogonal to [`Self::compat_mode`].
+    ///
+    /// See `design/008-oxlint-oxfmt-support/README.md` §4.2 for the
+    /// gating matrix and §5.2 for the wire-size impact.
+    pub preserve_whitespace: bool,
 }
 
 impl Default for ParseOptions {
@@ -81,6 +94,7 @@ impl Default for ParseOptions {
             fence_aware: true,
             parse_types: false,
             type_parse_mode: type_data::ParseMode::Jsdoc,
+            preserve_whitespace: false,
         }
     }
 }
@@ -177,6 +191,9 @@ pub fn parse<'arena>(
     if options.compat_mode {
         writer.set_compat_mode(true);
     }
+    if options.preserve_whitespace {
+        writer.set_preserve_whitespace_span(true);
+    }
     // Source text is appended after the writer's pre-interned common
     // strings (`StringTableBuilder::new`); the returned offset is what
     // `push_root` needs to record so the decoder can locate the source
@@ -250,6 +267,9 @@ pub fn parse_to_bytes(source: &str, options: ParseOptions) -> ParseBytesResult {
     let mut writer = BinaryWriter::new(&arena);
     if options.compat_mode {
         writer.set_compat_mode(true);
+    }
+    if options.preserve_whitespace {
+        writer.set_preserve_whitespace_span(true);
     }
     let source_offset = writer.append_source_text(source);
 
@@ -371,6 +391,9 @@ pub fn parse_batch<'arena>(
     if options.compat_mode {
         writer.set_compat_mode(true);
     }
+    if options.preserve_whitespace {
+        writer.set_preserve_whitespace_span(true);
+    }
 
     // Parse with relative spans (base_offset = 0); each root index entry
     // carries the absolute offset so the lazy decoder can rebuild ranges.
@@ -441,6 +464,9 @@ pub fn parse_batch_to_bytes(
     let mut writer = BinaryWriter::new(&arena);
     if options.compat_mode {
         writer.set_compat_mode(true);
+    }
+    if options.preserve_whitespace {
+        writer.set_preserve_whitespace_span(true);
     }
 
     let parser_options = ParseOptions {

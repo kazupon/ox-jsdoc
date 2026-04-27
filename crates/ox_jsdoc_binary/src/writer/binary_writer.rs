@@ -110,6 +110,11 @@ pub struct BinaryWriter<'arena> {
     /// (so the next call to [`Self::emit_node_record`] can patch its
     /// `next_sibling` field). `0` means "no previous sibling".
     pub(crate) next_sibling_patch: ArenaVec<'arena, u32>,
+    /// Per-writer opt-in for emitting the trailing `description_raw_span`
+    /// slot on `JsdocBlock` / `JsdocTag` ED records. Set via
+    /// [`Self::set_preserve_whitespace_span`]; consumed by the per-node
+    /// emit phase in `parser/context.rs`. Orthogonal to compat mode.
+    pub(crate) preserve_whitespace_span: bool,
     /// Reference to the underlying arena, used by the per-node helpers when
     /// they need to allocate scratch space.
     pub(crate) arena: &'arena Allocator,
@@ -144,6 +149,7 @@ impl<'arena> BinaryWriter<'arena> {
             current_source_length: 0,
             current_source_ptr: 0,
             next_sibling_patch: ArenaVec::new_in(arena),
+            preserve_whitespace_span: false,
             arena,
         }
     }
@@ -313,6 +319,30 @@ impl<'arena> BinaryWriter<'arena> {
     #[must_use]
     pub const fn compat_mode(&self) -> bool {
         self.header.compat_mode()
+    }
+
+    /// Enable / disable per-node emission of the `description_raw_span` slot
+    /// on `JsdocBlock` / `JsdocTag`. When enabled, the parser-side emitter
+    /// passes the span to the writer and the per-node `has_description_raw_span`
+    /// Common Data bit is set. When disabled (default), the bit stays clear
+    /// and the 8-byte slot is omitted entirely.
+    ///
+    /// Must be called before any node is written, since the flag affects the
+    /// per-record ED size emitted by `write_jsdoc_block` / `write_jsdoc_tag`.
+    /// Fully orthogonal to [`Self::set_compat_mode`].
+    ///
+    /// See `design/008-oxlint-oxfmt-support/README.md` §4.2.
+    pub fn set_preserve_whitespace_span(&mut self, enabled: bool) {
+        self.preserve_whitespace_span = enabled;
+    }
+
+    /// Whether the per-node `description_raw_span` opt-in is currently
+    /// enabled. The parser's emit phase consults this to decide whether to
+    /// pass the span through to the per-node `write_*` helper.
+    #[inline]
+    #[must_use]
+    pub const fn preserve_whitespace_span(&self) -> bool {
+        self.preserve_whitespace_span
     }
 
     /// Append one root entry to the Root Index Array.

@@ -88,6 +88,7 @@ function _growU32(pool, need) {
  *   parseTypes?: boolean,
  *   typeParseMode?: 'jsdoc' | 'closure' | 'typescript',
  *   compatMode?: boolean,
+ *   preserveWhitespace?: boolean,
  *   emptyStringForNull?: boolean,
  *   baseOffset?: number,
  * }} [options]
@@ -111,6 +112,9 @@ export function parse(sourceText, options) {
     }
     if (options.compatMode !== undefined) {
       bindingOptions.compatMode = options.compatMode
+    }
+    if (options.preserveWhitespace !== undefined) {
+      bindingOptions.preserveWhitespace = options.preserveWhitespace
     }
     if (options.baseOffset !== undefined) {
       bindingOptions.baseOffset = options.baseOffset
@@ -139,6 +143,7 @@ export function parse(sourceText, options) {
  *   parseTypes?: boolean,
  *   typeParseMode?: 'jsdoc' | 'closure' | 'typescript',
  *   compatMode?: boolean,
+ *   preserveWhitespace?: boolean,
  *   emptyStringForNull?: boolean,
  * }} [options]
  * @returns {{

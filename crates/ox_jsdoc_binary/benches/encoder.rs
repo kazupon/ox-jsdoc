@@ -50,6 +50,7 @@ fn encode_simple_param(arena: &Allocator) -> Vec<u8> {
         nl,
         empty,
         0b010, // bit1 = tags present
+        None,  // description_raw_span — Phase 5 opt-in, off here
     );
     let block = block_idx.as_u32();
 
@@ -67,6 +68,7 @@ fn encode_simple_param(arena: &Allocator) -> Vec<u8> {
         Some(desc),
         None,
         0b0000_1101,
+        None, // description_raw_span — Phase 5 opt-in, off here
     );
     let tag = tag_idx.as_u32();
     writer.record_list_child(&mut tags_list, tag);

@@ -47,6 +47,11 @@ export interface JsdocBlock {
   tags: JsdocTag[]
   inlineTags: JsdocInlineTag[]
   // ── compat_mode: true ──────────────────────────────────────────────
+  /** Raw description slice (with `*` prefix and blank lines intact).
+   *  Source-preserving view used by oxfmt-style formatters that need
+   *  paragraph breaks and indented code blocks intact.
+   *  See `design/008-oxlint-oxfmt-support/README.md` §4.4. compat_mode only. */
+  descriptionRaw?: string
   /** Source-preserved opening delimiter ("/**"). compat_mode only. */
   delimiter?: string
   /** Whitespace after the opening delimiter. compat_mode only. */
@@ -100,6 +105,10 @@ export interface JsdocTag {
   /** ox-jsdoc-specific. Excluded from output when `compatMode: true`. */
   defaultValue?: string | null
   description: string
+  /** Raw description slice (with `*` prefix and blank lines intact).
+   *  Same shape as `JsdocBlock.descriptionRaw`. compat_mode only.
+   *  See `design/008-oxlint-oxfmt-support/README.md` §4.4. */
+  descriptionRaw?: string
   /** ox-jsdoc-specific. Excluded from output when `compatMode: true`. */
   rawBody?: string | null
   typeLines: JsdocTypeLine[]

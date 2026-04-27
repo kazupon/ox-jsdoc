@@ -2,8 +2,12 @@
 // @license MIT
 //
 
+use std::borrow::Cow;
+
 use oxc_allocator::{Box as ArenaBox, Vec as ArenaVec};
 use oxc_span::Span;
+
+use crate::parser::text::parsed_preserving_whitespace;
 
 /// Root node for one `/** ... */` JSDoc block.
 ///
@@ -29,6 +33,11 @@ pub struct JsdocBlock<'a> {
     pub preterminal_line_break: &'a str,
     /// Joined top-level description text before the first block tag.
     pub description: Option<&'a str>,
+    /// Raw description slice from the original source (with `*` prefix and
+    /// blank lines intact). `None` when the block has no description.
+    /// See `design/008-oxlint-oxfmt-support/README.md` §4.1 for the
+    /// boundary definition.
+    pub description_raw: Option<&'a str>,
     /// Source-preserving top-level description lines.
     pub description_lines: ArenaVec<'a, JsdocDescriptionLine<'a>>,
     /// Block tags in source order.
@@ -47,6 +56,24 @@ pub struct JsdocBlock<'a> {
     pub has_preterminal_description: u8,
     /// Some(1) if tag description exists on the `*/` line, None otherwise.
     pub has_preterminal_tag_description: Option<u8>,
+}
+
+impl<'a> JsdocBlock<'a> {
+    /// Description text. When `preserve_whitespace` is `true`, blank lines
+    /// and indentation past the `* ` prefix are preserved (algorithm:
+    /// see [`crate::parsed_preserving_whitespace`] /
+    /// `design/008-oxlint-oxfmt-support/README.md` §3). When `false`,
+    /// returns the compact view (existing [`Self::description`] field).
+    /// Returns `None` when no description is present.
+    #[must_use]
+    pub fn description_text(&self, preserve_whitespace: bool) -> Option<Cow<'a, str>> {
+        if preserve_whitespace {
+            self.description_raw
+                .map(|raw| Cow::Owned(parsed_preserving_whitespace(raw)))
+        } else {
+            self.description.map(Cow::Borrowed)
+        }
+    }
 }
 
 /// One source-preserving description line.
@@ -83,6 +110,11 @@ pub struct JsdocTag<'a> {
     pub default_value: Option<&'a str>,
     /// Joined tag description text.
     pub description: Option<&'a str>,
+    /// Raw description slice from the original source (with `*` prefix and
+    /// blank lines intact). `None` when the tag has no description.
+    /// See `design/008-oxlint-oxfmt-support/README.md` §4.1 for the
+    /// boundary definition.
+    pub description_raw: Option<&'a str>,
     /// Raw body after the tag name, preserved for recovery and validators.
     pub raw_body: Option<&'a str>,
     /// Source line delimiter for the tag line.
@@ -107,6 +139,19 @@ pub struct JsdocTag<'a> {
     pub inline_tags: ArenaVec<'a, JsdocInlineTag<'a>>,
     /// Optional structured body for consumers that need more than convenience fields.
     pub body: Option<ArenaBox<'a, JsdocTagBody<'a>>>,
+}
+
+impl<'a> JsdocTag<'a> {
+    /// Description text. Identical contract to [`JsdocBlock::description_text`].
+    #[must_use]
+    pub fn description_text(&self, preserve_whitespace: bool) -> Option<Cow<'a, str>> {
+        if preserve_whitespace {
+            self.description_raw
+                .map(|raw| Cow::Owned(parsed_preserving_whitespace(raw)))
+        } else {
+            self.description.map(Cow::Borrowed)
+        }
+    }
 }
 
 /// Tag name without the leading `@`.

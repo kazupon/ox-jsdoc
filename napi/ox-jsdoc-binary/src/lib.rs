@@ -28,6 +28,12 @@ pub struct JsParseOptions {
     pub type_parse_mode: Option<String>,
     /// Enable jsdoccomment-compat extension fields. Default: false.
     pub compat_mode: Option<bool>,
+    /// Emit per-node `description_raw_span` so the decoder's
+    /// `descriptionRaw` getter and `descriptionText(true)` method work.
+    /// Adds 8 bytes per `JsdocBlock` / `JsdocTag` ED record that has a
+    /// description. Fully orthogonal to `compat_mode`. Default: false.
+    /// See `design/008-oxlint-oxfmt-support/README.md` §4.2.
+    pub preserve_whitespace: Option<bool>,
     /// Original-file absolute byte offset of `source_text`. Default: 0.
     pub base_offset: Option<u32>,
 }
@@ -229,6 +235,7 @@ fn convert_options(options: Option<JsParseOptions>) -> ParseOptions {
         parse_types: options.parse_types.unwrap_or(false),
         type_parse_mode,
         compat_mode: options.compat_mode.unwrap_or(false),
+        preserve_whitespace: options.preserve_whitespace.unwrap_or(false),
         base_offset: options.base_offset.unwrap_or(0),
     }
 }

@@ -50,19 +50,39 @@ pub const JSDOC_BLOCK_INLINE_TAGS_SLOT: usize = JSDOC_BLOCK_LISTS_BASE + 2 * LIS
 
 /// Basic-mode Extended Data size for [`JsdocBlock`]:
 /// `1 + 1 + 8 × StringField + 3 × ListMetadata = 68` bytes.
-const JSDOC_BLOCK_BASIC_SIZE: usize =
+pub(crate) const JSDOC_BLOCK_BASIC_SIZE: usize =
     JSDOC_BLOCK_LISTS_BASE + JSDOC_BLOCK_LIST_COUNT * LIST_METADATA_SIZE;
 /// Compat-mode Extended Data size for [`JsdocBlock`]: basic + `22` bytes
-/// of compat tail (line indices, has_preterminal_* flags) starting at the
-/// end of the basic region.
-const JSDOC_BLOCK_COMPAT_SIZE: usize = JSDOC_BLOCK_BASIC_SIZE + 22;
+/// of compat tail (line indices + `has_preterminal_*_description` flags).
+/// `description_raw_span` is **not** part of the compat tail in Phase 5 —
+/// it is opt-in per the per-node Common Data bit (see [`Self::write_jsdoc_block`]).
+///
+/// Inter-record 8-byte alignment is handled by the writer
+/// (`crate::writer::extended_data::ExtendedDataWriter::reserve_mut` pads
+/// before each new record), so this constant does not include any extra
+/// trailing padding.
+pub(crate) const JSDOC_BLOCK_COMPAT_SIZE: usize = JSDOC_BLOCK_BASIC_SIZE + 22;
 /// Compat tail base offset (start of the compat-only region).
 const JSDOC_BLOCK_COMPAT_TAIL_BASE: usize = JSDOC_BLOCK_BASIC_SIZE;
 
+/// Size of the optional `description_raw_span` slot appended at the **end**
+/// of every `JsdocBlock` / `JsdocTag` Extended Data record when the
+/// `has_description_raw_span` Common Data bit is set. See
+/// `design/008-oxlint-oxfmt-support/README.md` §4.2 for the wire layout
+/// and §5.2 for the per-mode total ED sizes.
+pub(crate) const DESCRIPTION_RAW_SPAN_SIZE: usize = 8;
+
+/// Common Data bit signalling presence of `description_raw_span` on a
+/// `JsdocBlock` Extended Data record. Bit 0 of the 6-bit Common Data
+/// field. (bits 1–5 reserved.)
+pub(crate) const JSDOC_BLOCK_HAS_DESCRIPTION_RAW_SPAN_BIT: u8 = 1 << 0;
+
 /// Write a `JsdocBlock` (Kind `0x01`, Extended type).
 ///
-/// Extended Data layout (basic 68 bytes; compat extends to 90 bytes via
-/// [`write_jsdoc_block_compat_tail`]):
+/// Extended Data layout (basic 68 bytes; compat tail adds 22 bytes via
+/// [`write_jsdoc_block_compat_tail`]; an optional 8-byte
+/// `description_raw_span` is appended at the **very end** when
+/// `description_raw_span` is `Some`):
 ///
 /// ```text
 /// byte 0      : Children bitmask (u8, retained for visitor framework)
@@ -78,7 +98,22 @@ const JSDOC_BLOCK_COMPAT_TAIL_BASE: usize = JSDOC_BLOCK_BASIC_SIZE;
 /// byte 50-55  : description_lines list metadata (head: u32, count: u16)
 /// byte 56-61  : tags list metadata
 /// byte 62-67  : inline_tags list metadata
+/// [compat tail (bytes 68-89) — only present in compat mode]
+/// [description_raw_span (last 8 bytes) — only when bit 0 of Common Data set]
 /// ```
+///
+/// Per-mode total sizes (matrix from
+/// `design/008-oxlint-oxfmt-support/README.md` §5.2):
+///
+/// | compat | preserve | total |
+/// |--------|----------|-------|
+/// | false  | false    | 68    |
+/// | false  | true     | 76    |
+/// | true   | false    | 90    |
+/// | true   | true     | 98    |
+///
+/// When `description_raw_span` is `Some`, the [`JSDOC_BLOCK_HAS_DESCRIPTION_RAW_SPAN_BIT`]
+/// is set in Common Data so the decoder knows to read the trailing 8 bytes.
 ///
 /// Returns `(NodeIndex, ExtOffset)` so the caller can patch the per-list
 /// metadata via [`BinaryWriter::begin_node_list_at`] /
@@ -98,11 +133,17 @@ pub fn write_jsdoc_block(
     delimiter_line_break: StringField,
     preterminal_line_break: StringField,
     children_bitmask: u8,
+    description_raw_span: Option<(u32, u32)>,
 ) -> (NodeIndex, ExtOffset) {
-    let total_size = if writer.compat_mode() {
+    let base_size = if writer.compat_mode() {
         JSDOC_BLOCK_COMPAT_SIZE
     } else {
         JSDOC_BLOCK_BASIC_SIZE
+    };
+    let total_size = if description_raw_span.is_some() {
+        base_size + DESCRIPTION_RAW_SPAN_SIZE
+    } else {
+        base_size
     };
     let (off, dst) = writer.extended.reserve_mut(total_size);
     dst[0] = children_bitmask;
@@ -117,7 +158,18 @@ pub fn write_jsdoc_block(
     write_string_field(dst, 44, preterminal_line_break);
     // List metadata bytes 50..68 are zeroed by reserve_mut and patched later
     // via begin_node_list_at / finalize_node_list.
-    let idx = writer.emit_extended_node(parent_index, Kind::JsdocBlock, 0, span, off);
+
+    // Phase 5: optional description_raw_span at the very end of the ED.
+    let common_data = if let Some((raw_start, raw_end)) = description_raw_span {
+        let span_off = total_size - DESCRIPTION_RAW_SPAN_SIZE;
+        dst[span_off..span_off + 4].copy_from_slice(&raw_start.to_le_bytes());
+        dst[span_off + 4..span_off + 8].copy_from_slice(&raw_end.to_le_bytes());
+        JSDOC_BLOCK_HAS_DESCRIPTION_RAW_SPAN_BIT
+    } else {
+        0
+    };
+
+    let idx = writer.emit_extended_node(parent_index, Kind::JsdocBlock, common_data, span, off);
     (idx, off)
 }
 
@@ -137,6 +189,11 @@ pub fn write_jsdoc_block(
 /// byte 87    : has_preterminal_tag_description (u8, 0xFF = None)
 /// byte 88-89 : padding (u16, zero-fill)
 /// ```
+///
+/// `description_raw_span` is **not** part of the compat tail in Phase 5 —
+/// it is written by [`write_jsdoc_block`] at the very end of the ED record
+/// when opted in (see `design/008-oxlint-oxfmt-support/README.md` §4.2).
+#[allow(clippy::too_many_arguments)]
 pub fn write_jsdoc_block_compat_tail(
     writer: &mut BinaryWriter<'_>,
     ext_offset: ExtOffset,
@@ -165,7 +222,7 @@ pub fn write_jsdoc_block_compat_tail(
         .copy_from_slice(&opt_u32_sentinel(last_description_line).to_le_bytes());
     dst[base + 18] = has_preterminal_description;
     dst[base + 19] = has_preterminal_tag_description.unwrap_or(0xFF);
-    // bytes [base+20..base+22] trailing alignment (already zero)
+    // bytes [base+20..base+22] trailing alignment padding (already zero)
 }
 
 // ---------------------------------------------------------------------------
@@ -241,17 +298,31 @@ pub const JSDOC_TAG_INLINE_TAGS_SLOT: usize = JSDOC_TAG_LISTS_BASE + 2 * LIST_ME
 
 /// Basic-mode Extended Data size for [`JsdocTag`]:
 /// `1 + 1 + 3 × StringField + 3 × ListMetadata = 38` bytes.
-const JSDOC_TAG_BASIC_SIZE: usize =
+pub(crate) const JSDOC_TAG_BASIC_SIZE: usize =
     JSDOC_TAG_LISTS_BASE + JSDOC_TAG_LIST_COUNT * LIST_METADATA_SIZE;
-/// Compat-mode Extended Data size for [`JsdocTag`]: basic + 7 × StringField
-/// of compat tail (42 bytes).
-const JSDOC_TAG_COMPAT_SIZE: usize = JSDOC_TAG_BASIC_SIZE + 7 * STRING_FIELD_SIZE;
+/// Compat-mode Extended Data size for [`JsdocTag`]: basic + 42 bytes of
+/// compat tail (7 × `StringField` for the delimiter group).
+/// `description_raw_span` is **not** part of the compat tail in Phase 5 —
+/// it is opt-in per the per-node Common Data bit (see [`Self::write_jsdoc_tag`]).
+pub(crate) const JSDOC_TAG_COMPAT_SIZE: usize = JSDOC_TAG_BASIC_SIZE + 7 * STRING_FIELD_SIZE;
 /// Compat tail base offset (start of the compat-only region).
 const JSDOC_TAG_COMPAT_TAIL_BASE: usize = JSDOC_TAG_BASIC_SIZE;
 
+/// Common Data bit signalling presence of `description_raw_span` on a
+/// `JsdocTag` Extended Data record. Bit 1 of the 6-bit Common Data
+/// field (bit 0 is `optional`; bits 2–5 reserved).
+pub(crate) const JSDOC_TAG_HAS_DESCRIPTION_RAW_SPAN_BIT: u8 = 1 << 1;
+
 /// Write a `JsdocTag` (Kind `0x03`, Extended type).
 ///
-/// Common Data: `bit0 = optional`. Extended Data layout (basic 38 bytes):
+/// Common Data layout: bit 0 = `optional`, bit 1 =
+/// `has_description_raw_span` (set when `description_raw_span` is `Some`).
+/// bits 2–5 reserved.
+///
+/// Extended Data layout (basic 38 bytes; compat tail adds 42 bytes via
+/// [`write_jsdoc_tag_compat_tail`]; an optional 8-byte
+/// `description_raw_span` is appended at the **very end** when
+/// `description_raw_span` is `Some`):
 ///
 /// ```text
 /// byte 0      : Children bitmask (u8, retained for visitor framework)
@@ -262,10 +333,19 @@ const JSDOC_TAG_COMPAT_TAIL_BASE: usize = JSDOC_TAG_BASIC_SIZE;
 /// byte 20-25  : type_lines       list metadata (head: u32, count: u16)
 /// byte 26-31  : description_lines list metadata
 /// byte 32-37  : inline_tags      list metadata
+/// [compat tail: 7 × StringField at bytes 38..=79 — only in compat mode]
+/// [description_raw_span (last 8 bytes) — only when bit 1 of Common Data set]
 /// ```
 ///
-/// In compat mode the 7 delimiter StringFields follow at byte 38..=79
-/// (total 80 bytes); use [`write_jsdoc_tag_compat_tail`] to patch them.
+/// Per-mode total sizes (matrix from
+/// `design/008-oxlint-oxfmt-support/README.md` §5.2):
+///
+/// | compat | preserve | total |
+/// |--------|----------|-------|
+/// | false  | false    | 38    |
+/// | false  | true     | 46    |
+/// | true   | false    | 80    |
+/// | true   | true     | 88    |
 ///
 /// Returns `(NodeIndex, ExtOffset)` so the caller can patch the per-list
 /// metadata via [`BinaryWriter::begin_node_list_at`] /
@@ -280,11 +360,17 @@ pub fn write_jsdoc_tag(
     description: Option<StringField>,
     raw_body: Option<StringField>,
     children_bitmask: u8,
+    description_raw_span: Option<(u32, u32)>,
 ) -> (NodeIndex, ExtOffset) {
-    let total_size = if writer.compat_mode() {
+    let base_size = if writer.compat_mode() {
         JSDOC_TAG_COMPAT_SIZE
     } else {
         JSDOC_TAG_BASIC_SIZE
+    };
+    let total_size = if description_raw_span.is_some() {
+        base_size + DESCRIPTION_RAW_SPAN_SIZE
+    } else {
+        base_size
     };
     let (off, dst) = writer.extended.reserve_mut(total_size);
     dst[0] = children_bitmask;
@@ -294,12 +380,29 @@ pub fn write_jsdoc_tag(
     write_opt_string_field(dst, 14, raw_body);
     // List metadata bytes 20..38 are zeroed by reserve_mut and patched
     // later via begin_node_list_at / finalize_node_list.
-    let idx = writer.emit_extended_node(parent_index, Kind::JsdocTag, optional as u8, span, off);
+
+    // Phase 5: optional description_raw_span at the very end of the ED.
+    let common_data = {
+        let mut cd = optional as u8;
+        if let Some((raw_start, raw_end)) = description_raw_span {
+            let span_off = total_size - DESCRIPTION_RAW_SPAN_SIZE;
+            dst[span_off..span_off + 4].copy_from_slice(&raw_start.to_le_bytes());
+            dst[span_off + 4..span_off + 8].copy_from_slice(&raw_end.to_le_bytes());
+            cd |= JSDOC_TAG_HAS_DESCRIPTION_RAW_SPAN_BIT;
+        }
+        cd
+    };
+
+    let idx = writer.emit_extended_node(parent_index, Kind::JsdocTag, common_data, span, off);
     (idx, off)
 }
 
-/// Write the 7 delimiter [`StringField`]s (42 bytes) at the compat tail of a
-/// previously written `JsdocTag` Extended Data record.
+/// Write the 7 delimiter [`StringField`]s (42 bytes total) at the compat
+/// tail of a previously written `JsdocTag` Extended Data record.
+///
+/// `description_raw_span` is **not** part of the compat tail in Phase 5 —
+/// it is written by [`write_jsdoc_tag`] at the very end of the ED record
+/// when opted in (see `design/008-oxlint-oxfmt-support/README.md` §4.2).
 #[allow(clippy::too_many_arguments)]
 pub fn write_jsdoc_tag_compat_tail(
     writer: &mut BinaryWriter<'_>,

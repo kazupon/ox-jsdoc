@@ -6,6 +6,7 @@ mod checkpoint;
 mod context;
 mod diagnostics;
 mod scanner;
+pub mod text;
 mod type_parse;
 
 use oxc_allocator::{Allocator, Box as ArenaBox};

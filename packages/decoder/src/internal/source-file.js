@@ -32,6 +32,7 @@ import {
   ROOT_ARRAY_OFFSET_FIELD,
   ROOT_COUNT_FIELD,
   ROOT_INDEX_ENTRY_SIZE,
+  SOURCE_OFFSET_FIELD,
   SOURCE_TEXT_LENGTH_FIELD,
   STRING_DATA_OFFSET_FIELD,
   STRING_FIELD_NONE_OFFSET,
@@ -279,6 +280,48 @@ export class RemoteSourceFile {
     const off =
       this.#internal.rootArrayOffset + rootIndex * ROOT_INDEX_ENTRY_SIZE + BASE_OFFSET_FIELD
     return this.#internal.uint32View[off >>> 2]
+  }
+
+  /**
+   * Get the `source_offset_in_data` (byte offset where this root's source
+   * text starts inside the String Data section) for the i-th root.
+   * Used by `descriptionRaw` getters that need to slice the source text
+   * by `(start, end)` byte offsets.
+   *
+   * @param {number} rootIndex
+   * @returns {number}
+   */
+  getRootSourceOffsetInData(rootIndex) {
+    const off =
+      this.#internal.rootArrayOffset + rootIndex * ROOT_INDEX_ENTRY_SIZE + SOURCE_OFFSET_FIELD
+    return this.#internal.uint32View[off >>> 2]
+  }
+
+  /**
+   * Slice the source text region for `rootIndex` at the given
+   * `(start, end)` source-text-relative UTF-8 byte offsets. Returns
+   * `null` for the `(0, 0)` sentinel, for `start > end`, or when the
+   * slice would extend past the buffer.
+   *
+   * Used by `descriptionRaw` getters on `RemoteJsdocBlock` /
+   * `RemoteJsdocTag` (compat-mode wire field per
+   * `design/008-oxlint-oxfmt-support/README.md` §4.3).
+   *
+   * @param {number} rootIndex
+   * @param {number} start
+   * @param {number} end
+   * @returns {string | null}
+   */
+  sliceSourceText(rootIndex, start, end) {
+    if (start === 0 && end === 0) return null
+    if (start > end) return null
+    const sourceOffset = this.getRootSourceOffsetInData(rootIndex)
+    const { view, stringDataOffset } = this.#internal
+    const absStart = stringDataOffset + sourceOffset + start
+    const absEnd = stringDataOffset + sourceOffset + end
+    if (absEnd > view.byteOffset + view.byteLength) return null
+    const bytes = new Uint8Array(view.buffer, view.byteOffset + absStart, end - start)
+    return utf8Decoder.decode(bytes)
   }
 
   /**

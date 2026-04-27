@@ -176,6 +176,11 @@ struct TagData<'arena, 'a> {
     optional: bool,
     default_value: Option<&'a str>,
     description: Option<&'a str>,
+    /// Source-text-relative `(start, end)` byte offsets covering the raw
+    /// description region (with `*` prefix and blank lines intact).
+    /// `None` when the tag has no description. Emitted in compat-mode wire
+    /// format per `design/008-oxlint-oxfmt-support/README.md` §4.2.
+    description_raw_span: Option<(u32, u32)>,
     raw_body: Option<&'a str>,
     raw_type: Option<TypeSourceData<'a>>,
     name: Option<TagNameValueData<'a>>,
@@ -204,6 +209,10 @@ struct TagData<'arena, 'a> {
 struct BlockData<'arena, 'a> {
     span: Span,
     description: Option<&'a str>,
+    /// Source-text-relative `(start, end)` byte offsets covering the raw
+    /// block description region (with `*` prefix and blank lines intact).
+    /// Same shape as [`TagData::description_raw_span`].
+    description_raw_span: Option<(u32, u32)>,
     description_lines: ArenaVec<'arena, DescriptionLineData<'a>>,
     inline_tags: InlineTagsVec<'arena, 'a>,
     /// Path C-2: arena-allocated. `TagData` is now non-Drop (parsed_type
@@ -453,9 +462,13 @@ pub fn parse_block_into_data<'arena, 'a>(
         }
     }
 
+    let description_raw_span =
+        description_raw_span_from_block_lines(&parsed_desc.lines, base_offset);
+
     let block = BlockData {
         span,
         description: parsed_desc.text,
+        description_raw_span,
         description_lines: parsed_desc.lines,
         inline_tags: parsed_desc.inline_tags,
         tags,
@@ -543,7 +556,11 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         for (idx, line) in lines.iter().enumerate() {
             let trimmed = trim_start_fast(line.content);
             let trimmed_delta = line.content.len() - trimmed.len();
-            let trimmed_start = line.content_start + u32::try_from(trimmed_delta).unwrap();
+            // `trimmed_delta <= line.content.len()` and source offsets fit
+            // in u32 by encoder precondition; the panic check on
+            // `try_from(...).unwrap()` is dead weight on this hot loop
+            // (`partition_sections` runs once per logical line). Pattern #9.
+            let trimmed_start = line.content_start + trimmed_delta as u32;
 
             if !in_fence {
                 if let Some((tag_name, tag_name_start, body_start)) =
@@ -567,7 +584,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                     current_tag = Some(TagSection {
                         tag_name,
                         tag_name_start,
-                        tag_name_end: tag_name_start + u32::try_from(tag_name.len()).unwrap(),
+                        // `tag_name` is a sub-slice of the source text; its
+                        // length fits in u32 by the same precondition that
+                        // bounds source offsets. Pattern #9.
+                        tag_name_end: tag_name_start + tag_name.len() as u32,
                         body_lines,
                         end: line.content_end(),
                         header_initial: m.initial,
@@ -697,6 +717,11 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         };
 
         let has_parsed_type = parsed_type.is_some();
+        let description_raw_span = description_raw_span_from_tag(
+            &description_lines,
+            &section.body_lines,
+            self.base_offset,
+        );
         let tag = TagData {
             span: Span::new(section.tag_name_start, section.end),
             tag_name_span: Span::new(section.tag_name_start, section.tag_name_end),
@@ -704,6 +729,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             optional,
             default_value,
             description,
+            description_raw_span,
             raw_body,
             raw_type,
             name,
@@ -889,9 +915,11 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         // Fast path: most descriptions contain no `{@…}` inline tag at
         // all, but the original `find("{@")` loop still pays a Boyer-Moore
         // scan over the entire text. A single byte search for `@` is
-        // SIMD-fused on modern targets and lets us skip the scan loop
-        // entirely when the description has no `@` to anchor on.
-        if !text.as_bytes().contains(&b'@') {
+        // SIMD-accelerated via `memchr::memchr` and lets us skip the scan
+        // loop entirely when the description has no `@` to anchor on.
+        // (`[u8]::contains` doesn't currently lower to memchr; using it
+        // explicitly here matches `scanner::logical_lines`.)
+        if memchr::memchr(b'@', text.as_bytes()).is_none() {
             return ParsedDescription {
                 text: Some(text),
                 lines,
@@ -1014,8 +1042,10 @@ fn parse_tag_header(line: &str, line_start: u32) -> Option<(&str, u32, Option<(&
     let body_start = if body.is_empty() {
         None
     } else {
+        // `body_delta <= line.len()` and source offsets fit in u32 by
+        // encoder precondition. Pattern #9.
         let body_delta = line.len() - body.len();
-        Some((body, line_start + u32::try_from(body_delta).unwrap()))
+        Some((body, line_start + body_delta as u32))
     };
     Some((tag_name, line_start + 1, body_start))
 }
@@ -1361,7 +1391,8 @@ pub fn emit_block<'arena>(
 ) -> Option<u32> {
     let block = parsed.block.as_ref()?;
     let compat = writer.compat_mode();
-    Some(emit_block_inner(writer, block, compat))
+    let preserve_ws = writer.preserve_whitespace_span();
+    Some(emit_block_inner(writer, block, compat, preserve_ws))
 }
 
 fn opt_string(writer: &mut BinaryWriter<'_>, value: Option<&str>) -> Option<StringField> {
@@ -1376,6 +1407,55 @@ fn opt_string(writer: &mut BinaryWriter<'_>, value: Option<&str>) -> Option<Stri
 /// unique-string path with no per-call branching at the call site.
 fn opt_source_string(writer: &mut BinaryWriter<'_>, value: Option<&str>) -> Option<StringField> {
     value.map(|s| writer.intern_source_slice_or_string(s))
+}
+
+/// Compute the `description_raw_span` for a `JsdocBlock` from its
+/// description-line list. Returns source-text-relative `(start, end)`
+/// UTF-8 byte offsets, or `None` when the list is empty.
+///
+/// The boundary is `description_lines.first().span.start ..
+/// description_lines.last().span.end` per
+/// `design/008-oxlint-oxfmt-support/README.md` §4.1. For `JsdocBlock` each
+/// description line carries an accurate per-`LogicalLine` span, so this
+/// straight reduction is correct (no multi-line span correction needed).
+fn description_raw_span_from_block_lines(
+    description_lines: &[DescriptionLineData<'_>],
+    base_offset: u32,
+) -> Option<(u32, u32)> {
+    let first = description_lines.first()?;
+    let last = description_lines.last()?;
+    let start = first.span.start.checked_sub(base_offset)?;
+    let end = last.span.end.checked_sub(base_offset)?;
+    if start > end {
+        return None;
+    }
+    Some((start, end))
+}
+
+/// Compute the `description_raw_span` for a `JsdocTag` from the synthetic
+/// description line (built by `parse_description_text`) plus the tag's
+/// `body_lines`. The synthetic line's `span.start` points at the
+/// description's first byte in the original source, but its `span.end` is
+/// short by `(line_breaks * margin_chars_lost)` bytes for multi-line
+/// bodies because `normalize_lines` joins lines with a single `\n`. We
+/// take END from the last non-blank `body_line.content_end` to recover the
+/// correct original-source range.
+fn description_raw_span_from_tag(
+    description_lines: &[DescriptionLineData<'_>],
+    body_lines: &[scanner::LogicalLine<'_>],
+    base_offset: u32,
+) -> Option<(u32, u32)> {
+    let first = description_lines.first()?;
+    let last_body = body_lines
+        .iter()
+        .rev()
+        .find(|line| !line.content.bytes().all(|b| b == b' ' || b == b'\t'))?;
+    let start = first.span.start.checked_sub(base_offset)?;
+    let end = last_body.content_end().checked_sub(base_offset)?;
+    if start > end {
+        return None;
+    }
+    Some((start, end))
 }
 
 fn intern(writer: &mut BinaryWriter<'_>, value: &str) -> StringField {
@@ -1403,34 +1483,51 @@ fn emit_block_inner<'arena>(
     writer: &mut BinaryWriter<'arena>,
     block: &BlockData<'_, '_>,
     compat: bool,
+    preserve_whitespace_span: bool,
 ) -> u32 {
     let description_idx = opt_source_string(writer, block.description);
 
+    use crate::writer::{
+        COMMON_EMPTY, COMMON_SLASH_STAR, COMMON_SPACE, COMMON_STAR, common_string_field,
+    };
+
+    // Branchless bitmask: each `is_empty()` returns bool, cast to u8 (0 or 1).
+    // Compute first so `bitmask == 0` doubles as `is_empty_block(block)`,
+    // saving 3 redundant `is_empty()` calls vs the previous post_delim check
+    // calling `is_empty_block` separately.
+    let bitmask: u8 = ((!block.description_lines.is_empty()) as u8)
+        | (((!block.tags.is_empty()) as u8) << 1)
+        | (((!block.inline_tags.is_empty()) as u8) << 2);
+
     // Pre-intern all source-preserving strings.
-    let post_delim_str = if block.delimiter_line_break.is_empty() && !is_empty_block(block) {
+    let post_delim_str = if block.delimiter_line_break.is_empty() && bitmask != 0 {
         " "
     } else {
         ""
     };
-    use crate::writer::{
-        COMMON_EMPTY, COMMON_SLASH_STAR, COMMON_SPACE, COMMON_STAR, common_string_field,
-    };
     let star = common_string_field(COMMON_STAR);
     let close = common_string_field(COMMON_SLASH_STAR);
+    let empty_field = common_string_field(COMMON_EMPTY);
     let post_delim = if post_delim_str.is_empty() {
-        common_string_field(COMMON_EMPTY)
+        empty_field
     } else {
         common_string_field(COMMON_SPACE)
     };
     let line_end = intern_line_end(writer, block.line_end);
-    let initial = common_string_field(COMMON_EMPTY);
+    // `initial` reuses the same prelude-cached `""` slot as `post_delim`'s
+    // empty branch; one prelude lookup instead of two.
+    let initial = empty_field;
     let dlb = intern_line_end(writer, block.delimiter_line_break);
     let plb = intern_line_end(writer, block.preterminal_line_break);
 
-    // Branchless bitmask: each `is_empty()` returns bool, cast to u8 (0 or 1).
-    let bitmask: u8 = ((!block.description_lines.is_empty()) as u8)
-        | (((!block.tags.is_empty()) as u8) << 1)
-        | (((!block.inline_tags.is_empty()) as u8) << 2);
+    // Phase 5: pass description_raw_span only when the writer-level opt-in
+    // is on; otherwise the per-node `has_description_raw_span` Common Data
+    // bit stays clear and the 8-byte slot is omitted.
+    let block_description_raw_span = if preserve_whitespace_span {
+        block.description_raw_span
+    } else {
+        None
+    };
 
     let (block_idx, block_ext) = write_jsdoc_block(
         writer,
@@ -1445,6 +1542,7 @@ fn emit_block_inner<'arena>(
         dlb,
         plb,
         bitmask,
+        block_description_raw_span,
     );
 
     if compat {
@@ -1491,7 +1589,14 @@ fn emit_block_inner<'arena>(
             }
             _ => None,
         };
-        let child_idx = emit_tag(writer, tag, block_parent, compat, parsed_type);
+        let child_idx = emit_tag(
+            writer,
+            tag,
+            block_parent,
+            compat,
+            preserve_whitespace_span,
+            parsed_type,
+        );
         writer.record_list_child(&mut tag_list, child_idx);
     }
     writer.finalize_node_list(tag_list);
@@ -1507,10 +1612,6 @@ fn emit_block_inner<'arena>(
     writer.finalize_node_list(inline_list);
 
     block_parent
-}
-
-fn is_empty_block(block: &BlockData<'_, '_>) -> bool {
-    block.description_lines.is_empty() && block.tags.is_empty() && block.inline_tags.is_empty()
 }
 
 fn emit_description_line(
@@ -1560,6 +1661,7 @@ fn emit_tag(
     tag: &TagData<'_, '_>,
     parent_index: u32,
     compat: bool,
+    preserve_whitespace_span: bool,
     parsed_type: Option<&TypeNodeData<'_>>,
 ) -> u32 {
     let default_idx = opt_source_string(writer, tag.default_value);
@@ -1576,6 +1678,14 @@ fn emit_tag(
         | (((!tag.description_lines.is_empty()) as u8) << 6)
         | (((!tag.inline_tags.is_empty()) as u8) << 7);
 
+    // Phase 5: pass description_raw_span only when the writer-level opt-in
+    // is on (mirrors the JsdocBlock path).
+    let tag_description_raw_span = if preserve_whitespace_span {
+        tag.description_raw_span
+    } else {
+        None
+    };
+
     let (tag_idx, tag_ext) = write_jsdoc_tag(
         writer,
         tag.span,
@@ -1585,6 +1695,7 @@ fn emit_tag(
         desc_idx,
         raw_body_idx,
         bitmask,
+        tag_description_raw_span,
     );
 
     if compat {

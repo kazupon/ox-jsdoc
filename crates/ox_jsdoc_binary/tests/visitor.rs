@@ -127,6 +127,7 @@ fn build_fixture(arena: &Allocator) -> Vec<u8> {
         nl,
         empty,
         0b011,
+        None, // description_raw_span — Phase 5 opt-in, off here
     );
     let block = block_idx.as_u32();
 
@@ -149,6 +150,7 @@ fn build_fixture(arena: &Allocator) -> Vec<u8> {
         None,
         None,
         0b0000_1101,
+        None, // description_raw_span — Phase 5 opt-in, off here
     );
     let tag = tag_idx.as_u32();
     w.record_list_child(&mut tags_list, tag);

@@ -739,6 +739,7 @@ mod tests {
             nl,
             empty,
             0b010, // bit1 = tags
+            None,  // description_raw_span — Phase 5 opt-in, off here
         );
         let mut tags_list = writer.begin_node_list_at(block_ext, JSDOC_BLOCK_TAGS_SLOT);
         // Tag children bitmask: bit0 (tag) + bit2 (name) + bit3 (parsedType) = 0b1101.
@@ -751,6 +752,7 @@ mod tests {
             None,
             None,
             0b0000_1101,
+            None, // description_raw_span — Phase 5 opt-in, off here
         );
         writer.record_list_child(&mut tags_list, tag.as_u32());
         writer.finalize_node_list(tags_list);

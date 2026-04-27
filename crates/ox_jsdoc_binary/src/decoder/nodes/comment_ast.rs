@@ -10,18 +10,23 @@
 //! slots from Extended Data — there is no longer a String Offsets table to
 //! consult.
 
+use std::borrow::Cow;
+
 use crate::format::kind::Kind;
 use crate::format::node_record::{KIND_OFFSET, NODE_RECORD_SIZE};
 use crate::format::string_field::STRING_FIELD_SIZE;
 use crate::writer::nodes::comment_ast::{
-    JSDOC_BLOCK_DESC_LINES_SLOT, JSDOC_BLOCK_INLINE_TAGS_SLOT, JSDOC_BLOCK_TAGS_SLOT,
-    JSDOC_TAG_DESC_LINES_SLOT, JSDOC_TAG_INLINE_TAGS_SLOT, JSDOC_TAG_TYPE_LINES_SLOT,
+    JSDOC_BLOCK_BASIC_SIZE, JSDOC_BLOCK_COMPAT_SIZE, JSDOC_BLOCK_DESC_LINES_SLOT,
+    JSDOC_BLOCK_HAS_DESCRIPTION_RAW_SPAN_BIT, JSDOC_BLOCK_INLINE_TAGS_SLOT, JSDOC_BLOCK_TAGS_SLOT,
+    JSDOC_TAG_BASIC_SIZE, JSDOC_TAG_COMPAT_SIZE, JSDOC_TAG_DESC_LINES_SLOT,
+    JSDOC_TAG_HAS_DESCRIPTION_RAW_SPAN_BIT, JSDOC_TAG_INLINE_TAGS_SLOT, JSDOC_TAG_TYPE_LINES_SLOT,
 };
 
 use super::super::helpers::{
     child_at_visitor_index, ext_offset, read_list_metadata, read_string_field, string_payload,
 };
 use super::super::source_file::LazySourceFile;
+use super::super::text::parsed_preserving_whitespace;
 use super::type_node::LazyTypeNode;
 use super::{LazyNode, NodeListIter};
 
@@ -179,6 +184,48 @@ impl<'a> LazyJsdocBlock<'a> {
         ))
     }
 
+    /// Raw description slice (with `*` prefix and blank lines intact).
+    /// Returns `None` when the buffer was not parsed with
+    /// `preserve_whitespace = true` (the per-node
+    /// `has_description_raw_span` Common Data bit is clear), or when the
+    /// block has no description.
+    ///
+    /// Phase 5 layout: the span sits at the **last 8 bytes** of the ED
+    /// record (offset = compat ? 90 : 68 = the basic / compat ED size).
+    /// See `design/008-oxlint-oxfmt-support/README.md` §4.2 / §4.3.
+    pub fn description_raw(&self) -> Option<&'a str> {
+        if (self.common_data() & JSDOC_BLOCK_HAS_DESCRIPTION_RAW_SPAN_BIT) == 0 {
+            return None;
+        }
+        let span_off = if self.source_file.compat_mode {
+            JSDOC_BLOCK_COMPAT_SIZE
+        } else {
+            JSDOC_BLOCK_BASIC_SIZE
+        };
+        let ext = ext_offset(self.source_file, self.node_index) as usize;
+        let bytes = self.source_file.bytes();
+        let start = super::super::helpers::read_u32(bytes, ext + span_off);
+        let end = super::super::helpers::read_u32(bytes, ext + span_off + 4);
+        self.source_file
+            .slice_source_text(self.root_index, start, end)
+    }
+
+    /// Description text. When `preserve_whitespace` is `true`, blank lines
+    /// and indentation past the `* ` prefix are preserved (algorithm in
+    /// [`super::super::text::parsed_preserving_whitespace`]). When `false`,
+    /// returns the compact view ([`Self::description`]). Returns `None`
+    /// when no description is present, or when `preserve_whitespace = true`
+    /// is requested on a buffer that wasn't parsed with the matching
+    /// `preserve_whitespace = true` parse option.
+    pub fn description_text(&self, preserve_whitespace: bool) -> Option<Cow<'a, str>> {
+        if preserve_whitespace {
+            self.description_raw()
+                .map(|raw| Cow::Owned(parsed_preserving_whitespace(raw)))
+        } else {
+            self.description().map(Cow::Borrowed)
+        }
+    }
+
     /// Helper: read the per-list `(head, count)` metadata at `slot_offset`
     /// inside this block's Extended Data record and produce an iterator.
     #[inline]
@@ -236,6 +283,41 @@ impl<'a> LazyJsdocTag<'a> {
     pub fn description(&self) -> Option<&'a str> {
         let ext = ext_offset(self.source_file, self.node_index) as usize;
         resolve_string_field_slot(self.source_file, ext, 8)
+    }
+    /// Raw description slice (with `*` prefix and blank lines intact).
+    /// Returns `None` when the buffer was not parsed with
+    /// `preserve_whitespace = true` (the per-node
+    /// `has_description_raw_span` Common Data bit is clear), or when the
+    /// tag has no description.
+    ///
+    /// Phase 5 layout: the span sits at the **last 8 bytes** of the ED
+    /// record (offset = compat ? 80 : 38 = the basic / compat ED size).
+    /// See `design/008-oxlint-oxfmt-support/README.md` §4.2 / §4.3.
+    pub fn description_raw(&self) -> Option<&'a str> {
+        if (self.common_data() & JSDOC_TAG_HAS_DESCRIPTION_RAW_SPAN_BIT) == 0 {
+            return None;
+        }
+        let span_off = if self.source_file.compat_mode {
+            JSDOC_TAG_COMPAT_SIZE
+        } else {
+            JSDOC_TAG_BASIC_SIZE
+        };
+        let ext = ext_offset(self.source_file, self.node_index) as usize;
+        let bytes = self.source_file.bytes();
+        let start = super::super::helpers::read_u32(bytes, ext + span_off);
+        let end = super::super::helpers::read_u32(bytes, ext + span_off + 4);
+        self.source_file
+            .slice_source_text(self.root_index, start, end)
+    }
+    /// Description text. Identical contract to
+    /// [`LazyJsdocBlock::description_text`].
+    pub fn description_text(&self, preserve_whitespace: bool) -> Option<Cow<'a, str>> {
+        if preserve_whitespace {
+            self.description_raw()
+                .map(|raw| Cow::Owned(parsed_preserving_whitespace(raw)))
+        } else {
+            self.description().map(Cow::Borrowed)
+        }
     }
     /// Raw body when the tag uses the `Raw` body variant.
     pub fn raw_body(&self) -> Option<&'a str> {

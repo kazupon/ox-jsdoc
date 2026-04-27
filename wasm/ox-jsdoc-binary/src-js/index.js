@@ -103,6 +103,7 @@ export async function initWasm(wasmUrl) {
  *   parseTypes?: boolean,
  *   typeParseMode?: 'jsdoc' | 'closure' | 'typescript',
  *   compatMode?: boolean,
+ *   preserveWhitespace?: boolean,
  *   baseOffset?: number,
  * }} [options]
  * @returns {{
@@ -122,6 +123,7 @@ export function parse(sourceText, options) {
     options?.parseTypes ?? null,
     options?.typeParseMode ?? null,
     options?.compatMode ?? null,
+    options?.preserveWhitespace ?? null,
     options?.baseOffset ?? null
   )
 
@@ -149,6 +151,7 @@ export function parse(sourceText, options) {
  *   parseTypes?: boolean,
  *   typeParseMode?: 'jsdoc' | 'closure' | 'typescript',
  *   compatMode?: boolean,
+ *   preserveWhitespace?: boolean,
  * }} [options]
  * @returns {{
  *   asts: Array<import('@ox-jsdoc/decoder').RemoteJsdocBlock | null>,
@@ -232,7 +235,8 @@ export function parseBatch(items, options) {
     options?.fenceAware ?? null,
     options?.parseTypes ?? null,
     options?.typeParseMode ?? null,
-    options?.compatMode ?? null
+    options?.compatMode ?? null,
+    options?.preserveWhitespace ?? null
   )
 
   const view = new Uint8Array(wasmMemory.buffer, handle.bufferPtr(), handle.bufferLen())

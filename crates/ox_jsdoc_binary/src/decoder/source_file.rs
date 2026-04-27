@@ -16,7 +16,9 @@ use crate::format::header::{
     STRING_DATA_OFFSET_FIELD, STRING_OFFSETS_OFFSET_FIELD,
 };
 use crate::format::node_record::STRING_PAYLOAD_NONE_SENTINEL;
-use crate::format::root_index::{BASE_OFFSET_FIELD, NODE_INDEX_OFFSET, ROOT_INDEX_ENTRY_SIZE};
+use crate::format::root_index::{
+    BASE_OFFSET_FIELD, NODE_INDEX_OFFSET, ROOT_INDEX_ENTRY_SIZE, SOURCE_OFFSET_FIELD,
+};
 use crate::format::string_field::StringField;
 use crate::format::string_table::STRING_OFFSET_ENTRY_SIZE;
 
@@ -194,6 +196,47 @@ impl<'a> LazySourceFile<'a> {
             + root_index as usize * ROOT_INDEX_ENTRY_SIZE
             + BASE_OFFSET_FIELD;
         read_u32(self.bytes, off)
+    }
+
+    /// Get the `source_offset_in_data` (byte offset where this root's
+    /// source text starts inside the String Data section) for root index
+    /// `root_index`. Used by `description_raw` getters that need to slice
+    /// the source text by `(start, end)` byte offsets.
+    #[must_use]
+    pub fn get_root_source_offset_in_data(&self, root_index: u32) -> u32 {
+        let off = self.root_array_offset as usize
+            + root_index as usize * ROOT_INDEX_ENTRY_SIZE
+            + SOURCE_OFFSET_FIELD;
+        read_u32(self.bytes, off)
+    }
+
+    /// Slice the source text region for `root_index` at the given
+    /// `(start, end)` source-text-relative UTF-8 byte offsets. Returns
+    /// `None` for the `(0, 0)` sentinel, for `start > end`, or when the
+    /// slice would extend past `bytes`.
+    ///
+    /// Used by `description_raw` getters on `LazyJsdocBlock` /
+    /// `LazyJsdocTag` (compat-mode wire field per
+    /// `design/008-oxlint-oxfmt-support/README.md` §4.3).
+    #[must_use]
+    pub fn slice_source_text(&self, root_index: u32, start: u32, end: u32) -> Option<&'a str> {
+        if start == 0 && end == 0 {
+            return None;
+        }
+        if start > end {
+            return None;
+        }
+        let source_offset = self.get_root_source_offset_in_data(root_index) as usize;
+        let sd_offset = self.string_data_offset as usize;
+        let abs_start = sd_offset + source_offset + start as usize;
+        let abs_end = sd_offset + source_offset + end as usize;
+        if abs_end > self.bytes.len() {
+            return None;
+        }
+        let slice = &self.bytes[abs_start..abs_end];
+        // SAFETY: writers only feed `&str` source text into String Data,
+        // so the slice is guaranteed UTF-8.
+        Some(unsafe { core::str::from_utf8_unchecked(slice) })
     }
 
     /// Iterate over the AST root for each entry in the Root index array.

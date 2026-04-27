@@ -19,6 +19,7 @@
   "devDependencies": {
     "@kazupon/eslint-plugin": "^0.7.1",
     "@kazupon/vp-config": "^0.1.0",
+    "@types/node": "catalog:",
     "bumpp": "^11.0.1",
     "gh-changelogen": "^0.2.8",
     "playwright": "^1.59.1",

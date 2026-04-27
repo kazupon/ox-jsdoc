@@ -1,0 +1,77 @@
+{
+  "_doc": "Cross-language parity fixtures for description_text(preserve_whitespace) — see design/008-oxlint-oxfmt-support/README.md §7.3. Both the Rust and JS test suites read this file and assert their library output matches `block.compact` / `block.preserve` (and likewise for the first tag when `tag` is non-null). When updating fixtures, run BOTH `cargo test -p ox_jsdoc --test cross_language_parity` and `pnpm --filter ox-jsdoc-binary test` to confirm parity is preserved.",
+  "fixtures": [
+    {
+      "name": "single_line_block_no_tag",
+      "source": "/** Just one line */",
+      "block": { "compact": "Just one line", "preserve": "Just one line" },
+      "tag": null
+    },
+    {
+      "name": "multi_line_block_no_blank_lines",
+      "source": "/**\n * First line.\n * Second line.\n */",
+      "block": { "compact": "First line.\nSecond line.", "preserve": "First line.\nSecond line." },
+      "tag": null
+    },
+    {
+      "name": "multi_paragraph_block_preserves_blank_line",
+      "source": "/**\n * First.\n *\n * Second.\n */",
+      "block": { "compact": "First.\n\nSecond.", "preserve": "First.\n\nSecond." },
+      "tag": null
+    },
+    {
+      "name": "indented_code_block_in_block_description",
+      "source": "/**\n * Intro.\n *\n *     code()\n *\n * Outro.\n */",
+      "block": {
+        "compact": "Intro.\n\n    code()\n\nOutro.",
+        "preserve": "Intro.\n\n    code()\n\nOutro."
+      },
+      "tag": null
+    },
+    {
+      "name": "markdown_emphasis_keeps_leading_star",
+      "source": "/**\n * normal\n * *foo* is emphasis\n */",
+      "block": { "compact": "normal\n*foo* is emphasis", "preserve": "normal\n*foo* is emphasis" },
+      "tag": null
+    },
+    {
+      "name": "block_without_description_but_with_tag",
+      "source": "/** @param x */",
+      "block": { "compact": null, "preserve": null },
+      "tag": { "compact": null, "preserve": null }
+    },
+    {
+      "name": "tag_with_single_line_description",
+      "source": "/** @param {T} id A short description */",
+      "block": { "compact": null, "preserve": null },
+      "tag": { "compact": "A short description", "preserve": "A short description" }
+    },
+    {
+      "name": "tag_with_multi_line_continuation_indent",
+      "source": "/**\n * @param {T} x first line of desc\n *   continuation here\n */",
+      "block": { "compact": null, "preserve": null },
+      "tag": {
+        "compact": "first line of desc\n  continuation here",
+        "preserve": "first line of desc\n  continuation here"
+      }
+    },
+    {
+      "name": "tag_with_paragraph_break",
+      "source": "/**\n * @param x first paragraph.\n *\n * second paragraph.\n */",
+      "block": { "compact": null, "preserve": null },
+      "tag": {
+        "compact": "first paragraph.\n\nsecond paragraph.",
+        "preserve": "first paragraph.\n\nsecond paragraph."
+      }
+    },
+    {
+      "name": "block_and_tag_both_present",
+      "source": "/**\n * Block intro.\n *\n * Block continuation.\n * @param x tag desc.\n */",
+      "block": {
+        "compact": "Block intro.\n\nBlock continuation.",
+        "preserve": "Block intro.\n\nBlock continuation."
+      },
+      "tag": { "compact": "tag desc.", "preserve": "tag desc." }
+    }
+  ]
+}

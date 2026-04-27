@@ -208,6 +208,10 @@ struct SerBlock<'a> {
     has_preterminal_tag_description: Option<u8>,
 
     description: &'a str,
+    /// Raw description slice (with `*` prefix and blank lines intact).
+    /// Emitted only in `compat_mode` per `design/008-oxlint-oxfmt-support/README.md` §4.4.
+    #[serde(rename = "descriptionRaw", skip_serializing_if = "Option::is_none")]
+    description_raw: Option<&'a str>,
     #[serde(rename = "descriptionLines")]
     description_lines: Vec<SerDescriptionLine<'a>>,
     tags: Vec<SerTag<'a>>,
@@ -275,6 +279,7 @@ impl<'a> SerBlock<'a> {
                 None
             },
             description: block.description.unwrap_or_default(),
+            description_raw: if compat { block.description_raw } else { None },
             description_lines: block
                 .description_lines
                 .iter()
@@ -364,6 +369,10 @@ struct SerTag<'a> {
     default_value: Option<&'a str>,
 
     description: &'a str,
+    /// Raw description slice (with `*` prefix and blank lines intact).
+    /// Emitted only in `compat_mode` per `design/008-oxlint-oxfmt-support/README.md` §4.4.
+    #[serde(rename = "descriptionRaw", skip_serializing_if = "Option::is_none")]
+    description_raw: Option<&'a str>,
 
     #[serde(rename = "rawBody", skip_serializing_if = "Option::is_none")]
     raw_body: Option<&'a str>,
@@ -431,6 +440,7 @@ impl<'a> SerTag<'a> {
             optional: if compat { None } else { Some(tag.optional) },
             default_value: if compat { None } else { tag.default_value },
             description: tag.description.unwrap_or_default(),
+            description_raw: if compat { tag.description_raw } else { None },
             raw_body: if compat { None } else { tag.raw_body },
             delimiter: if compat { Some(tag.delimiter) } else { None },
             post_delimiter: if compat {

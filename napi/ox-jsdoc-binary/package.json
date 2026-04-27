@@ -16,6 +16,7 @@
   "devDependencies": {
     "@es-joy/jsdoccomment": "^0.50.1",
     "@napi-rs/cli": "^3.6.1",
+    "@types/node": "catalog:",
     "vite-plus": "catalog:"
   },
   "napi": {

@@ -12,7 +12,17 @@
 
 // @ts-check
 
-import { COMMON_DATA_MASK, COMMON_DATA_OFFSET, STRING_FIELD_SIZE } from '../constants.js'
+import {
+  COMMON_DATA_MASK,
+  COMMON_DATA_OFFSET,
+  JSDOC_BLOCK_BASIC_SIZE as JSDOC_BLOCK_BASIC_SIZE_CONST,
+  JSDOC_BLOCK_COMPAT_SIZE as JSDOC_BLOCK_COMPAT_SIZE_CONST,
+  JSDOC_BLOCK_HAS_DESCRIPTION_RAW_SPAN_BIT,
+  JSDOC_TAG_BASIC_SIZE as JSDOC_TAG_BASIC_SIZE_CONST,
+  JSDOC_TAG_COMPAT_SIZE as JSDOC_TAG_COMPAT_SIZE_CONST,
+  JSDOC_TAG_HAS_DESCRIPTION_RAW_SPAN_BIT,
+  STRING_FIELD_SIZE
+} from '../constants.js'
 import {
   absoluteRange,
   childNodeAtVisitorIndex,
@@ -24,6 +34,7 @@ import {
 } from '../helpers.js'
 import { inspectPayload, inspectSymbol } from '../inspect.js'
 import { nodeListAtSlotExtended } from '../node-list.js'
+import { parsedPreservingWhitespace } from '../preserve-whitespace.js'
 
 // ---------------------------------------------------------------------------
 // Per-Kind ED list-metadata slot offsets (see
@@ -57,6 +68,11 @@ const JSDOC_BLOCK_DESC_END_LINE_OFFSET = JSDOC_BLOCK_DESC_START_LINE_OFFSET + 4
 const JSDOC_BLOCK_LAST_DESC_LINE_OFFSET = JSDOC_BLOCK_DESC_END_LINE_OFFSET + 4
 const JSDOC_BLOCK_HAS_PRETERMINAL_DESC_OFFSET = JSDOC_BLOCK_LAST_DESC_LINE_OFFSET + 4
 const JSDOC_BLOCK_HAS_PRETERMINAL_TAG_DESC_OFFSET = JSDOC_BLOCK_HAS_PRETERMINAL_DESC_OFFSET + 1
+// `description_raw_span` is **opt-in** in Phase 5: presence is gated on
+// `JSDOC_BLOCK_HAS_DESCRIPTION_RAW_SPAN_BIT` in Common Data. When set, the
+// 8-byte span sits at the **end** of the ED record at offset
+// `compatMode ? JSDOC_BLOCK_COMPAT_SIZE_CONST : JSDOC_BLOCK_BASIC_SIZE_CONST`.
+// See `design/008-oxlint-oxfmt-support/README.md` §4.2.
 /** `0xFFFFFFFF` sentinel for `Option<u32>` line indices in compat mode. */
 const COMPAT_LINE_NONE = 0xff_ff_ff_ff
 /** `0xFF` sentinel for `Option<u8>` flags in compat mode. */
@@ -80,6 +96,11 @@ const JSDOC_TAG_COMPAT_POST_TYPE = JSDOC_TAG_COMPAT_POST_TAG + STRING_FIELD_SIZE
 const JSDOC_TAG_COMPAT_POST_NAME = JSDOC_TAG_COMPAT_POST_TYPE + STRING_FIELD_SIZE
 const JSDOC_TAG_COMPAT_INITIAL = JSDOC_TAG_COMPAT_POST_NAME + STRING_FIELD_SIZE
 const JSDOC_TAG_COMPAT_LINE_END = JSDOC_TAG_COMPAT_INITIAL + STRING_FIELD_SIZE
+// `description_raw_span` is **opt-in** in Phase 5: presence is gated on
+// `JSDOC_TAG_HAS_DESCRIPTION_RAW_SPAN_BIT` in Common Data. When set, the
+// 8-byte span sits at the **end** of the ED record at offset
+// `compatMode ? JSDOC_TAG_COMPAT_SIZE_CONST : JSDOC_TAG_BASIC_SIZE_CONST`.
+// See `design/008-oxlint-oxfmt-support/README.md` §4.2.
 
 // JsdocDescriptionLine / JsdocTypeLine compat tail (3 optional StringFields,
 // after the leading `description` / `raw_type` StringField at byte 0-5).
@@ -417,6 +438,51 @@ export class RemoteJsdocBlock {
     return v === COMPAT_U8_NONE ? null : v
   }
 
+  /**
+   * Raw description slice (with `*` prefix and blank lines intact).
+   * Returns `null` when the buffer was not parsed with
+   * `preserveWhitespace: true` (the per-node
+   * `has_description_raw_span` Common Data bit is clear), or when the
+   * block has no description.
+   *
+   * Phase 5 layout: the span sits at the **last 8 bytes** of the ED
+   * record (offset = `compatMode ? 90 : 68` = the basic / compat ED size).
+   * See `design/008-oxlint-oxfmt-support/README.md` §4.2 / §4.3.
+   */
+  get descriptionRaw() {
+    const internal = this.#internal
+    if ((commonData(internal) & JSDOC_BLOCK_HAS_DESCRIPTION_RAW_SPAN_BIT) === 0) {
+      return null
+    }
+    const spanOff = internal.sourceFile.compatMode
+      ? JSDOC_BLOCK_COMPAT_SIZE_CONST
+      : JSDOC_BLOCK_BASIC_SIZE_CONST
+    const start = extU32(internal, spanOff)
+    const end = extU32(internal, spanOff + 4)
+    return internal.sourceFile.sliceSourceText(internal.rootIndex, start, end)
+  }
+
+  /**
+   * Description text. When `preserveWhitespace` is `true`, blank lines
+   * and indentation past the `* ` prefix are preserved (algorithm: see
+   * `parsedPreservingWhitespace` / design §3). When `false` or omitted,
+   * returns the compact view (`description` getter).
+   *
+   * Returns `null` when no description is present, or when
+   * `preserveWhitespace=true` is requested on a buffer that wasn't
+   * parsed with the matching `preserveWhitespace: true` parse option.
+   *
+   * @param {boolean} [preserveWhitespace]
+   * @returns {string | null}
+   */
+  descriptionText(preserveWhitespace) {
+    if (preserveWhitespace) {
+      const raw = this.descriptionRaw
+      return raw === null ? null : parsedPreservingWhitespace(raw)
+    }
+    return this.description
+  }
+
   /** Top-level description lines. */
   get descriptionLines() {
     const internal = this.#internal
@@ -476,6 +542,10 @@ export class RemoteJsdocBlock {
       json.hasPreterminalDescription = this.hasPreterminalDescription
       const hptd = this.hasPreterminalTagDescription
       if (hptd !== null) json.hasPreterminalTagDescription = hptd
+      // descriptionRaw — design 008 §4.4: emit only when present (parity
+      // with the Rust JSON serializer's `skip_serializing_if = "Option::is_none"`).
+      const raw = this.descriptionRaw
+      if (raw !== null) json.descriptionRaw = raw
       // Phase 6: comment-parser-shape source[] array.
       json.source = buildBlockSource(this)
     }
@@ -642,6 +712,43 @@ export class RemoteJsdocTag {
     if (cached !== undefined) return cached
     return (internal.$description = extStringField(internal, 8))
   }
+  /**
+   * Raw description slice (with `*` prefix and blank lines intact).
+   * Returns `null` when the buffer was not parsed with
+   * `preserveWhitespace: true` (the per-node
+   * `has_description_raw_span` Common Data bit is clear), or when the
+   * tag has no description.
+   *
+   * Phase 5 layout: the span sits at the **last 8 bytes** of the ED
+   * record (offset = `compatMode ? 80 : 38` = the basic / compat ED size).
+   * See `design/008-oxlint-oxfmt-support/README.md` §4.2 / §4.3.
+   */
+  get descriptionRaw() {
+    const internal = this.#internal
+    if ((commonData(internal) & JSDOC_TAG_HAS_DESCRIPTION_RAW_SPAN_BIT) === 0) {
+      return null
+    }
+    const spanOff = internal.sourceFile.compatMode
+      ? JSDOC_TAG_COMPAT_SIZE_CONST
+      : JSDOC_TAG_BASIC_SIZE_CONST
+    const start = extU32(internal, spanOff)
+    const end = extU32(internal, spanOff + 4)
+    return internal.sourceFile.sliceSourceText(internal.rootIndex, start, end)
+  }
+  /**
+   * Description text. Identical contract to
+   * `RemoteJsdocBlock.descriptionText`.
+   *
+   * @param {boolean} [preserveWhitespace]
+   * @returns {string | null}
+   */
+  descriptionText(preserveWhitespace) {
+    if (preserveWhitespace) {
+      const raw = this.descriptionRaw
+      return raw === null ? null : parsedPreservingWhitespace(raw)
+    }
+    return this.description
+  }
   /** Raw body when the tag uses the `Raw` body variant. */
   get rawBody() {
     const internal = this.#internal
@@ -788,7 +895,7 @@ export class RemoteJsdocTag {
         lineEnd: this.lineEnd,
         descriptionLines: this.descriptionLines
       }
-      return {
+      const json = {
         type: this.type,
         range: this.range,
         tag: tagName,
@@ -810,6 +917,10 @@ export class RemoteJsdocTag {
         // tag — header + description continuation).
         source: buildTagSource(tagFacade)
       }
+      // descriptionRaw — design 008 §4.4: emit only when present.
+      const raw = this.descriptionRaw
+      if (raw !== null) json.descriptionRaw = raw
+      return json
     }
     return {
       type: this.type,

@@ -73,6 +73,7 @@ pub fn parse_jsdoc(
     parse_types: Option<bool>,
     type_parse_mode: Option<String>,
     compat_mode: Option<bool>,
+    preserve_whitespace: Option<bool>,
     base_offset: Option<u32>,
 ) -> ParseResult {
     let mode = match type_parse_mode.as_deref() {
@@ -82,6 +83,7 @@ pub fn parse_jsdoc(
     };
     let options = ParseOptions {
         compat_mode: compat_mode.unwrap_or(false),
+        preserve_whitespace: preserve_whitespace.unwrap_or(false),
         base_offset: base_offset.unwrap_or(0),
         fence_aware: fence_aware.unwrap_or(true),
         parse_types: parse_types.unwrap_or(false),
@@ -170,6 +172,7 @@ pub fn parse_jsdoc_batch(
     parse_types: Option<bool>,
     type_parse_mode: Option<String>,
     compat_mode: Option<bool>,
+    preserve_whitespace: Option<bool>,
 ) -> BatchParseResult {
     assert_eq!(
         source_texts.len(),
@@ -184,6 +187,7 @@ pub fn parse_jsdoc_batch(
     };
     let options = ParseOptions {
         compat_mode: compat_mode.unwrap_or(false),
+        preserve_whitespace: preserve_whitespace.unwrap_or(false),
         base_offset: 0,
         fence_aware: fence_aware.unwrap_or(true),
         parse_types: parse_types.unwrap_or(false),
@@ -243,6 +247,7 @@ pub fn parse_jsdoc_batch_raw(
     parse_types: Option<bool>,
     type_parse_mode: Option<String>,
     compat_mode: Option<bool>,
+    preserve_whitespace: Option<bool>,
 ) -> BatchParseResult {
     let mode = match type_parse_mode.as_deref() {
         Some("typescript") => ParseMode::Typescript,
@@ -251,6 +256,7 @@ pub fn parse_jsdoc_batch_raw(
     };
     let options = ParseOptions {
         compat_mode: compat_mode.unwrap_or(false),
+        preserve_whitespace: preserve_whitespace.unwrap_or(false),
         base_offset: 0,
         fence_aware: fence_aware.unwrap_or(true),
         parse_types: parse_types.unwrap_or(false),

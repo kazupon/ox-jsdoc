@@ -14,6 +14,12 @@ export interface ParseOptions {
   typeParseMode?: 'jsdoc' | 'closure' | 'typescript'
   /** Enable jsdoccomment-compat extension fields. Default: false. */
   compatMode?: boolean
+  /** Emit per-node `description_raw_span` so the decoder's
+   *  `descriptionRaw` getter and `descriptionText(true)` method work.
+   *  Adds 8 bytes per `JsdocBlock` / `JsdocTag` ED record that has a
+   *  description. Fully orthogonal to `compatMode`. Default: false.
+   *  See `design/008-oxlint-oxfmt-support/README.md` §4.2. */
+  preserveWhitespace?: boolean
   /** Original-file absolute byte offset of `sourceText`. Default: 0. */
   baseOffset?: number
 }
@@ -57,6 +63,8 @@ export interface BatchParseOptions {
   typeParseMode?: 'jsdoc' | 'closure' | 'typescript'
   /** Enable jsdoccomment-compat extension fields. Default: false. */
   compatMode?: boolean
+  /** See `ParseOptions.preserveWhitespace`. */
+  preserveWhitespace?: boolean
 }
 
 export interface BatchParseResult {
