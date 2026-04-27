@@ -139,7 +139,6 @@ jobs:
       - build
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PUBLISH_FLAGS: --access public --no-git-checks
     steps:
       - name: Checkout codes
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -169,7 +168,9 @@ jobs:
 
       - name: Publish decoder
         working-directory: packages/decoder
-        run: pnpm publish ${PUBLISH_FLAGS}
+        run: |
+          publish_flags=(--access public --no-git-checks)
+          pnpm publish "${publish_flags[@]}"
 
       - name: Publish ox-jsdoc
         run: |
@@ -180,7 +181,8 @@ jobs:
           pnpm -C "${package_path}" exec napi artifacts --package-json-path ../../${package_path}/package.json --output-dir ../../artifacts --npm-dir ../../${npm_dir}
           pnpm -C "${package_path}" exec napi pre-publish --no-gh-release -t npm --package-json-path ../../${package_path}/package.json --npm-dir ../../${npm_dir}
           cd "${package_path}"
-          pnpm publish ${PUBLISH_FLAGS}
+          publish_flags=(--access public --no-git-checks)
+          pnpm publish "${publish_flags[@]}"
 
       - name: Publish ox-jsdoc-binary
         run: |
@@ -191,4 +193,15 @@ jobs:
           pnpm -C "${package_path}" exec napi artifacts --package-json-path ../../${package_path}/package.json --output-dir ../../artifacts --npm-dir ../../${npm_dir}
           pnpm -C "${package_path}" exec napi pre-publish --no-gh-release -t npm --package-json-path ../../${package_path}/package.json --npm-dir ../../${npm_dir}
           cd "${package_path}"
-          pnpm publish ${PUBLISH_FLAGS}
+          publish_flags=(--access public --no-git-checks)
+          pnpm publish "${publish_flags[@]}"
+
+      - name: Smoke test published packages
+        run: |
+          version=$(node -p "require('./napi/ox-jsdoc/package.json').version")
+          tmpdir=$(mktemp -d)
+          cd "${tmpdir}"
+          npm init -y
+          npm install --ignore-scripts "ox-jsdoc@${version}" "ox-jsdoc-binary@${version}"
+          node --input-type=module -e "import { parse } from 'ox-jsdoc'; const result = parse('/** hi */'); if (result.diagnostics.length !== 0) throw new Error('ox-jsdoc diagnostics mismatch'); console.log('ox-jsdoc smoke ok')"
+          node --input-type=module -e "import { parse } from 'ox-jsdoc-binary'; const result = parse('/** hi */'); if (result.diagnostics.length !== 0) throw new Error('ox-jsdoc-binary diagnostics mismatch'); console.log('ox-jsdoc-binary smoke ok')"
