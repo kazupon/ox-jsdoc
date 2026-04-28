@@ -1,6 +1,6 @@
 {
   "name": "ox-jsdoc",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "High-performance JSDoc parser powered by Rust and NAPI.",
   "keywords": [
     "jsdoc",

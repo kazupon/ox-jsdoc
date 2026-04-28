@@ -1,6 +1,6 @@
 {
   "name": "@ox-jsdoc/wasm-binary",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "High-performance JSDoc parser for the browser (WebAssembly) that returns a lazy Binary AST decoder.",
   "keywords": [
     "binary-ast",
