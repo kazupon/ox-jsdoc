@@ -13,6 +13,7 @@ const ignorePatterns = [
   // its 60 lazy classes have repetitive constructors that don't carry their
   // own JSDoc types yet. Lint coverage will return once the codegen ships.
   'packages/decoder/**',
+  'packages/jsdoccomment/**',
   'tasks/**',
   'scripts/**',
   'refers/**',

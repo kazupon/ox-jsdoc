@@ -5,13 +5,14 @@ packages:
   - 'wasm/*'
 
 allowBuilds:
+  unrs-resolver: true
   wasm-pack: true
 
 catalog:
+  '@types/node': ^25.6.0
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vite-plus: latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
-  '@types/node': ^25.6.0
 
 overrides:
   vite: 'catalog:'
