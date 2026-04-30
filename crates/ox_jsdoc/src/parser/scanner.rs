@@ -45,12 +45,12 @@ pub struct ScanResult<'a> {
 
 /// JSDoc blocks must start with `/**`; plain `/*` comments are rejected.
 pub fn is_jsdoc_block(source_text: &str) -> bool {
-    source_text.starts_with("/**")
+    source_text.trim_start().starts_with("/**")
 }
 
 /// The parser currently accepts only complete block comments.
 pub fn has_closing_block(source_text: &str) -> bool {
-    source_text.ends_with("*/")
+    source_text.trim_end().ends_with("*/")
 }
 
 /// Return the byte range between the opening `/**` and closing `*/`.
@@ -59,7 +59,9 @@ pub fn body_range(source_text: &str) -> Option<(usize, usize)> {
         return None;
     }
 
-    Some((3, source_text.len() - 2))
+    let leading = source_text.len() - source_text.trim_start().len();
+    let trailing = source_text.len() - source_text.trim_end().len();
+    Some((leading + 3, source_text.len() - trailing - 2))
 }
 
 /// Split the comment body into content lines with parallel margin metadata.
