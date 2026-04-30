@@ -969,6 +969,95 @@ describe('parseComment (string)', function () {
   });
 });
 
+describe('parseComment (problems)', function () {
+  /** @type {{value: string, problem: import('comment-parser').Problem}[]} */
+  const problemCases = [
+    {
+      value: '* @param {Object[]} employees[.name - The name of an employee.',
+      problem: {
+        code: 'spec:name:unpaired-brackets',
+        message: 'unpaired brackets',
+        line: 0,
+        critical: true
+      }
+    },
+    {
+      value: '* @param {Object[]} [] - The name of an employee.',
+      problem: {
+        code: 'spec:name:empty-name',
+        message: 'empty name',
+        line: 0,
+        critical: true
+      }
+    },
+    {
+      value: '* @param {string} [name=] - The name of an employee.',
+      problem: {
+        code: 'spec:name:empty-default',
+        message: 'empty default value',
+        line: 0,
+        critical: true
+      }
+    },
+    {
+      value: '* @param {string} [name==] - The name of an employee.',
+      problem: {
+        code: 'spec:name:invalid-default',
+        message: 'invalid default value syntax',
+        line: 0,
+        critical: true
+      }
+    }
+  ];
+
+  for (const {value, problem} of problemCases) {
+    it(`Reports ${problem.code}`, function () {
+      const parsed = parseComment({value});
+
+      expect(parsed.tags[0].problems).to.deep.equal([problem]);
+      expect(parsed.problems).to.deep.equal([problem]);
+    });
+  }
+
+  it('Keeps valid optional defaults problem-free', function () {
+    const parsed = parseComment({
+      value: '* @param {string} [name=default] - ok.'
+    });
+
+    expect(parsed.tags[0].problems).to.deep.equal([]);
+    expect(parsed.problems).to.deep.equal([]);
+  });
+
+  it('Reports unpaired type curlies', function () {
+    const problem = {
+      code: 'spec:type:unpaired-curlies',
+      message: 'unpaired curlies',
+      line: 0,
+      critical: true
+    };
+    const parsed = parseComment({
+      value: '* @param {string foo'
+    });
+
+    expect(parsed.tags[0].problems).to.deep.equal([problem]);
+    expect(parsed.problems).to.deep.equal([problem]);
+  });
+
+  it('Maps parser diagnostics to block problems', function () {
+    const parsed = parseComment('/**\n * {@link foo\n */');
+
+    expect(parsed.tags).to.deep.equal([]);
+    expect(parsed.problems).to.deep.equal([
+      {
+        code: 'custom',
+        message: 'inline tag is not closed',
+        line: 0,
+        critical: true
+      }
+    ]);
+  });
+});
+
 describe('parseComment (error)', function () {
   it('Throws on invalid argument (null)', function () {
     // @ts-expect-error -- Testing bad arg.
