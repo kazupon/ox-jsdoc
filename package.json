@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
-    "pack": "vp pack",
-    "test": "cargo test && pnpm --filter ox-jsdoc test && vp test",
+    "test": "cargo test && pnpm -r test",
     "check": "cargo run -p xtask -- headers:check && cargo check && vp check",
     "fmt": "cargo fmt && vp fmt",
     "release": "bumpp \"package.json\" \"wasm/**/package.json\" \"packages/*/package.json\" \"napi/*/package.json\" --commit \"release: v%s\" --all --push --tag",

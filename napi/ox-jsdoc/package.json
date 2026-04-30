@@ -41,7 +41,7 @@
   "scripts": {
     "build-dev": "napi build --esm --platform --js bindings.js --dts bindings.d.ts --output-dir src-js",
     "build": "pnpm run build-dev --release",
-    "test": "vp test run --config vitest.config.ts"
+    "test": "vp test run"
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.6.1",
