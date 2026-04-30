@@ -9,8 +9,6 @@
  * @license MIT
  */
 
-// @ts-check
-
 const HEADER_SIZE = 40
 const NODE_RECORD_SIZE = 24
 
@@ -20,51 +18,98 @@ const TYPE_TAG_EXTENDED = 0b10
 
 const NODE_LIST_KIND = 0x7f
 
+type NodeDataTypeTag = typeof TYPE_TAG_CHILDREN | typeof TYPE_TAG_STRING | typeof TYPE_TAG_EXTENDED
+
+interface EmitNodeArgs {
+  parentIndex: number
+  kind: number
+  commonData?: number
+  posStart?: number
+  posEnd?: number
+  nodeData: number
+}
+
+interface EmitStringNodeArgs {
+  parentIndex: number
+  kind: number
+  value: string
+  commonData?: number
+  posStart?: number
+  posEnd?: number
+}
+
+interface EmitChildrenNodeArgs {
+  parentIndex: number
+  kind: number
+  commonData?: number
+  posStart?: number
+  posEnd?: number
+  bitmask?: number
+}
+
+interface EmitNodeListArgs {
+  parentIndex: number
+  elementCount?: number
+  posStart?: number
+  posEnd?: number
+}
+
+interface EmitExtendedNodeArgs {
+  parentIndex: number
+  kind: number
+  commonData?: number
+  posStart?: number
+  posEnd?: number
+  extOffset: number
+}
+
+interface RootEntry {
+  nodeIndex: number
+  sourceOffset?: number
+  baseOffset?: number
+}
+
 /**
  * Pack `(typeTag, payload)` into a Node Data u32.
- *
- * @param {number} typeTag 0=Children, 1=String, 2=Extended
- * @param {number} payload 30-bit value
  */
-function packNodeData(typeTag, payload) {
+function packNodeData(typeTag: NodeDataTypeTag, payload: number): number {
   return ((typeTag & 0b11) << 30) | (payload & 0x3fff_ffff)
 }
 
-function align4(value) {
+function align4(value: number): number {
   return (value + 3) & ~3
 }
 
 export class FixtureBuilder {
+  compatMode: boolean
+  stringOffsets: Array<[number, number]>
+  stringData: Uint8Array
+  stringIndex: Map<string, number>
+  extendedData: Uint8Array
+  diagnostics: Array<{ rootIndex: number; messageIndex: number }>
+  nodes: Uint8Array[]
+  rootEntries: Array<Required<RootEntry>>
+  lastChildOfParent: Map<number, number>
+  sourceTextLength: number
+
   constructor() {
-    /** @type {boolean} */
     this.compatMode = false
-    /** @type {Array<[number, number]>} */
     this.stringOffsets = []
-    /** @type {Uint8Array} */
     this.stringData = new Uint8Array(0)
-    /** @type {Map<string, number>} */
     this.stringIndex = new Map()
-    /** @type {Uint8Array} */
     this.extendedData = new Uint8Array(0)
-    /** @type {Array<{ rootIndex: number, messageIndex: number }>} */
     this.diagnostics = []
-    /** @type {Array<Uint8Array>} */
     this.nodes = [new Uint8Array(NODE_RECORD_SIZE)] // sentinel node[0]
-    /** @type {Array<{ nodeIndex: number, sourceOffset: number, baseOffset: number }>} */
     this.rootEntries = []
-    /** @type {Map<number, number>} parent_index → last child node_index */
     this.lastChildOfParent = new Map()
-    /** @type {number} */
     this.sourceTextLength = 0
   }
 
   /**
    * Intern a UTF-8 string and return its String Offsets index.
    *
-   * @param {string} value
-   * @returns {number}
    */
-  internString(value) {
+  internString(value: string): number {
     const cached = this.stringIndex.get(value)
     if (cached !== undefined) {
       return cached
@@ -87,10 +132,8 @@ export class FixtureBuilder {
    * Extended Data section. Pads the final extended buffer to 8-byte
    * alignment when subsequent records are written.
    *
-   * @param {number} byteSize
-   * @returns {number}
    */
-  reserveExtended(byteSize) {
+  reserveExtended(byteSize: number): number {
     const start = this.extendedData.length
     const merged = new Uint8Array(start + byteSize)
     merged.set(this.extendedData)
@@ -101,26 +144,23 @@ export class FixtureBuilder {
   /**
    * Write into a previously-reserved Extended Data slot.
    *
-   * @param {number} offset
-   * @param {Uint8Array} bytes
    */
-  writeExtended(offset, bytes) {
+  writeExtended(offset: number, bytes: Uint8Array): void {
     this.extendedData.set(bytes, offset)
   }
 
   /**
    * Emit a node record.
    *
-   * @param {object} args
-   * @param {number} args.parentIndex
-   * @param {number} args.kind
-   * @param {number} [args.commonData] 6-bit value
-   * @param {number} [args.posStart]
-   * @param {number} [args.posEnd]
-   * @param {number} args.nodeData Pre-packed Node Data u32.
-   * @returns {number} Newly-assigned node_index.
    */
-  emitNode({ parentIndex, kind, commonData = 0, posStart = 0, posEnd = 0, nodeData }) {
+  emitNode({
+    parentIndex,
+    kind,
+    commonData = 0,
+    posStart = 0,
+    posEnd = 0,
+    nodeData
+  }: EmitNodeArgs): number {
     const newIndex = this.nodes.length
     const buf = new Uint8Array(NODE_RECORD_SIZE)
     const view = new DataView(buf.buffer)
@@ -145,15 +185,8 @@ export class FixtureBuilder {
   /**
    * Emit a String-type leaf node.
    *
-   * @param {object} args
-   * @param {number} args.parentIndex
-   * @param {number} args.kind
-   * @param {string} args.value
-   * @param {number} [args.commonData]
-   * @param {number} [args.posStart]
-   * @param {number} [args.posEnd]
    */
-  emitStringNode(args) {
+  emitStringNode(args: EmitStringNodeArgs): number {
     const stringIdx = this.internString(args.value)
     return this.emitNode({
       parentIndex: args.parentIndex,
@@ -168,7 +201,7 @@ export class FixtureBuilder {
   /**
    * Emit a Children-type node (bitmask in payload, no Extended Data).
    */
-  emitChildrenNode(args) {
+  emitChildrenNode(args: EmitChildrenNodeArgs): number {
     return this.emitNode({
       parentIndex: args.parentIndex,
       kind: args.kind,
@@ -182,13 +215,8 @@ export class FixtureBuilder {
   /**
    * Emit a NodeList wrapper (Kind 0x7F).
    *
-   * @param {object} args
-   * @param {number} args.parentIndex
-   * @param {number} [args.elementCount]
-   * @param {number} [args.posStart]
-   * @param {number} [args.posEnd]
    */
-  emitNodeList(args) {
+  emitNodeList(args: EmitNodeListArgs): number {
     return this.emitNode({
       parentIndex: args.parentIndex,
       kind: NODE_LIST_KIND,
@@ -202,7 +230,7 @@ export class FixtureBuilder {
    * Emit an Extended-type node. The caller pre-reserves the Extended Data
    * record via {@link reserveExtended} and passes its offset.
    */
-  emitExtendedNode(args) {
+  emitExtendedNode(args: EmitExtendedNodeArgs): number {
     return this.emitNode({
       parentIndex: args.parentIndex,
       kind: args.kind,
@@ -216,25 +244,23 @@ export class FixtureBuilder {
   /**
    * Add a Root index entry.
    */
-  pushRoot({ nodeIndex, sourceOffset = 0, baseOffset = 0 }) {
+  pushRoot({ nodeIndex, sourceOffset = 0, baseOffset = 0 }: RootEntry): void {
     this.rootEntries.push({ nodeIndex, sourceOffset, baseOffset })
   }
 
   /**
    * Set the `sourceTextLength` Header field.
    *
-   * @param {number} length
    */
-  setSourceTextLength(length) {
+  setSourceTextLength(length: number): void {
     this.sourceTextLength = length
   }
 
   /**
    * Materialize the buffer.
    *
-   * @returns {Uint8Array}
    */
-  build() {
+  build(): Uint8Array {
     // Section boundaries are padded to 4-byte alignment so the decoder's
     // `Uint32Array` view can read u32 fields with a single MOV. Mirrors
     // `crates/ox_jsdoc_binary/src/writer/binary_writer.rs`'s `align_up_4`

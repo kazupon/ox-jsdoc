@@ -9,8 +9,6 @@
  * @license MIT
  */
 
-// @ts-check
-
 import {
   RemoteJsdocBlock,
   RemoteJsdocBorrowsTagBody,
@@ -27,8 +25,8 @@ import {
   RemoteJsdocText,
   RemoteJsdocTypeLine,
   RemoteJsdocTypeSource
-} from './nodes/jsdoc.js'
-import { RemoteNodeListNode } from './nodes/node-list-node.js'
+} from './nodes/jsdoc.ts'
+import { RemoteNodeListNode } from './nodes/node-list-node.ts'
 import {
   RemoteTypeAny,
   RemoteTypeAsserts,
@@ -75,15 +73,15 @@ import {
   RemoteTypeUniqueSymbol,
   RemoteTypeUnknown,
   RemoteTypeVariadic
-} from './nodes/type-nodes.js'
+} from './nodes/type-nodes.ts'
+
+import type { LazyNodeConstructor } from './types.ts'
 
 /**
  * Flat 256-entry table indexed by the Kind byte. `undefined` entries fall
  * into the reserved space and trip an explicit error in `decodeKindToClass`.
- *
- * @type {Array<Function | undefined>}
  */
-const KIND_TABLE = new Array(256)
+const KIND_TABLE: Array<LazyNodeConstructor | undefined> = Array.from({ length: 256 })
 
 // Comment AST (0x01 - 0x0F)
 KIND_TABLE[0x01] = RemoteJsdocBlock
@@ -154,11 +152,8 @@ KIND_TABLE[0xac] = RemoteTypeReadonlyProperty
 
 /**
  * Look up the lazy class for a given Kind byte.
- *
- * @param {number} kind
- * @returns {Function}
  */
-export function decodeKindToClass(kind) {
+export function decodeKindToClass(kind: number): LazyNodeConstructor {
   const Class = KIND_TABLE[kind]
   if (Class === undefined) {
     throw new Error(`unknown Kind: 0x${kind.toString(16).padStart(2, '0')}`)

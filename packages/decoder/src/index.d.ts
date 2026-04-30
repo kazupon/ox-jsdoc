@@ -55,6 +55,7 @@ export class RemoteSourceFile {
   getString(idx: number): string | null
   getStringByField(offset: number, length: number): string | null
   getRootBaseOffset(rootIndex: number): number
+  getRootSourceText(rootIndex: number): string
   getNode(nodeIndex: number, parent: RemoteNode | null, rootIndex?: number): RemoteNode | null
 }
 
@@ -652,4 +653,3 @@ export class RemoteNodeListNode implements RemoteNode {
  * child nodes here, not strings).
  */
 export const jsdocVisitorKeys: Readonly<Record<string, readonly string[]>>
-

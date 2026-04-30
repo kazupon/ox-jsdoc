@@ -8,10 +8,8 @@
  * @license MIT
  */
 
-// @ts-check
-
-export { RemoteSourceFile } from './internal/source-file.js'
-export { EMPTY_NODE_LIST, RemoteNodeList } from './internal/node-list.js'
+export { RemoteSourceFile } from './internal/source-file.ts'
+export { EMPTY_NODE_LIST, RemoteNodeList } from './internal/node-list.ts'
 
 // Comment AST classes — exported so consumers can `instanceof` check them.
 export {
@@ -30,7 +28,7 @@ export {
   RemoteJsdocText,
   RemoteJsdocTypeLine,
   RemoteJsdocTypeSource
-} from './internal/nodes/jsdoc.js'
+} from './internal/nodes/jsdoc.ts'
 
 // TypeNode classes (45).
 export {
@@ -79,9 +77,9 @@ export {
   RemoteTypeUniqueSymbol,
   RemoteTypeUnknown,
   RemoteTypeVariadic
-} from './internal/nodes/type-nodes.js'
+} from './internal/nodes/type-nodes.ts'
 
-export { RemoteNodeListNode } from './internal/nodes/node-list-node.js'
+export { RemoteNodeListNode } from './internal/nodes/node-list-node.ts'
 
 /**
  * Visitor keys for every Remote* node kind (60 = 15 Comment AST + 45 TypeNode).
@@ -193,11 +191,8 @@ export const jsdocVisitorKeys = Object.freeze({
  * Recursively convert a Remote* lazy node into a plain JSON object.
  * Handy for browser DevTools (where `Symbol.for('nodejs.util.inspect.custom')`
  * has no effect) and for general logging.
- *
- * @param {unknown} node
- * @returns {unknown}
  */
-export function toPlainObject(node) {
+export function toPlainObject(node: unknown): unknown {
   if (node === null || node === undefined) {
     return node
   }
@@ -207,8 +202,9 @@ export function toPlainObject(node) {
   if (Array.isArray(node)) {
     return node.map(toPlainObject)
   }
-  if (typeof (/** @type {{ toJSON?: () => unknown }} */ (node).toJSON) === 'function') {
-    return /** @type {{ toJSON: () => unknown }} */ (node).toJSON()
+  const candidate = node as { toJSON?: () => unknown }
+  if (typeof candidate.toJSON === 'function') {
+    return candidate.toJSON()
   }
   return node
 }

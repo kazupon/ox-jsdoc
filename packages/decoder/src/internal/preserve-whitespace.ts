@@ -13,8 +13,6 @@
  * @license MIT
  */
 
-// @ts-check
-
 const ALNUM_OR_UNDERSCORE = /^[\p{L}\p{N}_]/u
 
 /**
@@ -29,10 +27,8 @@ const ALNUM_OR_UNDERSCORE = /^[\p{L}\p{N}_]/u
  *
  * Single-line input takes a fast path that just returns `raw.trim()`.
  *
- * @param {string} raw
- * @returns {string}
  */
-export function parsedPreservingWhitespace(raw) {
+export function parsedPreservingWhitespace(raw: string): string {
   if (!raw.includes('\n')) {
     return raw.trim()
   }
@@ -43,7 +39,9 @@ export function parsedPreservingWhitespace(raw) {
   const lines = trimmedTrailing.split('\n')
   let result = ''
   for (let i = 0; i < lines.length; i++) {
-    if (i > 0) result += '\n'
+    if (i > 0) {
+      result += '\n'
+    }
     const trimmed = lines[i].trim()
     if (trimmed.startsWith('*')) {
       const rest = trimmed.slice(1)

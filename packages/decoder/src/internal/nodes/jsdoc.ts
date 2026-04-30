@@ -10,8 +10,6 @@
  * @license MIT
  */
 
-// @ts-check
-
 import {
   COMMON_DATA_MASK,
   COMMON_DATA_OFFSET,
@@ -22,7 +20,7 @@ import {
   JSDOC_TAG_COMPAT_SIZE as JSDOC_TAG_COMPAT_SIZE_CONST,
   JSDOC_TAG_HAS_DESCRIPTION_RAW_SPAN_BIT,
   STRING_FIELD_SIZE
-} from '../constants.js'
+} from '../constants.ts'
 import {
   absoluteRange,
   childNodeAtVisitorIndex,
@@ -31,10 +29,18 @@ import {
   extU32,
   extU8,
   stringPayloadOf
-} from '../helpers.js'
-import { inspectPayload, inspectSymbol } from '../inspect.js'
-import { nodeListAtSlotExtended } from '../node-list.js'
-import { parsedPreservingWhitespace } from '../preserve-whitespace.js'
+} from '../helpers.ts'
+import { inspectPayload, inspectSymbol } from '../inspect.ts'
+import { nodeListAtSlotExtended, RemoteNodeList } from '../node-list.ts'
+import { parsedPreservingWhitespace } from '../preserve-whitespace.ts'
+import type {
+  LazyNode,
+  LazyNodeConstructor,
+  RemoteInternal,
+  RemoteJsonObject,
+  RemoteJsonValue,
+  RemoteSourceFileLike
+} from '../types.ts'
 
 // ---------------------------------------------------------------------------
 // Per-Kind ED list-metadata slot offsets (see
@@ -127,10 +133,46 @@ const COMPAT_LINE_INITIAL = 3 * STRING_FIELD_SIZE
 // parse time, content on opening/closing line) produce close-but-imperfect
 // output and are tracked alongside the Level 2 dynamic comparison test.
 
+interface LineTokens {
+  start: string
+  delimiter: string
+  postDelimiter: string
+  tag: string
+  postTag: string
+  name: string
+  postName: string
+  type: string
+  postType: string
+  description: string
+  end: string
+  lineEnd: string
+}
+
+interface PhysicalLine {
+  source: string
+  lineEnd: string
+  startOffset: number
+  endOffset: number
+}
+
+interface SourceEntry {
+  number: number
+  source: string
+  tokens: LineTokens
+  startOffset: number
+  endOffset: number
+}
+
+interface PublicSourceEntry {
+  number: number
+  source: string
+  tokens: LineTokens
+}
+
 /** Empty `tokens` template — every key present so consumers can index by
  * field name without truthy checks. Mirrors comment-parser's
  * `seedTokens()`. */
-function emptyTokens() {
+function emptyTokens(): LineTokens {
   return {
     start: '',
     delimiter: '',
@@ -150,7 +192,7 @@ function emptyTokens() {
 /** Concatenate every token field (in jsdoccomment order) to rebuild the
  * `source` string for one line. Mirrors `comment-parser.stringify()` for
  * a single Line. */
-function tokensToSource(t) {
+function tokensToSource(t: LineTokens): string {
   return (
     t.start +
     t.delimiter +
@@ -167,106 +209,374 @@ function tokensToSource(t) {
   )
 }
 
-/** Build one source-array entry from a `JsdocDescriptionLine`. The entry
- * carries no tag/type/name segments; only the line's prose. */
-function descriptionLineToSourceEntry(descLine, number) {
-  const tokens = emptyTokens()
-  tokens.start = descLine.initial ?? ''
-  tokens.delimiter = descLine.delimiter ?? ''
-  tokens.postDelimiter = descLine.postDelimiter ?? ''
-  tokens.description = descLine.description ?? ''
-  return { number, source: tokensToSource(tokens), tokens }
+const DEFAULT_NO_TYPES = new Set([
+  'default',
+  'defaultvalue',
+  'description',
+  'example',
+  'file',
+  'fileoverview',
+  'license',
+  'overview',
+  'see',
+  'summary'
+])
+
+const DEFAULT_NO_NAMES = new Set([
+  'access',
+  'author',
+  'default',
+  'defaultvalue',
+  'description',
+  'example',
+  'exception',
+  'file',
+  'fileoverview',
+  'kind',
+  'license',
+  'overview',
+  'return',
+  'returns',
+  'since',
+  'summary',
+  'throws',
+  'version',
+  'variation'
+])
+
+const TAG_HEADER_RE = /^@(?<tag>[^\s{]+)(?<postTag>\s*)/u
+
+interface ConsumedType {
+  type: string
+  postType: string
+  rest: string
 }
 
-/** Build the per-tag header entry (the line carrying `@name {type} value …`). */
-function tagHeaderToSourceEntry(tag, number) {
-  const tokens = emptyTokens()
-  tokens.start = tag.initial ?? ''
-  tokens.delimiter = tag.delimiter ?? ''
-  tokens.postDelimiter = tag.postDelimiter ?? ''
-  tokens.tag = tag.tag ? '@' + tag.tag.value : ''
-  tokens.postTag = tag.postTag ?? ''
-  // jsdoccomment keeps the surrounding braces in `type`; ox-jsdoc's
-  // RemoteJsdocTypeSource strips them, so wrap them back.
-  if (tag.rawType) {
-    tokens.type = '{' + tag.rawType.raw + '}'
+function consumeBalancedType(text: string): ConsumedType | null {
+  if (!text.startsWith('{')) {
+    return null
   }
-  tokens.postType = tag.postType ?? ''
-  if (tag.name) {
-    tokens.name = tag.name.raw
+  let depth = 0
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (ch === '{') {
+      depth++
+    }
+    if (ch === '}') {
+      depth--
+      if (depth === 0) {
+        const type = text.slice(0, i + 1)
+        const rest = text.slice(i + 1)
+        const ws = rest.match(/^\s*/u)?.[0] ?? ''
+        return { type, postType: ws, rest: rest.slice(ws.length) }
+      }
+    }
   }
-  tokens.postName = tag.postName ?? ''
-  tokens.description = tag.description ?? ''
-  tokens.lineEnd = tag.lineEnd ?? ''
-  return { number, source: tokensToSource(tokens), tokens }
+  return null
 }
 
-/** Build the `source[]` array for a JsdocBlock. */
-function buildBlockSource(block) {
-  const out = []
-  let number = 0
+interface BraceState {
+  depth: number
+  closeIndex: number
+}
 
-  // Opening `/**` line. ox-jsdoc currently stores `block.delimiter` as the
-  // per-line `*` marker (see KNOWN_DIFFERENCES), so we override here with
-  // the literal `/**` to match jsdoccomment's expectation.
-  const openingTokens = emptyTokens()
-  openingTokens.start = block.initial ?? ''
-  openingTokens.delimiter = '/**'
-  openingTokens.postDelimiter = block.postDelimiter ?? ''
-  out.push({ number: number++, source: tokensToSource(openingTokens), tokens: openingTokens })
+function braceDepthDelta(text: string, initialDepth = 0): BraceState {
+  let depth = initialDepth
+  let closeIndex = -1
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (ch === '{') {
+      depth++
+    }
+    if (ch === '}') {
+      depth--
+      if (depth === 0) {
+        closeIndex = i
+        break
+      }
+    }
+  }
+  return { depth, closeIndex }
+}
 
-  // Block-level description lines.
-  for (const descLine of block.descriptionLines) {
-    out.push(descriptionLineToSourceEntry(descLine, number++))
+interface SplitName {
+  name: string
+  postName: string
+  rest: string
+}
+
+function splitName(text: string): SplitName {
+  if (text === '') {
+    return { name: '', postName: '', rest: '' }
+  }
+  const match = text.match(/^(?<name>\S+)(?<postName>\s*)(?<rest>.*)$/su)
+  return {
+    name: match?.groups?.name ?? '',
+    postName: match?.groups?.postName ?? '',
+    rest: match?.groups?.rest ?? ''
+  }
+}
+
+function splitTemplateName(text: string): SplitName {
+  let pos: number
+  if (text.startsWith('[') && text.includes(']')) {
+    const endingBracketPos = text.lastIndexOf(']')
+    pos = text.slice(endingBracketPos).search(/(?<![\s,])\s/u)
+    if (pos > -1) {
+      pos += endingBracketPos
+    }
+  } else {
+    pos = text.search(/(?<![\s,])\s/u)
+  }
+  const name = pos === -1 ? text : text.slice(0, pos)
+  const extra = pos === -1 ? '' : text.slice(pos)
+  const match = extra.match(/^(?<postName>\s*)(?<rest>[^\r]*)(?<lineEnd>\r)?$/u)
+  return {
+    name,
+    postName: match?.groups?.postName ?? '',
+    rest: match?.groups?.rest ?? ''
+  }
+}
+
+function applyTagTokens(tokens: LineTokens): void {
+  const header = tokens.description.match(TAG_HEADER_RE)
+  if (!header?.groups) {
+    return
   }
 
-  // Tags. Each tag contributes a header line + one continuation entry
-  // per *additional* descriptionLine. The first descriptionLine shares
-  // the same source line as the tag header (jsdoccomment treats them as
-  // one source row), so we skip index 0. (typeLines beyond the first
-  // are an edge case we collapse into the description for v1; revisit
-  // alongside the parser multi-line type fix.)
-  for (const tag of block.tags) {
-    out.push(tagHeaderToSourceEntry(tag, number++))
-    for (let i = 1; i < tag.descriptionLines.length; i++) {
-      out.push(descriptionLineToSourceEntry(tag.descriptionLines[i], number++))
+  const tagName = header.groups.tag!
+  tokens.tag = '@' + tagName
+  tokens.postTag = header.groups.postTag ?? ''
+  let rest = tokens.description.slice(header[0].length)
+  tokens.description = ''
+
+  if (!DEFAULT_NO_TYPES.has(tagName)) {
+    const parsedType = consumeBalancedType(rest)
+    if (parsedType) {
+      tokens.type = parsedType.type
+      tokens.postType = parsedType.postType
+      rest = parsedType.rest
+    } else if (rest.startsWith('{')) {
+      tokens.type = rest
+      return
     }
   }
 
-  // Closing `*/` line.
-  const closingTokens = emptyTokens()
-  closingTokens.start = block.initial ?? ''
-  closingTokens.end = block.terminal ?? '*/'
-  out.push({ number, source: tokensToSource(closingTokens), tokens: closingTokens })
+  if (tagName === 'template') {
+    const parsedName = splitTemplateName(rest)
+    tokens.name = parsedName.name
+    tokens.postName = parsedName.postName
+    tokens.description = parsedName.rest
+    return
+  }
 
-  return out
+  if (
+    DEFAULT_NO_NAMES.has(tagName) ||
+    (tagName === 'see' && /\{@link.+?\}/u.test(tokensToSource(tokens) + rest))
+  ) {
+    tokens.description = rest
+    return
+  }
+
+  const parsedName = splitName(rest)
+  tokens.name = parsedName.name
+  tokens.postName = parsedName.postName
+  tokens.description = parsedName.rest
 }
 
-/** Build the per-tag `source[]` subset (every line that belongs to this
- * tag — header + descriptionLines beyond the first). The `number` field
- * is left tag-local (as if the tag stood alone). */
-function buildTagSource(tag) {
-  const out = []
-  let number = 0
-  out.push(tagHeaderToSourceEntry(tag, number++))
-  // Skip descriptionLines[0] — same source row as the tag header.
-  for (let i = 1; i < tag.descriptionLines.length; i++) {
-    out.push(descriptionLineToSourceEntry(tag.descriptionLines[i], number++))
+function splitPhysicalLines(sourceText: string, baseOffset: number): PhysicalLine[] {
+  const lines: PhysicalLine[] = []
+  let offset = 0
+  const pattern = /.*(?:\r\n|\n|\r|$)/gu
+  for (const match of sourceText.matchAll(pattern)) {
+    const raw = match[0]
+    if (raw === '') {
+      break
+    }
+    let lineEnd = ''
+    let source = raw
+    if (raw.endsWith('\r\n')) {
+      lineEnd = '\r\n'
+      source = raw.slice(0, -2)
+    } else if (raw.endsWith('\n') || raw.endsWith('\r')) {
+      lineEnd = raw.at(-1) ?? ''
+      source = raw.slice(0, -1)
+    }
+    lines.push({
+      source,
+      lineEnd,
+      startOffset: baseOffset + offset,
+      endOffset: baseOffset + offset + source.length
+    })
+    offset += raw.length
   }
-  return out
+  return lines
+}
+
+function lineToSourceEntry(line: PhysicalLine, number: number): SourceEntry {
+  const tokens = emptyTokens()
+  tokens.lineEnd = ''
+
+  let rest = line.source
+  const opening = rest.indexOf('/**')
+  if (opening !== -1) {
+    tokens.start = rest.slice(0, opening)
+    tokens.delimiter = '/**'
+    rest = rest.slice(opening + 3)
+  } else {
+    const initial = rest.match(/^\s*/u)?.[0] ?? ''
+    tokens.start = initial
+    rest = rest.slice(initial.length)
+    if (rest.startsWith('*') && !rest.startsWith('*/')) {
+      tokens.delimiter = '*'
+      rest = rest.slice(1)
+    }
+  }
+
+  if (tokens.delimiter) {
+    const postDelimiter = rest.match(/^[ \t]*/u)?.[0] ?? ''
+    tokens.postDelimiter = postDelimiter
+    rest = rest.slice(postDelimiter.length)
+  }
+
+  if (rest.endsWith('*/')) {
+    tokens.end = '*/'
+    rest = rest.slice(0, -2)
+  }
+
+  tokens.description = rest
+  applyTagTokens(tokens)
+
+  return {
+    number,
+    source: tokensToSource(tokens),
+    tokens,
+    startOffset: line.startOffset,
+    endOffset: line.endOffset
+  }
+}
+
+function applyMultilineTypeTokens(entries: SourceEntry[]): void {
+  let depth = 0
+  for (const entry of entries) {
+    const { tokens } = entry
+    if (depth === 0) {
+      if (!tokens.tag) {
+        continue
+      }
+      const typeText = tokens.type || tokens.description
+      if (!typeText.startsWith('{')) {
+        continue
+      }
+      const typeState = braceDepthDelta(typeText)
+      if (typeState.closeIndex !== -1) {
+        continue
+      }
+      tokens.type = typeText
+      tokens.description = ''
+      depth = typeState.depth
+      entry.source = tokensToSource(tokens)
+      continue
+    }
+
+    let text = tokens.description
+    if (tokens.delimiter && tokens.postDelimiter.length > 1) {
+      text = tokens.postDelimiter.slice(1) + text
+      tokens.postDelimiter = tokens.postDelimiter[0] ?? ''
+    }
+    const typeState = braceDepthDelta(text, depth)
+    if (typeState.closeIndex === -1) {
+      tokens.type = text
+      tokens.description = ''
+      depth = typeState.depth
+      entry.source = tokensToSource(tokens)
+      continue
+    }
+
+    tokens.type = text.slice(0, typeState.closeIndex + 1)
+    const rest = text.slice(typeState.closeIndex + 1)
+    const postType = rest.match(/^\s*/u)?.[0] ?? ''
+    tokens.postType = postType
+    const afterType = rest.slice(postType.length)
+    const parsedName = splitName(afterType)
+    tokens.name = parsedName.name
+    tokens.postName = parsedName.postName
+    tokens.description = parsedName.rest
+    depth = 0
+    entry.source = tokensToSource(tokens)
+  }
+}
+
+function stripSourceEntryMeta(entry: SourceEntry, number = entry.number): PublicSourceEntry {
+  return {
+    number,
+    source: entry.source,
+    tokens: entry.tokens
+  }
+}
+
+/**
+ * Minimal interface needed by the source[] reconstruction helpers — every
+ * lazy class that owns a `range` / `parent` / `rootIndex` / `sourceFile`
+ * tuple satisfies it. `parent` is the generic `LazyNode | null` (we only
+ * need `.range` from it, which every LazyNode exposes).
+ */
+interface SourceLikeNode {
+  readonly range: readonly [number, number]
+  readonly parent: LazyNode | null
+  readonly rootIndex: number
+  readonly sourceFile: RemoteSourceFileLike
+}
+
+function buildSourceEntriesForNode(node: SourceLikeNode): SourceEntry[] {
+  const baseOffset = node.sourceFile.getRootBaseOffset(node.rootIndex)
+  // Use the parent's range when available (the parent is the JsdocBlock
+  // root for tag-side reconstruction); otherwise fall back to the node's
+  // own range. Only `.range` is consumed so we don't need the parent to
+  // be a SourceLikeNode itself.
+  const [rootStart, rootEnd] = node.parent !== null ? node.parent.range : node.range
+  const sourceText =
+    node.sourceFile.sliceSourceText(node.rootIndex, rootStart - baseOffset, rootEnd - baseOffset) ??
+    ''
+
+  const entries = splitPhysicalLines(sourceText, rootStart).map((line, number) =>
+    lineToSourceEntry(line, number)
+  )
+  applyMultilineTypeTokens(entries)
+  return entries
+}
+
+function buildBlockSource(block: SourceLikeNode): PublicSourceEntry[] {
+  return buildSourceEntriesForNode(block).map(entry => stripSourceEntryMeta(entry))
+}
+
+function buildTagSourceFromRoot(tag: SourceLikeNode): PublicSourceEntry[] {
+  const entries = buildSourceEntriesForNode(tag)
+  const [tagStart, tagEnd] = tag.range
+  return entries
+    .filter(entry => entry.endOffset > tagStart && entry.startOffset < tagEnd)
+    .map(entry => stripSourceEntryMeta(entry))
+}
+
+function stripTypeBraces(type: string): string {
+  return type.replace(/^\{/u, '').replace(/\}$/u, '')
+}
+
+function compactDescriptionFromEntries(entries: PublicSourceEntry[]): string {
+  return entries
+    .filter(entry => entry.tokens.tag === '')
+    .map(entry => entry.tokens.description)
+    .map(description => description.replace(/^\s*/u, ''))
+    .filter(Boolean)
+    .join(' ')
 }
 
 // ---------------------------------------------------------------------------
 // Local helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Read the 6-bit Common Data byte for a node.
- *
- * @param {import('../helpers.js').RemoteInternal} internal
- * @returns {number}
- */
-function commonData(internal) {
+/** Read the 6-bit Common Data byte for a node. */
+function commonData(internal: RemoteInternal): number {
   return internal.view.getUint8(internal.byteIndex + COMMON_DATA_OFFSET) & COMMON_DATA_MASK
 }
 
@@ -274,7 +584,17 @@ function commonData(internal) {
  * `JsdocInlineTagFormat` numeric → string label.
  * Mirrors Rust's `JsdocInlineTagFormat` enum order.
  */
-const INLINE_TAG_FORMATS = ['plain', 'pipe', 'space', 'prefix', 'unknown']
+const INLINE_TAG_FORMATS = ['plain', 'pipe', 'space', 'prefix', 'unknown'] as const
+type InlineTagFormat = (typeof INLINE_TAG_FORMATS)[number]
+
+/**
+ * Per-class internal cache shape. Each Remote* class extends this with
+ * `$<getter>` slots for its own lazily-computed values. Defined as the
+ * intersection between the immutable wiring pieces (view/byteIndex/...)
+ * and an open-ended record of cache slots so subclasses can add fields
+ * without re-declaring the wiring fields each time.
+ */
+type LazyInternal<TCache> = RemoteInternal & TCache
 
 // ===========================================================================
 // 0x01 RemoteJsdocBlock
@@ -292,14 +612,36 @@ const INLINE_TAG_FORMATS = ['plain', 'pipe', 'space', 'prefix', 'unknown']
 //   byte 44-49  : preterminal_line_break
 // ===========================================================================
 
+interface JsdocBlockCache {
+  $range: readonly [number, number] | undefined
+  $description: string | null | undefined
+  $delimiter: string | undefined
+  $postDelimiter: string | undefined
+  $terminal: string | undefined
+  $lineEnd: string | undefined
+  $initial: string | undefined
+  $delimiterLineBreak: string | undefined
+  $preterminalLineBreak: string | undefined
+  $descriptionLines: RemoteNodeList | undefined
+  $tags: RemoteNodeList | undefined
+  $inlineTags: RemoteNodeList | undefined
+}
+
 /**
  * `JsdocBlock` (Kind 0x01) — root of every parsed `/** ... *​/` comment.
  */
-export class RemoteJsdocBlock {
-  type = 'JsdocBlock'
-  #internal
+export class RemoteJsdocBlock implements LazyNode, SourceLikeNode {
+  readonly type = 'JsdocBlock'
+  readonly #internal: LazyInternal<JsdocBlockCache>
 
-  constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
+  constructor(
+    view: DataView,
+    byteIndex: number,
+    index: number,
+    rootIndex: number,
+    parent: LazyNode | null,
+    sourceFile: RemoteSourceFileLike
+  ) {
     this.#internal = {
       view,
       byteIndex,
@@ -322,71 +664,93 @@ export class RemoteJsdocBlock {
     }
   }
 
-  get range() {
+  get range(): readonly [number, number] {
     const internal = this.#internal
     return internal.$range !== undefined
       ? internal.$range
       : (internal.$range = absoluteRange(internal))
   }
-  get parent() {
+  get parent(): LazyNode | null {
     return this.#internal.parent
+  }
+  get sourceFile(): RemoteSourceFileLike {
+    return this.#internal.sourceFile
+  }
+  get rootIndex(): number {
+    return this.#internal.rootIndex
   }
 
   /** Top-level description string (`null` when absent). The
    * `emptyStringForNull` option only affects `toJSON()` output. */
-  get description() {
+  get description(): string | null {
     const internal = this.#internal
     const cached = internal.$description
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$description = extStringField(internal, 2))
   }
   /** Source-preserving `*` line-prefix delimiter. */
-  get delimiter() {
+  get delimiter(): string {
     const internal = this.#internal
     const cached = internal.$delimiter
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$delimiter = extStringFieldRequired(internal, 8))
   }
   /** Source-preserving space after `*`. */
-  get postDelimiter() {
+  get postDelimiter(): string {
     const internal = this.#internal
     const cached = internal.$postDelimiter
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$postDelimiter = extStringFieldRequired(internal, 14))
   }
   /** Source-preserving `*​/` terminal. */
-  get terminal() {
+  get terminal(): string {
     const internal = this.#internal
     const cached = internal.$terminal
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$terminal = extStringFieldRequired(internal, 20))
   }
   /** Source-preserving line-end characters. */
-  get lineEnd() {
+  get lineEnd(): string {
     const internal = this.#internal
     const cached = internal.$lineEnd
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$lineEnd = extStringFieldRequired(internal, 26))
   }
   /** Indentation before the leading `*`. */
-  get initial() {
+  get initial(): string {
     const internal = this.#internal
     const cached = internal.$initial
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$initial = extStringFieldRequired(internal, 32))
   }
   /** Line-break right after `/**`. */
-  get delimiterLineBreak() {
+  get delimiterLineBreak(): string {
     const internal = this.#internal
     const cached = internal.$delimiterLineBreak
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$delimiterLineBreak = extStringFieldRequired(internal, 38))
   }
   /** Line-break right before `*​/`. */
-  get preterminalLineBreak() {
+  get preterminalLineBreak(): string {
     const internal = this.#internal
     const cached = internal.$preterminalLineBreak
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$preterminalLineBreak = extStringFieldRequired(internal, 44))
   }
 
@@ -396,44 +760,56 @@ export class RemoteJsdocBlock {
   // the next node's bytes). Each getter returns `null` outside compat mode.
 
   /** Total number of LogicalLines in this comment (compat-mode only). */
-  get endLine() {
+  get endLine(): number | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     return extU32(internal, JSDOC_BLOCK_END_LINE_OFFSET)
   }
   /** Index of the first description line, or `null` when absent. */
-  get descriptionStartLine() {
+  get descriptionStartLine(): number | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     const v = extU32(internal, JSDOC_BLOCK_DESC_START_LINE_OFFSET)
     return v === COMPAT_LINE_NONE ? null : v
   }
   /** Index of the last description line, or `null` when absent. */
-  get descriptionEndLine() {
+  get descriptionEndLine(): number | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     const v = extU32(internal, JSDOC_BLOCK_DESC_END_LINE_OFFSET)
     return v === COMPAT_LINE_NONE ? null : v
   }
   /** Description-boundary index (jsdoccomment's `lastDescriptionLine` —
    * actually the index of the first tag/end line). `null` when absent. */
-  get lastDescriptionLine() {
+  get lastDescriptionLine(): number | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     const v = extU32(internal, JSDOC_BLOCK_LAST_DESC_LINE_OFFSET)
     return v === COMPAT_LINE_NONE ? null : v
   }
   /** `1` when block description text exists on the `*​/` line. */
-  get hasPreterminalDescription() {
+  get hasPreterminalDescription(): number | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     return extU8(internal, JSDOC_BLOCK_HAS_PRETERMINAL_DESC_OFFSET)
   }
   /** `1` when tag description text exists on the `*​/` line; `null` when not
    * applicable (no active lastTag at end). */
-  get hasPreterminalTagDescription() {
+  get hasPreterminalTagDescription(): number | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     const v = extU8(internal, JSDOC_BLOCK_HAS_PRETERMINAL_TAG_DESC_OFFSET)
     return v === COMPAT_U8_NONE ? null : v
   }
@@ -449,7 +825,7 @@ export class RemoteJsdocBlock {
    * record (offset = `compatMode ? 90 : 68` = the basic / compat ED size).
    * See `design/008-oxlint-oxfmt-support/README.md` §4.2 / §4.3.
    */
-  get descriptionRaw() {
+  get descriptionRaw(): string | null {
     const internal = this.#internal
     if ((commonData(internal) & JSDOC_BLOCK_HAS_DESCRIPTION_RAW_SPAN_BIT) === 0) {
       return null
@@ -471,11 +847,8 @@ export class RemoteJsdocBlock {
    * Returns `null` when no description is present, or when
    * `preserveWhitespace=true` is requested on a buffer that wasn't
    * parsed with the matching `preserveWhitespace: true` parse option.
-   *
-   * @param {boolean} [preserveWhitespace]
-   * @returns {string | null}
    */
-  descriptionText(preserveWhitespace) {
+  descriptionText(preserveWhitespace?: boolean): string | null {
     if (preserveWhitespace) {
       const raw = this.descriptionRaw
       return raw === null ? null : parsedPreservingWhitespace(raw)
@@ -484,39 +857,42 @@ export class RemoteJsdocBlock {
   }
 
   /** Top-level description lines. */
-  get descriptionLines() {
+  get descriptionLines(): RemoteNodeList {
     const internal = this.#internal
     const cached = internal.$descriptionLines
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$descriptionLines = nodeListAtSlotExtended(
       internal,
       JSDOC_BLOCK_DESC_LINES_SLOT
     ))
   }
   /** Block tags. */
-  get tags() {
+  get tags(): RemoteNodeList {
     const internal = this.#internal
     const cached = internal.$tags
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$tags = nodeListAtSlotExtended(internal, JSDOC_BLOCK_TAGS_SLOT))
   }
   /** Inline tags found inside the top-level description. */
-  get inlineTags() {
+  get inlineTags(): RemoteNodeList {
     const internal = this.#internal
     const cached = internal.$inlineTags
-    if (cached !== undefined) return cached
-    return (internal.$inlineTags = nodeListAtSlotExtended(
-      internal,
-      JSDOC_BLOCK_INLINE_TAGS_SLOT
-    ))
+    if (cached !== undefined) {
+      return cached
+    }
+    return (internal.$inlineTags = nodeListAtSlotExtended(internal, JSDOC_BLOCK_INLINE_TAGS_SLOT))
   }
 
-  toJSON() {
+  toJSON(): RemoteJsonObject {
     const internal = this.#internal
     const nullToEmpty = internal.sourceFile.emptyStringForNull
-    const json = {
+    const json: RemoteJsonObject = {
       type: this.type,
-      range: this.range,
+      range: [...this.range],
       description: nullToEmpty ? (this.description ?? '') : this.description,
       delimiter: this.delimiter,
       postDelimiter: this.postDelimiter,
@@ -530,29 +906,51 @@ export class RemoteJsdocBlock {
       inlineTags: this.inlineTags.map(n => n.toJSON())
     }
     if (internal.sourceFile.compatMode) {
+      const source = buildBlockSource(this)
+      const sourceDescription = compactDescriptionFromEntries(source)
+      if (sourceDescription) {
+        json.description = sourceDescription
+      }
       // Match jsdoccomment's optional-field serialization: omit absent
       // line indices (Rust serializer uses `skip_serializing_if = "Option::is_none"`).
       json.endLine = this.endLine
       const dsl = this.descriptionStartLine
-      if (dsl !== null) json.descriptionStartLine = dsl
+      if (dsl !== null) {
+        json.descriptionStartLine = dsl
+      }
       const del = this.descriptionEndLine
-      if (del !== null) json.descriptionEndLine = del
+      if (del !== null) {
+        json.descriptionEndLine = del
+      }
       const ldl = this.lastDescriptionLine
-      if (ldl !== null) json.lastDescriptionLine = ldl
+      if (ldl !== null) {
+        json.lastDescriptionLine = ldl
+      }
       json.hasPreterminalDescription = this.hasPreterminalDescription
       const hptd = this.hasPreterminalTagDescription
-      if (hptd !== null) json.hasPreterminalTagDescription = hptd
+      if (hptd !== null) {
+        json.hasPreterminalTagDescription = hptd
+      }
       // descriptionRaw — design 008 §4.4: emit only when present (parity
       // with the Rust JSON serializer's `skip_serializing_if = "Option::is_none"`).
       const raw = this.descriptionRaw
-      if (raw !== null) json.descriptionRaw = raw
-      // Phase 6: comment-parser-shape source[] array.
-      json.source = buildBlockSource(this)
+      if (raw !== null) {
+        json.descriptionRaw = raw
+      }
+      // Phase 6: comment-parser-shape source[] array. Cast each entry to
+      // RemoteJsonObject (LineTokens is a fixed string-record, JSON-safe).
+      json.source = source as unknown as RemoteJsonObject[]
+      const tagsArr = json.tags as RemoteJsonObject[]
+      json.tags = tagsArr.filter(tag => {
+        const tagSource = tag.source as RemoteJsonObject[] | undefined
+        const firstTokens = tagSource?.[0]?.tokens as LineTokens | undefined
+        return Boolean(firstTokens?.tag)
+      })
     }
     return json
   }
 
-  [inspectSymbol]() {
+  [inspectSymbol](): object {
     return inspectPayload(this.toJSON(), 'JsdocBlock')
   }
 }
@@ -564,15 +962,27 @@ export class RemoteJsdocBlock {
 // adds 3 × 6-byte StringField slots after it.
 // ===========================================================================
 
+interface JsdocDescriptionLineCache {
+  $range: readonly [number, number] | undefined
+  $description: string | undefined
+}
+
 /**
  * `JsdocDescriptionLine` (Kind 0x02). Both basic and compat modes store
  * `description` as the leading StringField of the Extended Data record.
  */
-export class RemoteJsdocDescriptionLine {
-  type = 'JsdocDescriptionLine'
-  #internal
+export class RemoteJsdocDescriptionLine implements LazyNode, SourceLikeNode {
+  readonly type = 'JsdocDescriptionLine'
+  readonly #internal: LazyInternal<JsdocDescriptionLineCache>
 
-  constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
+  constructor(
+    view: DataView,
+    byteIndex: number,
+    index: number,
+    rootIndex: number,
+    parent: LazyNode | null,
+    sourceFile: RemoteSourceFileLike
+  ) {
     this.#internal = {
       view,
       byteIndex,
@@ -585,22 +995,30 @@ export class RemoteJsdocDescriptionLine {
     }
   }
 
-  get range() {
+  get range(): readonly [number, number] {
     const internal = this.#internal
     return internal.$range !== undefined
       ? internal.$range
       : (internal.$range = absoluteRange(internal))
   }
-  get parent() {
+  get parent(): LazyNode | null {
     return this.#internal.parent
+  }
+  get sourceFile(): RemoteSourceFileLike {
+    return this.#internal.sourceFile
+  }
+  get rootIndex(): number {
+    return this.#internal.rootIndex
   }
 
   /** Description content. Basic mode reads the String payload (Node Data);
    * compat mode reads byte 0-5 of the Extended Data record. */
-  get description() {
+  get description(): string {
     const internal = this.#internal
     const cached = internal.$description
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     const value = internal.sourceFile.compatMode
       ? extStringFieldRequired(internal, 0)
       : (stringPayloadOf(internal) ?? '')
@@ -611,26 +1029,36 @@ export class RemoteJsdocDescriptionLine {
   // Stored in ED bytes 6-23 only when sourceFile.compatMode is true.
 
   /** Source-preserving `*` line-prefix (compat-mode only; `null` otherwise). */
-  get delimiter() {
+  get delimiter(): string | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     return extStringField(internal, COMPAT_LINE_DELIMITER)
   }
   /** Source-preserving space after `*` (compat-mode only). */
-  get postDelimiter() {
+  get postDelimiter(): string | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     return extStringField(internal, COMPAT_LINE_POST_DELIMITER)
   }
   /** Indentation before the leading `*` (compat-mode only). */
-  get initial() {
+  get initial(): string | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     return extStringField(internal, COMPAT_LINE_INITIAL)
   }
 
-  toJSON() {
-    const json = { type: this.type, range: this.range, description: this.description }
+  toJSON(): RemoteJsonObject {
+    const json: RemoteJsonObject = {
+      type: this.type,
+      range: [...this.range],
+      description: this.description
+    }
     if (this.#internal.sourceFile.compatMode) {
       json.delimiter = this.delimiter ?? ''
       json.postDelimiter = this.postDelimiter ?? ''
@@ -638,7 +1066,7 @@ export class RemoteJsdocDescriptionLine {
     }
     return json
   }
-  [inspectSymbol]() {
+  [inspectSymbol](): object {
     return inspectPayload(this.toJSON(), 'JsdocDescriptionLine')
   }
 }
@@ -654,14 +1082,36 @@ export class RemoteJsdocDescriptionLine {
 //   byte 14-19  : raw_body       (StringField, NONE if absent)
 // ===========================================================================
 
+interface JsdocTagCache {
+  $range: readonly [number, number] | undefined
+  $defaultValue: string | null | undefined
+  $description: string | null | undefined
+  $rawBody: string | null | undefined
+  $tag: LazyNode | null | undefined
+  $rawType: LazyNode | null | undefined
+  $name: LazyNode | null | undefined
+  $parsedType: LazyNode | null | undefined
+  $body: LazyNode | null | undefined
+  $typeLines: RemoteNodeList | undefined
+  $descriptionLines: RemoteNodeList | undefined
+  $inlineTags: RemoteNodeList | undefined
+}
+
 /**
  * `JsdocTag` (Kind 0x03) — one block tag (e.g. `@param`).
  */
-export class RemoteJsdocTag {
-  type = 'JsdocTag'
-  #internal
+export class RemoteJsdocTag implements LazyNode, SourceLikeNode {
+  readonly type = 'JsdocTag'
+  readonly #internal: LazyInternal<JsdocTagCache>
 
-  constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
+  constructor(
+    view: DataView,
+    byteIndex: number,
+    index: number,
+    rootIndex: number,
+    parent: LazyNode | null,
+    sourceFile: RemoteSourceFileLike
+  ) {
     this.#internal = {
       view,
       byteIndex,
@@ -684,32 +1134,42 @@ export class RemoteJsdocTag {
     }
   }
 
-  get range() {
+  get range(): readonly [number, number] {
     const internal = this.#internal
     return internal.$range !== undefined
       ? internal.$range
       : (internal.$range = absoluteRange(internal))
   }
-  get parent() {
+  get parent(): LazyNode | null {
     return this.#internal.parent
+  }
+  get sourceFile(): RemoteSourceFileLike {
+    return this.#internal.sourceFile
+  }
+  get rootIndex(): number {
+    return this.#internal.rootIndex
   }
 
   /** `bit0` of Common Data — was the tag wrapped in `[...]`? */
-  get optional() {
+  get optional(): boolean {
     return (commonData(this.#internal) & 0b0000_0001) !== 0
   }
   /** Default value parsed from `[id=foo]` syntax. */
-  get defaultValue() {
+  get defaultValue(): string | null {
     const internal = this.#internal
     const cached = internal.$defaultValue
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$defaultValue = extStringField(internal, 2))
   }
   /** Joined description text. */
-  get description() {
+  get description(): string | null {
     const internal = this.#internal
     const cached = internal.$description
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$description = extStringField(internal, 8))
   }
   /**
@@ -723,7 +1183,7 @@ export class RemoteJsdocTag {
    * record (offset = `compatMode ? 80 : 38` = the basic / compat ED size).
    * See `design/008-oxlint-oxfmt-support/README.md` §4.2 / §4.3.
    */
-  get descriptionRaw() {
+  get descriptionRaw(): string | null {
     const internal = this.#internal
     if ((commonData(internal) & JSDOC_TAG_HAS_DESCRIPTION_RAW_SPAN_BIT) === 0) {
       return null
@@ -738,11 +1198,8 @@ export class RemoteJsdocTag {
   /**
    * Description text. Identical contract to
    * `RemoteJsdocBlock.descriptionText`.
-   *
-   * @param {boolean} [preserveWhitespace]
-   * @returns {string | null}
    */
-  descriptionText(preserveWhitespace) {
+  descriptionText(preserveWhitespace?: boolean): string | null {
     if (preserveWhitespace) {
       const raw = this.descriptionRaw
       return raw === null ? null : parsedPreservingWhitespace(raw)
@@ -750,70 +1207,88 @@ export class RemoteJsdocTag {
     return this.description
   }
   /** Raw body when the tag uses the `Raw` body variant. */
-  get rawBody() {
+  get rawBody(): string | null {
     const internal = this.#internal
     const cached = internal.$rawBody
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$rawBody = extStringField(internal, 14))
   }
 
   /** Mandatory tag-name child (visitor index 0 — the `@name` token). */
-  get tag() {
+  get tag(): LazyNode | null {
     const internal = this.#internal
     const cached = internal.$tag
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$tag = childNodeAtVisitorIndex(internal, 0))
   }
   /** Raw `{...}` type source (visitor index 1). */
-  get rawType() {
+  get rawType(): LazyNode | null {
     const internal = this.#internal
     const cached = internal.$rawType
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$rawType = childNodeAtVisitorIndex(internal, 1))
   }
   /** Tag-name value (visitor index 2). */
-  get name() {
+  get name(): LazyNode | null {
     const internal = this.#internal
     const cached = internal.$name
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$name = childNodeAtVisitorIndex(internal, 2))
   }
   /** `parsedType` child (visitor index 3) — any TypeNode variant. */
-  get parsedType() {
+  get parsedType(): LazyNode | null {
     const internal = this.#internal
     const cached = internal.$parsedType
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$parsedType = childNodeAtVisitorIndex(internal, 3))
   }
   /** Body child (visitor index 4) — Generic / Borrows / Raw variant. */
-  get body() {
+  get body(): LazyNode | null {
     const internal = this.#internal
     const cached = internal.$body
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$body = childNodeAtVisitorIndex(internal, 4))
   }
   /** Source-preserving type lines. */
-  get typeLines() {
+  get typeLines(): RemoteNodeList {
     const internal = this.#internal
     const cached = internal.$typeLines
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$typeLines = nodeListAtSlotExtended(internal, JSDOC_TAG_TYPE_LINES_SLOT))
   }
   /** Source-preserving description lines. */
-  get descriptionLines() {
+  get descriptionLines(): RemoteNodeList {
     const internal = this.#internal
     const cached = internal.$descriptionLines
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$descriptionLines = nodeListAtSlotExtended(
       internal,
       JSDOC_TAG_DESC_LINES_SLOT
     ))
   }
   /** Inline tags found in this tag's description. */
-  get inlineTags() {
+  get inlineTags(): RemoteNodeList {
     const internal = this.#internal
     const cached = internal.$inlineTags
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$inlineTags = nodeListAtSlotExtended(internal, JSDOC_TAG_INLINE_TAGS_SLOT))
   }
 
@@ -821,49 +1296,63 @@ export class RemoteJsdocTag {
   // Stored in ED bytes 38-79 (7 StringFields) only when compatMode is true.
 
   /** Source-preserving `*` line-prefix (compat-mode only). */
-  get delimiter() {
+  get delimiter(): string | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     return extStringFieldRequired(internal, JSDOC_TAG_COMPAT_DELIMITER)
   }
   /** Source-preserving space after `*` (compat-mode only). */
-  get postDelimiter() {
+  get postDelimiter(): string | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     return extStringFieldRequired(internal, JSDOC_TAG_COMPAT_POST_DELIMITER)
   }
   /** Whitespace after the `@name` token (compat-mode only). */
-  get postTag() {
+  get postTag(): string | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     return extStringFieldRequired(internal, JSDOC_TAG_COMPAT_POST_TAG)
   }
   /** Whitespace after the `{type}` source (compat-mode only). */
-  get postType() {
+  get postType(): string | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     return extStringFieldRequired(internal, JSDOC_TAG_COMPAT_POST_TYPE)
   }
   /** Whitespace after the name token (compat-mode only). */
-  get postName() {
+  get postName(): string | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     return extStringFieldRequired(internal, JSDOC_TAG_COMPAT_POST_NAME)
   }
   /** Indentation before the line's `*` (compat-mode only). */
-  get initial() {
+  get initial(): string | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     return extStringFieldRequired(internal, JSDOC_TAG_COMPAT_INITIAL)
   }
   /** Line ending of the tag's first line (compat-mode only). */
-  get lineEnd() {
+  get lineEnd(): string | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     return extStringFieldRequired(internal, JSDOC_TAG_COMPAT_LINE_END)
   }
 
-  toJSON() {
+  toJSON(): RemoteJsonObject {
     const internal = this.#internal
     const compat = internal.sourceFile.compatMode
     const nullToEmpty = internal.sourceFile.emptyStringForNull
@@ -871,37 +1360,27 @@ export class RemoteJsdocTag {
     if (compat) {
       // jsdoccomment-shape: omit ox-jsdoc-specific fields (optional,
       // defaultValue, rawBody, body) and surface delimiter strings + lineEnd.
+      const source = buildTagSourceFromRoot(this)
+      const headTokens: LineTokens = source[0]?.tokens ?? emptyTokens()
       const tagNode = this.tag?.toJSON() ?? null
-      const tagName = tagNode?.value ?? ''
+      const tagName = (tagNode?.value as string | undefined) ?? ''
       const rawTypeNode = this.rawType?.toJSON() ?? null
-      const rawTypeRaw = rawTypeNode?.raw ?? null
+      const hasSource = source.length > 0
+      const rawTypeRaw: string | null = hasSource
+        ? stripTypeBraces(headTokens.type)
+        : ((rawTypeNode?.raw as string | undefined) ?? null)
       const nameNode = this.name?.toJSON() ?? null
-      const nameValue = nameNode?.raw ?? null
-      // Build a synthetic facade so buildTagSource() can read camelCase
-      // fields without re-rolling the StringField lookups for every tag
-      // entry. Only the keys consumed by tagHeaderToSourceEntry need to
-      // be present.
-      const tagFacade = {
-        tag: tagNode ? { value: tagName } : null,
-        rawType: rawTypeNode ? { raw: rawTypeRaw ?? '' } : null,
-        name: nameNode ? { raw: nameValue ?? '' } : null,
-        description: this.description,
-        initial: this.initial,
-        delimiter: this.delimiter,
-        postDelimiter: this.postDelimiter,
-        postTag: this.postTag,
-        postType: this.postType,
-        postName: this.postName,
-        lineEnd: this.lineEnd,
-        descriptionLines: this.descriptionLines
-      }
-      const json = {
+      const nameValue: string | null = hasSource
+        ? headTokens.name
+        : ((nameNode?.raw as string | undefined) ?? null)
+      const description = hasSource ? headTokens.description : this.description
+      const json: RemoteJsonObject = {
         type: this.type,
-        range: this.range,
+        range: [...this.range],
         tag: tagName,
         rawType: nullToEmpty ? (rawTypeRaw ?? '') : rawTypeRaw,
         name: nullToEmpty ? (nameValue ?? '') : nameValue,
-        description: this.description ?? (nullToEmpty ? '' : null),
+        description: description ?? (nullToEmpty ? '' : null),
         delimiter: this.delimiter,
         postDelimiter: this.postDelimiter,
         postTag: this.postTag,
@@ -913,18 +1392,20 @@ export class RemoteJsdocTag {
         typeLines: this.typeLines.map(n => n.toJSON()),
         descriptionLines: this.descriptionLines.map(n => n.toJSON()),
         inlineTags: this.inlineTags.map(n => n.toJSON()),
-        // Phase 6: per-tag source[] subset (the lines that belong to this
-        // tag — header + description continuation).
-        source: buildTagSource(tagFacade)
+        // Phase 6: per-tag source[] subset (the physical lines that
+        // belong to this tag in the original comment).
+        source: source as unknown as RemoteJsonObject[]
       }
       // descriptionRaw — design 008 §4.4: emit only when present.
       const raw = this.descriptionRaw
-      if (raw !== null) json.descriptionRaw = raw
+      if (raw !== null) {
+        json.descriptionRaw = raw
+      }
       return json
     }
     return {
       type: this.type,
-      range: this.range,
+      range: [...this.range],
       optional: this.optional,
       defaultValue: this.defaultValue,
       description: this.description,
@@ -939,7 +1420,7 @@ export class RemoteJsdocTag {
       inlineTags: this.inlineTags.map(n => n.toJSON())
     }
   }
-  [inspectSymbol]() {
+  [inspectSymbol](): object {
     return inspectPayload(this.toJSON(), 'JsdocTag')
   }
 }
@@ -949,17 +1430,33 @@ export class RemoteJsdocTag {
 // (each carries a single 6-byte StringField in Extended Data)
 // ===========================================================================
 
+interface StringLeafCache {
+  $range: readonly [number, number] | undefined
+  $value: string | undefined
+}
+
 /**
- * Build a class for a single-string-leaf node.
- *
- * @param {string} typeName     The `type` field value.
- * @param {string} accessorName The accessor that returns the resolved string.
- * @returns {Function}
+ * Build a class for a single-string-leaf node. Captures `accessorName` so
+ * the resolved value is exposed under the right property name (`value`,
+ * `raw`, or `name`) per the Rust enum's variant.
  */
-function defineStringLeaf(typeName, accessorName) {
-  return class {
-    constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
-      Object.defineProperty(this, 'type', { value: typeName, enumerable: true })
+function defineStringLeaf(typeName: string, accessorName: string): LazyNodeConstructor {
+  return class implements LazyNode {
+    readonly type = typeName
+    readonly _internal: LazyInternal<StringLeafCache>;
+    // Index signature lets the dynamic accessor (`this[accessorName]`)
+    // type-check while keeping consumers free to use `.value` / `.raw` /
+    // `.name` per the public d.ts.
+    [key: string]: unknown
+
+    constructor(
+      view: DataView,
+      byteIndex: number,
+      index: number,
+      rootIndex: number,
+      parent: LazyNode | null,
+      sourceFile: RemoteSourceFileLike
+    ) {
       this._internal = {
         view,
         byteIndex,
@@ -970,49 +1467,93 @@ function defineStringLeaf(typeName, accessorName) {
         $range: undefined,
         $value: undefined
       }
+      // Define the dynamic accessor on the instance: keeps the name
+      // closure-bound while preserving the V8 hidden class shape.
+      const internal = this._internal
+      Object.defineProperty(this, accessorName, {
+        get() {
+          const cached = internal.$value
+          if (cached !== undefined) {
+            return cached
+          }
+          return (internal.$value = stringPayloadOf(internal) ?? '')
+        },
+        enumerable: true,
+        configurable: false
+      })
     }
-    get range() {
+    get range(): readonly [number, number] {
       const internal = this._internal
       return internal.$range !== undefined
         ? internal.$range
         : (internal.$range = absoluteRange(internal))
     }
-    get parent() {
+    get parent(): LazyNode | null {
       return this._internal.parent
     }
-    get [accessorName]() {
-      const internal = this._internal
-      const cached = internal.$value
-      if (cached !== undefined) return cached
-      return (internal.$value = stringPayloadOf(internal) ?? '')
-    }
-    toJSON() {
+    toJSON(): RemoteJsonObject {
+      const value: RemoteJsonValue = (this[accessorName] as string | undefined) ?? ''
       return {
         type: this.type,
-        range: this.range,
-        [accessorName]: this[accessorName]
+        range: [...this.range],
+        [accessorName]: value
       }
     }
-    [inspectSymbol]() {
+    [inspectSymbol](): object {
       return inspectPayload(this.toJSON(), typeName)
     }
   }
 }
 
+// The interface declarations below intentionally merge with their classes to
+// surface the dynamic accessor (`Object.defineProperty(this, accessorName, ...)`
+// inside `defineStringLeaf`'s constructor) on the public type. This pattern
+// keeps the per-Kind accessor name (`value`/`raw`/`name`) distinct while
+// sharing one runtime class body — declaration merging is the only way to
+// reflect that on the type side.
+
 /** `JsdocTagName` (Kind 0x04) — the `@name` token text. */
-export const RemoteJsdocTagName = defineStringLeaf('JsdocTagName', 'value')
+// eslint-disable-next-line typescript-eslint/no-unsafe-declaration-merging -- dynamic accessor; see comment above
+export class RemoteJsdocTagName extends defineStringLeaf('JsdocTagName', 'value') {}
+export interface RemoteJsdocTagName {
+  readonly value: string
+}
 /** `JsdocTagNameValue` (Kind 0x05) — value after the type in `@param`. */
-export const RemoteJsdocTagNameValue = defineStringLeaf('JsdocTagNameValue', 'raw')
+// eslint-disable-next-line typescript-eslint/no-unsafe-declaration-merging -- dynamic accessor; see comment above
+export class RemoteJsdocTagNameValue extends defineStringLeaf('JsdocTagNameValue', 'raw') {}
+export interface RemoteJsdocTagNameValue {
+  readonly raw: string
+}
 /** `JsdocTypeSource` (Kind 0x06) — raw `{...}` text inside a tag. */
-export const RemoteJsdocTypeSource = defineStringLeaf('JsdocTypeSource', 'raw')
+// eslint-disable-next-line typescript-eslint/no-unsafe-declaration-merging -- dynamic accessor; see comment above
+export class RemoteJsdocTypeSource extends defineStringLeaf('JsdocTypeSource', 'raw') {}
+export interface RemoteJsdocTypeSource {
+  readonly raw: string
+}
 /** `JsdocRawTagBody` (Kind 0x0B) — raw text body fallback. */
-export const RemoteJsdocRawTagBody = defineStringLeaf('JsdocRawTagBody', 'raw')
+// eslint-disable-next-line typescript-eslint/no-unsafe-declaration-merging -- dynamic accessor; see comment above
+export class RemoteJsdocRawTagBody extends defineStringLeaf('JsdocRawTagBody', 'raw') {}
+export interface RemoteJsdocRawTagBody {
+  readonly raw: string
+}
 /** `JsdocNamepathSource` (Kind 0x0D) — namepath token. */
-export const RemoteJsdocNamepathSource = defineStringLeaf('JsdocNamepathSource', 'raw')
+// eslint-disable-next-line typescript-eslint/no-unsafe-declaration-merging -- dynamic accessor; see comment above
+export class RemoteJsdocNamepathSource extends defineStringLeaf('JsdocNamepathSource', 'raw') {}
+export interface RemoteJsdocNamepathSource {
+  readonly raw: string
+}
 /** `JsdocIdentifier` (Kind 0x0E) — bare identifier. */
-export const RemoteJsdocIdentifier = defineStringLeaf('JsdocIdentifier', 'name')
+// eslint-disable-next-line typescript-eslint/no-unsafe-declaration-merging -- dynamic accessor; see comment above
+export class RemoteJsdocIdentifier extends defineStringLeaf('JsdocIdentifier', 'name') {}
+export interface RemoteJsdocIdentifier {
+  readonly name: string
+}
 /** `JsdocText` (Kind 0x0F) — raw text. */
-export const RemoteJsdocText = defineStringLeaf('JsdocText', 'value')
+// eslint-disable-next-line typescript-eslint/no-unsafe-declaration-merging -- dynamic accessor; see comment above
+export class RemoteJsdocText extends defineStringLeaf('JsdocText', 'value') {}
+export interface RemoteJsdocText {
+  readonly value: string
+}
 
 // ===========================================================================
 // 0x07 RemoteJsdocTypeLine
@@ -1021,14 +1562,26 @@ export const RemoteJsdocText = defineStringLeaf('JsdocText', 'value')
 // 3 × 6-byte StringField slots after it.
 // ===========================================================================
 
+interface JsdocTypeLineCache {
+  $range: readonly [number, number] | undefined
+  $rawType: string | undefined
+}
+
 /**
  * `JsdocTypeLine` (Kind 0x07).
  */
-export class RemoteJsdocTypeLine {
-  type = 'JsdocTypeLine'
-  #internal
+export class RemoteJsdocTypeLine implements LazyNode {
+  readonly type = 'JsdocTypeLine'
+  readonly #internal: LazyInternal<JsdocTypeLineCache>
 
-  constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
+  constructor(
+    view: DataView,
+    byteIndex: number,
+    index: number,
+    rootIndex: number,
+    parent: LazyNode | null,
+    sourceFile: RemoteSourceFileLike
+  ) {
     this.#internal = {
       view,
       byteIndex,
@@ -1041,22 +1594,24 @@ export class RemoteJsdocTypeLine {
     }
   }
 
-  get range() {
+  get range(): readonly [number, number] {
     const internal = this.#internal
     return internal.$range !== undefined
       ? internal.$range
       : (internal.$range = absoluteRange(internal))
   }
-  get parent() {
+  get parent(): LazyNode | null {
     return this.#internal.parent
   }
 
   /** Raw `{...}` line content. Basic mode reads the String payload;
    * compat mode reads byte 0-5 of the Extended Data record. */
-  get rawType() {
+  get rawType(): string {
     const internal = this.#internal
     const cached = internal.$rawType
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     const value = internal.sourceFile.compatMode
       ? extStringFieldRequired(internal, 0)
       : (stringPayloadOf(internal) ?? '')
@@ -1066,26 +1621,36 @@ export class RemoteJsdocTypeLine {
   // -- compat-only delimiter trio (same layout as JsdocDescriptionLine) ----
 
   /** Source-preserving `*` line-prefix (compat-mode only; `null` otherwise). */
-  get delimiter() {
+  get delimiter(): string | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     return extStringField(internal, COMPAT_LINE_DELIMITER)
   }
   /** Source-preserving space after `*` (compat-mode only). */
-  get postDelimiter() {
+  get postDelimiter(): string | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     return extStringField(internal, COMPAT_LINE_POST_DELIMITER)
   }
   /** Indentation before the leading `*` (compat-mode only). */
-  get initial() {
+  get initial(): string | null {
     const internal = this.#internal
-    if (!internal.sourceFile.compatMode) return null
+    if (!internal.sourceFile.compatMode) {
+      return null
+    }
     return extStringField(internal, COMPAT_LINE_INITIAL)
   }
 
-  toJSON() {
-    const json = { type: this.type, range: this.range, rawType: this.rawType }
+  toJSON(): RemoteJsonObject {
+    const json: RemoteJsonObject = {
+      type: this.type,
+      range: [...this.range],
+      rawType: this.rawType
+    }
     if (this.#internal.sourceFile.compatMode) {
       json.delimiter = this.delimiter ?? ''
       json.postDelimiter = this.postDelimiter ?? ''
@@ -1093,7 +1658,7 @@ export class RemoteJsdocTypeLine {
     }
     return json
   }
-  [inspectSymbol]() {
+  [inspectSymbol](): object {
     return inspectPayload(this.toJSON(), 'JsdocTypeLine')
   }
 }
@@ -1107,14 +1672,28 @@ export class RemoteJsdocTypeLine {
 //   byte 12-17  : raw_body         (StringField, NONE if absent)
 // ===========================================================================
 
+interface JsdocInlineTagCache {
+  $range: readonly [number, number] | undefined
+  $namepathOrURL: string | null | undefined
+  $text: string | null | undefined
+  $rawBody: string | null | undefined
+}
+
 /**
  * `JsdocInlineTag` (Kind 0x08) — e.g. `{@link Foo}`.
  */
-export class RemoteJsdocInlineTag {
-  type = 'JsdocInlineTag'
-  #internal
+export class RemoteJsdocInlineTag implements LazyNode {
+  readonly type = 'JsdocInlineTag'
+  readonly #internal: LazyInternal<JsdocInlineTagCache>
 
-  constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
+  constructor(
+    view: DataView,
+    byteIndex: number,
+    index: number,
+    rootIndex: number,
+    parent: LazyNode | null,
+    sourceFile: RemoteSourceFileLike
+  ) {
     this.#internal = {
       view,
       byteIndex,
@@ -1129,65 +1708,73 @@ export class RemoteJsdocInlineTag {
     }
   }
 
-  get range() {
+  get range(): readonly [number, number] {
     const internal = this.#internal
     return internal.$range !== undefined
       ? internal.$range
       : (internal.$range = absoluteRange(internal))
   }
-  get parent() {
+  get parent(): LazyNode | null {
     return this.#internal.parent
   }
 
   /** Inline tag format string. In compat mode the `'unknown'` variant is
    * mapped to `'plain'` to mirror jsdoccomment's behavior. */
-  get format() {
+  get format(): InlineTagFormat {
     const internal = this.#internal
     const raw = INLINE_TAG_FORMATS[commonData(internal) & 0b0000_0111] ?? 'unknown'
     return raw === 'unknown' && internal.sourceFile.compatMode ? 'plain' : raw
   }
   /** Optional name path or URL portion. */
-  get namepathOrURL() {
+  get namepathOrURL(): string | null {
     const internal = this.#internal
     const cached = internal.$namepathOrURL
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$namepathOrURL = extStringField(internal, 0))
   }
   /** Optional display text portion. */
-  get text() {
+  get text(): string | null {
     const internal = this.#internal
     const cached = internal.$text
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$text = extStringField(internal, STRING_FIELD_SIZE))
   }
   /** Raw body text fallback. */
-  get rawBody() {
+  get rawBody(): string | null {
     const internal = this.#internal
     const cached = internal.$rawBody
-    if (cached !== undefined) return cached
+    if (cached !== undefined) {
+      return cached
+    }
     return (internal.$rawBody = extStringField(internal, 2 * STRING_FIELD_SIZE))
   }
 
-  toJSON() {
+  toJSON(): RemoteJsonObject {
     const internal = this.#internal
     const compat = internal.sourceFile.compatMode
     const nullToEmpty = internal.sourceFile.emptyStringForNull
-    // NOTE: jsdoccomment's `JsdocInlineTag` exposes a `tag` field (the inline
+    // NOTE(jsdoccomment): `JsdocInlineTag` exposes a `tag` field (the inline
     // tag name without `@`, e.g. "link"). The binary writer does not currently
     // serialize this value (`emit_inline_tag` discards `inline.tag_name`), so
     // we cannot reproduce it here. Track as a future binary-format extension.
-    const json = {
+    const json: RemoteJsonObject = {
       type: this.type,
-      range: this.range,
+      range: [...this.range],
       format: this.format,
       namepathOrURL: nullToEmpty ? (this.namepathOrURL ?? '') : this.namepathOrURL,
       text: nullToEmpty ? (this.text ?? '') : this.text
     }
     // jsdoccomment excludes rawBody from inline-tag output.
-    if (!compat) json.rawBody = this.rawBody
+    if (!compat) {
+      json.rawBody = this.rawBody
+    }
     return json
   }
-  [inspectSymbol]() {
+  [inspectSymbol](): object {
     return inspectPayload(this.toJSON(), 'JsdocInlineTag')
   }
 }
@@ -1204,39 +1791,46 @@ export class RemoteJsdocInlineTag {
 /**
  * `JsdocGenericTagBody` (Kind 0x09).
  */
-export class RemoteJsdocGenericTagBody {
-  type = 'JsdocGenericTagBody'
-  #internal
+export class RemoteJsdocGenericTagBody implements LazyNode {
+  readonly type = 'JsdocGenericTagBody'
+  readonly #internal: RemoteInternal
 
-  constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
+  constructor(
+    view: DataView,
+    byteIndex: number,
+    index: number,
+    rootIndex: number,
+    parent: LazyNode | null,
+    sourceFile: RemoteSourceFileLike
+  ) {
     this.#internal = { view, byteIndex, index, rootIndex, parent, sourceFile }
   }
 
-  get range() {
+  get range(): readonly [number, number] {
     return absoluteRange(this.#internal)
   }
-  get parent() {
+  get parent(): LazyNode | null {
     return this.#internal.parent
   }
 
   /** `true` when the tag separator was `-`. */
-  get hasDashSeparator() {
+  get hasDashSeparator(): boolean {
     return (commonData(this.#internal) & 0b0000_0001) !== 0
   }
   /** Description text after the dash separator. */
-  get description() {
+  get description(): string | null {
     return extStringField(this.#internal, 2)
   }
 
-  toJSON() {
+  toJSON(): RemoteJsonObject {
     return {
       type: this.type,
-      range: this.range,
+      range: [...this.range],
       hasDashSeparator: this.hasDashSeparator,
       description: this.description
     }
   }
-  [inspectSymbol]() {
+  [inspectSymbol](): object {
     return inspectPayload(this.toJSON(), 'JsdocGenericTagBody')
   }
 }
@@ -1251,25 +1845,32 @@ export class RemoteJsdocGenericTagBody {
  * emitting them; for now the class exposes the standard range/parent/toJSON
  * surface.
  */
-export class RemoteJsdocBorrowsTagBody {
-  type = 'JsdocBorrowsTagBody'
-  #internal
+export class RemoteJsdocBorrowsTagBody implements LazyNode {
+  readonly type = 'JsdocBorrowsTagBody'
+  readonly #internal: RemoteInternal
 
-  constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
+  constructor(
+    view: DataView,
+    byteIndex: number,
+    index: number,
+    rootIndex: number,
+    parent: LazyNode | null,
+    sourceFile: RemoteSourceFileLike
+  ) {
     this.#internal = { view, byteIndex, index, rootIndex, parent, sourceFile }
   }
 
-  get range() {
+  get range(): readonly [number, number] {
     return absoluteRange(this.#internal)
   }
-  get parent() {
+  get parent(): LazyNode | null {
     return this.#internal.parent
   }
 
-  toJSON() {
-    return { type: this.type, range: this.range }
+  toJSON(): RemoteJsonObject {
+    return { type: this.type, range: [...this.range] }
   }
-  [inspectSymbol]() {
+  [inspectSymbol](): object {
     return inspectPayload(this.toJSON(), 'JsdocBorrowsTagBody')
   }
 }
@@ -1285,44 +1886,51 @@ export class RemoteJsdocBorrowsTagBody {
 /**
  * `JsdocParameterName` (Kind 0x0C) — `JsdocTagValue::Parameter` variant.
  */
-export class RemoteJsdocParameterName {
-  type = 'JsdocParameterName'
-  #internal
+export class RemoteJsdocParameterName implements LazyNode {
+  readonly type = 'JsdocParameterName'
+  readonly #internal: RemoteInternal
 
-  constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
+  constructor(
+    view: DataView,
+    byteIndex: number,
+    index: number,
+    rootIndex: number,
+    parent: LazyNode | null,
+    sourceFile: RemoteSourceFileLike
+  ) {
     this.#internal = { view, byteIndex, index, rootIndex, parent, sourceFile }
   }
 
-  get range() {
+  get range(): readonly [number, number] {
     return absoluteRange(this.#internal)
   }
-  get parent() {
+  get parent(): LazyNode | null {
     return this.#internal.parent
   }
 
   /** `true` when the parameter was wrapped in `[id]` brackets. */
-  get optional() {
+  get optional(): boolean {
     return (commonData(this.#internal) & 0b0000_0001) !== 0
   }
   /** Path text. */
-  get path() {
+  get path(): string {
     return extStringFieldRequired(this.#internal, 0)
   }
   /** Default value parsed from `[id=foo]` syntax. */
-  get defaultValue() {
+  get defaultValue(): string | null {
     return extStringField(this.#internal, STRING_FIELD_SIZE)
   }
 
-  toJSON() {
+  toJSON(): RemoteJsonObject {
     return {
       type: this.type,
-      range: this.range,
+      range: [...this.range],
       optional: this.optional,
       path: this.path,
       defaultValue: this.defaultValue
     }
   }
-  [inspectSymbol]() {
+  [inspectSymbol](): object {
     return inspectPayload(this.toJSON(), 'JsdocParameterName')
   }
 }

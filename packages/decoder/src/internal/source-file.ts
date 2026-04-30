@@ -13,9 +13,7 @@
  * @license MIT
  */
 
-// @ts-check
-
-import { decodeKindToClass } from './kind-dispatch.js'
+import { decodeKindToClass } from './kind-dispatch.ts'
 import {
   BASE_OFFSET_FIELD,
   COMPAT_MODE_BIT,
@@ -41,9 +39,48 @@ import {
   STRING_PAYLOAD_NONE_SENTINEL,
   SUPPORTED_MAJOR,
   VERSION_OFFSET
-} from './constants.js'
+} from './constants.ts'
+import type { LazyNode, RemoteSourceFileLike } from './types.ts'
 
 const utf8Decoder = new TextDecoder('utf-8')
+
+/**
+ * Construction options for {@link RemoteSourceFile}.
+ */
+export interface RemoteSourceFileOptions {
+  /**
+   * When the buffer's `compat_mode` flag is set, switch `toJSON()` and
+   * compat-mode-only field accessors to emit `""` instead of `null` for
+   * absent optional strings (rawType, name, namepathOrURL, text). Mirrors
+   * the Rust serializer's `SerializeOptions.empty_string_for_null` for
+   * jsdoccomment parity. Has no effect on basic-mode buffers.
+   */
+  emptyStringForNull?: boolean
+}
+
+/**
+ * Eagerly-resolved cache: every per-instance state field of `RemoteSourceFile`
+ * lives on this object so the V8 hidden class stays stable across instances.
+ */
+interface SourceFileInternal {
+  view: DataView
+  uint32View: Uint32Array
+  version: number
+  compatMode: boolean
+  emptyStringForNull: boolean
+  rootArrayOffset: number
+  stringOffsetsOffset: number
+  stringDataOffset: number
+  extendedDataOffset: number
+  diagnosticsOffset: number
+  nodesOffset: number
+  nodeCount: number
+  sourceTextLength: number
+  rootCount: number
+  stringCache: Map<number, string>
+  nodeCache: Array<LazyNode | null | undefined>
+  $asts: ReadonlyArray<LazyNode | null> | undefined
+}
 
 /**
  * Root of the lazy decoder. Construct one per Binary AST buffer.
@@ -56,8 +93,8 @@ const utf8Decoder = new TextDecoder('utf-8')
  * - `getNode(nodeIndex, parent, rootIndex)` — lazy class instance (cached)
  * - `asts` getter — array of root Remote* instances (or `null` for failures)
  */
-export class RemoteSourceFile {
-  #internal
+export class RemoteSourceFile implements RemoteSourceFileLike {
+  #internal: SourceFileInternal
 
   /**
    * Construct from a binary buffer (any `BufferSource`-compatible value).
@@ -66,15 +103,13 @@ export class RemoteSourceFile {
    * - the buffer is shorter than {@link HEADER_SIZE} bytes
    * - the major version disagrees with {@link SUPPORTED_MAJOR}
    *
-   * @param {ArrayBuffer | ArrayBufferView} buffer
-   * @param {{ emptyStringForNull?: boolean }} [options]
-   *   `emptyStringForNull`: only effective when the buffer's `compat_mode`
-   *   flag is set. Switches `toJSON()` and compat-mode field accessors to
-   *   emit `""` instead of `null` for absent optional strings (rawType,
-   *   name, namepathOrURL, text). Mirrors the Rust serializer's
-   *   `SerializeOptions.empty_string_for_null` for jsdoccomment parity.
+   * `emptyStringForNull`: only effective when the buffer's `compat_mode`
+   * flag is set. Switches `toJSON()` and compat-mode field accessors to
+   * emit `""` instead of `null` for absent optional strings (rawType,
+   * name, namepathOrURL, text). Mirrors the Rust serializer's
+   * `SerializeOptions.empty_string_for_null` for jsdoccomment parity.
    */
-  constructor(buffer, options) {
+  constructor(buffer: ArrayBuffer | ArrayBufferView, options?: RemoteSourceFileOptions) {
     const view =
       buffer instanceof ArrayBuffer
         ? new DataView(buffer)
@@ -100,13 +135,11 @@ export class RemoteSourceFile {
     // practice; the assertion below catches the (very unlikely) day
     // someone wraps a misaligned slice manually.
     if ((view.byteOffset & 3) !== 0) {
-      throw new Error(
-        `Binary AST buffer must be 4-byte aligned (byteOffset=${view.byteOffset})`
-      )
+      throw new Error(`Binary AST buffer must be 4-byte aligned (byteOffset=${view.byteOffset})`)
     }
     const uint32View = new Uint32Array(view.buffer, view.byteOffset, view.byteLength >>> 2)
     const flags = view.getUint8(FLAGS_OFFSET)
-    const nodeCount = uint32View[NODE_COUNT_FIELD >>> 2]
+    const nodeCount = uint32View[NODE_COUNT_FIELD >>> 2]!
     const compatMode = (flags & COMPAT_MODE_BIT) !== 0
     this.#internal = {
       view,
@@ -115,24 +148,30 @@ export class RemoteSourceFile {
       compatMode,
       // Only effective when compatMode; basic-mode buffers have no
       // jsdoccomment-shape consumers so the toggle is meaningless there.
-      emptyStringForNull: compatMode && options !== undefined && options.emptyStringForNull === true,
-      rootArrayOffset: uint32View[ROOT_ARRAY_OFFSET_FIELD >>> 2],
-      stringOffsetsOffset: uint32View[STRING_OFFSETS_OFFSET_FIELD >>> 2],
-      stringDataOffset: uint32View[STRING_DATA_OFFSET_FIELD >>> 2],
-      extendedDataOffset: uint32View[EXTENDED_DATA_OFFSET_FIELD >>> 2],
-      diagnosticsOffset: uint32View[DIAGNOSTICS_OFFSET_FIELD >>> 2],
-      nodesOffset: uint32View[NODES_OFFSET_FIELD >>> 2],
+      emptyStringForNull:
+        compatMode && options !== undefined && options.emptyStringForNull === true,
+      rootArrayOffset: uint32View[ROOT_ARRAY_OFFSET_FIELD >>> 2]!,
+      stringOffsetsOffset: uint32View[STRING_OFFSETS_OFFSET_FIELD >>> 2]!,
+      stringDataOffset: uint32View[STRING_DATA_OFFSET_FIELD >>> 2]!,
+      extendedDataOffset: uint32View[EXTENDED_DATA_OFFSET_FIELD >>> 2]!,
+      diagnosticsOffset: uint32View[DIAGNOSTICS_OFFSET_FIELD >>> 2]!,
+      nodesOffset: uint32View[NODES_OFFSET_FIELD >>> 2]!,
       nodeCount,
-      sourceTextLength: uint32View[SOURCE_TEXT_LENGTH_FIELD >>> 2],
-      rootCount: uint32View[ROOT_COUNT_FIELD >>> 2],
+      sourceTextLength: uint32View[SOURCE_TEXT_LENGTH_FIELD >>> 2]!,
+      rootCount: uint32View[ROOT_COUNT_FIELD >>> 2]!,
       stringCache: new Map(),
+      // V8 hot path: `new Array(n)` keeps the cache as a HOLEY array which
+      // is what `nodeCache[i] = ...` assignments expect. `Array.from({length: n})`
+      // pre-fills with `undefined` and forces a packed shape that costs us
+      // ~10% on the parseBatch headline KPI.
+      // eslint-disable-next-line unicorn/no-new-array -- intentional sparse pre-allocation; see comment
       nodeCache: new Array(nodeCount),
       $asts: undefined
     }
   }
 
   /** Underlying DataView. */
-  get view() {
+  get view(): DataView {
     return this.#internal.view
   }
   /**
@@ -140,31 +179,31 @@ export class RemoteSourceFile {
    * Index by `byteOffset >>> 2` for any 4-byte aligned u32 read; this is
    * 5–10× faster than `DataView.getUint32` in V8 hot paths.
    */
-  get uint32View() {
+  get uint32View(): Uint32Array {
     return this.#internal.uint32View
   }
   /** Whether the buffer's `compat_mode` flag bit is set. */
-  get compatMode() {
+  get compatMode(): boolean {
     return this.#internal.compatMode
   }
   /** Whether `null` optional strings are emitted as `""` in compat-mode. */
-  get emptyStringForNull() {
+  get emptyStringForNull(): boolean {
     return this.#internal.emptyStringForNull
   }
   /** Byte offset of the Extended Data section. */
-  get extendedDataOffset() {
+  get extendedDataOffset(): number {
     return this.#internal.extendedDataOffset
   }
   /** Byte offset of the Nodes section. */
-  get nodesOffset() {
+  get nodesOffset(): number {
     return this.#internal.nodesOffset
   }
   /** Total number of node records (including the `node[0]` sentinel). */
-  get nodeCount() {
+  get nodeCount(): number {
     return this.#internal.nodeCount
   }
   /** Number of roots N. */
-  get rootCount() {
+  get rootCount(): number {
     return this.#internal.rootCount
   }
 
@@ -175,11 +214,8 @@ export class RemoteSourceFile {
    * section.
    *
    * Cached on first lookup so repeated reads are O(1).
-   *
-   * @param {number} idx
-   * @returns {string | null}
    */
-  getString(idx) {
+  getString(idx: number): string | null {
     if (idx === STRING_PAYLOAD_NONE_SENTINEL) {
       return null
     }
@@ -189,8 +225,8 @@ export class RemoteSourceFile {
     }
     const { view, uint32View, stringOffsetsOffset, stringDataOffset } = this.#internal
     const entryWordIndex = (stringOffsetsOffset + idx * STRING_OFFSET_ENTRY_SIZE) >>> 2
-    const start = uint32View[entryWordIndex]
-    const end = uint32View[entryWordIndex + 1]
+    const start = uint32View[entryWordIndex]!
+    const end = uint32View[entryWordIndex + 1]!
     const bytes = new Uint8Array(
       view.buffer,
       view.byteOffset + stringDataOffset + start,
@@ -210,12 +246,8 @@ export class RemoteSourceFile {
    * Cache key uses a high-bit-set form of `offset` so it never collides
    * with `getString(idx)` cache entries (string-leaf path uses small
    * indices, ED path uses byte offsets — both fit in u32 and overlap).
-   *
-   * @param {number} offset Byte offset within the String Data section.
-   * @param {number} length UTF-8 byte length.
-   * @returns {string | null}
    */
-  getStringByField(offset, length) {
+  getStringByField(offset: number, length: number): string | null {
     if (offset === STRING_FIELD_NONE_OFFSET) {
       return null
     }
@@ -227,11 +259,7 @@ export class RemoteSourceFile {
       return cached
     }
     const { view, stringDataOffset } = this.#internal
-    const bytes = new Uint8Array(
-      view.buffer,
-      view.byteOffset + stringDataOffset + offset,
-      length
-    )
+    const bytes = new Uint8Array(view.buffer, view.byteOffset + stringDataOffset + offset, length)
     const str = utf8Decoder.decode(bytes)
     this.#internal.stringCache.set(cacheKey, str)
     return str
@@ -245,23 +273,15 @@ export class RemoteSourceFile {
    * Reuses the same cache-key disambiguation as `getStringByField` (offset
    * is tagged with the sign bit) so inline-path lookups never collide with
    * String-Offsets-table lookups.
-   *
-   * @param {number} offset Byte offset within the String Data section (≤ 4 MB).
-   * @param {number} length UTF-8 byte length (≤ 255).
-   * @returns {string}
    */
-  getStringByOffsetAndLength(offset, length) {
+  getStringByOffsetAndLength(offset: number, length: number): string {
     const cacheKey = -(offset + 1)
     const cached = this.#internal.stringCache.get(cacheKey)
     if (cached !== undefined) {
       return cached
     }
     const { view, stringDataOffset } = this.#internal
-    const bytes = new Uint8Array(
-      view.buffer,
-      view.byteOffset + stringDataOffset + offset,
-      length
-    )
+    const bytes = new Uint8Array(view.buffer, view.byteOffset + stringDataOffset + offset, length)
     const str = utf8Decoder.decode(bytes)
     this.#internal.stringCache.set(cacheKey, str)
     return str
@@ -269,17 +289,14 @@ export class RemoteSourceFile {
 
   /**
    * Get the `base_offset` for the i-th root (used to compute absolute ranges).
-   *
-   * @param {number} rootIndex
-   * @returns {number}
    */
-  getRootBaseOffset(rootIndex) {
+  getRootBaseOffset(rootIndex: number): number {
     // Root index array is 4-byte aligned (starts at HEADER_SIZE = 40)
     // and each entry is 12 bytes (3 × u32) so every field lands on a
     // 4-byte boundary — safe for `Uint32Array[idx]`.
     const off =
       this.#internal.rootArrayOffset + rootIndex * ROOT_INDEX_ENTRY_SIZE + BASE_OFFSET_FIELD
-    return this.#internal.uint32View[off >>> 2]
+    return this.#internal.uint32View[off >>> 2]!
   }
 
   /**
@@ -287,14 +304,11 @@ export class RemoteSourceFile {
    * text starts inside the String Data section) for the i-th root.
    * Used by `descriptionRaw` getters that need to slice the source text
    * by `(start, end)` byte offsets.
-   *
-   * @param {number} rootIndex
-   * @returns {number}
    */
-  getRootSourceOffsetInData(rootIndex) {
+  getRootSourceOffsetInData(rootIndex: number): number {
     const off =
       this.#internal.rootArrayOffset + rootIndex * ROOT_INDEX_ENTRY_SIZE + SOURCE_OFFSET_FIELD
-    return this.#internal.uint32View[off >>> 2]
+    return this.#internal.uint32View[off >>> 2]!
   }
 
   /**
@@ -306,21 +320,43 @@ export class RemoteSourceFile {
    * Used by `descriptionRaw` getters on `RemoteJsdocBlock` /
    * `RemoteJsdocTag` (compat-mode wire field per
    * `design/008-oxlint-oxfmt-support/README.md` §4.3).
-   *
-   * @param {number} rootIndex
-   * @param {number} start
-   * @param {number} end
-   * @returns {string | null}
    */
-  sliceSourceText(rootIndex, start, end) {
-    if (start === 0 && end === 0) return null
-    if (start > end) return null
+  sliceSourceText(rootIndex: number, start: number, end: number): string | null {
+    if (start === 0 && end === 0) {
+      return null
+    }
+    if (start > end) {
+      return null
+    }
     const sourceOffset = this.getRootSourceOffsetInData(rootIndex)
     const { view, stringDataOffset } = this.#internal
     const absStart = stringDataOffset + sourceOffset + start
     const absEnd = stringDataOffset + sourceOffset + end
-    if (absEnd > view.byteOffset + view.byteLength) return null
+    if (absEnd > view.byteOffset + view.byteLength) {
+      return null
+    }
     const bytes = new Uint8Array(view.buffer, view.byteOffset + absStart, end - start)
+    return utf8Decoder.decode(bytes)
+  }
+
+  /**
+   * Return the complete source text for one root.
+   */
+  getRootSourceText(rootIndex: number): string {
+    const sourceOffset = this.getRootSourceOffsetInData(rootIndex)
+    const nextOffset =
+      rootIndex + 1 < this.#internal.rootCount
+        ? this.getRootSourceOffsetInData(rootIndex + 1)
+        : this.#internal.sourceTextLength
+    if (nextOffset < sourceOffset) {
+      return ''
+    }
+    const { view, stringDataOffset } = this.#internal
+    const bytes = new Uint8Array(
+      view.buffer,
+      view.byteOffset + stringDataOffset + sourceOffset,
+      nextOffset - sourceOffset
+    )
     return utf8Decoder.decode(bytes)
   }
 
@@ -328,13 +364,8 @@ export class RemoteSourceFile {
    * Build (or fetch from cache) the lazy class instance for a node.
    *
    * Returns `null` for the sentinel (node index 0).
-   *
-   * @param {number} nodeIndex
-   * @param {object | null} parent
-   * @param {number} [rootIndex]
-   * @returns {object | null}
    */
-  getNode(nodeIndex, parent, rootIndex = -1) {
+  getNode(nodeIndex: number, parent: LazyNode | null, rootIndex: number = -1): LazyNode | null {
     if (nodeIndex === 0) {
       return null
     }
@@ -354,15 +385,14 @@ export class RemoteSourceFile {
    * AST root for each entry in the Root Index array. Yields `null` for
    * entries with `node_index === 0` (parse failure sentinel) and the
    * matching lazy class instance otherwise.
-   *
-   * @returns {(object | null)[]}
    */
-  get asts() {
+  get asts(): ReadonlyArray<LazyNode | null> {
     if (this.#internal.$asts !== undefined) {
       return this.#internal.$asts
     }
     const { view, rootArrayOffset, rootCount } = this.#internal
-    const result = new Array(rootCount)
+    // eslint-disable-next-line unicorn/no-new-array -- intentional sparse pre-allocation; immediately filled in the loop below
+    const result: Array<LazyNode | null> = new Array(rootCount)
     for (let i = 0; i < rootCount; i++) {
       const nodeIdx = view.getUint32(
         rootArrayOffset + i * ROOT_INDEX_ENTRY_SIZE + NODE_INDEX_OFFSET,

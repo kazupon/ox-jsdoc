@@ -1,8 +1,7 @@
-// @ts-check
+import { describe, expect, it } from 'vite-plus/test'
+import { jsdocVisitorKeys } from '../src/index.ts'
 
-import { describe, expect, it } from 'vitest'
-
-import { jsdocVisitorKeys } from '../src/index.js'
+const visitorKeys = jsdocVisitorKeys as Readonly<Record<string, readonly string[]>>
 
 describe('jsdocVisitorKeys', () => {
   it('is a frozen object', () => {
@@ -28,8 +27,8 @@ describe('jsdocVisitorKeys', () => {
       'JsdocText'
     ]
     for (const kind of expected) {
-      expect(jsdocVisitorKeys, kind).toHaveProperty(kind)
-      expect(Array.isArray(jsdocVisitorKeys[kind]), `${kind} is array`).toBe(true)
+      expect(visitorKeys, kind).toHaveProperty(kind)
+      expect(Array.isArray(visitorKeys[kind]), `${kind} is array`).toBe(true)
     }
   })
 
@@ -83,8 +82,8 @@ describe('jsdocVisitorKeys', () => {
     ]
     expect(expected).toHaveLength(45)
     for (const kind of expected) {
-      expect(jsdocVisitorKeys, kind).toHaveProperty(kind)
-      expect(Array.isArray(jsdocVisitorKeys[kind]), `${kind} is array`).toBe(true)
+      expect(visitorKeys, kind).toHaveProperty(kind)
+      expect(Array.isArray(visitorKeys[kind]), `${kind} is array`).toBe(true)
     }
   })
 

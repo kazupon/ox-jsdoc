@@ -1,8 +1,6 @@
-// @ts-check
+import { describe, expect, it } from 'vite-plus/test'
 
-import { describe, expect, it } from 'vitest'
-
-import { parsedPreservingWhitespace } from '../src/internal/preserve-whitespace.js'
+import { parsedPreservingWhitespace } from '../src/internal/preserve-whitespace.ts'
 
 describe('parsedPreservingWhitespace', () => {
   it('returns trimmed single-line input as-is', () => {
@@ -51,16 +49,12 @@ describe('parsedPreservingWhitespace', () => {
 
   it('keeps the leading star on markdown emphasis', () => {
     const input = ' * normal\n * *foo* is emphasis\n * *bold* word\n'
-    expect(parsedPreservingWhitespace(input)).toBe(
-      'normal\n*foo* is emphasis\n*bold* word'
-    )
+    expect(parsedPreservingWhitespace(input)).toBe('normal\n*foo* is emphasis\n*bold* word')
   })
 
   it('treats underscore after star as emphasis', () => {
     const input = ' * normal\n * *_underscore_* example\n'
-    expect(parsedPreservingWhitespace(input)).toBe(
-      'normal\n*_underscore_* example'
-    )
+    expect(parsedPreservingWhitespace(input)).toBe('normal\n*_underscore_* example')
   })
 
   it('treats punctuation after star as a continuation prefix', () => {
@@ -72,14 +66,12 @@ describe('parsedPreservingWhitespace', () => {
     // Matches the Rust port — `*no_space` is kept verbatim because the
     // algorithm cannot distinguish `*foo` (incomplete emphasis) from
     // `*foo*` (completed) without scanning ahead.
-    expect(parsedPreservingWhitespace(' * normal\n *no_space\n')).toBe(
-      'normal\n*no_space'
-    )
+    expect(parsedPreservingWhitespace(' * normal\n *no_space\n')).toBe('normal\n*no_space')
   })
 
   it('passes lines without `*` prefix through trimmed', () => {
-    expect(
-      parsedPreservingWhitespace('first line\nsecond line\n  third line  ')
-    ).toBe('first line\nsecond line\nthird line')
+    expect(parsedPreservingWhitespace('first line\nsecond line\n  third line  ')).toBe(
+      'first line\nsecond line\nthird line'
+    )
   })
 })

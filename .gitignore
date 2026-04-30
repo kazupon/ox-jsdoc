@@ -1,6 +1,8 @@
 target/
 node_modules/
 dist/
+!packages/decoder/dist/
+!packages/decoder/dist/**
 *.log
 napi/ox-jsdoc/src-js/bindings.d.ts
 napi/ox-jsdoc/src-js/bindings.js

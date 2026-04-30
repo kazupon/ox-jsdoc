@@ -13,22 +13,21 @@
  * @license MIT
  */
 
-// @ts-check
-
-import { extOffsetOf, readNextSibling, thisNode } from './helpers.js'
+import { extOffsetOf, readNextSibling, thisNode } from './helpers.ts'
+import type { LazyNode, RemoteInternal } from './types.ts'
 
 /**
  * `Array` subclass returned by every "node list" getter. Inheriting from
  * `Array` gives us `length` / `map` / `filter` / `forEach` etc. for free;
  * indexed access (`list[i]`) returns lazy class instances built up front.
  */
-export class RemoteNodeList extends Array {}
+export class RemoteNodeList extends Array<LazyNode> {}
 
 /**
  * Empty singleton — every "no children" getter returns this so callers can
  * branch on `length === 0` without allocating.
  */
-export const EMPTY_NODE_LIST = new RemoteNodeList()
+export const EMPTY_NODE_LIST: RemoteNodeList = new RemoteNodeList()
 
 /**
  * Build a `RemoteNodeList` from the per-list metadata slot at byte offset
@@ -38,12 +37,11 @@ export const EMPTY_NODE_LIST = new RemoteNodeList()
  *
  * Mirrors `decoder::helpers::read_list_metadata` + `NodeListIter::new` on
  * the Rust side.
- *
- * @param {import('./helpers.js').RemoteInternal} internal
- * @param {number} slotOffset Per-Kind byte offset of the list metadata.
- * @returns {RemoteNodeList}
  */
-export function nodeListAtSlotExtended(internal, slotOffset) {
+export function nodeListAtSlotExtended(
+  internal: RemoteInternal,
+  slotOffset: number
+): RemoteNodeList {
   const ext = extOffsetOf(internal) + slotOffset
   const head = internal.view.getUint32(ext, true)
   const count = internal.view.getUint16(ext + 4, true)
@@ -56,19 +54,21 @@ export function nodeListAtSlotExtended(internal, slotOffset) {
 /**
  * Walk `count` siblings starting at `headIndex` and collect them into a
  * `RemoteNodeList`. The parent of every collected child is `internal`.
- *
- * @param {import('./helpers.js').RemoteInternal} parentInternal
- * @param {number} headIndex   First node index in the list.
- * @param {number} count       Number of elements to walk.
- * @returns {RemoteNodeList}
  */
-function collectNodeListChildren(parentInternal, headIndex, count) {
+function collectNodeListChildren(
+  parentInternal: RemoteInternal,
+  headIndex: number,
+  count: number
+): RemoteNodeList {
   const { sourceFile, rootIndex } = parentInternal
   const list = new RemoteNodeList()
   const parent = thisNode(parentInternal)
   let cursor = headIndex
   for (let i = 0; i < count && cursor !== 0; i++) {
-    list.push(sourceFile.getNode(cursor, parent, rootIndex))
+    const child = sourceFile.getNode(cursor, parent, rootIndex)
+    if (child !== null) {
+      list.push(child)
+    }
     cursor = readNextSibling(sourceFile, cursor)
   }
   return list
