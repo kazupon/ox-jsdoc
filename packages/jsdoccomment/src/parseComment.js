@@ -1,5 +1,8 @@
 /* eslint-disable prefer-named-capture-group -- Temporary */
-import { parse as oxJsdocBinaryParse } from 'ox-jsdoc-binary'
+import {
+  parse as oxJsdocBinaryParse,
+  parseBatch as oxJsdocBinaryParseBatch
+} from 'ox-jsdoc-binary'
 
 import { parseInlineTags } from './parseInlineTags.js'
 
@@ -328,6 +331,64 @@ const normalizeDiagnostics = (diagnostics, source) => {
 }
 
 /**
+ * @param {Array<{ message: string, rootIndex: number }>} diagnostics
+ * @returns {Map<number, Array<{ message: string, rootIndex: number }>>}
+ */
+const groupDiagnosticsByRootIndex = diagnostics => {
+  const grouped = new Map()
+  for (const diagnostic of diagnostics) {
+    const group = grouped.get(diagnostic.rootIndex)
+    if (group) {
+      group.push(diagnostic)
+    } else {
+      grouped.set(diagnostic.rootIndex, [diagnostic])
+    }
+  }
+
+  return grouped
+}
+
+/**
+ * @param {string | {value: string, range?: [number, number]}} commentOrNode
+ * @returns {number}
+ */
+const getCommentBaseOffset = commentOrNode => {
+  if (
+    typeof commentOrNode === 'object' &&
+    commentOrNode !== null &&
+    Array.isArray(commentOrNode.range)
+  ) {
+    return commentOrNode.range[0] ?? 0
+  }
+
+  return 0
+}
+
+/**
+ * @param {Array<{index: number, problem: import('comment-parser').Problem}>} problems
+ * @param {Array<import('.').JsdocBlockWithInline | null>} blocks
+ * @returns {void}
+ */
+const throwBatchParseError = (problems, blocks) => {
+  const firstProblem = problems[0]
+  if (firstProblem) {
+    throw new Error(
+      `There were errors for comment batch parsing ` +
+        `(index ${firstProblem.index}): ${firstProblem.problem.message}`
+    )
+  }
+
+  const nullIndex = blocks.findIndex(block => {
+    return block === null
+  })
+  if (nullIndex !== -1) {
+    throw new Error(
+      `There were no results for comment batch parsing (index ${nullIndex})`
+    )
+  }
+}
+
+/**
  * @param {object} tag
  * @returns {import('comment-parser').Spec}
  */
@@ -396,4 +457,62 @@ const parseComment = (commentOrNode, indent = '') => {
   return normalizeBlock(ast.toJSON(), diagnostics)
 }
 
-export { getTokenizers, parseComment }
+/**
+ * Parse multiple comments with one `ox-jsdoc-binary` batch call and return
+ * the same normalized block shape as `parseComment`.
+ *
+ * @param {Array<string | {value: string, range?: [number, number]}>} comments
+ * @param {{indent?: string, throwOnError?: boolean}} [options]
+ * @returns {{
+ *   blocks: Array<import('.').JsdocBlockWithInline | null>,
+ *   problems: Array<{index: number, problem: import('comment-parser').Problem}>
+ * }}
+ */
+const parseCommentBatch = (comments, options = {}) => {
+  const indent = options.indent ?? ''
+  const items = comments.map(commentOrNode => {
+    return {
+      sourceText: normalizeCommentSource(commentOrNode, indent),
+      baseOffset: getCommentBaseOffset(commentOrNode)
+    }
+  })
+  const { asts, diagnostics } = oxJsdocBinaryParseBatch(items, {
+    compatMode: true,
+    emptyStringForNull: true,
+    preserveWhitespace: true
+  })
+  const diagnosticsByIndex = groupDiagnosticsByRootIndex(diagnostics)
+  /** @type {Array<import('.').JsdocBlockWithInline | null>} */
+  const blocks = []
+  /** @type {Array<{index: number, problem: import('comment-parser').Problem}>} */
+  const problems = []
+
+  for (const [index, ast] of asts.entries()) {
+    const itemDiagnostics = diagnosticsByIndex.get(index) ?? []
+    if (!ast) {
+      const itemProblems = normalizeDiagnostics(itemDiagnostics, [])
+      blocks.push(null)
+      for (const problem of itemProblems) {
+        problems.push({ index, problem })
+      }
+      continue
+    }
+
+    const block = normalizeBlock(ast.toJSON(), itemDiagnostics)
+    blocks.push(block)
+    for (const problem of block.problems) {
+      problems.push({ index, problem })
+    }
+  }
+
+  if (options.throwOnError && (problems.length > 0 || blocks.includes(null))) {
+    throwBatchParseError(problems, blocks)
+  }
+
+  return {
+    blocks,
+    problems
+  }
+}
+
+export { getTokenizers, parseComment, parseCommentBatch }
