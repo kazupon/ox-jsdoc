@@ -1,85 +1,88 @@
 # @ox-jsdoc/eslint-plugin-jsdoc
 
-`@ox-jsdoc/eslint-plugin-jsdoc` は、`ox-jsdoc` 向けに fork した
-`eslint-plugin-jsdoc` です。
+`@ox-jsdoc/eslint-plugin-jsdoc` is a fork of `eslint-plugin-jsdoc` adapted
+for `ox-jsdoc`.
 
-この package は private workspace package であり、npm publish する汎用 package
-ではありません。主な目的は、`eslint-plugin-jsdoc` の rule 実装を使いながら、
-JSDoc parser として `@ox-jsdoc/jsdoccomment` を試し、ESLint / Oxlint integration
-や benchmark を行うことです。
+This package is a private workspace package and is not a general-purpose
+package intended for npm publish. Its main purpose is to reuse the rule
+implementations from `eslint-plugin-jsdoc` while exercising
+`@ox-jsdoc/jsdoccomment` as the JSDoc parser, so we can run ESLint /
+Oxlint integration and benchmarks.
 
-## 役割
+## Role
 
-- `eslint-plugin-jsdoc` の rule behavior をできるだけ維持する。
-- `@es-joy/jsdoccomment` の代わりに `@ox-jsdoc/jsdoccomment` を使う。
-- `@ox-jsdoc/jsdoccomment` の `parseComment` と `parseCommentBatch` を、同じ
-  ESLint plugin から切り替えて比較できるようにする。
-- `ox-jsdoc` の benchmark で、parser 差し替えによる性能差と batch parse の効果を
-  計測する。
+- Preserve the rule behavior of `eslint-plugin-jsdoc` as faithfully as
+  possible.
+- Use `@ox-jsdoc/jsdoccomment` instead of `@es-joy/jsdoccomment`.
+- Allow switching between `parseComment` and `parseCommentBatch` from
+  `@ox-jsdoc/jsdoccomment` within the same ESLint plugin so the two
+  strategies can be compared head-to-head.
+- Measure, in `ox-jsdoc` benchmarks, both the performance impact of
+  swapping the parser and the benefit of batch parsing.
 
-## 本家 eslint-plugin-jsdoc との主な違い
+## Key differences from upstream eslint-plugin-jsdoc
 
-| 項目 | 本家 `eslint-plugin-jsdoc` | この package |
-|---|---|---|
-| package name | `eslint-plugin-jsdoc` | `@ox-jsdoc/eslint-plugin-jsdoc` |
-| publish | npm package | private workspace package |
-| JSDoc parser | `@es-joy/jsdoccomment` | `@ox-jsdoc/jsdoccomment` |
-| single comment parse | `parseComment` | `parseComment` via `@ox-jsdoc/jsdoccomment` |
-| batch parse | なし | `settings.jsdoc.oxParseStrategy: 'batch'` で利用 |
-| 目的 | 一般利用向け ESLint plugin | ox-jsdoc integration / benchmark 用 fork |
+| Item                 | Upstream `eslint-plugin-jsdoc` | This package                                          |
+| -------------------- | ------------------------------ | ----------------------------------------------------- |
+| package name         | `eslint-plugin-jsdoc`          | `@ox-jsdoc/eslint-plugin-jsdoc`                       |
+| publish              | npm package                    | private workspace package                             |
+| JSDoc parser         | `@es-joy/jsdoccomment`         | `@ox-jsdoc/jsdoccomment`                              |
+| single comment parse | `parseComment`                 | `parseComment` via `@ox-jsdoc/jsdoccomment`           |
+| batch parse          | not available                  | enabled via `settings.jsdoc.oxParseStrategy: 'batch'` |
+| purpose              | general-purpose ESLint plugin  | fork for ox-jsdoc integration / benchmarking          |
 
-rule 名、config、rule の基本挙動は本家 `eslint-plugin-jsdoc` との互換性を保つことを
-目標にしています。ただし、この fork は benchmark と検証を主目的としているため、
-公開 package としての backward compatibility は保証しません。
+The rule names, configuration, and core rule behavior aim to remain
+compatible with upstream `eslint-plugin-jsdoc`. However, since this fork
+exists primarily for benchmarking and validation, it does not guarantee
+backward compatibility as a published package.
 
 ## oxParseStrategy
 
-この fork では `settings.jsdoc.oxParseStrategy` により、JSDoc comment の parse 方法を
-切り替えられます。
+This fork lets you switch how JSDoc comments are parsed via
+`settings.jsdoc.oxParseStrategy`.
 
 ```js
-import jsdoc from '@ox-jsdoc/eslint-plugin-jsdoc';
+import jsdoc from '@ox-jsdoc/eslint-plugin-jsdoc'
 
 export default [
   {
     plugins: {
-      jsdoc,
+      jsdoc
     },
     settings: {
       jsdoc: {
-        oxParseStrategy: 'single',
-      },
+        oxParseStrategy: 'single'
+      }
     },
     rules: {
       'jsdoc/empty-tags': 'error',
       'jsdoc/require-param-description': 'error',
-      'jsdoc/require-param-type': 'error',
-    },
-  },
-];
+      'jsdoc/require-param-type': 'error'
+    }
+  }
+]
 ```
 
-`oxParseStrategy` の値:
+`oxParseStrategy` values:
 
-| 値 | 挙動 |
-|---|---|
-| `single` | comment ごとに `@ox-jsdoc/jsdoccomment` の `parseComment` を呼ぶ。デフォルト。 |
-| `batch` | `SourceCode#getAllComments()` から JSDoc comment を集め、`parseCommentBatch` でまとめて parse する。 |
+| Value    | Behavior                                                                                                        |
+| -------- | --------------------------------------------------------------------------------------------------------------- |
+| `single` | Calls `parseComment` from `@ox-jsdoc/jsdoccomment` once per comment. Default.                                   |
+| `batch`  | Collects JSDoc comments from `SourceCode#getAllComments()` and parses them all at once via `parseCommentBatch`. |
 
-`batch` は `SourceCode` 単位で parse result を保持し、同一 lint run 内で同じ comment を
-再利用します。これにより、複数 rule を同時に有効にした場合でも batch parse の効果を
-測りやすくしています。
+`batch` caches the parse result per `SourceCode`, reusing the same parsed
+comments within a single lint run. This makes it easier to measure the
+benefit of batch parsing even when multiple rules are enabled at the same
+time.
 
-## Benchmark での想定
+## Intended benchmark scenarios
 
-この package は、次のような比較に使います。
+This package is meant to support comparisons such as:
 
 - `eslint + eslint-plugin-jsdoc (@es-joy/jsdoccomment)`
 - `eslint + @ox-jsdoc/eslint-plugin-jsdoc (oxParseStrategy: 'single')`
 - `eslint + @ox-jsdoc/eslint-plugin-jsdoc (oxParseStrategy: 'batch')`
 - `oxlint + @ox-jsdoc/eslint-plugin-jsdoc (oxParseStrategy: 'batch')`
-
-詳細は repository root の `.notes/jsdoc-linter-benchmark-design.md` を参照してください。
 
 ## Credit
 
