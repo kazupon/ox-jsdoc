@@ -1,1 +1,0 @@
-pnpm test && pnpm run build && pnpm run check-docs

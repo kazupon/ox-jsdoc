@@ -741,7 +741,7 @@ const getUtils = (
 
   /* c8 ignore next -- Fallback to deprecated method */
   const {
-    // @ts-expect-error ESLint < 10
+    // @ts-ignore ESLint < 10
     sourceCode = context.getSourceCode(),
   } = context;
 
@@ -1876,7 +1876,9 @@ const getSettings = (context) => {
     contexts: context.settings.jsdoc?.contexts,
 
     // @ox-jsdoc benchmark fork
-    oxParseStrategy: context.settings.jsdoc?.oxParseStrategy === 'batch' ? 'batch' : 'single',
+    oxParseStrategy: /** @type {import('./parseCommentStrategy.js').OxParseStrategy} */ (
+      context.settings.jsdoc?.oxParseStrategy === 'batch' ? 'batch' : 'single'
+    ),
   };
   /* eslint-enable perfectionist/sort-objects */
 
@@ -2198,7 +2200,7 @@ const iterateAllJsdocs = (iterator, ruleConfig, contexts, additiveCommentContext
   const callIterator = (context, node, jsdocNodes, state, lastCall) => {
     /* c8 ignore next -- Fallback to deprecated method */
     const {
-      // @ts-expect-error ESLint < 10
+      // @ts-ignore ESLint < 10
       sourceCode = context.getSourceCode(),
     } = context;
     const {
@@ -2315,7 +2317,7 @@ const iterateAllJsdocs = (iterator, ruleConfig, contexts, additiveCommentContext
     create (context) {
       /* c8 ignore next -- Fallback to deprecated method */
       const {
-        // @ts-expect-error ESLint < 10
+        // @ts-ignore ESLint < 10
         sourceCode = context.getSourceCode(),
       } = context;
       settings = getSettings(context);
@@ -2398,7 +2400,7 @@ const checkFile = (iterator, ruleConfig) => {
     create (context) {
       /* c8 ignore next -- Fallback to deprecated method */
       const {
-        // @ts-expect-error ESLint < 10
+        // @ts-ignore ESLint < 10
         sourceCode = context.getSourceCode(),
       } = context;
       const settings = getSettings(context);
@@ -2522,7 +2524,7 @@ export default function iterateJsdoc (iterator, ruleConfig) {
 
       /* c8 ignore next -- Fallback to deprecated method */
       const {
-        // @ts-expect-error ESLint < 10
+        // @ts-ignore ESLint < 10
         sourceCode = context.getSourceCode(),
       } = context;
       const {
@@ -2606,7 +2608,7 @@ export default function iterateJsdoc (iterator, ruleConfig) {
         contextObject['Program:exit'] = () => {
           const ste = /** @type {StateObject} */ (state);
 
-          // @ts-expect-error `utils` not needed at this point
+          // @ts-ignore `utils` not needed at this point
           /** @type {Required<RuleConfig>} */ (ruleConfig).exit({
             context,
             settings,

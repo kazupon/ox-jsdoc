@@ -8,6 +8,13 @@ import {
  */
 
 /**
+ * @typedef {import('estree').Comment | import('eslint').AST.Token | {
+ *   value: string,
+ *   range?: [number, number]
+ * }} CommentNode
+ */
+
+/**
  * @typedef {{
  *   oxParseStrategy?: OxParseStrategy
  * }} ParseSettings
@@ -16,7 +23,7 @@ import {
 /**
  * @type {WeakMap<
  *   import('eslint').SourceCode,
- *   Map<string, WeakMap<import('estree').Comment, import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline>>
+ *   Map<string, WeakMap<CommentNode, import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline>>
  * >}
  */
 const batchCacheBySourceCode = new WeakMap();
@@ -30,7 +37,7 @@ const getOxParseStrategy = (settings) => {
 };
 
 /**
- * @param {import('estree').Comment} comment
+ * @param {CommentNode} comment
  * @returns {boolean}
  */
 const isJsdocComment = (comment) => {
@@ -40,7 +47,7 @@ const isJsdocComment = (comment) => {
 /**
  * @param {import('eslint').SourceCode} sourceCode
  * @param {string} indent
- * @returns {WeakMap<import('estree').Comment, import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline>}
+ * @returns {WeakMap<CommentNode, import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline>}
  */
 const getBatchCache = (sourceCode, indent) => {
   let cacheByIndent = batchCacheBySourceCode.get(sourceCode);
@@ -54,7 +61,7 @@ const getBatchCache = (sourceCode, indent) => {
     return existing;
   }
 
-  const comments = /** @type {import('estree').Comment[]} */ (
+  const comments = /** @type {CommentNode[]} */ (
     sourceCode.getAllComments()
   ).filter(isJsdocComment);
   const {
@@ -80,7 +87,7 @@ const getBatchCache = (sourceCode, indent) => {
 
 /**
  * @param {import('eslint').SourceCode} sourceCode
- * @param {import('estree').Comment} commentNode
+ * @param {CommentNode} commentNode
  * @param {ParseSettings} settings
  * @param {string} [indent]
  * @returns {import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline}

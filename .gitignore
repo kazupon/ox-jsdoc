@@ -10,5 +10,6 @@ napi/ox-jsdoc/src-js/ox_jsdoc.*.node
 napi/ox-jsdoc-binary/src-js/bindings.d.ts
 napi/ox-jsdoc-binary/src-js/bindings.js
 napi/ox-jsdoc-binary/src-js/ox_jsdoc_binary.*.node
+packages/eslint-plugin-jsdoc/.README
 .notes/
 .playwright-cli
