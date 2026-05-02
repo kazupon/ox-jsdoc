@@ -1,0 +1,491 @@
+export default /** @type {import('../index.js').TestCases} */ ({
+  invalid: [
+    {
+      code: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property Foo.Bar
+           */
+      `,
+      errors: [
+        {
+          line: 4,
+          message: '@property path declaration ("Foo.Bar") appears before any real property.',
+        },
+      ],
+    },
+    {
+      code: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property foo
+           * @property Foo.Bar
+           */
+      `,
+      errors: [
+        {
+          line: 5,
+          message: '@property path declaration ("Foo.Bar") root node name ("Foo") does not match previous real property name ("foo").',
+        },
+      ],
+    },
+    {
+      code: `
+          /**
+           * Assign the project to a list of employees.
+           * @typedef (SomeType) SomeTypedef
+           * @property {string} employees[].name - The name of an employee.
+           * @property {string} employees[].department - The employee's department.
+           */
+      `,
+      errors: [
+        {
+          line: 5,
+          message: '@property path declaration ("employees[].name") appears before any real property.',
+        },
+      ],
+    },
+    {
+      code: `
+          /**
+           * Assign the project to a list of employees.
+           * @typedef (SomeType) SomeTypedef
+           * @property {string} employees[].name - The name of an employee.
+           * @property {string} employees[].name - The employee's department.
+           */
+      `,
+      errors: [
+        {
+          line: 6,
+          message: 'Duplicate @property "employees[].name"',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+          /**
+           * Assign the project to a list of employees.
+           * @typedef (SomeType) SomeTypedef
+           * @property {string} employees[].name - The name of an employee.
+           */
+      `,
+    },
+    {
+      code: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property foo
+           * @property foo
+           */
+      `,
+      errors: [
+        {
+          line: 5,
+          message: 'Duplicate @property "foo"',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property foo
+           */
+      `,
+    },
+    {
+      code: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property foo
+           * @property foo
+           */
+      `,
+      errors: [
+        {
+          line: 5,
+          message: 'Duplicate @property "foo"',
+        },
+      ],
+      output: null,
+    },
+    {
+      code: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property cfg
+           * @property cfg.foo
+           * @property cfg.foo
+           */
+          function quux ({foo, bar}) {
+
+          }
+      `,
+      errors: [
+        {
+          line: 6,
+          message: 'Duplicate @property "cfg.foo"',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property cfg
+           * @property cfg.foo
+           */
+          function quux ({foo, bar}) {
+
+          }
+      `,
+    },
+    {
+      code: `
+      class Test {
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property cfg
+           * @property cfg.foo
+           * @property cfg.foo
+           */
+          quux ({foo, bar}) {
+
+          }
+      }
+      `,
+      errors: [
+        {
+          line: 7,
+          message: 'Duplicate @property "cfg.foo"',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+      class Test {
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property cfg
+           * @property cfg.foo
+           */
+          quux ({foo, bar}) {
+
+          }
+      }
+      `,
+    },
+    {
+      code: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property cfg
+           * @property cfg.foo
+           * @property [cfg.foo]
+           * @property baz
+           */
+          function quux ({foo, bar}, baz) {
+
+          }
+      `,
+      errors: [
+        {
+          line: 6,
+          message: 'Duplicate @property "cfg.foo"',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property cfg
+           * @property cfg.foo
+           * @property baz
+           */
+          function quux ({foo, bar}, baz) {
+
+          }
+      `,
+    },
+    {
+      code: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property cfg
+           * @property cfg.foo
+           * @property [cfg.foo="with a default"]
+           * @property baz
+           */
+          function quux ({foo, bar}, baz) {
+
+          }
+      `,
+      errors: [
+        {
+          line: 6,
+          message: 'Duplicate @property "cfg.foo"',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property cfg
+           * @property cfg.foo
+           * @property baz
+           */
+          function quux ({foo, bar}, baz) {
+
+          }
+      `,
+    },
+    {
+      code: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @prop foo
+           * @prop foo
+           */
+      `,
+      errors: [
+        {
+          line: 5,
+          message: 'Duplicate @prop "foo"',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @prop foo
+           */
+      `,
+      settings: {
+        jsdoc: {
+          tagNamePreference: {
+            property: 'prop',
+          },
+        },
+      },
+    },
+    {
+      code: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property foo
+           */
+      `,
+      errors: [
+        {
+          line: 4,
+          message: 'Unexpected tag `@property`',
+        },
+      ],
+      settings: {
+        jsdoc: {
+          tagNamePreference: {
+            property: false,
+          },
+        },
+      },
+    },
+    {
+      code: `
+        /**
+         * @typedef {object} foo
+         * @property {string} type
+         *
+         * @typedef {object} bar
+         * @property {object} abc
+         * @property {number} abc.def
+         * @property {number} abc.def
+         */
+      `,
+      errors: [
+        {
+          line: 9,
+          message: 'Duplicate @property "abc.def"',
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         * @typedef {object} foo
+         * @property {string} type
+         *
+         * @typedef {object} bar
+         * @property {object} abc
+         * @property {number} abc
+         */
+      `,
+      errors: [
+        {
+          line: 8,
+          message: 'Duplicate @property "abc"',
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         * @typedef {object} foo
+         * @property {string} type
+         * @property {string} type
+         *
+         * @typedef {object} bar
+         * @property {object} abc
+         */
+      `,
+      errors: [
+        {
+          line: 5,
+          message: 'Duplicate @property "type"',
+        },
+      ],
+    },
+  ],
+  valid: [
+    {
+      code: `
+          /**
+           *
+           */
+      `,
+    },
+    {
+      code: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property foo
+           */
+      `,
+    },
+    {
+      code: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @prop foo
+           */
+      `,
+    },
+    {
+      code: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property foo
+           * @property bar
+           */
+      `,
+    },
+    {
+      code: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property foo
+           * @property foo.foo
+           * @property bar
+           */
+      `,
+    },
+    {
+      code: `
+          /**
+           * Assign the project to a list of employees.
+           * @typedef (SomeType) SomeTypedef
+           * @property {object[]} employees - The employees who are responsible for the project.
+           * @property {string} employees[].name - The name of an employee.
+           * @property {string} employees[].department - The employee's department.
+           */
+      `,
+    },
+    {
+      code: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property {Error} error Exit code
+           * @property {number} [code = 1] Exit code
+           */
+      `,
+    },
+    {
+      code: `
+          /**
+           * @namespace (SomeType) SomeNamespace
+           * @property {Error} error Exit code
+           * @property {number} [code = 1] Exit code
+           */
+      `,
+    },
+    {
+      code: `
+          /**
+           * @class
+           * @property {Error} error Exit code
+           * @property {number} [code = 1] Exit code
+           */
+          function quux (code = 1) {
+            this.error = new Error('oops');
+            this.code = code;
+          }
+      `,
+    },
+    {
+      code: `
+          /**
+           * @typedef (SomeType) SomeTypedef
+           * @property foo
+           * @property foo.bar
+           * @property foo.baz
+           * @property bar
+           */
+      `,
+    },
+    {
+      code: `
+        /**
+         * @typedef {object} foo
+         * @property {string} type
+         *
+         * @typedef {object} bar
+         * @property {number} type
+         */
+      `,
+    },
+    {
+      code: `
+        /**
+         * @typedef {object} foo
+         * @property {string} type
+         *
+         * @typedef {object} bar
+         * @property {number} anotherType
+         */
+      `,
+    },
+  ],
+});

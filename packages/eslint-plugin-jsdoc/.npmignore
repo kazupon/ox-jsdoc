@@ -1,0 +1,11 @@
+coverage
+bin
+test
+.*
+*.log
+CONTRIBUTING.md
+tsconfig*.json
+pnpm-workspace.yaml
+eslint.config.js
+*.d.ts.map
+docs

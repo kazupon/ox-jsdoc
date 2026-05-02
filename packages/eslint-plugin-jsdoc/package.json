@@ -1,0 +1,109 @@
+{
+  "author": {
+    "email": "gajus@gajus.com",
+    "name": "Gajus Kuizinas",
+    "url": "http://gajus.com"
+  },
+  "private": true,
+  "dependencies": {
+    "@ox-jsdoc/jsdoccomment": "workspace:*",
+    "@es-joy/resolve.exports": "1.2.0",
+    "are-docs-informative": "^0.0.2",
+    "comment-parser": "1.4.6",
+    "debug": "^4.4.3",
+    "escape-string-regexp": "^4.0.0",
+    "espree": "^11.2.0",
+    "esquery": "^1.7.0",
+    "html-entities": "^2.6.0",
+    "object-deep-merge": "^2.0.0",
+    "parse-imports-exports": "^0.2.4",
+    "semver": "^7.7.4",
+    "spdx-expression-parse": "^4.0.0",
+    "to-valid-identifier": "^1.0.0"
+  },
+  "description": "eslint-plugin-jsdoc fork using @ox-jsdoc/jsdoccomment.",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
+  "keywords": [
+    "eslint",
+    "plugin",
+    "jsdoc"
+  ],
+  "license": "BSD-3-Clause",
+  "lint-staged": {
+    "*.js": "eslint --fix"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./src/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.cjs.d.cts",
+        "default": "./dist/index-cjs.cjs"
+      }
+    },
+    "./getJsdocProcessorPlugin.js": {
+      "import": {
+        "types": "./dist/getJsdocProcessorPlugin.d.ts",
+        "default": "./src/getJsdocProcessorPlugin.js"
+      },
+      "require": {
+        "types": "./dist/cjs/getJsdocProcessorPlugin.d.cts",
+        "default": "./dist/getJsdocProcessorPlugin.cjs"
+      }
+    },
+    "./iterateJsdoc.js": {
+      "import": {
+        "types": "./dist/iterateJsdoc.d.ts",
+        "default": "./src/iterateJsdoc.js"
+      },
+      "require": {
+        "types": "./dist/cjs/iterateJsdoc.d.cts",
+        "default": "./dist/iterateJsdoc.cjs"
+      }
+    }
+  },
+  "name": "@ox-jsdoc/eslint-plugin-jsdoc",
+  "mocha": {
+    "reporter": "dot",
+    "recursive": true,
+    "timeout": 12000
+  },
+  "c8": {
+    "branches": 100,
+    "check-coverage": true,
+    "exclude": [
+      "src/rules/checkExamples.js"
+    ],
+    "functions": 100,
+    "include": [
+      "src/"
+    ],
+    "instrument": false,
+    "lines": 100,
+    "reporter": "text-summary",
+    "sourceMap": false,
+    "statements": 100
+  },
+  "peerDependencies": {
+    "eslint": "^7.0.0 || ^8.0.0 || ^9.0.0 || ^10.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gajus/eslint-plugin-jsdoc.git"
+  },
+  "homepage": "https://github.com/gajus/eslint-plugin-jsdoc#readme",
+  "bugs": {
+    "url": "https://github.com/gajus/eslint-plugin-jsdoc/issues"
+  },
+  "scripts": {
+    "lint": "eslint"
+  },
+  "version": "0.0.0"
+}

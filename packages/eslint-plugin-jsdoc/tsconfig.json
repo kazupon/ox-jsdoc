@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "lib": ["es2024"],
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "declaration": true,
+    "declarationMap": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "target": "es2024",
+    "outDir": "dist"
+  },
+  "include": [
+    "src/bin/*.js",
+    "src/*.js",
+    "src/rules/*.js",
+    "src/rules.d.ts",
+    "src/utils/*.js",
+    "test/**/*.js",
+    "typings/gitdown.d.ts",
+    "typings/babel__eslint-parser.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "src/bin/generateOptions.js"
+  ]
+}

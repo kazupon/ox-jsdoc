@@ -10,6 +10,7 @@ const ignorePatterns = [
   'crates/**',
   'napi/ox-jsdoc/src-js/binding.*',
   'packages/jsdoccomment/**',
+  'packages/eslint-plugin-jsdoc/**',
   'tasks/**',
   'scripts/**',
   'refers/**',

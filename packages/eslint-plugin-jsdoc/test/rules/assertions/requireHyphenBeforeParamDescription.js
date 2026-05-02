@@ -1,0 +1,714 @@
+export default /** @type {import('../index.js').TestCases} */ ({
+  invalid: [
+    {
+      code: `
+          /**
+           * @param foo Foo.
+           */
+          function quux () {
+
+          }
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be a hyphen before @param description.',
+        },
+      ],
+      options: [
+        'always',
+      ],
+      output: `
+          /**
+           * @param foo - Foo.
+           */
+          function quux () {
+
+          }
+      `,
+    },
+    {
+      code: `
+          /**
+           * @param foo Foo.
+           */
+          function quux () {
+
+          }
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be a hyphen before @param description.',
+        },
+      ],
+      options: [
+        'always',
+        {
+          tags: {
+            '*': 'never',
+          },
+        },
+      ],
+      output: `
+          /**
+           * @param foo - Foo.
+           */
+          function quux () {
+
+          }
+      `,
+    },
+    {
+      code: `
+          /**
+           * @param foo Foo.
+           * @returns {SomeType} - Hyphen here.
+           */
+          function quux () {
+
+          }
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be a hyphen before @param description.',
+        },
+      ],
+      options: [
+        'always',
+        {
+          tags: {
+            '*': 'never',
+            returns: 'always',
+          },
+        },
+      ],
+      output: `
+          /**
+           * @param foo - Foo.
+           * @returns {SomeType} - Hyphen here.
+           */
+          function quux () {
+
+          }
+      `,
+    },
+    {
+      code: `
+          /**
+           * @param foo Foo.
+           */
+          function quux () {
+
+          }
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be a hyphen before @param description.',
+        },
+      ],
+      output: `
+          /**
+           * @param foo - Foo.
+           */
+          function quux () {
+
+          }
+      `,
+    },
+    {
+      code: `
+          /**
+           * @param foo - Foo.
+           */
+          function quux () {
+
+          }
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be no hyphen before @param description.',
+        },
+      ],
+      options: [
+        'never',
+      ],
+      output: `
+          /**
+           * @param foo Foo.
+           */
+          function quux () {
+
+          }
+      `,
+    },
+    {
+      code: `
+          /**
+           * @param foo    - Foo.
+           */
+          function quux () {
+
+          }
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be no hyphen before @param description.',
+        },
+      ],
+      options: [
+        'never',
+      ],
+      output: `
+          /**
+           * @param foo    Foo.
+           */
+          function quux () {
+
+          }
+      `,
+    },
+    {
+      code: `
+          /**
+           * @param foo - foo
+           * @param foo foo
+           */
+          function quux () {
+
+          }
+      `,
+      errors: [
+        {
+          line: 4,
+          message: 'There must be a hyphen before @param description.',
+        },
+      ],
+      options: [
+        'always',
+      ],
+      output: `
+          /**
+           * @param foo - foo
+           * @param foo - foo
+           */
+          function quux () {
+
+          }
+      `,
+    },
+    {
+      code: `
+          /**
+           * @param foo foo
+           * bar
+           * @param bar - bar
+           */
+          function quux () {
+
+          }
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be a hyphen before @param description.',
+        },
+      ],
+      options: [
+        'always',
+      ],
+      output: `
+          /**
+           * @param foo - foo
+           * bar
+           * @param bar - bar
+           */
+          function quux () {
+
+          }
+      `,
+    },
+    {
+      code: `
+          /**
+           * @param foo
+           */
+          function quux (foo) {
+
+          }
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Unexpected tag `@param`',
+        },
+      ],
+      settings: {
+        jsdoc: {
+          tagNamePreference: {
+            param: false,
+          },
+        },
+      },
+    },
+    {
+      code: `
+          /**
+           * @typedef {SomeType} ATypeDefName
+           * @property foo Foo.
+           */
+      `,
+      errors: [
+        {
+          line: 4,
+          message: 'There must be a hyphen before @property description.',
+        },
+      ],
+      options: [
+        'always', {
+          tags: {
+            property: 'always',
+          },
+        },
+      ],
+      output: `
+          /**
+           * @typedef {SomeType} ATypeDefName
+           * @property foo - Foo.
+           */
+      `,
+    },
+    {
+      code: `
+          /**
+           * @template TempA, TempB A desc.
+           */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be a hyphen before @template description.',
+        },
+      ],
+      options: [
+        'always', {
+          tags: {
+            template: 'always',
+          },
+        },
+      ],
+      output: `
+          /**
+           * @template TempA, TempB - A desc.
+           */
+      `,
+    },
+    {
+      code: `
+          /**
+           * @typedef {SomeType} ATypeDefName
+           * @property foo - Foo.
+           */
+      `,
+      errors: [
+        {
+          line: 4,
+          message: 'There must be no hyphen before @property description.',
+        },
+      ],
+      options: [
+        'never', {
+          tags: {
+            property: 'never',
+          },
+        },
+      ],
+      output: `
+          /**
+           * @typedef {SomeType} ATypeDefName
+           * @property foo Foo.
+           */
+      `,
+    },
+    {
+      code: `
+          /**
+           * @param foo Foo.
+           * @returns {SomeType} - A description.
+           */
+          function quux () {
+
+          }
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be a hyphen before @param description.',
+        },
+        {
+          line: 4,
+          message: 'There must be no hyphen before @returns description.',
+        },
+      ],
+      options: [
+        'always', {
+          tags: {
+            returns: 'never',
+          },
+        },
+      ],
+      output: `
+          /**
+           * @param foo - Foo.
+           * @returns {SomeType} - A description.
+           */
+          function quux () {
+
+          }
+      `,
+    },
+    {
+      code: `
+      /**
+       * Split a unit to metric prefix and basic unit.
+       *
+       * @param {string} unit - Unit to split.
+       * @param {string} [basicUnit] - Basic unit regardless of the metric prefix.
+       *     If omitted, basic unit will be inferred by trying to remove the metric
+       *     prefix in \`unit\`.
+       *
+       * @returns {{ prefix: string, basicUnit: string }} - Split result.
+       *     If \`unit\` does not have a metric prefix, \`''\` is returned for \`prefix\`.
+       *     If \`unit\` does not have a basic unit, \`''\` is returned for \`basicUnit\`.
+       */
+      `,
+      errors: [
+        {
+          line: 10,
+          message: 'There must be no hyphen before @returns description.',
+        },
+      ],
+      options: [
+        'always',
+        {
+          tags: {
+            '*': 'never',
+            property: 'always',
+          },
+        },
+      ],
+      output: `
+      /**
+       * Split a unit to metric prefix and basic unit.
+       *
+       * @param {string} unit - Unit to split.
+       * @param {string} [basicUnit] - Basic unit regardless of the metric prefix.
+       *     If omitted, basic unit will be inferred by trying to remove the metric
+       *     prefix in \`unit\`.
+       *
+       * @returns {{ prefix: string, basicUnit: string }} Split result.
+       *     If \`unit\` does not have a metric prefix, \`''\` is returned for \`prefix\`.
+       *     If \`unit\` does not have a basic unit, \`''\` is returned for \`basicUnit\`.
+       */
+      `,
+    },
+    {
+      code: `
+      /**
+       * @returns {{
+       *   prefix: string, basicUnit: string
+       * }} - Split result.
+       */
+      `,
+      errors: [
+        {
+          line: 5,
+          message: 'There must be no hyphen before @returns description.',
+        },
+      ],
+      options: [
+        'always',
+        {
+          tags: {
+            '*': 'never',
+            property: 'always',
+          },
+        },
+      ],
+      output: `
+      /**
+       * @returns {{
+       *   prefix: string, basicUnit: string
+       * }} Split result.
+       */
+      `,
+    },
+    {
+      code: `
+        /**
+         * @param {(
+         *  | string
+         *  | number
+         * )} input The input value
+         */
+        function test(input) {}
+      `,
+      errors: [
+        {
+          line: 6,
+          message: 'There must be a hyphen before @param description.',
+        },
+      ],
+      output: `
+        /**
+         * @param {(
+         *  | string
+         *  | number
+         * )} input - The input value
+         */
+        function test(input) {}
+      `,
+    },
+    {
+      code: `
+        /**
+         * @template [O=unknown]
+         * @param {string} name The name of the thing.
+         */
+        function test(name) {}
+      `,
+      errors: [
+        {
+          line: 4,
+          message: 'There must be a hyphen before @param description.',
+        },
+      ],
+      ignoreReadme: true,
+      output: `
+        /**
+         * @template [O=unknown]
+         * @param {string} name - The name of the thing.
+         */
+        function test(name) {}
+      `,
+    },
+    {
+      code: `
+        /**
+         * @param foo -
+         * The possible values for \`foo\` are as follows.
+         * - \`"option1"\`: Description of option 1.
+         * - \`"option2"\`: Description of option 2.
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be no hyphen followed by newline after the @param name.',
+        },
+      ],
+      output: `
+        /**
+         * @param foo
+         * The possible values for \`foo\` are as follows.
+         * - \`"option1"\`: Description of option 1.
+         * - \`"option2"\`: Description of option 2.
+         */
+      `,
+    },
+  ],
+  valid: [
+    {
+      code: `
+          /**
+           * @param foo - Foo.
+           */
+          function quux () {
+
+          }
+      `,
+      options: [
+        'always',
+      ],
+    },
+    {
+      code: `
+          /**
+           * @param foo     - Foo.
+           */
+          function quux () {
+
+          }
+      `,
+      options: [
+        'always',
+      ],
+    },
+    {
+      code: `
+          /**
+           * @param foo - Foo.
+           * @returns {SomeType} A description.
+           */
+          function quux () {
+
+          }
+      `,
+      options: [
+        'always', {
+          tags: {
+            returns: 'never',
+          },
+        },
+      ],
+    },
+    {
+      code: `
+          /**
+           * @param foo Foo.
+           */
+          function quux () {
+
+          }
+      `,
+      options: [
+        'never',
+      ],
+    },
+    {
+      code: `
+          /**
+           * @param foo
+           */
+          function quux () {
+
+          }
+      `,
+    },
+    {
+      code: `
+          /**
+           *
+           */
+          function quux () {
+
+          }
+      `,
+      options: [
+        'always', {
+          tags: {
+            '*': 'always',
+          },
+        },
+      ],
+    },
+    {
+      code: `
+          /**
+           * @typedef {SomeType} ATypeDefName
+           * @property foo - Foo.
+           */
+      `,
+      options: [
+        'always', {
+          tags: {
+            property: 'always',
+          },
+        },
+      ],
+    },
+    {
+      code: `
+          /**
+           * @typedef {SomeType} ATypeDefName
+           * @property foo Foo.
+           */
+      `,
+      options: [
+        'never', {
+          tags: {
+            property: 'never',
+          },
+        },
+      ],
+    },
+    {
+      code: `
+          /**
+           * @typedef {SomeType} ATypeDefName
+           * @property foo - Foo.
+           */
+      `,
+      options: [
+        'never', {
+          tags: {
+            '*': 'always',
+          },
+        },
+      ],
+    },
+    {
+      code: `
+      /** Entry point for module.
+       *
+       * @param {!Array<string>} argv Command-line arguments.
+       */
+      function main(argv) {
+      };
+      `,
+      options: [
+        'never',
+      ],
+    },
+    {
+      code: `
+        /**
+         * @template {any} T - Arg 1
+         * @template {string | number} K - Arg 2
+         * @template {any} [R=(K extends keyof T ? T[K] : never)] - Arg 3  ->  Errors here
+         * @typedef {any} Test
+         */
+      `,
+      options: [
+        'always',
+        {
+          tags: {
+            template: 'always',
+          },
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         * @param foo - The possible values for \`foo\` are as follows.
+         * - \`"option1"\`: Description of option 1.
+         * - \`"option2"\`: Description of option 2.
+         */
+      `,
+    },
+    {
+      code: `
+        /**
+         * @param foo
+         * The possible values for \`foo\` are as follows.
+         * - \`"option1"\`: Description of option 1.
+         * - \`"option2"\`: Description of option 2.
+         */
+      `,
+    },
+    {
+      code: `
+        /**
+         * @param foo
+         * - \`"option1"\`: Description of option 1.
+         * - \`"option2"\`: Description of option 2.
+         */
+      `,
+    },
+  ],
+});
