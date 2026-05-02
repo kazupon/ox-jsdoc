@@ -1043,18 +1043,11 @@ describe('parseComment (problems)', function () {
     expect(parsed.problems).to.deep.equal([problem]);
   });
 
-  it('Maps parser diagnostics to block problems', function () {
+  it('Ignores binary inline tag diagnostics like comment-parser', function () {
     const parsed = parseComment('/**\n * {@link foo\n */');
 
     expect(parsed.tags).to.deep.equal([]);
-    expect(parsed.problems).to.deep.equal([
-      {
-        code: 'custom',
-        message: 'inline tag is not closed',
-        line: 0,
-        critical: true
-      }
-    ]);
+    expect(parsed.problems).to.deep.equal([]);
   });
 });
 

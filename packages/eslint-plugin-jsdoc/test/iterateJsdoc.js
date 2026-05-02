@@ -157,7 +157,7 @@ describe('iterateJsdoc', () => {
           ],
           tags: [
             {
-              description: '          desc',
+              description: 'desc',
               inlineTags: [],
               name: 'name',
               optional: false,

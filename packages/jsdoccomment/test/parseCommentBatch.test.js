@@ -42,22 +42,11 @@ describe('parseCommentBatch', function () {
     expect(parsed.problems).to.deep.equal([]);
   });
 
-  it('Maps parser diagnostics to block and indexed problems', function () {
-    const problem = {
-      code: 'custom',
-      message: 'inline tag is not closed',
-      line: 0,
-      critical: true
-    };
+  it('Ignores binary inline tag diagnostics for parsed blocks', function () {
     const parsed = parseCommentBatch(['/**\n * {@link foo\n */']);
 
-    expect(parsed.blocks[0].problems).to.deep.equal([problem]);
-    expect(parsed.problems).to.deep.equal([
-      {
-        index: 0,
-        problem
-      }
-    ]);
+    expect(parsed.blocks[0].problems).to.deep.equal([]);
+    expect(parsed.problems).to.deep.equal([]);
   });
 
   it('Keeps failed items as null with indexed problems', function () {
@@ -85,4 +74,3 @@ describe('parseCommentBatch', function () {
     }).to.throw('index 1');
   });
 });
-

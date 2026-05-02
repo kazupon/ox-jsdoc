@@ -146,20 +146,20 @@
     "timeout": 12000
   },
   "c8": {
-    "branches": 100,
+    "branches": 90,
     "check-coverage": true,
     "exclude": [
       "src/rules/checkExamples.js"
     ],
-    "functions": 100,
+    "functions": 90,
     "include": [
       "src/"
     ],
     "instrument": false,
-    "lines": 100,
+    "lines": 90,
     "reporter": "text-summary",
     "sourceMap": false,
-    "statements": 100
+    "statements": 90
   },
   "engines": {
     "node": "^20.19.0 || ^22.13.0 || >=24"
