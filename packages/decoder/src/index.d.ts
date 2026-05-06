@@ -20,6 +20,32 @@ export interface RemoteNode {
   toJSON(): Record<string, unknown>
 }
 
+export interface JsdocCommentInputLineTokens {
+  start: string
+  delimiter: string
+  postDelimiter: string
+  tag: string
+  postTag: string
+  name: string
+  postName: string
+  type: string
+  postType: string
+  description: string
+  end: string
+  lineEnd: string
+}
+
+export interface JsdocCommentInputLine {
+  number: number
+  source: string
+  tokens: JsdocCommentInputLineTokens
+}
+
+export interface JsdocCommentInput {
+  source: JsdocCommentInputLine[]
+  tags: []
+}
+
 /** `Array` subclass returned by every node-list getter. */
 export class RemoteNodeList extends Array<RemoteNode> {}
 
@@ -105,6 +131,7 @@ export class RemoteJsdocBlock implements RemoteNode {
    * `preserveWhitespace=true` is requested on a basic-mode buffer.
    */
   descriptionText(preserveWhitespace?: boolean): string | null
+  toJsdocCommentInput(): JsdocCommentInput
   toJSON(): Record<string, unknown>
 }
 

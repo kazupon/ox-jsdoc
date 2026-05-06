@@ -940,6 +940,20 @@ var RemoteJsdocBlock = class {
 		}
 		return json;
 	}
+	/**
+	* Intermediate shape for `@ox-jsdoc/jsdoccomment`'s batch hot path.
+	*
+	* Unlike compat-mode `toJSON()`, this intentionally avoids materializing
+	* per-tag `source[]` and child JSON. `@ox-jsdoc/jsdoccomment` rebuilds final
+	* tag objects from the block-level `source[]`, preserving shared line object
+	* identity while skipping duplicate decoder work.
+	*/
+	toJsdocCommentInput() {
+		return {
+			source: buildBlockSource(this),
+			tags: []
+		};
+	}
 	[inspectSymbol]() {
 		return inspectPayload(this.toJSON(), "JsdocBlock");
 	}

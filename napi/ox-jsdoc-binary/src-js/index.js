@@ -145,9 +145,11 @@ export function parse(sourceText, options) {
  *   compatMode?: boolean,
  *   preserveWhitespace?: boolean,
  *   emptyStringForNull?: boolean,
+ *   output?: 'ast' | 'jsdoccomment-input',
  * }} [options]
  * @returns {{
  *   asts: Array<import('@ox-jsdoc/decoder').RemoteJsdocBlock | null>,
+ *   blocks?: Array<import('@ox-jsdoc/decoder').JsdocCommentInput | null>,
  *   diagnostics: Array<{ message: string, rootIndex: number }>,
  *   sourceFile: import('@ox-jsdoc/decoder').RemoteSourceFile,
  * }}
@@ -216,11 +218,17 @@ export function parseBatch(items, options) {
     offsets[i + 1] = pos
     baseOffsets[i] = items[i].baseOffset ?? 0
   }
+  let bindingOptions = options ?? {}
+  if (options?.output !== undefined) {
+    bindingOptions = { ...options }
+    delete bindingOptions.output
+  }
+
   const result = parseJsdocBatchRawBinding(
     concat.subarray(0, pos),
     offsets.subarray(0, needOffsets),
     baseOffsets.subarray(0, needBaseOffsets),
-    options ?? {}
+    bindingOptions
   )
   const sourceFile = new RemoteSourceFile(result.buffer, {
     emptyStringForNull: options?.emptyStringForNull
@@ -228,6 +236,18 @@ export function parseBatch(items, options) {
   const asts = /** @type {Array<import('@ox-jsdoc/decoder').RemoteJsdocBlock | null>} */ (
     sourceFile.asts
   )
+  if (options?.output === 'jsdoccomment-input') {
+    const blocks = asts.map(ast => {
+      return ast?.toJsdocCommentInput() ?? null
+    })
+    return {
+      asts,
+      blocks,
+      diagnostics: result.diagnostics,
+      sourceFile
+    }
+  }
+
   return {
     asts,
     diagnostics: result.diagnostics,

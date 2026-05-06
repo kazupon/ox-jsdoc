@@ -152,9 +152,11 @@ export function parse(sourceText, options) {
  *   typeParseMode?: 'jsdoc' | 'closure' | 'typescript',
  *   compatMode?: boolean,
  *   preserveWhitespace?: boolean,
+ *   output?: 'ast' | 'jsdoccomment-input',
  * }} [options]
  * @returns {{
  *   asts: Array<import('@ox-jsdoc/decoder').RemoteJsdocBlock | null>,
+ *   blocks?: Array<import('@ox-jsdoc/decoder').JsdocCommentInput | null>,
  *   diagnostics: Array<{ message: string, rootIndex: number }>,
  *   sourceFile: import('@ox-jsdoc/decoder').RemoteSourceFile,
  *   free: () => void,
@@ -248,6 +250,19 @@ export function parseBatch(items, options) {
   const asts = /** @type {Array<import('@ox-jsdoc/decoder').RemoteJsdocBlock | null>} */ (
     sourceFile.asts
   )
+  if (options?.output === 'jsdoccomment-input') {
+    const blocks = asts.map(ast => {
+      return ast?.toJsdocCommentInput() ?? null
+    })
+    return {
+      asts,
+      blocks,
+      diagnostics,
+      sourceFile,
+      free: () => handle.free()
+    }
+  }
+
   return {
     asts,
     diagnostics,

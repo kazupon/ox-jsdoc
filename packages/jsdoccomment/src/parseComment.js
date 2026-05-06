@@ -1155,10 +1155,15 @@ const parseCommentBatch = (comments, options = {}) => {
       baseOffset: getCommentBaseOffset(commentOrNode)
     }
   })
-  const { asts, diagnostics } = oxJsdocBinaryParseBatch(items, {
+  const {
+    asts,
+    blocks: inputBlocks,
+    diagnostics
+  } = oxJsdocBinaryParseBatch(items, {
     compatMode: true,
     emptyStringForNull: true,
-    preserveWhitespace: true
+    preserveWhitespace: true,
+    output: 'jsdoccomment-input'
   })
   const diagnosticsByIndex = groupDiagnosticsByRootIndex(diagnostics)
   /** @type {Array<import('.').JsdocBlockWithInline | null>} */
@@ -1177,7 +1182,8 @@ const parseCommentBatch = (comments, options = {}) => {
       continue
     }
 
-    const block = normalizeBlock(ast.toJSON(), itemDiagnostics, items[index].sourceText)
+    const inputBlock = inputBlocks?.[index] ?? ast.toJSON()
+    const block = normalizeBlock(inputBlock, itemDiagnostics, items[index].sourceText)
     blocks.push(block)
     for (const problem of block.problems) {
       problems.push({ index, problem })

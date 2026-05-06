@@ -169,6 +169,11 @@ interface PublicSourceEntry {
   tokens: LineTokens
 }
 
+export interface JsdocCommentInput {
+  source: PublicSourceEntry[]
+  tags: []
+}
+
 /** Empty `tokens` template — every key present so consumers can index by
  * field name without truthy checks. Mirrors comment-parser's
  * `seedTokens()`. */
@@ -948,6 +953,21 @@ export class RemoteJsdocBlock implements LazyNode, SourceLikeNode {
       })
     }
     return json
+  }
+
+  /**
+   * Intermediate shape for `@ox-jsdoc/jsdoccomment`'s batch hot path.
+   *
+   * Unlike compat-mode `toJSON()`, this intentionally avoids materializing
+   * per-tag `source[]` and child JSON. `@ox-jsdoc/jsdoccomment` rebuilds final
+   * tag objects from the block-level `source[]`, preserving shared line object
+   * identity while skipping duplicate decoder work.
+   */
+  toJsdocCommentInput(): JsdocCommentInput {
+    return {
+      source: buildBlockSource(this),
+      tags: []
+    }
   }
 
   [inspectSymbol](): object {

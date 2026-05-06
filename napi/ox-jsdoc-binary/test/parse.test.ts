@@ -124,6 +124,23 @@ describe('parseBatch (binary NAPI binding)', () => {
     expect((result.asts[1] as RemoteJsdocBlock).range[0]).toBe(2000)
   })
 
+  it('can return jsdoccomment input blocks for the batch hot path', () => {
+    const result = parseBatch([{ sourceText: '/**\n * @param {string} id Description.\n */' }], {
+      compatMode: true,
+      preserveWhitespace: true,
+      emptyStringForNull: true,
+      output: 'jsdoccomment-input'
+    })
+
+    expect(result.blocks).toHaveLength(1)
+    const block = result.blocks[0]!
+    expect(block.tags).toEqual([])
+    expect(block.source[1].tokens.tag).toBe('@param')
+    expect(block.source[1].tokens.type).toBe('{string}')
+    expect(block.source[1].tokens.name).toBe('id')
+    expect(block.source[1].tokens.description).toBe('Description.')
+  })
+
   it('shares a single buffer across N roots (string dedup engaged)', () => {
     const single = parseBatch([{ sourceText: '/**\n * @param {string} id\n */' }])
     const singleBytes = (single.sourceFile as unknown as { view: DataView }).view.byteLength

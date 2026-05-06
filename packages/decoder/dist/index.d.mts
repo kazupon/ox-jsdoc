@@ -240,6 +240,29 @@ declare const EMPTY_NODE_LIST: RemoteNodeList;
 declare const inspectSymbol: unique symbol;
 //#endregion
 //#region src/internal/nodes/jsdoc.d.ts
+interface LineTokens {
+  start: string;
+  delimiter: string;
+  postDelimiter: string;
+  tag: string;
+  postTag: string;
+  name: string;
+  postName: string;
+  type: string;
+  postType: string;
+  description: string;
+  end: string;
+  lineEnd: string;
+}
+interface PublicSourceEntry {
+  number: number;
+  source: string;
+  tokens: LineTokens;
+}
+interface JsdocCommentInput {
+  source: PublicSourceEntry[];
+  tags: [];
+}
 /**
  * Minimal interface needed by the source[] reconstruction helpers — every
  * lazy class that owns a `range` / `parent` / `rootIndex` / `sourceFile`
@@ -330,6 +353,15 @@ declare class RemoteJsdocBlock implements LazyNode, SourceLikeNode {
   /** Inline tags found inside the top-level description. */
   get inlineTags(): RemoteNodeList;
   toJSON(): RemoteJsonObject;
+  /**
+   * Intermediate shape for `@ox-jsdoc/jsdoccomment`'s batch hot path.
+   *
+   * Unlike compat-mode `toJSON()`, this intentionally avoids materializing
+   * per-tag `source[]` and child JSON. `@ox-jsdoc/jsdoccomment` rebuilds final
+   * tag objects from the block-level `source[]`, preserving shared line object
+   * identity while skipping duplicate decoder work.
+   */
+  toJsdocCommentInput(): JsdocCommentInput;
   [inspectSymbol](): object;
 }
 /**
@@ -877,4 +909,4 @@ declare const jsdocVisitorKeys: Readonly<{
  */
 declare function toPlainObject(node: unknown): unknown;
 //#endregion
-export { EMPTY_NODE_LIST, RemoteJsdocBlock, RemoteJsdocBorrowsTagBody, RemoteJsdocDescriptionLine, RemoteJsdocGenericTagBody, RemoteJsdocIdentifier, RemoteJsdocInlineTag, RemoteJsdocNamepathSource, RemoteJsdocParameterName, RemoteJsdocRawTagBody, RemoteJsdocTag, RemoteJsdocTagName, RemoteJsdocTagNameValue, RemoteJsdocText, RemoteJsdocTypeLine, RemoteJsdocTypeSource, RemoteNodeList, RemoteNodeListNode, RemoteSourceFile, RemoteTypeAny, RemoteTypeAsserts, RemoteTypeAssertsPlain, RemoteTypeCallSignature, RemoteTypeConditional, RemoteTypeConstructorSignature, RemoteTypeFunction, RemoteTypeGeneric, RemoteTypeImport, RemoteTypeIndexSignature, RemoteTypeIndexedAccessIndex, RemoteTypeInfer, RemoteTypeIntersection, RemoteTypeJsdocObjectField, RemoteTypeKeyOf, RemoteTypeKeyValue, RemoteTypeMappedType, RemoteTypeMethodSignature, RemoteTypeName, RemoteTypeNamePath, RemoteTypeNotNullable, RemoteTypeNull, RemoteTypeNullable, RemoteTypeNumber, RemoteTypeObject, RemoteTypeObjectField, RemoteTypeOptional, RemoteTypeParameterList, RemoteTypeParenthesis, RemoteTypePredicate, RemoteTypeProperty, RemoteTypeReadonlyArray, RemoteTypeReadonlyProperty, RemoteTypeSpecialNamePath, RemoteTypeStringValue, RemoteTypeSymbol, RemoteTypeTemplateLiteral, RemoteTypeTuple, RemoteTypeTypeOf, RemoteTypeTypeParameter, RemoteTypeUndefined, RemoteTypeUnion, RemoteTypeUniqueSymbol, RemoteTypeUnknown, RemoteTypeVariadic, jsdocVisitorKeys, toPlainObject };
+export { EMPTY_NODE_LIST, type JsdocCommentInput, RemoteJsdocBlock, RemoteJsdocBorrowsTagBody, RemoteJsdocDescriptionLine, RemoteJsdocGenericTagBody, RemoteJsdocIdentifier, RemoteJsdocInlineTag, RemoteJsdocNamepathSource, RemoteJsdocParameterName, RemoteJsdocRawTagBody, RemoteJsdocTag, RemoteJsdocTagName, RemoteJsdocTagNameValue, RemoteJsdocText, RemoteJsdocTypeLine, RemoteJsdocTypeSource, RemoteNodeList, RemoteNodeListNode, RemoteSourceFile, RemoteTypeAny, RemoteTypeAsserts, RemoteTypeAssertsPlain, RemoteTypeCallSignature, RemoteTypeConditional, RemoteTypeConstructorSignature, RemoteTypeFunction, RemoteTypeGeneric, RemoteTypeImport, RemoteTypeIndexSignature, RemoteTypeIndexedAccessIndex, RemoteTypeInfer, RemoteTypeIntersection, RemoteTypeJsdocObjectField, RemoteTypeKeyOf, RemoteTypeKeyValue, RemoteTypeMappedType, RemoteTypeMethodSignature, RemoteTypeName, RemoteTypeNamePath, RemoteTypeNotNullable, RemoteTypeNull, RemoteTypeNullable, RemoteTypeNumber, RemoteTypeObject, RemoteTypeObjectField, RemoteTypeOptional, RemoteTypeParameterList, RemoteTypeParenthesis, RemoteTypePredicate, RemoteTypeProperty, RemoteTypeReadonlyArray, RemoteTypeReadonlyProperty, RemoteTypeSpecialNamePath, RemoteTypeStringValue, RemoteTypeSymbol, RemoteTypeTemplateLiteral, RemoteTypeTuple, RemoteTypeTypeOf, RemoteTypeTypeParameter, RemoteTypeUndefined, RemoteTypeUnion, RemoteTypeUniqueSymbol, RemoteTypeUnknown, RemoteTypeVariadic, jsdocVisitorKeys, toPlainObject };

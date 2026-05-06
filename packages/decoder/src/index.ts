@@ -29,6 +29,7 @@ export {
   RemoteJsdocTypeLine,
   RemoteJsdocTypeSource
 } from './internal/nodes/jsdoc.ts'
+export type { JsdocCommentInput } from './internal/nodes/jsdoc.ts'
 
 // TypeNode classes (45).
 export {

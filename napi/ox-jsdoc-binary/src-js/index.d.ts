@@ -3,7 +3,7 @@
  * @license MIT
  */
 
-import type { RemoteJsdocBlock, RemoteSourceFile } from '@ox-jsdoc/decoder'
+import type { JsdocCommentInput, RemoteJsdocBlock, RemoteSourceFile } from '@ox-jsdoc/decoder'
 
 export interface ParseOptions {
   /** Suppress tag recognition inside fenced code blocks. Default: true. */
@@ -63,6 +63,11 @@ export interface BatchParseResult {
   sourceFile: RemoteSourceFile
 }
 
+export interface BatchParseJsdocCommentInputResult extends BatchParseResult {
+  /** One jsdoccomment input block per input item; `null` indicates parse failure. */
+  blocks: Array<JsdocCommentInput | null>
+}
+
 export interface BatchParseOptions {
   /** Suppress tag recognition inside fenced code blocks. Default: true. */
   fenceAware?: boolean
@@ -76,6 +81,13 @@ export interface BatchParseOptions {
   preserveWhitespace?: boolean
   /** See `ParseOptions.emptyStringForNull`. */
   emptyStringForNull?: boolean
+  /** Select the materialized output. Default: 'ast'. */
+  output?: 'ast'
+}
+
+export interface BatchParseJsdocCommentInputOptions extends Omit<BatchParseOptions, 'output'> {
+  /** Return decoder-created input for @ox-jsdoc/jsdoccomment's normalizer. */
+  output: 'jsdoccomment-input'
 }
 
 /**
@@ -88,6 +100,10 @@ export function parse(sourceText: string, options?: ParseOptions): ParseResult
  * buffer. Common strings (`*`, `*​/`, tag names) are interned once across
  * all comments.
  */
+export function parseBatch(
+  items: BatchItem[],
+  options: BatchParseJsdocCommentInputOptions
+): BatchParseJsdocCommentInputResult
 export function parseBatch(items: BatchItem[], options?: BatchParseOptions): BatchParseResult
 
 /**
