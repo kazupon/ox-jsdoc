@@ -17,6 +17,10 @@ import { fileURLToPath } from 'node:url'
 import { parseSync } from 'oxc-parser'
 import { parse as commentParserParse } from 'comment-parser'
 import { parseComment as jsdoccommentParse } from '@es-joy/jsdoccomment'
+import {
+  parseComment as oxJsdoccommentParse,
+  parseCommentBatch as oxJsdoccommentParseBatch
+} from '../../../packages/jsdoccomment/src/index.js'
 import { parse as parseTypedNapi } from 'ox-jsdoc'
 import {
   parse as parseBinaryNapi,
@@ -60,6 +64,14 @@ const groups = [
           try { void jsdoccommentParse(c) } catch {}
         }
       }],
+      ['@ox-jsdoc/jsdoccomment (parseComment loop)', () => {
+        for (const c of batch100) {
+          try { void oxJsdoccommentParse(c) } catch {}
+        }
+      }],
+      ['@ox-jsdoc/jsdoccomment (parseCommentBatch)', () => {
+        void oxJsdoccommentParseBatch(batch100).blocks
+      }],
       ['ox-jsdoc typed NAPI (loop)', () => { for (const c of batch100) void parseTypedNapi(c).ast }],
       ['ox-jsdoc-binary NAPI (loop)', () => { for (const c of batch100) void parseBinaryNapi(c).ast }],
       ['ox-jsdoc-binary NAPI (parseBatch)', () => { void parseBatchBinaryNapi(batch100Items).asts }],
@@ -86,6 +98,14 @@ const groups = [
         for (const c of allComments) {
           try { void jsdoccommentParse(c) } catch {}
         }
+      }],
+      ['@ox-jsdoc/jsdoccomment (parseComment loop)', () => {
+        for (const c of allComments) {
+          try { void oxJsdoccommentParse(c) } catch {}
+        }
+      }],
+      ['@ox-jsdoc/jsdoccomment (parseCommentBatch)', () => {
+        void oxJsdoccommentParseBatch(allComments).blocks
       }],
       ['ox-jsdoc typed NAPI (loop)', () => { for (const c of allComments) void parseTypedNapi(c).ast }],
       ['ox-jsdoc-binary NAPI (loop)', () => { for (const c of allComments) void parseBinaryNapi(c).ast }],
