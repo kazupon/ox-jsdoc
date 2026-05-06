@@ -13,3 +13,4 @@ napi/ox-jsdoc-binary/src-js/ox_jsdoc_binary.*.node
 packages/eslint-plugin-jsdoc/.README
 .notes/
 .playwright-cli
+tasks/benchmark/.tmp

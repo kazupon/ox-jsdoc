@@ -29,6 +29,10 @@ function determineFormat (match) {
  * @returns {import('.').InlineTag[]} Array of inline tags from the description.
  */
 function parseDescription (description) {
+  if (!description.includes('{@')) {
+    return [];
+  }
+
   /** @type {import('.').InlineTag[]} */
   const result = [];
 

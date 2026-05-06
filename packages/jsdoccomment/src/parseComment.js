@@ -11,7 +11,9 @@ import { parseInlineTags } from './parseInlineTags.js'
  * @returns {boolean}
  */
 export const hasSeeWithLink = spec => {
-  return spec.tag === 'see' && /\{@link.+?\}/v.test(spec.source[0].source)
+  return spec.tag === 'see' &&
+    spec.source[0] !== undefined &&
+    /\{@link.+?\}/v.test(spec.source[0].source)
 }
 
 export const defaultNoTypes = [
@@ -26,6 +28,7 @@ export const defaultNoTypes = [
   'see',
   'summary'
 ]
+const defaultNoTypesSet = new Set(defaultNoTypes)
 
 export const defaultNoNames = [
   'access',
@@ -48,6 +51,7 @@ export const defaultNoNames = [
   'version',
   'variation'
 ]
+const defaultNoNamesSet = new Set(defaultNoNames)
 
 const optionalBrackets = /^\[(?<name>[^=]*)=[^\]]*\]/v
 // eslint-disable-next-line no-div-regex -- Default assignment syntax.
@@ -520,44 +524,47 @@ const parseNameToken = nameToken => {
 }
 
 /**
- * @param {string[]} descriptions
- * @returns {string}
- */
-const joinDescriptions = descriptions => {
-  const values = [
-    ...descriptions
-  ]
-  while (values[0] === '') {
-    values.shift()
-  }
-  while (values.at(-1) === '') {
-    values.pop()
-  }
-
-  return values.join('\n')
-}
-
-/**
  * @param {import('comment-parser').Line[]} source
  * @returns {string}
  */
 const getJoinedDescription = source => {
-  return joinDescriptions(source.map(line => {
-    return line.tokens.description
-  }))
+  let start = 0
+  while (source[start]?.tokens.description === '') {
+    start++
+  }
+
+  let end = source.length - 1
+  while (end >= start && source[end]?.tokens.description === '') {
+    end--
+  }
+
+  let description = ''
+  for (let index = start; index <= end; index++) {
+    if (index > start) {
+      description += '\n'
+    }
+    description += source[index].tokens.description
+  }
+
+  return description
 }
 
 /**
  * @param {import('comment-parser').Line[]} source
+ * @param {number} [endIndex]
  * @returns {string}
  */
-const getJoinedBlockDescription = source => {
-  return source
-    .map(line => {
-      return line.tokens.description
-    })
-    .filter(Boolean)
-    .join(' ')
+const getJoinedBlockDescription = (source, endIndex = source.length) => {
+  let description = ''
+  for (let index = 0; index < endIndex; index++) {
+    const value = source[index].tokens.description
+    if (value === '') {
+      continue
+    }
+    description += description === '' ? value : ` ${value}`
+  }
+
+  return description
 }
 
 /**
@@ -577,14 +584,15 @@ const stripEncapsulatingCurlies = rawType => {
  * @returns {string}
  */
 const getTagType = source => {
-  return stripEncapsulatingCurlies(
-    source
-      .map(line => {
-        return line.tokens.type
-      })
-      .filter(Boolean)
-      .join('\n')
-  )
+  let rawType = ''
+  for (const line of source) {
+    if (line.tokens.type === '') {
+      continue
+    }
+    rawType += rawType === '' ? line.tokens.type : `\n${line.tokens.type}`
+  }
+
+  return stripEncapsulatingCurlies(rawType)
 }
 
 /**
@@ -844,17 +852,18 @@ const throwBatchParseError = (problems, blocks) => {
 
 /**
  * @param {object} tag
- * @param {Map<number, import('comment-parser').Line>} sourceByNumber
  * @returns {import('comment-parser').Spec}
  */
-const normalizeTag = (tag, sourceByNumber) => {
+const normalizeTag = tag => {
   const tagName = tag.tag ?? ''
-  const source = Array.from(tag.source ?? [], line => {
-    return sourceByNumber.get(line.number ?? 0) ?? normalizeLine(line)
+  const source = tag.source ?? []
+  const seeWithLink = hasSeeWithLink({
+    tag: tagName,
+    source
   })
 
   for (const line of source) {
-    if (defaultNoTypes.includes(tagName) && line.tokens.type !== '') {
+    if (defaultNoTypesSet.has(tagName) && line.tokens.type !== '') {
       line.tokens.description = line.tokens.type +
         line.tokens.postType +
         line.tokens.description
@@ -864,11 +873,8 @@ const normalizeTag = (tag, sourceByNumber) => {
   }
 
   if (
-    defaultNoNames.includes(tagName) ||
-    hasSeeWithLink({
-      tag: tagName,
-      source
-    })
+    defaultNoNamesSet.has(tagName) ||
+    seeWithLink
   ) {
     for (const line of source) {
       if (line.tokens.name !== '') {
@@ -923,11 +929,8 @@ const normalizeTag = (tag, sourceByNumber) => {
 
   if (
     tagName !== 'template' &&
-    !defaultNoNames.includes(tagName) &&
-    !hasSeeWithLink({
-      tag: tagName,
-      source
-    })
+    !defaultNoNamesSet.has(tagName) &&
+    !seeWithLink
   ) {
     let nameLine = source.find(line => {
       return line.tokens.tag !== '' && line.tokens.name !== ''
@@ -1045,28 +1048,33 @@ const buildTagInputs = (block, source) => {
     }
   }
 
-  const tagStarts = source
-    .map((line, index) => {
-      return {
+  const tagStarts = []
+  for (const [index, line] of source.entries()) {
+    if (line.tokens.tag !== '') {
+      tagStarts.push({
         line,
         index
-      }
-    })
-    .filter(({ line }) => {
-      return line.tokens.tag !== ''
-    })
+      })
+    }
+  }
 
-  return tagStarts.map(({ line, index }, tagIndex) => {
+  const tagInputs = []
+  for (const [tagIndex, {
+    line,
+    index
+  }] of tagStarts.entries()) {
     const nextIndex = tagStarts[tagIndex + 1]?.index ?? source.length
     const rawTag = rawTagByLine.get(line.number) ?? {}
 
-    return {
+    tagInputs.push({
       ...rawTag,
       tag: rawTag.tag ?? getTagNameFromToken(line.tokens.tag),
       name: rawTag.name ?? line.tokens.name,
       source: source.slice(index, nextIndex)
-    }
-  })
+    })
+  }
+
+  return tagInputs
 }
 
 /**
@@ -1082,27 +1090,23 @@ const normalizeBlock = (block, diagnostics, sourceText) => {
     return normalizeLine(line, sourceLines)
   })
   repairSourceLines(source)
-  const sourceByNumber = new Map(source.map(line => {
-    return [
-      line.number,
-      line
-    ]
-  }))
   const tagInputs = buildTagInputs(block, source)
   const tags = Array.from(tagInputs, tag => {
-    return normalizeTag(tag, sourceByNumber)
+    return normalizeTag(tag)
   })
-  const firstTagNumber = tags[0]?.source[0]?.number
-  const descriptionSource = firstTagNumber === undefined
-    ? source
-    : source.filter(line => {
-      return line.number < firstTagNumber
-    })
-  const problems = [
-    ...tags.flatMap(tag => tag.problems)
-  ]
+  const firstTagSource = tags[0]?.source[0]
+  const rawDescriptionEndIndex = firstTagSource === undefined
+    ? source.length
+    : source.indexOf(firstTagSource)
+  const descriptionEndIndex = rawDescriptionEndIndex === -1
+    ? source.length
+    : rawDescriptionEndIndex
+  const problems = []
+  for (const tag of tags) {
+    problems.push(...tag.problems)
+  }
   return parseInlineTags({
-    description: getJoinedBlockDescription(descriptionSource),
+    description: getJoinedBlockDescription(source, descriptionEndIndex),
     tags,
     inlineTags: [],
     source,

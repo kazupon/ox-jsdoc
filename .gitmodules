@@ -22,3 +22,6 @@
 [submodule "refers/jsdoc-type-pratt-parser"]
 	path = refers/jsdoc-type-pratt-parser
 	url = git@github.com:jsdoc-type-pratt-parser/jsdoc-type-pratt-parser.git
+[submodule "refers/vscode"]
+	path = refers/vscode
+	url = git@github.com:microsoft/vscode.git
