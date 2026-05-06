@@ -528,6 +528,21 @@ struct NormalizedText<'a> {
     span: Span,
 }
 
+#[inline]
+fn is_indented_code_block(
+    content_leading_whitespace: usize,
+    margin: &scanner::MarginInfo<'_>,
+) -> bool {
+    if margin.delimiter.is_empty() {
+        return false;
+    }
+
+    // Same threshold as `oxc_jsdoc`: one conventional space after `*`
+    // plus four Markdown indented-code spaces.
+    let spaces_after_star = margin.post_delimiter.len() + content_leading_whitespace;
+    spaces_after_star >= 5
+}
+
 #[derive(Debug)]
 struct ParsedTagBody<'arena, 'a> {
     raw_body: &'a str,
@@ -562,41 +577,47 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             // `try_from(...).unwrap()` is dead weight on this hot loop
             // (`partition_sections` runs once per logical line). Pattern #9.
             let trimmed_start = line.content_start + trimmed_delta as u32;
+            let m = &margins[idx];
+            let tag_header = if !in_fence
+                && trimmed.starts_with('@')
+                && !is_indented_code_block(trimmed_delta, m)
+            {
+                parse_tag_header(trimmed, trimmed_start)
+            } else {
+                None
+            };
 
-            if !in_fence {
-                if let Some((tag_name, tag_name_start, body_start)) =
-                    parse_tag_header(trimmed, trimmed_start)
-                {
-                    if let Some(section) = current_tag.take() {
-                        tag_sections.push(section);
-                    }
-                    let mut body_lines = Vec::new();
-                    if let Some((body, body_abs_start)) = body_start {
-                        // `body` is `trim_start`ed by `parse_tag_header`, so it
-                        // begins with a non-whitespace byte and is therefore
-                        // never whitespace-only.
-                        body_lines.push(scanner::LogicalLine {
-                            content: body,
-                            content_start: body_abs_start,
-                            is_content_empty: false,
-                        });
-                    }
-                    let m = &margins[idx];
-                    current_tag = Some(TagSection {
-                        tag_name,
-                        tag_name_start,
-                        // `tag_name` is a sub-slice of the source text; its
-                        // length fits in u32 by the same precondition that
-                        // bounds source offsets. Pattern #9.
-                        tag_name_end: tag_name_start + tag_name.len() as u32,
-                        body_lines,
-                        end: line.content_end(),
-                        header_initial: m.initial,
-                        header_delimiter: m.delimiter,
-                        header_post_delimiter: m.post_delimiter,
-                        header_line_end: m.line_end,
+            if let Some((tag_name, tag_name_start, body_start)) = tag_header {
+                if let Some(section) = current_tag.take() {
+                    tag_sections.push(section);
+                }
+                let mut body_lines = Vec::new();
+                if let Some((body, body_abs_start)) = body_start {
+                    // `body` is `trim_start`ed by `parse_tag_header`, so it
+                    // begins with a non-whitespace byte and is therefore
+                    // never whitespace-only.
+                    body_lines.push(scanner::LogicalLine {
+                        content: body,
+                        content_start: body_abs_start,
+                        is_content_empty: false,
                     });
-                } else if let Some(section) = current_tag.as_mut() {
+                }
+                current_tag = Some(TagSection {
+                    tag_name,
+                    tag_name_start,
+                    // `tag_name` is a sub-slice of the source text; its
+                    // length fits in u32 by the same precondition that
+                    // bounds source offsets. Pattern #9.
+                    tag_name_end: tag_name_start + tag_name.len() as u32,
+                    body_lines,
+                    end: line.content_end(),
+                    header_initial: m.initial,
+                    header_delimiter: m.delimiter,
+                    header_post_delimiter: m.post_delimiter,
+                    header_line_end: m.line_end,
+                });
+            } else if !in_fence {
+                if let Some(section) = current_tag.as_mut() {
                     section.body_lines.push(*line);
                     section.end = line.content_end();
                 } else {
@@ -1937,5 +1958,60 @@ mod tests {
         assert_eq!(tag.raw_type.as_ref().unwrap().raw, "string");
         assert!(tag.name.is_some());
         assert_eq!(tag.name.as_ref().unwrap().raw, "id");
+    }
+
+    #[test]
+    fn parses_tags_like_oxc_jsdoc_tag_splitter() {
+        let cases = [
+            (
+                "backtick_inside_quotes",
+                "/**\n * @param {\"'\" | '\"' | '`'} string_start_char desc\n * @returns {number} The index\n */",
+                vec!["param", "returns"],
+            ),
+            (
+                "extra_closing_brace",
+                "/**\n * @param {AST.SvelteElement | AST.RegularElement} node}\n * @param {{ stop: () => void }} context\n */",
+                vec!["param", "param"],
+            ),
+            (
+                "inline_link",
+                "/**\n * @param {string} name See {@link Foo} for details\n * @returns {void}\n */",
+                vec!["param", "returns"],
+            ),
+            (
+                "at_sign_mid_line",
+                "/**\n * @param {string} email user@example.com address\n * @returns {void}\n */",
+                vec!["param", "returns"],
+            ),
+            (
+                "braces_inside_quotes",
+                "/**\n * \"props\" of the form \"{ [key: string]: { type?: \"String\" | \"Object\" }\"\n * @param {null} node\n * @returns {never}\n */",
+                vec!["param", "returns"],
+            ),
+            (
+                "indented_code_block_at_sign",
+                "/**\n * @deprecated\n *     @myDecorator\n *     class Foo {}\n * @type {string}\n */",
+                vec!["deprecated", "type"],
+            ),
+            (
+                "normal_indent_at_sign",
+                "/**\n * @deprecated\n *    @type {string}\n */",
+                vec!["deprecated", "type"],
+            ),
+        ];
+
+        for (name, source, expected) in cases {
+            let arena = oxc_allocator::Allocator::default();
+            let parsed = parse_block_into_data(&arena, source, 0, opts());
+            assert!(!parsed.is_failure(), "{name}");
+            let block = parsed.block.as_ref().unwrap();
+            let actual = block
+                .tags
+                .iter()
+                .map(|section| section.tag_name)
+                .collect::<Vec<_>>();
+
+            assert_eq!(actual, expected, "{name}");
+        }
     }
 }

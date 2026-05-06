@@ -303,37 +303,43 @@ impl<'a> ParserContext<'a> {
             let trimmed = line.content.trim_start();
             let trimmed_delta = line.content.len() - trimmed.len();
             let trimmed_start = line.content_start + u32::try_from(trimmed_delta).unwrap();
+            let m = &margins[idx];
+            let tag_header = if !in_fence
+                && trimmed.starts_with('@')
+                && !is_indented_code_block(trimmed_delta, m)
+            {
+                parse_tag_header(trimmed, trimmed_start)
+            } else {
+                None
+            };
 
-            if !in_fence {
-                if let Some((tag_name, tag_name_start, body_start)) =
-                    parse_tag_header(trimmed, trimmed_start)
-                {
-                    if let Some(section) = current_tag.take() {
-                        tag_sections.push(section);
-                    }
+            if let Some((tag_name, tag_name_start, body_start)) = tag_header {
+                if let Some(section) = current_tag.take() {
+                    tag_sections.push(section);
+                }
 
-                    let mut body_lines = Vec::new();
-                    if let Some((body, body_abs_start)) = body_start {
-                        body_lines.push(scanner::LogicalLine {
-                            content: body,
-                            content_start: body_abs_start,
-                            content_end: line.content_end,
-                        });
-                    }
-
-                    let m = &margins[idx];
-                    current_tag = Some(TagSection {
-                        tag_name,
-                        tag_name_start,
-                        tag_name_end: tag_name_start + u32::try_from(tag_name.len()).unwrap(),
-                        body_lines,
-                        end: line.content_end,
-                        header_initial: m.initial,
-                        header_delimiter: m.delimiter,
-                        header_post_delimiter: m.post_delimiter,
-                        header_line_end: m.line_end,
+                let mut body_lines = Vec::new();
+                if let Some((body, body_abs_start)) = body_start {
+                    body_lines.push(scanner::LogicalLine {
+                        content: body,
+                        content_start: body_abs_start,
+                        content_end: line.content_end,
                     });
-                } else if let Some(section) = current_tag.as_mut() {
+                }
+
+                current_tag = Some(TagSection {
+                    tag_name,
+                    tag_name_start,
+                    tag_name_end: tag_name_start + u32::try_from(tag_name.len()).unwrap(),
+                    body_lines,
+                    end: line.content_end,
+                    header_initial: m.initial,
+                    header_delimiter: m.delimiter,
+                    header_post_delimiter: m.post_delimiter,
+                    header_line_end: m.line_end,
+                });
+            } else if !in_fence {
+                if let Some(section) = current_tag.as_mut() {
                     section.body_lines.push(*line);
                     section.end = line.content_end;
                 } else {
@@ -765,6 +771,20 @@ struct NormalizedText<'a> {
     span: Span,
 }
 
+fn is_indented_code_block(
+    content_leading_whitespace: usize,
+    margin: &scanner::MarginInfo<'_>,
+) -> bool {
+    if margin.delimiter.is_empty() {
+        return false;
+    }
+
+    // Same threshold as `oxc_jsdoc`: one conventional space after `*`
+    // plus four Markdown indented-code spaces.
+    let spaces_after_star = margin.post_delimiter.len() + content_leading_whitespace;
+    spaces_after_star >= 5
+}
+
 /// Parse a block tag header from a logical line.
 fn parse_tag_header(line: &str, line_start: u32) -> Option<(&str, u32, Option<(&str, u32)>)> {
     let stripped = line.strip_prefix('@')?;
@@ -1061,6 +1081,60 @@ mod tests {
         );
         assert_eq!(tag_sections[1].tag_name, "returns");
         assert_eq!(tag_sections[1].body_lines[0].content, "{void}");
+    }
+
+    #[test]
+    fn partitions_like_oxc_jsdoc_tag_splitter() {
+        let cases = [
+            (
+                "backtick_inside_quotes",
+                "/**\n * @param {\"'\" | '\"' | '`'} string_start_char desc\n * @returns {number} The index\n */",
+                vec!["param", "returns"],
+            ),
+            (
+                "extra_closing_brace",
+                "/**\n * @param {AST.SvelteElement | AST.RegularElement} node}\n * @param {{ stop: () => void }} context\n */",
+                vec!["param", "param"],
+            ),
+            (
+                "inline_link",
+                "/**\n * @param {string} name See {@link Foo} for details\n * @returns {void}\n */",
+                vec!["param", "returns"],
+            ),
+            (
+                "at_sign_mid_line",
+                "/**\n * @param {string} email user@example.com address\n * @returns {void}\n */",
+                vec!["param", "returns"],
+            ),
+            (
+                "braces_inside_quotes",
+                "/**\n * \"props\" of the form \"{ [key: string]: { type?: \"String\" | \"Object\" }\"\n * @param {null} node\n * @returns {never}\n */",
+                vec!["param", "returns"],
+            ),
+            (
+                "indented_code_block_at_sign",
+                "/**\n * @deprecated\n *     @myDecorator\n *     class Foo {}\n * @type {string}\n */",
+                vec!["deprecated", "type"],
+            ),
+            (
+                "normal_indent_at_sign",
+                "/**\n * @deprecated\n *    @type {string}\n */",
+                vec!["deprecated", "type"],
+            ),
+        ];
+
+        for (name, source, expected) in cases {
+            let allocator = Allocator::default();
+            let context = context(&allocator, source);
+            let scan = scanner::logical_lines(source, 100);
+            let (_, tag_sections) = context.partition_sections(&scan);
+            let actual = tag_sections
+                .iter()
+                .map(|section| section.tag_name)
+                .collect::<Vec<_>>();
+
+            assert_eq!(actual, expected, "{name}");
+        }
     }
 
     #[test]

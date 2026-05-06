@@ -316,6 +316,27 @@ mod tests {
     }
 
     #[test]
+    fn suppresses_block_tags_inside_indented_code() {
+        let allocator = Allocator::default();
+        let output = parse_comment(
+            &allocator,
+            "/**\n * @deprecated\n *     @myDecorator\n *     class Foo {}\n * @type {string}\n */",
+            0,
+            ParseOptions::default(),
+        );
+
+        assert!(output.diagnostics.is_empty());
+        let comment = output.comment.expect("expected a comment AST");
+        assert_eq!(comment.tags.len(), 2);
+        assert_eq!(comment.tags[0].tag.value, "deprecated");
+        assert_eq!(comment.tags[1].tag.value, "type");
+        assert_eq!(
+            comment.tags[0].raw_body,
+            Some("    @myDecorator\n    class Foo {}")
+        );
+    }
+
+    #[test]
     fn parsed_type_is_none_when_parse_types_disabled() {
         let allocator = Allocator::default();
         let output = parse_comment(

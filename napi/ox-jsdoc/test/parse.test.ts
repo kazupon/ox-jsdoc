@@ -53,6 +53,15 @@ describe('parse', () => {
     expect(result.ast!.tags[1].tag).toBe('returns')
   })
 
+  it('matches oxc_jsdoc tag splitting for indented code blocks', () => {
+    const source =
+      '/**\n * @deprecated\n *     @myDecorator\n *     class Foo {}\n * @type {string}\n */'
+    const result = parse(source)
+    expect(result.diagnostics).toEqual([])
+    expect(result.ast!.tags.map(tag => tag.tag)).toEqual(['deprecated', 'type'])
+    expect(result.ast!.tags[0].rawBody).toBe('    @myDecorator\n    class Foo {}')
+  })
+
   it('returns ast with correct span', () => {
     const source = '/** @param x */'
     const result = parse(source)

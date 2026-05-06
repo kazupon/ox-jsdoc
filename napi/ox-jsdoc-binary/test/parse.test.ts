@@ -72,6 +72,16 @@ describe('parse (binary NAPI binding)', () => {
     expect(parsed!.type).toBe('TypeUnion')
   })
 
+  it('matches oxc_jsdoc tag splitting for indented code blocks', () => {
+    const source =
+      '/**\n * @deprecated\n *     @myDecorator\n *     class Foo {}\n * @type {string}\n */'
+    const result = parse(source)
+    expect(result.diagnostics).toEqual([])
+    const tags = result.ast!.tags as RemoteJsdocTag[]
+    expect(tags.map(tag => (tag.tag as RemoteJsdocTagName).value)).toEqual(['deprecated', 'type'])
+    expect(tags[0].rawBody).toBe('    @myDecorator\n    class Foo {}')
+  })
+
   it('respects baseOffset when computing absolute ranges', () => {
     const result = parse('/** ok */', { baseOffset: 100 })
     expect(result.diagnostics).toEqual([])
