@@ -694,8 +694,8 @@ Phase 2's typed-AST scope:
 - `crates/ox_jsdoc/src/serializer/json.rs` — add `descriptionRaw` field gated by `SerializeOptions.compat_mode`
 - `crates/ox_jsdoc/src/parser/text.rs` (new module) — `parsed_preserving_whitespace` algorithm + unit tests
 - `crates/ox_jsdoc/src/lib.rs` — wire the new helper module
-- **NAPI binding type defs**: `napi/ox-jsdoc/src-js/index.d.ts` — `JsdocBlock` / `JsdocTag` に `descriptionRaw?: string` (compat-mode-only) を追加
-- **WASM binding type defs**: `wasm/ox-jsdoc/src-js/index.d.ts` — 同上 (NAPI 側と shape 揃える)
+- **NAPI binding type defs**: `napi/ox-jsdoc/src-js/index.d.ts` — add `descriptionRaw?: string` (compat-mode-only) to `JsdocBlock` / `JsdocTag`
+- **WASM binding type defs**: `wasm/ox-jsdoc/src-js/index.d.ts` — same as above (keep shape aligned with NAPI side)
 
 Phase 3's binary-AST scope:
 
@@ -704,9 +704,9 @@ Phase 3's binary-AST scope:
 - `packages/decoder/src/internal/preserve-whitespace.js` (new) — JS port of the `parsed_preserving_whitespace` algorithm (mirrors the Rust `crates/ox_jsdoc/src/parser/text.rs`)
 - `packages/decoder/test/preserve-whitespace.test.js` (new) — JS test suite, fixtures shared with Rust side
 - `packages/decoder/src/internal/nodes/jsdoc.js` — `descriptionRaw` getter + `descriptionText(preserveWhitespace?)` method on `RemoteJsdocBlock` / `RemoteJsdocTag`
-- **Binary AST type defs (decoder)**: `packages/decoder/src/index.d.ts` — `RemoteJsdocBlock` / `RemoteJsdocTag` に `descriptionRaw: string | null` getter + `descriptionText(preserveWhitespace?: boolean): string | null` method を追加
-- **Binary AST type defs (NAPI)**: `napi/ox-jsdoc-binary/src-js/index.d.ts` — re-export shape を更新 (decoder と同期)
-- **Binary AST type defs (WASM)**: `wasm/ox-jsdoc-binary/src-js/index.d.ts` — 同上
+- **Binary AST type defs (decoder)**: `packages/decoder/src/index.d.ts` — add `descriptionRaw: string | null` getter + `descriptionText(preserveWhitespace?: boolean): string | null` method to `RemoteJsdocBlock` / `RemoteJsdocTag`
+- **Binary AST type defs (NAPI)**: `napi/ox-jsdoc-binary/src-js/index.d.ts` — update re-export shape (sync with decoder)
+- **Binary AST type defs (WASM)**: `wasm/ox-jsdoc-binary/src-js/index.d.ts` — same as above
 - `design/007-binary-ast/format.md` — amend `JsdocBlock complete byte-level layout` / `JsdocTag complete byte-level layout` sections to include `description_raw_span` in the compat tail
 
 Phase 5's binary-AST scope (revising the Phase 3 wire layout to support
