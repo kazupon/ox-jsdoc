@@ -24,16 +24,20 @@ It collects documents related to syntax, AST design, and performance design.
 ### Binary AST
 
 - [Binary AST overview](./007-binary-ast/README.md)
-- [Architecture (背景・アーキテクチャ)](./007-binary-ast/architecture.md)
-- [AST Nodes (対象ノード一覧)](./007-binary-ast/ast-nodes.md)
-- [Binary Format (バイナリフォーマット)](./007-binary-ast/format.md)
-- [Encoding (ツリー・Variant・compat_mode)](./007-binary-ast/encoding.md)
+- [Architecture (background and architecture)](./007-binary-ast/architecture.md)
+- [AST Nodes (target node list)](./007-binary-ast/ast-nodes.md)
+- [Binary Format (binary format)](./007-binary-ast/format.md)
+- [Encoding (tree, Variant, compat_mode)](./007-binary-ast/encoding.md)
 - [JS Decoder (JS lazy decoder)](./007-binary-ast/js-decoder.md)
-- [Rust Implementation (Rust 内部実装)](./007-binary-ast/rust-impl.md)
-- [Testing Strategy (テスト戦略)](./007-binary-ast/testing.md)
-- [Benchmark Strategy (ベンチマーク戦略)](./007-binary-ast/benchmark.md)
-- [Phases (実装フェーズ)](./007-binary-ast/phases.md)
-- [Batch Processing (batch 5 論点と決定)](./007-binary-ast/batch-processing.md)
+- [Rust Implementation (Rust internal implementation)](./007-binary-ast/rust-impl.md)
+- [Testing Strategy (testing strategy)](./007-binary-ast/testing.md)
+- [Benchmark Strategy (benchmark strategy)](./007-binary-ast/benchmark.md)
+- [Phases (implementation phases)](./007-binary-ast/phases.md)
+- [Batch Processing (batch 5 discussion points and decisions)](./007-binary-ast/batch-processing.md)
+
+### JSDoc Linter Benchmark
+
+- [JSDoc linter benchmark design](./009-jsdoc-linter-benchmark/README.md)
 
 ### Diagrams
 
