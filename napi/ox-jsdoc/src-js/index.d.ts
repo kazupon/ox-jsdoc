@@ -204,3 +204,10 @@ export function parseType(
   typeText: string,
   mode?: 'jsdoc' | 'closure' | 'typescript'
 ): string | null
+
+/**
+ * Parse a standalone type expression and return whether it succeeded,
+ * without the stringification overhead. Useful when you only need to
+ * validate that a type expression is well-formed.
+ */
+export function parseTypeCheck(typeText: string, mode?: 'jsdoc' | 'closure' | 'typescript'): boolean
