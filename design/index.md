@@ -1,7 +1,6 @@
 # ox-jsdoc Design Documents
 
-This directory is the table of contents for the design documents of `ox-jsdoc`.
-It collects documents related to syntax, AST design, and performance design.
+This directory is the table of contents for the design documents of `ox-jsdoc`. It collects documents related to syntax, AST design, and performance design.
 
 ## Table of Contents
 

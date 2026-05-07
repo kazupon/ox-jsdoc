@@ -2,58 +2,42 @@
 
 ## Design overview
 
-The JS-side Binary AST decoder is designed to deliver **lazy expansion + zero-copy + full environment support
-(Node/Deno/Bun/Browser)**. It mirrors the Rust side (LazySourceFile + LazyJsdocBlock, etc.) with a
-**fully symmetric structure**, enabling both languages to be generated simultaneously from a single AST schema.
+The JS-side Binary AST decoder is designed to deliver **lazy expansion + zero-copy + full environment support (Node/Deno/Bun/Browser)**. It mirrors the Rust side (LazySourceFile + LazyJsdocBlock, etc.) with a **fully symmetric structure**, enabling both languages to be generated simultaneously from a single AST schema.
 
 Key decisions:
 
-- **Lazy expansion (proxies built only on access)**: rather than materializing every node up front, `getter`s
-  read the DataView only when needed. Unvisited nodes cost zero
-- **Single `#internal` object pattern**: following oxc raw transfer, private state and cache slots
-  (`$tag`, `$rawType`, etc.) are consolidated into a single object. The V8 hidden class stays stable and
-  declarations remain concise
-- **Shared decoder package `@ox-jsdoc/decoder`**: the NAPI binding and WASM binding share **fully identical
-  implementations**. Because it does not depend on the byte source (NAPI Buffer / wasm.memory.buffer view),
-  format changes propagate to both bindings simultaneously
-- **toJSON + Symbol.for("nodejs.util.inspect.custom")**: ECMA-standard `JSON.stringify` performs eager
-  conversion, and `console.log` prints directly in Node-family runtimes. It also works in browsers via
-  `JSON.stringify` (a `toPlainObject` helper is also provided)
-- **`RemoteNodeList extends Array`** + **`EMPTY_NODE_LIST` shared singleton**: array fields expose an
-  `Array`-compatible API; empty arrays use a singleton for memory efficiency
-- **Kind dispatch is code-generated in Phase 4**: a flat 256-entry `KIND_TABLE` for O(1) lookup. Single-instruction
-  category checks leverage the Kind numbering constraints (Sentinel 0x00 / NodeList 0x7F (reserved-only,
-  never emitted) / TypeNode 0x80-0xFF) ([ast-nodes.md "Implementation of category checks"](./ast-nodes.md#category-check-implementation))
+- **Lazy expansion (proxies built only on access)**: rather than materializing every node up front, `getter`s read the DataView only when needed. Unvisited nodes cost zero
+- **Single `#internal` object pattern**: following oxc raw transfer, private state and cache slots (`$tag`, `$rawType`, etc.) are consolidated into a single object. The V8 hidden class stays stable and declarations remain concise
+- **Shared decoder package `@ox-jsdoc/decoder`**: the NAPI binding and WASM binding share **fully identical implementations**. Because it does not depend on the byte source (NAPI Buffer / wasm.memory.buffer view), format changes propagate to both bindings simultaneously
+- **toJSON + Symbol.for("nodejs.util.inspect.custom")**: ECMA-standard `JSON.stringify` performs eager conversion, and `console.log` prints directly in Node-family runtimes. It also works in browsers via `JSON.stringify` (a `toPlainObject` helper is also provided)
+- **`RemoteNodeList extends Array`** + **`EMPTY_NODE_LIST` shared singleton**: array fields expose an `Array`-compatible API; empty arrays use a singleton for memory efficiency
+- **Kind dispatch is code-generated in Phase 4**: a flat 256-entry `KIND_TABLE` for O(1) lookup. Single-instruction category checks leverage the Kind numbering constraints (Sentinel 0x00 / NodeList 0x7F (reserved-only, never emitted) / TypeNode 0x80-0xFF) ([ast-nodes.md "Implementation of category checks"](./ast-nodes.md#category-check-implementation))
 
-This document explains the **Lazy node classes** (`#internal` pattern + main examples + helpers + RemoteSourceFile +
-Kind dispatch) → **Eager conversion** → **Array fields** → **Visitor Keys** → **JS Public API**, in that order.
+This document explains the **Lazy node classes** (`#internal` pattern + main examples + helpers + RemoteSourceFile + Kind dispatch) → **Eager conversion** → **Array fields** → **Visitor Keys** → **JS Public API**, in that order.
 
 ## Lazy node classes
 
-We follow tsgo's `RemoteNode` pattern, additionally adopting oxc raw transfer (lazy mode)'s `toJSON()` +
-Node.js inspect support. Each node class is merely a **view + accessor set** over the binary buffer; values
-are computed only on property access.
+We follow tsgo's `RemoteNode` pattern, additionally adopting oxc raw transfer (lazy mode)'s `toJSON()` + Node.js inspect support. Each node class is merely a **view + accessor set** over the binary buffer; values are computed only on property access.
 
 ### Internal state encapsulation pattern (`#internal`)
 
 Following oxc raw transfer (lazy mode), private state is consolidated into a **single `#internal` object**:
 
 - Private state declarations fit on one line, and the constructor stays simple
-- `$tag`, `$rawType`, etc. — **caches for lazily constructed properties** — live in the same place,
-  preventing recomputation on re-access
+- `$tag`, `$rawType`, etc. — **caches for lazily constructed properties** — live in the same place, preventing recomputation on re-access
 - The V8 hidden class remains stable (instances share a single shape → faster property lookup)
 
 Contents of `#internal` (common to all node classes):
 
-| Key          | Type               | Usage                                                                                      |
-| ------------ | ------------------ | ------------------------------------------------------------------------------------------ |
-| `view`       | DataView           | View over the entire binary buffer                                                         |
-| `byteIndex`  | u32                | Byte offset of this node record (= `nodesOffset + index * 24`)                             |
-| `index`      | u32                | Index of the node record (= `(byteIndex - nodesOffset) / 24`)                              |
-| `rootIndex`  | u32                | Index of the root this node belongs to (used to obtain `baseOffset` for range computation) |
-| `parent`     | RemoteNode \| null | Reference to the parent node (also provides `compat_mode` via sourceFile)                  |
-| `sourceFile` | RemoteSourceFile   | The root that consolidates the string table / Header / Root array                          |
-| `$xxx`       | any                | Cache for child nodes / arrays / computed values (lazily built)                            |
+| Key | Type | Usage |
+| --- | --- | --- |
+| `view` | DataView | View over the entire binary buffer |
+| `byteIndex` | u32 | Byte offset of this node record (= `nodesOffset + index * 24`) |
+| `index` | u32 | Index of the node record (= `(byteIndex - nodesOffset) / 24`) |
+| `rootIndex` | u32 | Index of the root this node belongs to (used to obtain `baseOffset` for range computation) |
+| `parent` | RemoteNode \| null | Reference to the parent node (also provides `compat_mode` via sourceFile) |
+| `sourceFile` | RemoteSourceFile | The root that consolidates the string table / Header / Root array |
+| `$xxx` | any | Cache for child nodes / arrays / computed values (lazily built) |
 
 ### Main node class example: RemoteJsdocTag
 
@@ -246,8 +230,7 @@ export function stringPayloadOf(internal) {
 
 ### RemoteSourceFile (the decoder's root class)
 
-The **decoder entry point** that consolidates the Header / Root array / String table.
-Every node class goes through this to obtain strings, base offsets, nodeCount, etc.
+The **decoder entry point** that consolidates the Header / Root array / String table. Every node class goes through this to obtain strings, base offsets, nodeCount, etc.
 
 ```javascript
 import { decodeKindToClass } from './kind-dispatch.js'
@@ -370,8 +353,7 @@ export class RemoteSourceFile {
 
 ### Kind dispatch (Kind → class selection)
 
-Look up the corresponding `RemoteXxx` class from the **Kind value (u8)** at byte 0 of the node record.
-This is **code-generated** in Phase 4 (see ast-nodes.md), enabling O(1) lookup via a flat array:
+Look up the corresponding `RemoteXxx` class from the **Kind value (u8)** at byte 0 of the node record. This is **code-generated** in Phase 4 (see ast-nodes.md), enabling O(1) lookup via a flat array:
 
 ```javascript
 // generated/kind-dispatch.js (auto-generated in Phase 4)
@@ -418,14 +400,11 @@ export function decodeKindToClass(kind) {
 }
 ```
 
-For category checks (`is_type_node` / `is_node_list`, etc.), see [ast-nodes.md "Implementation of category checks"](./ast-nodes.md#category-check-implementation).
-The Kind numbering space is designed to support single-instruction category checks under the constraints
-**TypeNode = upper bit set**, **NodeList = 0x7F**, and **Sentinel = 0x00**.
+For category checks (`is_type_node` / `is_node_list`, etc.), see [ast-nodes.md "Implementation of category checks"](./ast-nodes.md#category-check-implementation). The Kind numbering space is designed to support single-instruction category checks under the constraints **TypeNode = upper bit set**, **NodeList = 0x7F**, and **Sentinel = 0x00**.
 
 ## Eager conversion (toJSON / full environment support)
 
-While only the lazy decoder is provided, implementing `toJSON()` on each node class enables eager conversion
-via the ECMA-standard `JSON.stringify` (the same approach as oxc raw transfer):
+While only the lazy decoder is provided, implementing `toJSON()` on each node class enables eager conversion via the ECMA-standard `JSON.stringify` (the same approach as oxc raw transfer):
 
 ```javascript
 // Works in every environment (Node / Deno / Bun / Browser)
@@ -445,15 +424,13 @@ RemoteJsdocBlock { type: 'JsdocBlock', range: [0, 50], tags: [ JsdocTag { ... } 
                                                               Empty class for label display
 ```
 
-The trick `Object.setPrototypeOf(this.toJSON(), DebugXxx.prototype)` makes the output label `JsdocBlock`
-instead of `Object` (improving debug readability).
+The trick `Object.setPrototypeOf(this.toJSON(), DebugXxx.prototype)` makes the output label `JsdocBlock` instead of `Object` (improving debug readability).
 
 In browsers `Symbol.for('nodejs.util.inspect.custom')` is ignored, so the above logic is harmless (no side effects).
 
 ### Browser / WASM environments
 
-In the browser, `console.log(block)` alone shows only internal representation, so explicitly call `toJSON()`
-or use a helper function:
+In the browser, `console.log(block)` alone shows only internal representation, so explicitly call `toJSON()` or use a helper function:
 
 ```javascript
 import { toPlainObject } from '@ox-jsdoc/decoder'
@@ -491,15 +468,12 @@ The README guides browser users to **use `toPlainObject`**.
 
 - **Full materialization via an `eager: true` option**: rejected because it loses the benefit of laziness
 - **Proxy-based automatic eager conversion**: rejected due to V8 performance degradation
-- **Browser DevTools-only formatter** (`window.devtoolsFormatters`): rejected because it is not standardized
-  and requires users to change DevTools settings (oxc does not provide it either)
-- **Custom `toString()` implementation**: rejected because the use case is too narrow (use `JSON.stringify(node)`
-  if needed)
+- **Browser DevTools-only formatter** (`window.devtoolsFormatters`): rejected because it is not standardized and requires users to change DevTools settings (oxc does not provide it either)
+- **Custom `toString()` implementation**: rejected because the use case is too narrow (use `JSON.stringify(node)` if needed)
 
 ## Array field return type (RemoteNodeList)
 
-Getters for array fields (`tags`, `descriptionLines`, `inlineTags`, etc.) return a **`RemoteNodeList`** instance.
-This is a **subclass of `Array`** modeled on the same-named class in tsgo:
+Getters for array fields (`tags`, `descriptionLines`, `inlineTags`, etc.) return a **`RemoteNodeList`** instance. This is a **subclass of `Array`** modeled on the same-named class in tsgo:
 
 ```javascript
 // Provided by the shared decoder package
@@ -534,21 +508,13 @@ for (const tag of tags) {
 
 **Empty array handling**:
 
-- "Empty array field" and "no field" are treated as semantically identical (NodeList skip optimization,
-  consistent with Option A2)
+- "Empty array field" and "no field" are treated as semantically identical (NodeList skip optimization, consistent with Option A2)
 - Both return `EMPTY_NODE_LIST` (a shared singleton) → no need to distinguish (just check `length === 0`)
 - Callers use `tags.length === 0` to handle both cases
 
 ## Visitor Keys
 
-Visitor keys for use by ESLint plugins are **planned** to be code-generated
-from the AST schema. Manual maintenance cannot keep up with the 60 kinds,
-so the export below is the **target shape**, not a currently-shipped
-artifact: as of this writing `@ox-jsdoc/decoder` does **not** export
-`jsdocVisitorKeys`. Consumers that need a visitor key map today should
-inline the table below or wait for the codegen rollout (tracked alongside
-the Phase 4 codegen work — see
-[`README.md`](./README.md) "Code generation").
+Visitor keys for use by ESLint plugins are **planned** to be code-generated from the AST schema. Manual maintenance cannot keep up with the 60 kinds, so the export below is the **target shape**, not a currently-shipped artifact: as of this writing `@ox-jsdoc/decoder` does **not** export `jsdocVisitorKeys`. Consumers that need a visitor key map today should inline the table below or wait for the codegen rollout (tracked alongside the Phase 4 codegen work — see [`README.md`](./README.md) "Code generation").
 
 ```javascript
 // generated/visitor-keys.js (planned export — not yet shipped)
@@ -594,13 +560,11 @@ export const jsdocVisitorKeys = {
 }
 ```
 
-Whether the AST originates from JSON deserialization or from Binary AST lazy nodes, ESLint rule authors see
-the same API.
+Whether the AST originates from JSON deserialization or from Binary AST lazy nodes, ESLint rule authors see the same API.
 
 ## JS Public API (`parse` / `parseBatch`)
 
-The existing `parse(text)` API is preserved for compatibility. A new `parseBatch(items)` is added for batch
-processing:
+The existing `parse(text)` API is preserved for compatibility. A new `parseBatch(items)` is added for batch processing:
 
 ```typescript
 // Existing API (compatibility preserved; internal implementation is replaced with Binary AST + lazy decoder)
@@ -645,11 +609,7 @@ interface BatchDiagnostic extends Diagnostic {
 
 ### Wrapper internal shape
 
-`parse()` and `parseBatch()` are thin JS wrappers over two distinct Rust
-entry points (`parse_to_bytes` / `parse_batch_to_bytes`); the wrapper does
-not route single-comment calls through the batch path. The wrapper's only
-job is to construct the `RemoteSourceFile` from the returned bytes and
-forward `diagnostics` (with `rootIndex` only on the batch side):
+`parse()` and `parseBatch()` are thin JS wrappers over two distinct Rust entry points (`parse_to_bytes` / `parse_batch_to_bytes`); the wrapper does not route single-comment calls through the batch path. The wrapper's only job is to construct the `RemoteSourceFile` from the returned bytes and forward `diagnostics` (with `rootIndex` only on the batch side):
 
 ```typescript
 function parse(text: string, options?: ParseOptions): ParseResult {
@@ -689,15 +649,13 @@ if (result.asts[1] === null) {
 
 ### Representation of parse failures
 
-- When `RootIndexArray[i].node_index === 0` (sentinel), the JS API represents it as
-  `result.asts[i] === null`
+- When `RootIndexArray[i].node_index === 0` (sentinel), the JS API represents it as `result.asts[i] === null`
 - On failure, at least one `BatchDiagnostic` always corresponds with `rootIndex === i`
 - The position of the failed comment is recovered from the input `items[i]` (`baseOffset` + `sourceText.length`)
 
 ### Replacing the existing `parse()` API (at the 1.0 release)
 
-The current `parse(text): { ast_json: String, diagnostics }` (JSON path) is **fully replaced by the
-Binary AST + lazy decoder path**. No coexistence.
+The current `parse(text): { ast_json: String, diagnostics }` (JSON path) is **fully replaced by the Binary AST + lazy decoder path**. No coexistence.
 
 ```typescript
 // API after 1.0 (signature is preserved; the contents of the return value change)
@@ -710,28 +668,21 @@ parse(text: string, options?: ParseOptions): ParseResult
 // underlying buffer's lifetime.
 ```
 
-**The API surface is unchanged**: function signatures and property access patterns
-(`result.ast.tags[0].tag`, etc.) are the same. Typical ESLint plugin code works unmodified.
+**The API surface is unchanged**: function signatures and property access patterns (`result.ast.tags[0].tag`, etc.) are the same. Typical ESLint plugin code works unmodified.
 
 **Behavioral changes (called out in release notes)**:
 
 1. The type of `result.ast` changes from `JsdocBlock` (plain object) to `RemoteJsdocBlock` (lazy class)
-2. `JSON.stringify(result.ast)` produces equivalent output via the automatic `toJSON()` invocation
-   (no user changes required)
-3. Non-standard code using `Object.keys(result.ast)` / `for...in` is recommended to go through
-   `toPlainObject(result.ast)`
-4. `result.ast.constructor.name` changes from `'Object'` to `'RemoteJsdocBlock'` (code that uses
-   instanceof checks should be reviewed)
+2. `JSON.stringify(result.ast)` produces equivalent output via the automatic `toJSON()` invocation (no user changes required)
+3. Non-standard code using `Object.keys(result.ast)` / `for...in` is recommended to go through `toPlainObject(result.ast)`
+4. `result.ast.constructor.name` changes from `'Object'` to `'RemoteJsdocBlock'` (code that uses instanceof checks should be reviewed)
 5. The new `parseBatch(items)` API is provided for large batches
 
 **Migration timing**:
 
-- ox-jsdoc is **pre-1.0** (the parsedType implementation just landed in PR #5) → low cost of protecting
-  existing users; high tolerance for breaking changes
-- Binary AST introduction is performed as a **regular release in the pre-1.0 stage** (the 1.0 release is a
-  separate decision; not necessarily tied to the Binary AST introduction)
-- The release notes explicitly announce the diffs 1-5 above (treated as a breaking change in a minor version
-  bump within pre-1.0)
+- ox-jsdoc is **pre-1.0** (the parsedType implementation just landed in PR #5) → low cost of protecting existing users; high tolerance for breaking changes
+- Binary AST introduction is performed as a **regular release in the pre-1.0 stage** (the 1.0 release is a separate decision; not necessarily tied to the Binary AST introduction)
+- The release notes explicitly announce the diffs 1-5 above (treated as a breaking change in a minor version bump within pre-1.0)
 
 Coexistence (additional APIs such as `parseLegacy`, `parseBinary`, etc.) is **not adopted**:
 

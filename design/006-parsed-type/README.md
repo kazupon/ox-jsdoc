@@ -2,24 +2,20 @@
 
 ## Background
 
-ox-jsdoc currently stores JSDoc type expressions (e.g. `{string | number}`, `{Array<T>}`)
-as raw text in `rawType`. A `parsedType` field provides a structured AST for type
-expressions, enabling type validation, transformation, and fixer support.
+ox-jsdoc currently stores JSDoc type expressions (e.g. `{string | number}`, `{Array<T>}`) as raw text in `rawType`. A `parsedType` field provides a structured AST for type expressions, enabling type validation, transformation, and fixer support.
 
 ## No Official Specification
 
-JSDoc type expression syntax has **no formal specification** (unlike ECMAScript/TC39).
-The syntax is defined by implementations:
+JSDoc type expression syntax has **no formal specification** (unlike ECMAScript/TC39). The syntax is defined by implementations:
 
-| Source                     | Role                            | URL                                                                              |
-| -------------------------- | ------------------------------- | -------------------------------------------------------------------------------- |
-| JSDoc docs                 | Tool user guide (not a spec)    | https://jsdoc.app/tags-type                                                      |
-| Google Closure Compiler    | Closure type system definition  | https://github.com/google/closure-compiler/wiki/Types-in-the-Closure-Type-System |
-| TypeScript JSDoc Reference | TS-recognized JSDoc types       | https://www.typescriptlang.org/docs/handbook/jsdoc-supported-types.html          |
-| jsdoc-type-pratt-parser    | De facto unified spec (3 modes) | https://github.com/jsdoc-type-pratt-parser/jsdoc-type-pratt-parser               |
+| Source | Role | URL |
+| --- | --- | --- |
+| JSDoc docs | Tool user guide (not a spec) | https://jsdoc.app/tags-type |
+| Google Closure Compiler | Closure type system definition | https://github.com/google/closure-compiler/wiki/Types-in-the-Closure-Type-System |
+| TypeScript JSDoc Reference | TS-recognized JSDoc types | https://www.typescriptlang.org/docs/handbook/jsdoc-supported-types.html |
+| jsdoc-type-pratt-parser | De facto unified spec (3 modes) | https://github.com/jsdoc-type-pratt-parser/jsdoc-type-pratt-parser |
 
-For the eslint-plugin-jsdoc ecosystem, **jsdoc-type-pratt-parser's implementation is
-the de facto specification**.
+For the eslint-plugin-jsdoc ecosystem, **jsdoc-type-pratt-parser's implementation is the de facto specification**.
 
 ## Reference Implementations
 
@@ -304,8 +300,7 @@ Implement a full Pratt parser in Rust matching jsdoc-type-pratt-parser's behavio
 
 ### Option C: Hybrid
 
-Use oxc_parser for TypeScript type syntax + implement JSDoc-specific extensions
-as a thin layer.
+Use oxc_parser for TypeScript type syntax + implement JSDoc-specific extensions as a thin layer.
 
 - Pros: Best of both worlds, incremental approach
 - Cons: Requires careful integration between two parsers
@@ -313,8 +308,7 @@ as a thin layer.
 
 ### Option D: Delegate to JS (Strategy B)
 
-Keep `parsedType: null` in ox-jsdoc. Let jsdoccomment call jsdoc-type-pratt-parser
-on the JS side using ox-jsdoc's `rawType` output.
+Keep `parsedType: null` in ox-jsdoc. Let jsdoccomment call jsdoc-type-pratt-parser on the JS side using ox-jsdoc's `rawType` output.
 
 - Pros: Zero implementation effort, guaranteed compatibility
 - Cons: No Rust-side type AST, type parsing cost stays in JS
@@ -322,10 +316,7 @@ on the JS side using ox-jsdoc's `rawType` output.
 
 ### Decision: Option B
 
-eslint-plugin-jsdoc requires full jsdoc-type-pratt-parser compatibility when
-ox-jsdoc replaces comment-parser in jsdoccomment. Options A and C leave gaps
-in Closure/JSDoc syntax. Option D keeps type parsing cost in JS.
-Option B provides 100% coverage with maximum performance via Rust Pratt parser.
+eslint-plugin-jsdoc requires full jsdoc-type-pratt-parser compatibility when ox-jsdoc replaces comment-parser in jsdoccomment. Options A and C leave gaps in Closure/JSDoc syntax. Option D keeps type parsing cost in JS. Option B provides 100% coverage with maximum performance via Rust Pratt parser.
 
 ## Practical Impact Assessment
 
@@ -343,43 +334,35 @@ For eslint-plugin-jsdoc integration:
 
 - Full compatibility is required for drop-in replacement
 - All 3 parse modes must produce identical AST output
-- However, the simplest path for eslint-plugin-jsdoc is Option D (call
-  jsdoc-type-pratt-parser on the JS side), where jsdoccomment generates
-  parsedType after ox-jsdoc provides rawType
+- However, the simplest path for eslint-plugin-jsdoc is Option D (call jsdoc-type-pratt-parser on the JS side), where jsdoccomment generates parsedType after ox-jsdoc provides rawType
 
 ## Strategy
 
 ### jsdoc-type-pratt-parser compatible Pratt parser in Rust
 
-To enable full operation when replacing comment-parser with ox-jsdoc in jsdoccomment
-for eslint-plugin-jsdoc, all 3 parse modes of jsdoc-type-pratt-parser are supported.
-Performance is prioritized using a Pratt parser approach with oxc-style optimizations.
+To enable full operation when replacing comment-parser with ox-jsdoc in jsdoccomment for eslint-plugin-jsdoc, all 3 parse modes of jsdoc-type-pratt-parser are supported. Performance is prioritized using a Pratt parser approach with oxc-style optimizations.
 
 ## Architectural Consistency with Comment Parser
 
-ox-jsdoc is a high-performance project. The type parser follows the same
-architectural patterns as the existing comment parser to ensure consistency,
-maintainability, and shared infrastructure.
+ox-jsdoc is a high-performance project. The type parser follows the same architectural patterns as the existing comment parser to ensure consistency, maintainability, and shared infrastructure.
 
 ### Shared Infrastructure
 
 The type parser reuses the same foundations as the comment parser:
 
-| Infrastructure | Comment Parser                             | Type Parser                                   | Shared?               |
-| -------------- | ------------------------------------------ | --------------------------------------------- | --------------------- |
-| Allocator      | `&'a Allocator`                            | `&'a Allocator`                               | Same instance         |
-| AST arena      | `ArenaBox`, `ArenaVec`                     | `ArenaBox`, `ArenaVec`                        | Same allocator        |
-| Span           | `oxc_span::Span` (absolute offsets)        | `oxc_span::Span` (absolute offsets)           | Same type             |
-| Error type     | `OxcDiagnostic` via `ParserDiagnosticKind` | `OxcDiagnostic` via `TypeDiagnosticKind`      | Same framework        |
-| Checkpoint     | `parser::Checkpoint`                       | `Lexer::save()/restore()` (separate approach) | Managed independently |
-| Zero-copy      | `&'a str` slices from source               | `&'a str` slices from source                  | Same pattern          |
-| base_offset    | `ParserContext.base_offset`                | Passed to Lexer                               | Same pattern          |
+| Infrastructure | Comment Parser | Type Parser | Shared? |
+| --- | --- | --- | --- |
+| Allocator | `&'a Allocator` | `&'a Allocator` | Same instance |
+| AST arena | `ArenaBox`, `ArenaVec` | `ArenaBox`, `ArenaVec` | Same allocator |
+| Span | `oxc_span::Span` (absolute offsets) | `oxc_span::Span` (absolute offsets) | Same type |
+| Error type | `OxcDiagnostic` via `ParserDiagnosticKind` | `OxcDiagnostic` via `TypeDiagnosticKind` | Same framework |
+| Checkpoint | `parser::Checkpoint` | `Lexer::save()/restore()` (separate approach) | Managed independently |
+| Zero-copy | `&'a str` slices from source | `&'a str` slices from source | Same pattern |
+| base_offset | `ParserContext.base_offset` | Passed to Lexer | Same pattern |
 
 ### Unified Error Handling
 
-Both parsers use `OxcDiagnostic` through the same `diagnostic()` helper pattern.
-`TypeDiagnosticKind` enum and `type_diagnostic()` function are added to the
-existing `parser/diagnostics.rs` (not a separate file).
+Both parsers use `OxcDiagnostic` through the same `diagnostic()` helper pattern. `TypeDiagnosticKind` enum and `type_diagnostic()` function are added to the existing `parser/diagnostics.rs` (not a separate file).
 
 ```rust
 // parser/diagnostics.rs — consolidated in one file
@@ -431,8 +414,7 @@ This consolidation means:
 
 ### Diagnostics Propagation
 
-Type parsing is a method on ParserContext, so `self.diagnostics` is used directly.
-No argument passing or type conversion needed:
+Type parsing is a method on ParserContext, so `self.diagnostics` is used directly. No argument passing or type conversion needed:
 
 ```rust
 // Type parse method on ParserContext
@@ -461,8 +443,7 @@ parsed_type = match node {
 
 ### Checkpoint Separation
 
-The comment parser and type parser need to save/restore entirely different state,
-so separate approaches are used:
+The comment parser and type parser need to save/restore entirely different state, so separate approaches are used:
 
 - **Comment parser**: Existing `Checkpoint` struct (`parser/checkpoint.rs`) unchanged
 - **Type parser**: `Lexer::save()/restore()` implementation. `diagnostics_len` managed by ParserContext
@@ -520,9 +501,7 @@ All stack-local value copies (32 bytes), no heap allocation.
 
 ### Unified Parser Struct
 
-No `TypeParser` struct. Type parsing logic is integrated directly as methods
-on `ParserContext`. This eliminates all field duplication for `allocator`,
-`source_text`, `base_offset`, and `diagnostics`:
+No `TypeParser` struct. Type parsing logic is integrated directly as methods on `ParserContext`. This eliminates all field duplication for `allocator`, `source_text`, `base_offset`, and `diagnostics`:
 
 ```rust
 impl<'a> ParserContext<'a> {
@@ -573,22 +552,20 @@ parse_comment() [ParserContext]
 
 ### Justified Differences
 
-| Difference                                  | Reason                                                                  |
-| ------------------------------------------- | ----------------------------------------------------------------------- |
+| Difference | Reason |
+| --- | --- |
 | Comment parser: line-oriented (LogicalLine) | JSDoc comments are structurally line-based (margin, tags at line start) |
-| Type parser: token-oriented (Lexer + Token) | Type expressions are inline token streams (operators, nesting)          |
-| Comment parser: no Precedence               | No operator precedence in comment structure                             |
-| Type parser: Precedence enum + Pratt loop   | Type operators have precedence (union < intersection < generic)         |
-| Comment parser: FenceState + QuoteKind      | Fenced code blocks exist in comments                                    |
-| Type parser: no fence state                 | No fenced code blocks inside type expressions                           |
+| Type parser: token-oriented (Lexer + Token) | Type expressions are inline token streams (operators, nesting) |
+| Comment parser: no Precedence | No operator precedence in comment structure |
+| Type parser: Precedence enum + Pratt loop | Type operators have precedence (union < intersection < generic) |
+| Comment parser: FenceState + QuoteKind | Fenced code blocks exist in comments |
+| Type parser: no fence state | No fenced code blocks inside type expressions |
 
 These differences are inherent to what each parser processes, not architectural divergence.
 
 ## Architecture
 
-The type parser is implemented as a submodule within `crates/ox_jsdoc`.
-AST definitions live in `type_parser/ast.rs` and are re-exported from `ast.rs`
-for seamless integration with the existing JSDoc AST.
+The type parser is implemented as a submodule within `crates/ox_jsdoc`. AST definitions live in `type_parser/ast.rs` and are re-exported from `ast.rs` for seamless integration with the existing JSDoc AST.
 
 ```
 crates/
@@ -610,9 +587,7 @@ crates/
         stringify.rs        <-- AST to string reconstruction
 ```
 
-`parser/type_parse.rs` distributes `impl ParserContext` block into a separate file.
-It implements methods on the same `ParserContext` as `context.rs`, and the generated
-binary is identical to having everything in one file (Rust compilation unit is the crate).
+`parser/type_parse.rs` distributes `impl ParserContext` block into a separate file. It implements methods on the same `ParserContext` as `context.rs`, and the generated binary is identical to having everything in one file (Rust compilation unit is the crate).
 
 ### AST Placement
 
@@ -640,14 +615,11 @@ pub enum JsdocType<'a> {
 
 ### 1. Span: Absolute Byte Offsets
 
-All TypeNode Spans use **absolute byte offsets relative to the source file**.
-`parse_type_expression()` passes `base_offset` to the Lexer, which adds this
-offset to all token positions.
+All TypeNode Spans use **absolute byte offsets relative to the source file**. `parse_type_expression()` passes `base_offset` to the Lexer, which adds this offset to all token positions.
 
 ### 2. NodeKind: Unified Numbering
 
-A single `NodeKind` enum (`#[repr(u16)]`) manages both JSDoc comment AST nodes
-and TypeNode variants for Binary AST compatibility:
+A single `NodeKind` enum (`#[repr(u16)]`) manages both JSDoc comment AST nodes and TypeNode variants for Binary AST compatibility:
 
 ```rust
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -727,30 +699,27 @@ pub enum NodeKind {
 
 Mapping from jsdoc-type-pratt-parser's meta fields to ox-jsdoc TypeNode struct fields:
 
-| jsdoc-type-pratt-parser meta   | ox-jsdoc TypeNode field                             | Usage                                     |
-| ------------------------------ | --------------------------------------------------- | ----------------------------------------- |
-| `position: 'prefix'\|'suffix'` | `ModifierPosition` enum                             | Nullable, Optional, Variadic, NotNullable |
-| `brackets: 'angle'\|'square'`  | `GenericBrackets` enum                              | Generic `<T>` vs `T[]`                    |
-| `dot: boolean`                 | `TypeGeneric.dot: bool`                             | `Array.<T>` dot notation                  |
-| `quote: 'single'\|'double'`    | `TypeStringValue.quote: QuoteStyle`                 | String literal quote style                |
-| `separator`                    | `TypeObject.separator: ObjectSeparator`             | Object field separator                    |
-| `parenthesis: boolean`         | `TypeFunction.parenthesis: bool`                    | function has parentheses                  |
-| `arrow: boolean`               | `TypeFunction.arrow: bool`                          | `=>` vs `function()`                      |
-| `constructor: boolean`         | `TypeFunction.constructor: bool`                    | `new function()`                          |
-| `squareBrackets: boolean`      | `TypeVariadic.square_brackets: bool`                | `...[T]` brackets                         |
-| `pathType`                     | `TypeNamePath.path_type: NamePathType`              | `.` `#` `~` `["key"]`                     |
-| `specialType`                  | `TypeSpecialNamePath.special_type: SpecialPathType` | `module:x`                                |
-| `optional: boolean`            | `TypeObjectField.optional: bool`                    | `{key?: T}`                               |
-| `readonly: boolean`            | `TypeObjectField.readonly: bool`                    | `{readonly key: T}`                       |
+| jsdoc-type-pratt-parser meta | ox-jsdoc TypeNode field | Usage |
+| --- | --- | --- |
+| `position: 'prefix'\|'suffix'` | `ModifierPosition` enum | Nullable, Optional, Variadic, NotNullable |
+| `brackets: 'angle'\|'square'` | `GenericBrackets` enum | Generic `<T>` vs `T[]` |
+| `dot: boolean` | `TypeGeneric.dot: bool` | `Array.<T>` dot notation |
+| `quote: 'single'\|'double'` | `TypeStringValue.quote: QuoteStyle` | String literal quote style |
+| `separator` | `TypeObject.separator: ObjectSeparator` | Object field separator |
+| `parenthesis: boolean` | `TypeFunction.parenthesis: bool` | function has parentheses |
+| `arrow: boolean` | `TypeFunction.arrow: bool` | `=>` vs `function()` |
+| `constructor: boolean` | `TypeFunction.constructor: bool` | `new function()` |
+| `squareBrackets: boolean` | `TypeVariadic.square_brackets: bool` | `...[T]` brackets |
+| `pathType` | `TypeNamePath.path_type: NamePathType` | `.` `#` `~` `["key"]` |
+| `specialType` | `TypeSpecialNamePath.special_type: SpecialPathType` | `module:x` |
+| `optional: boolean` | `TypeObjectField.optional: bool` | `{key?: T}` |
+| `readonly: boolean` | `TypeObjectField.readonly: bool` | `{readonly key: T}` |
 
 ### 4. Binary AST Flattening
 
-Binary AST is not yet implemented. This section confirms that the TypeNode design
-is compatible with future Binary AST flattening.
+Binary AST is not yet implemented. This section confirms that the TypeNode design is compatible with future Binary AST flattening.
 
-The Binary AST encoder flattens the recursive TypeNode tree into a linear node array
-using DFS order. JSDoc nodes and TypeNodes coexist in the same flat array,
-distinguished by NodeKind.
+The Binary AST encoder flattens the recursive TypeNode tree into a linear node array using DFS order. JSDoc nodes and TypeNodes coexist in the same flat array, distinguished by NodeKind.
 
 ```
 // Input: string | Array<number>
@@ -823,8 +792,7 @@ JSDoc nodes and TypeNodes coexist in the same flat array:
 ### Phase 1: Foundation (Token + Lexer + Precedence)
 
 - Token: 12-byte Copy type (start, end, kind). 3 bytes padding reserved for future flags.
-- Lexer: Zero-copy, 1-token lookahead, base_offset addition, loose mode (NaN/Infinity).
-  Reserved word handling: exact match only for keywords, `"functionBar"` → `Identifier`.
+- Lexer: Zero-copy, 1-token lookahead, base_offset addition, loose mode (NaN/Infinity). Reserved word handling: exact match only for keywords, `"functionBar"` → `Identifier`.
 - Precedence: `#[repr(u8)]` enum, 21 levels (All → SpecialTypes). `PartialOrd` for `>` comparison.
 
 ### Phase 2: Pratt Parser Core
@@ -833,21 +801,16 @@ JSDoc nodes and TypeNodes coexist in the same flat array:
 - Prefix parse (`parse_prefix_type`): 26-branch match statement.
 - Infix precedence lookup (`cur_infix_precedence`): 13-branch match statement.
 - Infix parse (`parse_infix_type`): 13-branch match statement.
-- Helpers: `cur_kind()`, `bump()`, `expect()` are `#[inline]`. Error paths are `#[cold]`.
-  Error type is `OxcDiagnostic` (`TypeError` is not used).
-- Checkpoint/Lookahead: Disambiguating `(T)` vs `(a: T) => U`.
-  Implemented via Lexer `save()/restore()` (separate from existing Checkpoint).
+- Helpers: `cur_kind()`, `bump()`, `expect()` are `#[inline]`. Error paths are `#[cold]`. Error type is `OxcDiagnostic` (`TypeError` is not used).
+- Checkpoint/Lookahead: Disambiguating `(T)` vs `(a: T) => U`. Implemented via Lexer `save()/restore()` (separate from existing Checkpoint).
 - Context flags: `disallow_conditional` (prevents nested conditional types inside extends clause).
 - Mode difference handling: `if self.is_xxx()` conditional branches in match (no grammar table swapping).
-- Intermediate nodes: `ParameterList` → `TypeFunction.parameters`,
-  `ReadonlyProperty` → `TypeObjectField.readonly = true`.
+- Intermediate nodes: `ParameterList` → `TypeFunction.parameters`, `ReadonlyProperty` → `TypeObjectField.readonly = true`.
 
 ### Phase 3: Type AST Definition
 
-- Common enums: `ModifierPosition`, `GenericBrackets`, `QuoteStyle`, `ObjectSeparator`,
-  `NamePathType`, `SpecialPathType`
-- TypeNode enum: 35+ variants (basic, compound, name path, modifier, TS-specific,
-  JSDoc/Closure-specific, object/function internals, intermediates)
+- Common enums: `ModifierPosition`, `GenericBrackets`, `QuoteStyle`, `ObjectSeparator`, `NamePathType`, `SpecialPathType`
+- TypeNode enum: 35+ variants (basic, compound, name path, modifier, TS-specific, JSDoc/Closure-specific, object/function internals, intermediates)
 - All struct definitions with spacing fields (for stringify roundtrip)
 - JsdocType integration: `Parsed(ArenaBox<TypeNode>)` | `Raw(JsdocTypeSource)`
 
@@ -860,8 +823,7 @@ JSDoc nodes and TypeNodes coexist in the same flat array:
 ### Phase 5: Integration
 
 - Type parse method: `ParserContext::parse_type_expression()` (internal, pub(crate))
-- Helper functions: `traverse()`, `visitor_keys()`, `simplify()`, `get_parameters()`
-  (provided as functions in `type_parser/` module)
+- Helper functions: `traverse()`, `visitor_keys()`, `simplify()`, `get_parameters()` (provided as functions in `type_parser/` module)
 - Diagnostics: `self.diagnostics.push(...)` directly (no TypeParser needed)
 - JsdocTag integration: `parse_generic_tag_body()` calls `self.parse_type_expression()`
 - Serializer integration: `JsdocType::Parsed` output to JSON
@@ -902,8 +864,7 @@ Phase 6: Stringify
 
 ## Test Strategy
 
-351+ fixtures from `refers/jsdoc-type-pratt-parser/test/fixtures/` are ported
-to Rust to verify identical AST output for the same inputs.
+351+ fixtures from `refers/jsdoc-type-pratt-parser/test/fixtures/` are ported to Rust to verify identical AST output for the same inputs.
 
 | Level                   | Tests     | Description                                     |
 | ----------------------- | --------- | ----------------------------------------------- |
@@ -920,18 +881,18 @@ to Rust to verify identical AST output for the same inputs.
 
 ### Patterns Referenced from oxc_parser
 
-| #   | Pattern                                     | Applied To                                                            |
-| --- | ------------------------------------------- | --------------------------------------------------------------------- |
-| 1   | `match` jump table for O(1) dispatch        | `parse_prefix_type()`, `cur_infix_precedence()`, `parse_infix_type()` |
-| 2   | Token as Copy type (12 bytes) bit-packed    | `Token { start, end, kind }` — register ops only                      |
-| 3   | `token_text()` lazy retrieval on demand     | Most tokens need only `kind`                                          |
-| 4   | `#[inline]` for hot path functions          | `cur_kind()`, `bump()`, `at()`, `is_jsdoc()`                          |
-| 5   | `#[cold] #[inline(never)]` for error paths  | `error_no_prefix()`, `error_expected()`                               |
-| 6   | `ArenaVec::with_capacity()` pre-sized       | Union elements, Generic parameters, Object fields                     |
-| 7   | Ownership chains avoid Clone                | `left` move semantics                                                 |
-| 8   | Mode branches as `#[inline]` bool functions | `is_jsdoc()`, `is_typescript()` — LLVM eliminates dead branches       |
-| 9   | Zero indirect calls                         | No function pointers/vtables, all direct method calls                 |
-| 10  | Absolute span offsets                       | `base_offset` added once in Lexer                                     |
+| # | Pattern | Applied To |
+| --- | --- | --- |
+| 1 | `match` jump table for O(1) dispatch | `parse_prefix_type()`, `cur_infix_precedence()`, `parse_infix_type()` |
+| 2 | Token as Copy type (12 bytes) bit-packed | `Token { start, end, kind }` — register ops only |
+| 3 | `token_text()` lazy retrieval on demand | Most tokens need only `kind` |
+| 4 | `#[inline]` for hot path functions | `cur_kind()`, `bump()`, `at()`, `is_jsdoc()` |
+| 5 | `#[cold] #[inline(never)]` for error paths | `error_no_prefix()`, `error_expected()` |
+| 6 | `ArenaVec::with_capacity()` pre-sized | Union elements, Generic parameters, Object fields |
+| 7 | Ownership chains avoid Clone | `left` move semantics |
+| 8 | Mode branches as `#[inline]` bool functions | `is_jsdoc()`, `is_typescript()` — LLVM eliminates dead branches |
+| 9 | Zero indirect calls | No function pointers/vtables, all direct method calls |
+| 10 | Absolute span offsets | `base_offset` added once in Lexer |
 
 ### Performance Goals
 
@@ -940,5 +901,4 @@ to Rust to verify identical AST output for the same inputs.
 - Token passing: register operations only (12-byte Copy)
 - All AST nodes in arena allocator
 - `parse_types: false` = zero cost (if branch only, no feature flag)
-- Seamless integration with ox-jsdoc's existing parser pipeline,
-  with no additional data conversion or copies to store in `JsdocTag.parsed_type`
+- Seamless integration with ox-jsdoc's existing parser pipeline, with no additional data conversion or copies to store in `JsdocTag.parsed_type`

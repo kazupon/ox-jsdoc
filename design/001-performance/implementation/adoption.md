@@ -39,5 +39,4 @@ What matters most is the performance philosophy:
 - compact memory layout
 - mechanical protection for structural invariants
 
-The most specialized implementation techniques should be introduced only when
-measurement shows that JSDoc parsing actually needs them.
+The most specialized implementation techniques should be introduced only when measurement shows that JSDoc parsing actually needs them.

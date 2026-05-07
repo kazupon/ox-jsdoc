@@ -1,29 +1,19 @@
 # Testing Strategy
 
-Binary AST combines a binary format, a lazy decoder, and multiple bindings (Rust + NAPI + WASM),
-so it requires a richer strategy than ordinary AST testing. The 16 categories below provide complete coverage:
+Binary AST combines a binary format, a lazy decoder, and multiple bindings (Rust + NAPI + WASM), so it requires a richer strategy than ordinary AST testing. The 16 categories below provide complete coverage:
 
 ## Design overview
 
-The ox-jsdoc Binary AST testing strategy is structured along three axes: **bit-perfect verification of the format
-spec**, **semantic equivalence with the typed AST plus reuse of existing test assets**, and **verification of
-lazy decoder characteristics**.
+The ox-jsdoc Binary AST testing strategy is structured along three axes: **bit-perfect verification of the format spec**, **semantic equivalence with the typed AST plus reuse of existing test assets**, and **verification of lazy decoder characteristics**.
 
 Key decisions:
 
-- **16 categories ensure coverage**: unit / encoder / decoder / roundtrip / compatibility / JS-side /
-  cross-binding / edge case / Visitor / memory safety / Fuzzing / Snapshot / performance / bit-level /
-  lazy and cache / compat switching — each layer is verified independently
-- **Maximum reuse of existing test assets** (50-70% reduction): the 7 buckets under `fixtures/perf/` and the
-  existing vitest tests are reused via **import substitution**, with almost zero new code written
-- **Expected JSON files**: the current typed AST output is fixed as "the baseline that guarantees the current
-  state", and the Binary AST side is verified to return equivalent output (generated in bulk at the start of Phase 1.0)
-- **bit-perfect verification** (category 14): roundtrip verification of encoder/decoder via **direct byte reads**
-  of Common Data 6-bit / Node Data type tag / Children bitmask
-- **Independent measurement of lazy characteristics** (category 15): proxy construction count hooks /
-  identity caching / `EMPTY_NODE_LIST` shared singleton / Rust stack value type size assertions
-- **Phased introduction per Phase**: unit tests in Phase 1.0, encoder/decoder in Phase 1.1, binding integration
-  in Phase 1.2, Fuzzing just before Phase 1.3 — early failure detection
+- **16 categories ensure coverage**: unit / encoder / decoder / roundtrip / compatibility / JS-side / cross-binding / edge case / Visitor / memory safety / Fuzzing / Snapshot / performance / bit-level / lazy and cache / compat switching — each layer is verified independently
+- **Maximum reuse of existing test assets** (50-70% reduction): the 7 buckets under `fixtures/perf/` and the existing vitest tests are reused via **import substitution**, with almost zero new code written
+- **Expected JSON files**: the current typed AST output is fixed as "the baseline that guarantees the current state", and the Binary AST side is verified to return equivalent output (generated in bulk at the start of Phase 1.0)
+- **bit-perfect verification** (category 14): roundtrip verification of encoder/decoder via **direct byte reads** of Common Data 6-bit / Node Data type tag / Children bitmask
+- **Independent measurement of lazy characteristics** (category 15): proxy construction count hooks / identity caching / `EMPTY_NODE_LIST` shared singleton / Rust stack value type size assertions
+- **Phased introduction per Phase**: unit tests in Phase 1.0, encoder/decoder in Phase 1.1, binding integration in Phase 1.2, Fuzzing just before Phase 1.3 — early failure detection
 
 ## 1. Unit tests (per module)
 
@@ -66,8 +56,7 @@ fn decode_jsdoc_block_minimal() {
 
 ## 4. Roundtrip tests (encode → decode, semantic equivalence)
 
-Verify across all fixtures that the parser emits binary directly → the decoder reads it back → input
-information is fully preserved:
+Verify across all fixtures that the parser emits binary directly → the decoder reads it back → input information is fully preserved:
 
 ```rust
 #[test]
@@ -83,8 +72,7 @@ fn roundtrip_preserves_semantics() {
 
 ## 5. Compatibility tests (typed AST vs binary AST, equivalence verification)
 
-Serialize the outputs of `crates/ox_jsdoc/` (typed AST) and `crates/ox_jsdoc_binary/` to JSON and compare them.
-During the Phase 1.0-1.2 coexistence period, this guarantees that both parsers return the same AST:
+Serialize the outputs of `crates/ox_jsdoc/` (typed AST) and `crates/ox_jsdoc_binary/` to JSON and compare them. During the Phase 1.0-1.2 coexistence period, this guarantees that both parsers return the same AST:
 
 ```rust
 // crates/ox_jsdoc_binary/tests/compat_with_typed_ast.rs
@@ -98,9 +86,7 @@ fn typed_and_binary_produce_equivalent_ast() {
 }
 ```
 
-This runs on **the same fixtures** as the performance comparison benchmark, simultaneously guaranteeing
-performance and semantic equivalence. It is the key test that proves the precondition for the Phase 1.3
-cutover (binary is fully equivalent to typed).
+This runs on **the same fixtures** as the performance comparison benchmark, simultaneously guaranteeing performance and semantic equivalence. It is the key test that proves the precondition for the Phase 1.3 cutover (binary is fully equivalent to typed).
 
 ## 6. JS-side tests (vitest, both bindings)
 
@@ -150,18 +136,18 @@ This verifies the precondition that Rust's crates/ox_jsdoc_binary uses the same 
 
 Place the following under `fixtures/edge_cases/`:
 
-| Fixture                        | Verification target                                                                                                                            |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `empty_comment.jsdoc`          | `/** */` (minimum)                                                                                                                             |
-| `single_tag.jsdoc`             | Single tag                                                                                                                                     |
-| `unicode_heavy.jsdoc`          | Strings with UTF-16 surrogates (UTF-8 → UTF-16 conversion boundary)                                                                            |
-| `parse_failure.jsdoc`          | Invalid JSDoc (root index = 0 sentinel)                                                                                                        |
-| `large_batch_100.json`         | 100-comment batch                                                                                                                              |
-| `string_table_overflow.json`   | 64K+ unique strings (overflow test)                                                                                                            |
-| `compat_mode_block.jsdoc`      | compat_mode with all fields populated                                                                                                          |
-| `empty_arrays.jsdoc`           | All array fields empty (verifies ED list metadata `(head=0, count=0)` correctly yields `EMPTY_NODE_LIST`)                                      |
-| `deep_nesting.jsdoc`           | Deeply nested TypeNode (Union of Generic of ...)                                                                                               |
-| `all_kinds.jsdoc`              | Large comment containing all 60 node kinds (`NodeList` Kind 0x7F is reserved-only and intentionally absent — encoder never emits it)           |
+| Fixture | Verification target |
+| --- | --- |
+| `empty_comment.jsdoc` | `/** */` (minimum) |
+| `single_tag.jsdoc` | Single tag |
+| `unicode_heavy.jsdoc` | Strings with UTF-16 surrogates (UTF-8 → UTF-16 conversion boundary) |
+| `parse_failure.jsdoc` | Invalid JSDoc (root index = 0 sentinel) |
+| `large_batch_100.json` | 100-comment batch |
+| `string_table_overflow.json` | 64K+ unique strings (overflow test) |
+| `compat_mode_block.jsdoc` | compat_mode with all fields populated |
+| `empty_arrays.jsdoc` | All array fields empty (verifies ED list metadata `(head=0, count=0)` correctly yields `EMPTY_NODE_LIST`) |
+| `deep_nesting.jsdoc` | Deeply nested TypeNode (Union of Generic of ...) |
+| `all_kinds.jsdoc` | Large comment containing all 60 node kinds (`NodeList` Kind 0x7F is reserved-only and intentionally absent — encoder never emits it) |
 | `string_inline_boundary.jsdoc` | String-leaf nodes around the 256-byte boundary — verifies `TypeTag::StringInline` (≤ 255) vs `TypeTag::String` (≥ 256) selection (Path B-leaf) |
 
 ## 9. Visitor traversal tests
@@ -255,8 +241,7 @@ fn snapshot_typescript_checker_first_comment() {
 }
 ```
 
-When the format spec changes, **detect unintended byte-sequence changes**. Approve/reject with
-`cargo insta review`.
+When the format spec changes, **detect unintended byte-sequence changes**. Approve/reject with `cargo insta review`.
 
 ## 13. Performance tests (criterion + mitata)
 
@@ -268,8 +253,7 @@ When the format spec changes, **detect unintended byte-sequence changes**. Appro
 
 ## 14. Bit-level encoding verification (Common Data / Node Data / Children bitmask)
 
-Verify that the 6-bit / 30-bit / bitmask layouts in format.md are kept **bit-perfect** by encoder/decoder.
-Use minimal inputs to verify down to the single-bit level:
+Verify that the 6-bit / 30-bit / bitmask layouts in format.md are kept **bit-perfect** by encoder/decoder. Use minimal inputs to verify down to the single-bit level:
 
 ```rust
 #[test]
@@ -324,8 +308,7 @@ Coverage targets:
 
 ## 15. Lazy / cache behavior verification
 
-Directly measure the core of the lazy decoder (proxy is built only on access, cache hits on re-access,
-unvisited nodes have zero cost):
+Directly measure the core of the lazy decoder (proxy is built only on access, cache hits on re-access, unvisited nodes have zero cost):
 
 ```typescript
 // JS: verify access count vs proxy construction count
@@ -424,25 +407,23 @@ jobs:
 
 ## Per-Phase test addition schedule
 
-The sub-phase numbers per Phase align with the Phase composition in [phases.md](./phases.md) "crate / package
-composition" (1.0a-d, 1.1a-d, 1.2a-d).
+The sub-phase numbers per Phase align with the Phase composition in [phases.md](./phases.md) "crate / package composition" (1.0a-d, 1.1a-d, 1.2a-d).
 
-| Phase      | Tests added                                                                                                                                            |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1.0a-d     | Unit tests (1) only (type definitions, consts, skeleton build verification, scope where `unimplemented!()` is not called)                              |
-| 1.1a       | Add encoder tests (2), snapshot (12), bit-level encoding verification (14), compat_mode switching verification (16) (alongside encoder implementation) |
-| 1.1b       | Add Rust decoder tests (3), memory safety (10), and the Rust side of lazy / cache behavior verification (15) (alongside lazy decoder implementation)   |
-| 1.1c       | Add Visitor tests (9) (alongside the LazyJsdocVisitor trait implementation)                                                                            |
-| 1.1d       | Add JS-side tests (6) and the JS side of lazy / cache behavior verification (15) (`@ox-jsdoc/decoder` lazy classes, direct DataView passing)           |
-| 1.2a       | (parser implementation, no new tests added — regression checked via existing tests)                                                                    |
-| 1.2b-c     | Roundtrip (4), compatibility tests (5), edge cases (8), cross-binding (7) (NAPI/WASM bindings)                                                         |
-| 1.2d       | Performance tests (13)                                                                                                                                 |
-| Before 1.3 | Fuzzing (11)                                                                                                                                           |
+| Phase | Tests added |
+| --- | --- |
+| 1.0a-d | Unit tests (1) only (type definitions, consts, skeleton build verification, scope where `unimplemented!()` is not called) |
+| 1.1a | Add encoder tests (2), snapshot (12), bit-level encoding verification (14), compat_mode switching verification (16) (alongside encoder implementation) |
+| 1.1b | Add Rust decoder tests (3), memory safety (10), and the Rust side of lazy / cache behavior verification (15) (alongside lazy decoder implementation) |
+| 1.1c | Add Visitor tests (9) (alongside the LazyJsdocVisitor trait implementation) |
+| 1.1d | Add JS-side tests (6) and the JS side of lazy / cache behavior verification (15) (`@ox-jsdoc/decoder` lazy classes, direct DataView passing) |
+| 1.2a | (parser implementation, no new tests added — regression checked via existing tests) |
+| 1.2b-c | Roundtrip (4), compatibility tests (5), edge cases (8), cross-binding (7) (NAPI/WASM bindings) |
+| 1.2d | Performance tests (13) |
+| Before 1.3 | Fuzzing (11) |
 
 ## Reuse of existing test assets
 
-ox-jsdoc has a rich set of existing test assets for the typed AST (642 Rust tests + vitest suites + fixtures).
-Reuse these to the maximum extent for Binary AST testing.
+ox-jsdoc has a rich set of existing test assets for the typed AST (642 Rust tests + vitest suites + fixtures). Reuse these to the maximum extent for Binary AST testing.
 
 ### Existing test assets
 
@@ -467,13 +448,13 @@ fixtures/perf/               ← Performance fixtures (7 buckets)
 
 ### Reuse policy
 
-| Existing asset                                     | Reuse for Binary AST                                                                      |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| All 7 `fixtures/perf/` buckets                     | **Fully reused** (input shared by both parsers)                                           |
-| Input strings in `parse.test.ts`                   | **Copy + import substitution** works (property access is the same even with lazy classes) |
-| `#[cfg(test)]` in `parser/**/*.rs` (typical cases) | Reuse the input + expected structure ideas, rewrite only the API portion                  |
-| validator/analyzer tests (one each)                | Reuse the input + expected diagnostics/output                                             |
-| Rust type fixtures                                 | Reuse the TypeNode input text                                                             |
+| Existing asset | Reuse for Binary AST |
+| --- | --- |
+| All 7 `fixtures/perf/` buckets | **Fully reused** (input shared by both parsers) |
+| Input strings in `parse.test.ts` | **Copy + import substitution** works (property access is the same even with lazy classes) |
+| `#[cfg(test)]` in `parser/**/*.rs` (typical cases) | Reuse the input + expected structure ideas, rewrite only the API portion |
+| validator/analyzer tests (one each) | Reuse the input + expected diagnostics/output |
+| Rust type fixtures | Reuse the TypeNode input text |
 
 ### Shared test corpus
 
@@ -578,10 +559,10 @@ Rename:
 
 ### Expected reuse efficiency
 
-| Item                         | Reduction method                               | Effect                   |
-| ---------------------------- | ---------------------------------------------- | ------------------------ |
-| Input fixtures               | Shared (both parsers reference the same files) | **100% reuse**           |
-| Expected AST structure       | Expected JSON files                            | **100% shared**          |
-| vitest test cases (over 80%) | Import substitution                            | **Almost zero new code** |
-| Benchmark fixtures           | Fully shared                                   | **100% reuse**           |
-| **Total new test code**      |                                                | **50-70% reduction**     |
+| Item | Reduction method | Effect |
+| --- | --- | --- |
+| Input fixtures | Shared (both parsers reference the same files) | **100% reuse** |
+| Expected AST structure | Expected JSON files | **100% shared** |
+| vitest test cases (over 80%) | Import substitution | **Almost zero new code** |
+| Benchmark fixtures | Fully shared | **100% reuse** |
+| **Total new test code** |  | **50-70% reduction** |

@@ -1,8 +1,6 @@
 # Scanner / Parser Boundary
 
-The scanner / parser boundary should be decided before the first parser
-implementation, because it affects allocation behavior, recovery, diagnostics,
-and future API stability.
+The scanner / parser boundary should be decided before the first parser implementation, because it affects allocation behavior, recovery, diagnostics, and future API stability.
 
 ## Option A. Full token stream before parsing
 
@@ -121,8 +119,7 @@ Decision:
 
 ## Checkpoint contract
 
-Checkpoints are internal parser state, not public API.
-They should be small and should not own AST nodes.
+Checkpoints are internal parser state, not public API. They should be small and should not own AST nodes.
 
 It is useful to distinguish a long-lived parser context from a checkpoint:
 
@@ -135,8 +132,7 @@ It is useful to distinguish a long-lived parser context from a checkpoint:
   - used only around ambiguous regions
   - does not own diagnostics, AST nodes, the allocator, or source text
 
-In other words, a checkpoint is not the parser context itself.
-It is a copyable subset of the context that is safe to restore.
+In other words, a checkpoint is not the parser context itself. It is a copyable subset of the context that is safe to restore.
 
 Representative shape:
 
@@ -179,9 +175,7 @@ Rules:
 4. ambiguous regions should compute local spans / slices first
 5. arena allocation should happen only after the subpart is accepted
 
-This rule is important because arena allocators are not a good fit for frequent
-fine-grained rollback. If a parse attempt may fail, it should avoid committing
-AST nodes until the interpretation is accepted.
+This rule is important because arena allocators are not a good fit for frequent fine-grained rollback. If a parse attempt may fail, it should avoid committing AST nodes until the interpretation is accepted.
 
 ## v1 boundary decision
 
@@ -196,9 +190,6 @@ direct AST construction
 - arena rollback
 ```
 
-`Scanner` does not need to be a public type.
-The parser can own the cursor and expose scanner-like helpers internally.
+`Scanner` does not need to be a public type. The parser can own the cursor and expose scanner-like helpers internally.
 
-The implementation should stay free to introduce an internal token or event
-stream later, but only if measurement shows that it improves recovery,
-diagnostics, or throughput on representative inputs.
+The implementation should stay free to introduce an internal token or event stream later, but only if measurement shows that it improves recovery, diagnostics, or throughput on representative inputs.

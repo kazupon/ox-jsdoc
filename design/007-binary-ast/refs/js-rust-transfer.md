@@ -11,9 +11,7 @@ Note:
 
 ## Background
 
-ox-jsdoc uses the JSDoc AST parsed on the Rust side from the JavaScript side as well.
-The transfer overhead at this point becomes an issue.
-The oxc project solves this problem with a mechanism called "raw transfer".
+ox-jsdoc uses the JSDoc AST parsed on the Rust side from the JavaScript side as well. The transfer overhead at this point becomes an issue. The oxc project solves this problem with a mechanism called "raw transfer".
 
 ---
 
@@ -21,8 +19,7 @@ The oxc project solves this problem with a mechanism called "raw transfer".
 
 ### Overview
 
-A mechanism that, when passing AST from Rust to JavaScript, avoids ordinary JSON/serde-like serialization
-and reconstructs on the JS side based on the Rust-side arena memory layout.
+A mechanism that, when passing AST from Rust to JavaScript, avoids ordinary JSON/serde-like serialization and reconstructs on the JS side based on the Rust-side arena memory layout.
 
 More precisely:
 
@@ -45,13 +42,13 @@ JS side: Code-generated deserializer reconstructs from Uint8Array / uint32 view
 
 ### Core technologies
 
-| Element                          | Detail                                                                                                  |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `#[repr(C)]` + layout assertions | Fixes field order / size / align of AST type group; generated `assert_layouts` detects regressions      |
-| Code generation                  | `tasks/ast_tools` generates JS eager deserializer / lazy constructors / constants / Rust-side constants |
-| 4GiB alignment                   | Since the upper 32 bits of 64-bit pointers become common, JS can treat them as 32-bit offsets           |
-| Lazy deserialization             | Getter/class-based reconstruction that materializes nodes only when actually accessed                   |
-| Buffer pooling                   | `FinalizationRegistry` reuses buffers on GC                                                             |
+| Element | Detail |
+| --- | --- |
+| `#[repr(C)]` + layout assertions | Fixes field order / size / align of AST type group; generated `assert_layouts` detects regressions |
+| Code generation | `tasks/ast_tools` generates JS eager deserializer / lazy constructors / constants / Rust-side constants |
+| 4GiB alignment | Since the upper 32 bits of 64-bit pointers become common, JS can treat them as 32-bit offsets |
+| Lazy deserialization | Getter/class-based reconstruction that materializes nodes only when actually accessed |
+| Buffer pooling | `FinalizationRegistry` reuses buffers on GC |
 
 ### Deserialization modes on the JS side
 
@@ -100,12 +97,12 @@ The most fundamental issue. 4GiB boundary alignment assumes 64-bit systems and i
 
 #### 2. Platform-specific issues
 
-| Platform     | Issue                                                                                         |
-| ------------ | --------------------------------------------------------------------------------------------- |
-| Windows      | Virtual memory overcommit limit causes OOM panic when reserving 6GiB (issue #19395, #20331)   |
-| macOS        | System allocator rejects 4GiB alignment. Workaround: reserve with 2GiB alignment and use half |
-| Linux (slim) | OOM in environments where overcommit is disabled                                              |
-| mimalloc     | Rejects high-alignment requests. Uses system allocator directly                               |
+| Platform | Issue |
+| --- | --- |
+| Windows | Virtual memory overcommit limit causes OOM panic when reserving 6GiB (issue #19395, #20331) |
+| macOS | System allocator rejects 4GiB alignment. Workaround: reserve with 2GiB alignment and use half |
+| Linux (slim) | OOM in environments where overcommit is disabled |
+| mimalloc | Rejects high-alignment requests. Uses system allocator directly |
 
 #### 3. bumpalo hack
 
@@ -199,11 +196,11 @@ AST memory allocation **always uses an arena model**. This does not change regar
 
 The ox-jsdoc transfer method was considered in the following 3 stages:
 
-| Stage                                    | Proposal                                      | Status                                                                                   |
-| ---------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Initial (~2026-04-10)                    | JSON-based transfer (serde_json + JSON.parse) | Implemented and currently in operation                                                   |
-| Intermediate consideration (~2026-04-13) | oxc Raw Transfer                              | **Not adopted** (WASM-incompatible, 64-bit LE-only does not match ox-jsdoc requirements) |
-| **Current (from 2026-04-19)**            | **tsgo-style Binary AST (approach c-1)**      | ✅ **Adoption decided**                                                                  |
+| Stage | Proposal | Status |
+| --- | --- | --- |
+| Initial (~2026-04-10) | JSON-based transfer (serde_json + JSON.parse) | Implemented and currently in operation |
+| Intermediate consideration (~2026-04-13) | oxc Raw Transfer | **Not adopted** (WASM-incompatible, 64-bit LE-only does not match ox-jsdoc requirements) |
+| **Current (from 2026-04-19)** | **tsgo-style Binary AST (approach c-1)** | ✅ **Adoption decided** |
 
 ### Options not adopted
 
@@ -222,11 +219,9 @@ Since **WASM support is a primary requirement** for ox-jsdoc (both NAPI/WASM are
 
 JSON had low implementation cost, but migrated to Binary AST for the following reasons:
 
-- `serde_json::to_string` (Rust) and `JSON.parse` (JS) account for the majority of round-trip cost
-  (typescript-checker.ts benchmark: JSON path 829 µs / existing NAPI direct path 30 µs)
+- `serde_json::to_string` (Rust) and `JSON.parse` (JS) account for the majority of round-trip cost (typescript-checker.ts benchmark: JSON path 829 µs / existing NAPI direct path 30 µs)
 - Frequent string allocations occur, putting pressure on the JS-side V8 heap
-- Since all nodes are eagerly materialized, there is much waste in use cases like ESLint plugins
-  that reference only a portion
+- Since all nodes are eagerly materialized, there is much waste in use cases like ESLint plugins that reference only a portion
 
 ### Adopted Binary AST (approach c-1)
 
@@ -240,9 +235,6 @@ Designed an ox-jsdoc-specific format with reference to the tsgo Binary AST:
 
 ### Lessons learned
 
-- The essence to learn from `oxc` is not "fixing on a transport ABI from the start" but
-  "separating the core AST and transport layer so that they can be swapped later"
-- As a result, by choosing Binary AST instead of Raw Transfer, the tsgo-style
-  "designed offset-based format" can support all of NAPI/WASM/IPC
-- ox-jsdoc achieves a good balance: faster than plain JSON, more portable than Raw Transfer,
-  and smaller in scale than tsgo
+- The essence to learn from `oxc` is not "fixing on a transport ABI from the start" but "separating the core AST and transport layer so that they can be swapped later"
+- As a result, by choosing Binary AST instead of Raw Transfer, the tsgo-style "designed offset-based format" can support all of NAPI/WASM/IPC
+- ox-jsdoc achieves a good balance: faster than plain JSON, more portable than Raw Transfer, and smaller in scale than tsgo

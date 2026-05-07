@@ -1,34 +1,19 @@
 # Batch Processing (5 points and decisions)
 
-This document summarizes the five points of discussion and their decisions for the
-**batch processing** of Binary AST (a design that stores N comments in a single buffer).
+This document summarizes the five points of discussion and their decisions for the **batch processing** of Binary AST (a design that stores N comments in a single buffer).
 
 ## Design overview
 
-ox-jsdoc primarily targets use cases such as oxlint that **process N comments at once**,
-so we design Binary AST as a batch-capable format from the start.
-N=1 (a single comment) is treated as a special case of the same format; we do not provide
-a separate API.
+ox-jsdoc primarily targets use cases such as oxlint that **process N comments at once**, so we design Binary AST as a batch-capable format from the start. N=1 (a single comment) is treated as a special case of the same format; we do not provide a separate API.
 
 Key decisions:
 
-- **Single buffer with N roots (add a root index array to the Header)**: Fit everything
-  into one NAPI call and reap all batch benefits, including string dedup, memory locality,
-  and Header overhead reduction (Options alpha and gamma are not adopted)
-- **Store Diagnostics inside the Binary AST as well** (Option 1A): Avoid V8 object
-  construction at the NAPI boundary by adding a Diagnostics section to the Header.
-  Minimize each entry to **8 bytes fixed** as `{root_index, message_index}` (the
-  eslint-plugin-jsdoc investigation confirmed that severity / range are unnecessary)
-- **Public API splits `parse()` and `parseBatch()`** (Option 3A): To avoid TypeScript
-  return-type unions. Maintain backward compatibility with the existing `parse()` API
-- **Parse failure is represented by `roots[i] = 0` sentinel** (Option 4A): Convention
-  that on failure, at least one diagnostic is always attached. The failure location is
-  reconstructed from the input
-- **Each BatchItem owns an independent sourceText** (Option 5C): In typical oxlint code,
-  each comment is an independent slice, so we do not force the caller to perform any
-  pre-concatenation
-- **Pos/End are relative to sourceText**, plus **`base_offset` stored as root metadata**:
-  The JS side computes the absolute position as `baseOffset + pos` (for ESLint reporting)
+- **Single buffer with N roots (add a root index array to the Header)**: Fit everything into one NAPI call and reap all batch benefits, including string dedup, memory locality, and Header overhead reduction (Options alpha and gamma are not adopted)
+- **Store Diagnostics inside the Binary AST as well** (Option 1A): Avoid V8 object construction at the NAPI boundary by adding a Diagnostics section to the Header. Minimize each entry to **8 bytes fixed** as `{root_index, message_index}` (the eslint-plugin-jsdoc investigation confirmed that severity / range are unnecessary)
+- **Public API splits `parse()` and `parseBatch()`** (Option 3A): To avoid TypeScript return-type unions. Maintain backward compatibility with the existing `parse()` API
+- **Parse failure is represented by `roots[i] = 0` sentinel** (Option 4A): Convention that on failure, at least one diagnostic is always attached. The failure location is reconstructed from the input
+- **Each BatchItem owns an independent sourceText** (Option 5C): In typical oxlint code, each comment is an independent slice, so we do not force the caller to perform any pre-concatenation
+- **Pos/End are relative to sourceText**, plus **`base_offset` stored as root metadata**: The JS side computes the absolute position as `baseOffset + pos` (for ESLint reporting)
 
 The remainder of the document explains the five points in detail.
 
@@ -47,14 +32,12 @@ Benefits of batching:
 
 1. **Reduced NAPI call overhead** (140ns x N -> 140ns x 1)
 2. **Reduced buffer allocation cost** (eliminating N duplicated Headers)
-3. **String dedup**: Tag names such as `param`, `returns`, and `throws` recur across
-   all comments, so sharing them through the string table saves several KB on large files
+3. **String dedup**: Tag names such as `param`, `returns`, and `throws` recur across all comments, so sharing them through the string table saves several KB on large files
 4. **Cache locality**: Sequential walking over contiguous memory
 
 ## Adoption policy: a single buffer with N roots
 
-Add a root index array to the Header and lay multiple trees side-by-side within the
-Nodes section:
+Add a root index array to the Header and lay multiple trees side-by-side within the Nodes section:
 
 ```text
 Nodes section:
@@ -83,12 +66,8 @@ Reasons:
 **Option gamma: Wrap N roots as children of a top-level virtual NodeList**
 
 - Pros: No Header change required
-- Cons: Single comments must go through the virtual NodeList -> unnatural in ESTree
-  terms, plus 24 bytes overhead
-- Note: NodeList wrappers are no longer emitted anywhere in the live design
-  (variable-length child lists use inline `(head_index, count)` metadata in
-  the parent's Extended Data block); this option is preserved here as
-  historical context only
+- Cons: Single comments must go through the virtual NodeList -> unnatural in ESTree terms, plus 24 bytes overhead
+- Note: NodeList wrappers are no longer emitted anywhere in the live design (variable-length child lists use inline `(head_index, count)` metadata in the parent's Extended Data block); this option is preserved here as historical context only
 
 ---
 
@@ -98,28 +77,24 @@ Reasons:
 
 **Adopt Option 1A** (Diagnostics section in the Header, linked by root_index)
 
-| Item                                    | Decision                                                     | Rationale                                                                                    |
-| --------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| Diagnostic structure size               | **8 bytes fixed** (`root_index: u32` + `message_index: u32`) | The eslint-plugin-jsdoc investigation confirmed that severity / source_range are unnecessary |
-| Global diagnostics (not tied to a root) | **Not needed**                                               | ox-jsdoc Diagnostics are always attached to a specific root                                  |
-| Diagnostic ordering                     | **Ascending by root_index**                                  | Speeds up retrieval of diagnostics for a specific root via binary search                     |
+| Item | Decision | Rationale |
+| --- | --- | --- |
+| Diagnostic structure size | **8 bytes fixed** (`root_index: u32` + `message_index: u32`) | The eslint-plugin-jsdoc investigation confirmed that severity / source_range are unnecessary |
+| Global diagnostics (not tied to a root) | **Not needed** | ox-jsdoc Diagnostics are always attached to a specific root |
+| Diagnostic ordering | **Ascending by root_index** | Speeds up retrieval of diagnostics for a specific root via binary search |
 
 ### Summary of the eslint-plugin-jsdoc investigation
 
 Investigating all sources under `refers/eslint-plugin-jsdoc/` showed that:
 
-- The only Diagnostic field actually used is **`message`** (one location at
-  `validTypes.js:253-258`)
+- The only Diagnostic field actually used is **`message`** (one location at `validTypes.js:253-258`)
 - `code`, `line`, and `critical` (originating from comment-parser) are **never used**
 - The block-level `problems` array is never read
 - **No rule** reports "JSDoc parsing failed"
-- `severity` is determined by the **ESLint rule configuration** (not needed on the
-  parser side)
-- Error positions are reconstructed from the **AST node spans**
-  (`iterateJsdoc.js:1916-1918`)
+- `severity` is determined by the **ESLint rule configuration** (not needed on the parser side)
+- Error positions are reconstructed from the **AST node spans** (`iterateJsdoc.js:1916-1918`)
 
--> There is no value in storing severity / source_range in the Binary AST.
-`{ root_index, message_index }` is sufficient.
+-> There is no value in storing severity / source_range in the Binary AST. `{ root_index, message_index }` is sufficient.
 
 ### Final format
 
@@ -142,8 +117,7 @@ Return `{ binary: Vec<u8>, diagnostics: Diagnostic[] }` as a 2-tuple via NAPI.
 
 - Pros: Simpler Binary AST format
 - Cons: Causes V8 object construction at the NAPI boundary -> reduces batching benefit
-- Reason for non-adoption: Undermines the batching benefit (fitting everything into one
-  NAPI call)
+- Reason for non-adoption: Undermines the batching benefit (fitting everything into one NAPI call)
 
 **Option 1C: Nodelize Diagnostics inside the binary as well**
 
@@ -151,8 +125,7 @@ Add a `JsdocDiagnostic` Kind and place it as a virtual child of each root.
 
 - Pros: Uniform handling
 - Cons: Visitors leak into the AST, affecting ESLint compatibility
-- Reason for non-adoption: ESLint visitors would see them and trigger unintended node
-  traversal
+- Reason for non-adoption: ESLint visitors would see them and trigger unintended node traversal
 
 ---
 
@@ -160,31 +133,24 @@ Add a `JsdocDiagnostic` Kind and place it as a virtual child of each root.
 
 ### Design direction
 
-**Current design (approach c-1)**: The parser builds the Binary AST directly into the
-arena (the typed AST is removed). The JS side shares the binary on the arena via
-zero-copy (NAPI Buffer / WASM memory.buffer). The Rust walker also reads the binary
-through the lazy decoder. The bytes-only encoder entry points
-(`parse_to_bytes` / `parse_batch_to_bytes`) ship today and target IPC/network
-adoption as a secondary use case (see "Decisions" table below).
+**Current design (approach c-1)**: The parser builds the Binary AST directly into the arena (the typed AST is removed). The JS side shares the binary on the arena via zero-copy (NAPI Buffer / WASM memory.buffer). The Rust walker also reads the binary through the lazy decoder. The bytes-only encoder entry points (`parse_to_bytes` / `parse_batch_to_bytes`) ship today and target IPC/network adoption as a secondary use case (see "Decisions" table below).
 
 ### Decisions
 
-| Item                                                     | Decision                                                                                                                                                      |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **How to build the Binary AST**                          | **Approach c-1**: Modify the parser to write Binary AST directly into the arena without going through a typed AST. The typed AST struct hierarchy is removed  |
-| **Rust public API**                                      | `parse()` returns `binary_bytes: &[u8]` (Binary AST) and `lazy_root: LazyJsdocBlock<'_>` (for the Rust walker). No typed AST is provided                      |
-| **NAPI sharing**                                         | (c) zero-copy: pass the binary on the arena to JS via NAPI Buffer (no memcpy)                                                                                 |
-| **WASM sharing**                                         | JS views the arena region directly with `new Uint8Array(wasm.memory.buffer, offset, length)`                                                                  |
-| **Rust walker**                                          | Walks the Binary AST **via the lazy decoder** (Copy-able value structs such as `LazyJsdocBlock`). There is no typed AST                                       |
-| **JS walker (linters, etc.)**                            | Reads the Uint8Array (binary on the arena) lazily and only materializes nodes as JS objects on demand (allocated on the JS heap, not the arena)               |
+| Item | Decision |
+| --- | --- |
+| **How to build the Binary AST** | **Approach c-1**: Modify the parser to write Binary AST directly into the arena without going through a typed AST. The typed AST struct hierarchy is removed |
+| **Rust public API** | `parse()` returns `binary_bytes: &[u8]` (Binary AST) and `lazy_root: LazyJsdocBlock<'_>` (for the Rust walker). No typed AST is provided |
+| **NAPI sharing** | (c) zero-copy: pass the binary on the arena to JS via NAPI Buffer (no memcpy) |
+| **WASM sharing** | JS views the arena region directly with `new Uint8Array(wasm.memory.buffer, offset, length)` |
+| **Rust walker** | Walks the Binary AST **via the lazy decoder** (Copy-able value structs such as `LazyJsdocBlock`). There is no typed AST |
+| **JS walker (linters, etc.)** | Reads the Uint8Array (binary on the arena) lazily and only materializes nodes as JS objects on demand (allocated on the JS heap, not the arena) |
 | **`parse_to_bytes` / `parse_batch_to_bytes` public API** | Shipped. Targets IPC/network use (no API encodes from a typed AST; the input is `&str`). See [rust-impl.md "Public Rust API"](./rust-impl.md#public-rust-api) |
-| **`decode_binary` public API**                           | For access from other languages (Go/Python/Rust). ox-jsdoc itself does not use it. Tracked for a future phase                                                 |
+| **`decode_binary` public API** | For access from other languages (Go/Python/Rust). ox-jsdoc itself does not use it. Tracked for a future phase |
 
 ### Shipped API shape (Option 2C adopted)
 
-Because the typed AST is removed (approach c-1), the API takes `&str` (sourceText)
-directly, runs the parser internally, and produces the Binary AST byte stream
-(see [rust-impl.md "Public Rust API"](./rust-impl.md#public-rust-api)):
+Because the typed AST is removed (approach c-1), the API takes `&str` (sourceText) directly, runs the parser internally, and produces the Binary AST byte stream (see [rust-impl.md "Public Rust API"](./rust-impl.md#public-rust-api)):
 
 ```rust
 pub struct BatchItem<'a> {
@@ -201,21 +167,13 @@ pub fn parse_to_bytes(source: &str, options: ParseOptions) -> ParseBytesResult
 pub fn parse_batch_to_bytes(items: &[BatchItem<'_>], options: ParseOptions) -> ParseBatchBytesResult
 ```
 
-Note: The "encode from typed AST to Binary AST" use case **does not exist**
-(after removing the typed AST, the source of truth is always the Binary AST byte stream).
+Note: The "encode from typed AST to Binary AST" use case **does not exist** (after removing the typed AST, the source of truth is always the Binary AST byte stream).
 
-The implementation kept Option 2C ("separate functions for single and batch")
-rather than the originally-planned Option 2B (single `parse_to_binary` taking
-`&[BatchItem]`) because:
+The implementation kept Option 2C ("separate functions for single and batch") rather than the originally-planned Option 2B (single `parse_to_binary` taking `&[BatchItem]`) because:
 
-- **Result-type clarity**: `ParseBytesResult` (one root) vs
-  `ParseBatchBytesResult` (N roots, per-diagnostic `root_index`) need
-  different result shapes anyway.
-- **Caller ergonomics**: passing `&[item; 1]` for a single comment was
-  awkward in practice, especially from NAPI/WASM bindings.
-- **Naming**: `_to_bytes` is more accurate than `_to_binary` because the
-  return value is a byte stream (`Vec<u8>` / `Box<[u8]>`), not a Rust
-  "binary" struct.
+- **Result-type clarity**: `ParseBytesResult` (one root) vs `ParseBatchBytesResult` (N roots, per-diagnostic `root_index`) need different result shapes anyway.
+- **Caller ergonomics**: passing `&[item; 1]` for a single comment was awkward in practice, especially from NAPI/WASM bindings.
+- **Naming**: `_to_bytes` is more accurate than `_to_binary` because the return value is a byte stream (`Vec<u8>` / `Box<[u8]>`), not a Rust "binary" struct.
 
 ### Other options considered (not adopted)
 
@@ -228,8 +186,7 @@ pub fn parse_to_binary<'a>(
 ) -> Vec<u8>
 ```
 
-Reason for non-adoption: Tuples make intent unclear, and adding fields would be a
-breaking change.
+Reason for non-adoption: Tuples make intent unclear, and adding fields would be a breaking change.
 
 **Option 2B: Single function taking `&[BatchItem]` for both single and batch**
 
@@ -237,9 +194,7 @@ breaking change.
 pub fn parse_to_binary<'a>(items: &[BatchItem<'a>], options: ParseOptions) -> Vec<u8>
 ```
 
-Reason for non-adoption (in favor of the shipped Option 2C above): single
-and batch results need different shapes, and single-comment callers should
-not be forced to wrap one item in a slice.
+Reason for non-adoption (in favor of the shipped Option 2C above): single and batch results need different shapes, and single-comment callers should not be forced to wrap one item in a slice.
 
 ---
 
@@ -247,8 +202,7 @@ not be forced to wrap one item in a slice.
 
 ### Decisions
 
-**Adopt Option 3A** (split `parse` and `parseBatch`), maintain backward compatibility
-with the existing `parse()` API, and provide `BatchItem.baseOffset` from the start.
+**Adopt Option 3A** (split `parse` and `parseBatch`), maintain backward compatibility with the existing `parse()` API, and provide `BatchItem.baseOffset` from the start.
 
 ### Final API
 
@@ -282,11 +236,7 @@ interface BatchDiagnostic extends Diagnostic {
 
 ### Wrapper internal shape
 
-`parse()` and `parseBatch()` are thin JS wrappers over two distinct Rust
-entry points (`parse_to_bytes` / `parse_batch_to_bytes`) — single-comment
-calls do **not** route through the batch path. Both wrappers construct a
-`RemoteSourceFile` from the returned bytes and forward `diagnostics`
-(`rootIndex` is added on the batch side only):
+`parse()` and `parseBatch()` are thin JS wrappers over two distinct Rust entry points (`parse_to_bytes` / `parse_batch_to_bytes`) — single-comment calls do **not** route through the batch path. Both wrappers construct a `RemoteSourceFile` from the returned bytes and forward `diagnostics` (`rootIndex` is added on the batch side only):
 
 ```typescript
 function parse(text: string, options?: ParseOptions): ParseResult {
@@ -316,8 +266,7 @@ result.asts[0]?.tags[0].range // -> [142, 158] etc.
 function parse(input: string | BatchItem[], options?): ParseResult | BatchResult
 ```
 
-Reason for non-adoption: TypeScript would union the return type, forcing users to write
-`Array.isArray(result.asts)` checks every time, and IDE completions would be unclear.
+Reason for non-adoption: TypeScript would union the return type, forcing users to write `Array.isArray(result.asts)` checks every time, and IDE completions would be unclear.
 
 **Option 3C: Unified BatchResult**
 
@@ -325,8 +274,7 @@ Reason for non-adoption: TypeScript would union the return type, forcing users t
 parse(input: string | BatchItem | BatchItem[], options): BatchResult
 ```
 
-Reason for non-adoption: Breaks backward compatibility with the existing API
-(PR #5 has already shipped), and always writing `result.asts[0]` is verbose.
+Reason for non-adoption: Breaks backward compatibility with the existing API (PR #5 has already shipped), and always writing `result.asts[0]` is verbose.
 
 ---
 
@@ -336,11 +284,11 @@ Reason for non-adoption: Breaks backward compatibility with the existing API
 
 **Adopt Option 4A** (root index = 0 sentinel) plus related conventions:
 
-| Item                           | Decision                                                                                                                                                                                           |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Root representation on failure | `roots[i] = 0` (points to the sentinel node index)                                                                                                                                                 |
-| Diagnostic required            | **On failure, at least one diagnostic is always attached** (the parser guarantees this; if it does not currently, we adopt the convention of always attaching a minimal "parse failed" diagnostic) |
-| Failure location               | Not included in the Binary AST. Reconstructed on the JS side from `BatchItem.baseOffset + sourceText.length`                                                                                       |
+| Item | Decision |
+| --- | --- |
+| Root representation on failure | `roots[i] = 0` (points to the sentinel node index) |
+| Diagnostic required | **On failure, at least one diagnostic is always attached** (the parser guarantees this; if it does not currently, we adopt the convention of always attaching a minimal "parse failed" diagnostic) |
+| Failure location | Not included in the Binary AST. Reconstructed on the JS side from `BatchItem.baseOffset + sourceText.length` |
 
 ### Example behavior
 
@@ -369,13 +317,11 @@ const end = start + item.sourceText.length
 
 **Option 4B: Skip failure entries (output count < input count)**
 
-Reason for non-adoption: `asts.length < items.length` breaks the input correspondence,
-causing position misreporting in ESLint.
+Reason for non-adoption: `asts.length < items.length` breaks the input correspondence, causing position misreporting in ESLint.
 
 **Option 4C: Emit a placeholder empty JsdocBlock**
 
-Reason for non-adoption: Wastes 24 bytes, forces rule authors to consider "empty nodes",
-and produces an unnatural empty JsdocBlock in the ESTree.
+Reason for non-adoption: Wastes 24 bytes, forces rule authors to consider "empty nodes", and produces an unnatural empty JsdocBlock in the ESTree.
 
 ---
 
@@ -385,18 +331,16 @@ and produces an unnatural empty JsdocBlock in the ESTree.
 
 **Adopt Option 5C** (each BatchItem owns an independent sourceText)
 
-Note: Option 5B was the initial recommendation, but during discussion we discovered that
-**typical oxlint code provides each sourceText as an independent slice** (the entire
-jsCode is not passed to ox-jsdoc), so we switched to Option 5C.
+Note: Option 5B was the initial recommendation, but during discussion we discovered that **typical oxlint code provides each sourceText as an independent slice** (the entire jsCode is not passed to ox-jsdoc), so we switched to Option 5C.
 
 ### Decisions
 
-| Item                                 | Decision                                                                             |
-| ------------------------------------ | ------------------------------------------------------------------------------------ |
-| **String Data**                      | Concatenate each sourceText in order (the zero-copy slice optimization is preserved) |
-| **Root index array**                 | **12 bytes/root** (`node_index + source_offset_in_data + base_offset`)               |
-| **Pos/End on nodes**                 | **Relative byte offsets within sourceText** (parser output as-is, no rewriting)      |
-| **Absolute range computation on JS** | `[baseOffset + pos, baseOffset + end]` (added on the decoder side)                   |
+| Item | Decision |
+| --- | --- |
+| **String Data** | Concatenate each sourceText in order (the zero-copy slice optimization is preserved) |
+| **Root index array** | **12 bytes/root** (`node_index + source_offset_in_data + base_offset`) |
+| **Pos/End on nodes** | **Relative byte offsets within sourceText** (parser output as-is, no rewriting) |
+| **Absolute range computation on JS** | `[baseOffset + pos, baseOffset + end]` (added on the decoder side) |
 
 ### Binary AST format details
 
@@ -450,24 +394,20 @@ class RemoteJsdocTag {
 
 Each root holds (source_start, source_end) in its Extended Data.
 
-Reason for non-adoption: Functionally equivalent to 5C, but the per-root metadata is
-scattered across two locations (the root index array and the Extended Data). 5C is
-more consistent.
+Reason for non-adoption: Functionally equivalent to 5C, but the per-root metadata is scattered across two locations (the root index array and the Extended Data). 5C is more consistent.
 
 **Option 5B: The encoder takes a single `source` (oxlint-specialized)**
 
-Reason for non-adoption: In typical oxlint code, each comment is passed as an
-independent slice. Forcing the caller to concatenate everything into one `source`
-hurts usability.
+Reason for non-adoption: In typical oxlint code, each comment is passed as an independent slice. Forcing the caller to concatenate everything into one `source` hurts usability.
 
 ---
 
 ## Summary of decisions
 
-| Point               | Decision                                                                                                                                                                        |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1: Diagnostic array | Option 1A (Diagnostics section in the Header, ordered by root_index, 8 bytes fixed)                                                                                             |
+| Point | Decision |
+| --- | --- |
+| 1: Diagnostic array | Option 1A (Diagnostics section in the Header, ordered by root_index, 8 bytes fixed) |
 | 2: Rust encoder API | **Approach c-1** (parser writes Binary AST directly into the arena, typed AST removed); shipped as `parse_to_bytes` (single) + `parse_batch_to_bytes` (batch) — Option 2C shape |
-| 3: JS API naming    | Option 3A (split `parse` and `parseBatch`, maintain API compatibility, provide `baseOffset`)                                                                                    |
-| 4: Empty comments   | Option 4A (root index = 0 sentinel) plus a required diagnostic on failure; failure location is reconstructed from the input                                                     |
-| 5: Source text      | Option 5C (each BatchItem owns its sourceText, root array 12B/root, Pos/End relative)                                                                                           |
+| 3: JS API naming | Option 3A (split `parse` and `parseBatch`, maintain API compatibility, provide `baseOffset`) |
+| 4: Empty comments | Option 4A (root index = 0 sentinel) plus a required diagnostic on failure; failure location is reconstructed from the input |
+| 5: Source text | Option 5C (each BatchItem owns its sourceText, root array 12B/root, Pos/End relative) |

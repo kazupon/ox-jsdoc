@@ -51,16 +51,16 @@ The Binary AST consists of 7 sections (including the Header):
 
 The "table of contents" and "fingerprint" of the entire binary. The decoder first reads the Header, verifies protocol version compatibility, determines whether a cached AST can be reused via the content hash, and uses the offsets to each section for random access to subsequent data.
 
-| Offset | Type    | Field                                                                                                             |
-| ------ | ------- | ----------------------------------------------------------------------------------------------------------------- |
-| 0-3    | uint32  | Metadata (LE uint32; the protocol version is the upper 8 bits = `(metadata >> 24) & 0xff`, i.e. stored at byte 3) |
-| 4-19   | uint128 | Content hash (xxh3, little-endian)                                                                                |
-| 20-23  | uint32  | Parse options (bit0=JSX, bit1=Force)                                                                              |
-| 24-27  | uint32  | Offset to String Offsets section                                                                                  |
-| 28-31  | uint32  | Offset to String Data section                                                                                     |
-| 32-35  | uint32  | Offset to Extended Data section                                                                                   |
-| 36-39  | uint32  | Offset to Structured Data section                                                                                 |
-| 40-43  | uint32  | Offset to Nodes section                                                                                           |
+| Offset | Type | Field |
+| --- | --- | --- |
+| 0-3 | uint32 | Metadata (LE uint32; the protocol version is the upper 8 bits = `(metadata >> 24) & 0xff`, i.e. stored at byte 3) |
+| 4-19 | uint128 | Content hash (xxh3, little-endian) |
+| 20-23 | uint32 | Parse options (bit0=JSX, bit1=Force) |
+| 24-27 | uint32 | Offset to String Offsets section |
+| 28-31 | uint32 | Offset to String Data section |
+| 32-35 | uint32 | Offset to Extended Data section |
+| 36-39 | uint32 | Offset to Structured Data section |
+| 40-43 | uint32 | Offset to Nodes section |
 
 Note: The documentation comment in `encoder.go` states "Offset 0 = uint8 protocol version", but the implementation writes `metadata := uint32(ProtocolVersion) << 24` in little-endian, and the decoder reads it via `data[HeaderOffsetMetadata+3]` (`encoder.go:479`, `decoder.go:57`). The TS client side (`encoder.ts:373`) likewise writes `PROTOCOL_VERSION << 24`. In practice, the version ends up at byte 3.
 
@@ -78,15 +78,15 @@ A section dedicated to node kinds with additional properties that do not fit int
 
 Only the following node kinds carry additional data:
 
-| Node Kind                     | Size     | Data Content                                                                |
-| ----------------------------- | -------- | --------------------------------------------------------------------------- |
-| SourceFile                    | 48 bytes | Metadata such as text, fileName, path, languageVariant, scriptKind, imports |
-| StringLiteral                 | 8 bytes  | text string index (uint32) + TokenFlags (uint32)                            |
-| NumericLiteral                | 8 bytes  | text string index (uint32) + TokenFlags (uint32)                            |
-| BigIntLiteral                 | 8 bytes  | text string index (uint32) + TokenFlags (uint32)                            |
-| RegularExpressionLiteral      | 8 bytes  | text string index (uint32) + TokenFlags (uint32)                            |
-| TemplateHead/Middle/Tail      | 12 bytes | text string index + rawText string index + TemplateFlags                    |
-| NoSubstitutionTemplateLiteral | 12 bytes | text string index + rawText string index + TemplateFlags                    |
+| Node Kind | Size | Data Content |
+| --- | --- | --- |
+| SourceFile | 48 bytes | Metadata such as text, fileName, path, languageVariant, scriptKind, imports |
+| StringLiteral | 8 bytes | text string index (uint32) + TokenFlags (uint32) |
+| NumericLiteral | 8 bytes | text string index (uint32) + TokenFlags (uint32) |
+| BigIntLiteral | 8 bytes | text string index (uint32) + TokenFlags (uint32) |
+| RegularExpressionLiteral | 8 bytes | text string index (uint32) + TokenFlags (uint32) |
+| TemplateHead/Middle/Tail | 12 bytes | text string index + rawText string index + TemplateFlags |
+| NoSubstitutionTemplateLiteral | 12 bytes | text string index + rawText string index + TemplateFlags |
 
 Note: StringLiteral/NumericLiteral/BigIntLiteral/RegularExpressionLiteral were originally of String type (0b01), but because TokenFlags do not fit into 6 bits they were moved to Extended type (0b10) (see the hand-written comment at `encoder.go:702-703`). TokenFlags is a collection of multiple bit flags including `hasExtendedEscapeSequence`.
 
@@ -105,15 +105,15 @@ The core section of the Binary AST. The tree structure of the AST is represented
 
 Each node consists of seven uint32 fields:
 
-| Offset | Type   | Field        | Description                                                                                     |
-| ------ | ------ | ------------ | ----------------------------------------------------------------------------------------------- |
-| 0-3    | uint32 | Kind         | SyntaxKind value. Identifies the kind of node.                                                  |
-| 4-7    | uint32 | Pos          | Start position (UTF-16 code units)                                                              |
-| 8-11   | uint32 | End          | End position (UTF-16 code units)                                                                |
-| 12-15  | uint32 | Next Sibling | Index of the next sibling node. 0 = no sibling.                                                 |
-| 16-19  | uint32 | Parent       | Index of the parent node. 0 = root or none.                                                     |
-| 20-23  | uint32 | Node Data    | Type tag (2 bits) + node-specific data (6 bits) + payload (24 bits). See Section 3 for details. |
-| 24-27  | uint32 | Flags        | NodeFlags (HasImplicitReturn, HasExplicitReturn, etc.)                                          |
+| Offset | Type | Field | Description |
+| --- | --- | --- | --- |
+| 0-3 | uint32 | Kind | SyntaxKind value. Identifies the kind of node. |
+| 4-7 | uint32 | Pos | Start position (UTF-16 code units) |
+| 8-11 | uint32 | End | End position (UTF-16 code units) |
+| 12-15 | uint32 | Next Sibling | Index of the next sibling node. 0 = no sibling. |
+| 16-19 | uint32 | Parent | Index of the parent node. 0 = root or none. |
+| 20-23 | uint32 | Node Data | Type tag (2 bits) + node-specific data (6 bits) + payload (24 bits). See Section 3 for details. |
+| 24-27 | uint32 | Flags | NodeFlags (HasImplicitReturn, HasExplicitReturn, etc.) |
 
 **Important design points**:
 
@@ -240,8 +240,7 @@ The diagram below shows the 32 bits of the Node Data field for each node in `imp
 
 ### Flat Layout Design
 
-Nodes are **stored in a flat array in source order** rather than as a pointer-based tree.
-Design inspiration: [Speeding up the JavaScript ecosystem - Part 11](https://marvinh.dev/blog/speeding-up-javascript-ecosystem-part-11/)
+Nodes are **stored in a flat array in source order** rather than as a pointer-based tree. Design inspiration: [Speeding up the JavaScript ecosystem - Part 11](https://marvinh.dev/blog/speeding-up-javascript-ecosystem-part-11/)
 
 ```
 Memory: [nil][SourceFile][FuncDecl][Ident"add"][ParamList][Param_a][Ident"a"][Param_b][...]

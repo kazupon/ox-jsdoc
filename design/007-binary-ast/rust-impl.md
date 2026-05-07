@@ -1,36 +1,19 @@
 # Rust Implementation
 
-The parser writes Binary AST bytes **directly into the arena**. No typed AST struct
-hierarchy is built; the Binary AST is the single source of truth.
+The parser writes Binary AST bytes **directly into the arena**. No typed AST struct hierarchy is built; the Binary AST is the single source of truth.
 
 ## Design overview
 
-The Rust-side implementation of ox-jsdoc adopts a **lazy decoder architecture
-centered on the Binary AST byte stream**. By placing a structure on the Rust side
-that is symmetric with the JS side (RemoteSourceFile), the encoder/decoder pair
-can be generated for both languages from a single Binary Format specification.
+The Rust-side implementation of ox-jsdoc adopts a **lazy decoder architecture centered on the Binary AST byte stream**. By placing a structure on the Rust side that is symmetric with the JS side (RemoteSourceFile), the encoder/decoder pair can be generated for both languages from a single Binary Format specification.
 
 Key design decisions:
 
-- **Approach c-1 (Parser-Integrated Binary Writer)**: The parser writes Binary AST
-  bytes directly to the arena without going through a typed AST. No serialize step
-  is needed, and the transferred payload is the parser output itself (see
-  [refs/construction-methods.md](./refs/construction-methods.md) for details).
-- **Removal of typed AST struct hierarchy**: There are no Rust structs such as
-  `JsdocBlock<'a>` or `TypeNode<'a>`; instead, **lazy wrappers** like
-  `LazyJsdocBlock<'a>` are built on top of the Binary AST (symmetric with the
-  JS-side `RemoteJsdocBlock`).
-- **Lazy nodes are stack value types** (`#[derive(Copy, Clone)]`, 24-32 bytes or
-  less): This completely eliminates the heap allocation cost of `Box::new`
-  (about 10x speedup in Rust walkers).
-- **Build the Binary AST on an arena allocator (e.g. bumpalo)** and share it
-  **zero-copy** as a NAPI Buffer / WASM memory at parser exit.
-- **Code generation synchronizes Rust and JS**: From the AST schema,
-  `binary_writer_generated.rs` / `lazy_decoder_generated.rs` /
-  `decoder.generated.js` are emitted simultaneously.
-- **Internal API symmetric with the JS decoder**: Maintain correspondences such
-  as `LazySourceFile` (Rust) <-> `RemoteSourceFile` (JS),
-  `ext_offset` <-> `extOffsetOf`, and `KIND_TABLE` <-> `KIND_TABLE` (js).
+- **Approach c-1 (Parser-Integrated Binary Writer)**: The parser writes Binary AST bytes directly to the arena without going through a typed AST. No serialize step is needed, and the transferred payload is the parser output itself (see [refs/construction-methods.md](./refs/construction-methods.md) for details).
+- **Removal of typed AST struct hierarchy**: There are no Rust structs such as `JsdocBlock<'a>` or `TypeNode<'a>`; instead, **lazy wrappers** like `LazyJsdocBlock<'a>` are built on top of the Binary AST (symmetric with the JS-side `RemoteJsdocBlock`).
+- **Lazy nodes are stack value types** (`#[derive(Copy, Clone)]`, 24-32 bytes or less): This completely eliminates the heap allocation cost of `Box::new` (about 10x speedup in Rust walkers).
+- **Build the Binary AST on an arena allocator (e.g. bumpalo)** and share it **zero-copy** as a NAPI Buffer / WASM memory at parser exit.
+- **Code generation synchronizes Rust and JS**: From the AST schema, `binary_writer_generated.rs` / `lazy_decoder_generated.rs` / `decoder.generated.js` are emitted simultaneously.
+- **Internal API symmetric with the JS decoder**: Maintain correspondences such as `LazySourceFile` (Rust) <-> `RemoteSourceFile` (JS), `ext_offset` <-> `extOffsetOf`, and `KIND_TABLE` <-> `KIND_TABLE` (js).
 
 ## Parser-Integrated Binary Writer
 
@@ -52,9 +35,7 @@ Public API:
   }
 ```
 
-Note: typed AST (Rust struct hierarchies like `JsdocBlock<'a>`, `TypeNode<'a>`)
-is **removed**. Instead, lazy wrappers like `LazyJsdocBlock<'a>` are built on top
-of the Binary AST.
+Note: typed AST (Rust struct hierarchies like `JsdocBlock<'a>`, `TypeNode<'a>`) is **removed**. Instead, lazy wrappers like `LazyJsdocBlock<'a>` are built on top of the Binary AST.
 
 ## Rust-side lazy decoder
 
@@ -73,22 +54,14 @@ for tag in block.tags() {
 
 ### Lazy nodes are stack value types (no Box allocation)
 
-Each lazy node is **a small `#[derive(Copy, Clone)]` struct (32 bytes or less)**
-placed on the stack. `Box<LazyXxx>` is not used (this completely eliminates the
-heap allocation cost).
+Each lazy node is **a small `#[derive(Copy, Clone)]` struct (32 bytes or less)** placed on the stack. `Box<LazyXxx>` is not used (this completely eliminates the heap allocation cost).
 
 Rationale:
 
-- In a scenario like an ESLint-equivalent Rust walker traversing 100 files x 3,000
-  nodes = 300,000 nodes, eliminating the `Box::new` heap allocation cost
-  (~50 ns each) yields **about a 10x speedup**.
-- The fields of a lazy node are minimal — `&'a [u8]` (binary reference) +
-  `node_index: u32` + `&'a LazySourceFile` — and fit within 24-32 bytes.
-- The cost of pass-by-value is memcpy 32 bytes ≈ 5 ns, effectively zero via
-  registers.
-- Adding an arena allocator (internal / thread_local) for walking is an option,
-  but it is not adopted due to lifetime management complexity and reentrancy
-  issues.
+- In a scenario like an ESLint-equivalent Rust walker traversing 100 files x 3,000 nodes = 300,000 nodes, eliminating the `Box::new` heap allocation cost (~50 ns each) yields **about a 10x speedup**.
+- The fields of a lazy node are minimal — `&'a [u8]` (binary reference) + `node_index: u32` + `&'a LazySourceFile` — and fit within 24-32 bytes.
+- The cost of pass-by-value is memcpy 32 bytes ≈ 5 ns, effectively zero via registers.
+- Adding an arena allocator (internal / thread_local) for walking is an option, but it is not adopted due to lifetime management complexity and reentrancy issues.
 
 Implementation sketch:
 
@@ -163,9 +136,7 @@ impl<'a, T: LazyNode<'a>> Iterator for NodeListIter<'a, T> {
 
 ### LazySourceFile (root of the decoder)
 
-The **decoder entry point** that manages Header / Root array / String table.
-It plays a role symmetric with the JS-side `RemoteSourceFile`, and all lazy
-nodes obtain strings, base offset, nodeCount, etc. through it.
+The **decoder entry point** that manages Header / Root array / String table. It plays a role symmetric with the JS-side `RemoteSourceFile`, and all lazy nodes obtain strings, base offset, nodeCount, etc. through it.
 
 ```rust
 #[derive(Copy, Clone)]
@@ -272,8 +243,7 @@ fn read_u32(bytes: &[u8], offset: usize) -> u32 {
 
 ### Helper functions (shared parts for reading Binary AST)
 
-Common low-level operations called from each lazy node type. Symmetric with the
-JS side (`extOffsetOf` / `childAtVisitorIndex`):
+Common low-level operations called from each lazy node type. Symmetric with the JS side (`extOffsetOf` / `childAtVisitorIndex`):
 
 ```rust
 /// Node Data -> byte offset within Extended Data (Extended type 0b10 only)
@@ -316,10 +286,7 @@ pub fn child_at_visitor_index(
 
 ### Kind dispatch (Kind → type selection)
 
-From the **Kind value (u8)** at byte 0 of the node record, look up the
-corresponding handling (visitor dispatch or type conversion). Symmetric with
-the JS-side `decodeKindToClass`, and **code-generated** in Phase 4 (see
-ast-nodes.md):
+From the **Kind value (u8)** at byte 0 of the node record, look up the corresponding handling (visitor dispatch or type conversion). Symmetric with the JS-side `decodeKindToClass`, and **code-generated** in Phase 4 (see ast-nodes.md):
 
 ```rust
 // generated/kind_table.rs (auto-generated in Phase 4)
@@ -370,8 +337,7 @@ impl Kind {
 }
 ```
 
-Each lazy node type (such as `LazyJsdocBlock`) asserts the corresponding Kind
-in the `from_index` constructor so it does not wrap a wrong node:
+Each lazy node type (such as `LazyJsdocBlock`) asserts the corresponding Kind in the `from_index` constructor so it does not wrap a wrong node:
 
 ```rust
 impl<'a> LazyJsdocBlock<'a> {
@@ -387,9 +353,7 @@ impl<'a> LazyJsdocBlock<'a> {
 
 ### Lazy Visitor trait (code generation)
 
-The `LazyJsdocVisitor` trait is also emitted by code generation (Phase 4). Each
-method **takes a lazy node by value** and recursively walks via the default
-implementation:
+The `LazyJsdocVisitor` trait is also emitted by code generation (Phase 4). Each method **takes a lazy node by value** and recursively walks via the default implementation:
 
 ```rust
 // generated/visitor.rs (generated in Phase 4)
@@ -443,20 +407,16 @@ impl<'a> LazyJsdocVisitor<'a> for UnknownTagChecker {
 }
 ```
 
-This is the same pattern as the JS-side `RemoteJsdocBlock` (class instances are
-also effectively lightweight, holding a view ref + node_index). Code generation
-(Phase 4) emits the Rust and JS lazy decoders + visitors from a single schema.
+This is the same pattern as the JS-side `RemoteJsdocBlock` (class instances are also effectively lightweight, holding a view ref + node_index). Code generation (Phase 4) emits the Rust and JS lazy decoders + visitors from a single schema.
 
 ## Sharing with NAPI/WASM
 
-| Layer    | Sharing approach                                                                                  |
-| -------- | ------------------------------------------------------------------------------------------------- |
+| Layer | Sharing approach |
+| --- | --- |
 | **NAPI** | Pass the binary bytes on the arena to JS as a NAPI Buffer via **zero-copy reference** (no memcpy) |
-| **WASM** | View the arena region directly from JS via `new Uint8Array(wasm.memory.buffer, offset, length)`   |
+| **WASM** | View the arena region directly from JS via `new Uint8Array(wasm.memory.buffer, offset, length)` |
 
-In both environments, no encoder step (serializing the byte stream) is required.
-The Binary AST that the parser wrote into the arena is the transferred payload
-itself.
+In both environments, no encoder step (serializing the byte stream) is required. The Binary AST that the parser wrote into the arena is the transferred payload itself.
 
 ## Processing flow of the Parser-Integrated Binary Writer
 
@@ -516,9 +476,7 @@ itself.
 
 ### Backpatching details (parent / next_sibling)
 
-Because nodes are **written sequentially in DFS pre-order**, "my parent index"
-is fixed at write time, but "next sibling index" is not yet determined (forward
-reference). Backpatching solves this:
+Because nodes are **written sequentially in DFS pre-order**, "my parent index" is fixed at write time, but "next sibling index" is not yet determined (forward reference). Backpatching solves this:
 
 ```rust
 struct NodeWriter<'a> {
@@ -558,18 +516,11 @@ impl<'a> NodeWriter<'a> {
 }
 ```
 
-The **parent index** does not need backpatching because the parent's index is
-already known when the child is written. **next_sibling** is patched into bytes
-20-23 of the previous sibling at the moment the next sibling is emitted.
+The **parent index** does not need backpatching because the parent's index is already known when the child is written. **next_sibling** is patched into bytes 20-23 of the previous sibling at the moment the next sibling is emitted.
 
 ### Utf16PositionMap (UTF-8 → UTF-16 conversion)
 
-Converts each sourceText's UTF-8 byte offset to a UTF-16 code unit
-offset for the wire format's Pos/End fields. Lives at
-[`crate::utf16::Utf16PositionMap`] and is rebuilt per root via
-[`BinaryWriter::set_source_for_root`] before the matching `emit_block`
-walk. The algorithm mirrors tsgo's `internal/ast/positionmap.go` —
-sparse delta table per non-ASCII character + binary search lookup.
+Converts each sourceText's UTF-8 byte offset to a UTF-16 code unit offset for the wire format's Pos/End fields. Lives at [`crate::utf16::Utf16PositionMap`] and is rebuilt per root via [`BinaryWriter::set_source_for_root`] before the matching `emit_block` walk. The algorithm mirrors tsgo's `internal/ast/positionmap.go` — sparse delta table per non-ASCII character + binary search lookup.
 
 ```rust
 pub struct Utf16PositionMap {
@@ -637,16 +588,11 @@ Per-character delta rules (mirrors tsgo `PositionMap`):
 | U+0800..U+FFFF    |           3 |                  1 |    +2 |
 | U+10000..U+10FFFF |           4 | 2 (surrogate pair) |    +2 |
 
-**Effect of the ASCII-only optimization**: In practice, most JSDoc
-comments consist of ASCII only, so both table construction and lookup
-cost are zero — `Utf16PositionMap::build` returns the identity map after
-a single SIMD-accelerated `str::is_ascii()` scan.
+**Effect of the ASCII-only optimization**: In practice, most JSDoc comments consist of ASCII only, so both table construction and lookup cost are zero — `Utf16PositionMap::build` returns the identity map after a single SIMD-accelerated `str::is_ascii()` scan.
 
 ## Code generation
 
-The binary writer per node kind (Rust) and the lazy decoder (Rust + JS) are
-auto-generated from the AST schema. Manual maintenance cannot keep up with
-60 kinds + visitor keys + the 6-bit common data table.
+The binary writer per node kind (Rust) and the lazy decoder (Rust + JS) are auto-generated from the AST schema. Manual maintenance cannot keep up with 60 kinds + visitor keys + the 6-bit common data table.
 
 Schema specification:
 
@@ -658,31 +604,19 @@ Schema specification:
 Output:
 
 - Rust: `binary_writer_generated.rs` (the `write_*` function for each node kind, called from the parser)
-- Rust: `lazy_decoder_generated.rs` (lazy wrappers per node kind such as `LazyJsdocBlock`,
-  `#[derive(Copy, Clone)]` stack value-type structs)
-- Rust: `visitor_generated.rs` (the `LazyJsdocVisitor` trait, where each `visit_xxx`
-  method takes a lazy node by value and recursively walks via the default implementation)
+- Rust: `lazy_decoder_generated.rs` (lazy wrappers per node kind such as `LazyJsdocBlock`, `#[derive(Copy, Clone)]` stack value-type structs)
+- Rust: `visitor_generated.rs` (the `LazyJsdocVisitor` trait, where each `visit_xxx` method takes a lazy node by value and recursively walks via the default implementation)
 - Rust: `kind_table.rs` (Kind enum, Kind <-> name map)
 - JS: `decoder.generated.js` (RemoteNode subclasses, visitor keys)
 - JS: `protocol.js` (constants: Kind values, offsets, masks)
 
-Because the Rust and JS lazy decoders are generated from the same schema, the
-semantics of field access are guaranteed to remain consistent.
+Because the Rust and JS lazy decoders are generated from the same schema, the semantics of field access are guaranteed to remain consistent.
 
-The JS decoder is emitted into a **shared decoder package** (e.g.
-`@ox-jsdoc/decoder`), and the NAPI binding and WASM binding each import it.
-Since both bindings share the format specification (LE byte order, UTF-16
-positions, etc.), the same decoder classes work as-is. Only binding-specific
-code (buffer acquisition, initialization, lifecycle) is implemented in
-separate packages.
+The JS decoder is emitted into a **shared decoder package** (e.g. `@ox-jsdoc/decoder`), and the NAPI binding and WASM binding each import it. Since both bindings share the format specification (LE byte order, UTF-16 positions, etc.), the same decoder classes work as-is. Only binding-specific code (buffer acquisition, initialization, lifecycle) is implemented in separate packages.
 
 ## Public Rust API
 
-The `ox_jsdoc_binary` crate exposes four entry points (Approach c-1: the
-typed AST is removed and the parser writes Binary AST bytes directly).
-Each function takes **`&str` (sourceText)** as input — there is no
-"encode from typed AST" path because the Binary AST byte stream is the
-source of truth.
+The `ox_jsdoc_binary` crate exposes four entry points (Approach c-1: the typed AST is removed and the parser writes Binary AST bytes directly). Each function takes **`&str` (sourceText)** as input — there is no "encode from typed AST" path because the Binary AST byte stream is the source of truth.
 
 ```rust
 pub struct BatchItem<'a> {
@@ -731,25 +665,17 @@ pub fn parse_batch_to_bytes(
 ) -> ParseBatchBytesResult
 ```
 
-The split into single + batch (Option 2C in
-[batch-processing.md](./batch-processing.md#shipped-api-shape-option-2c-adopted))
-matches the typical usage shape: tools that parse one comment at a time
-(LSP hover, fixers) prefer `parse` / `parse_to_bytes`; lint runners that
-walk every comment in a file prefer `parse_batch` / `parse_batch_to_bytes`
-to amortize the NAPI/WASM crossing cost across all comments.
+The split into single + batch (Option 2C in [batch-processing.md](./batch-processing.md#shipped-api-shape-option-2c-adopted)) matches the typical usage shape: tools that parse one comment at a time (LSP hover, fixers) prefer `parse` / `parse_to_bytes`; lint runners that walk every comment in a file prefer `parse_batch` / `parse_batch_to_bytes` to amortize the NAPI/WASM crossing cost across all comments.
 
 ## Public Rust API (Phase 3 onward)
 
-For interoperability from non-JS languages (Go / Python / Rust itself, etc.),
-a decoder API is also considered in Phase 3 and beyond:
+For interoperability from non-JS languages (Go / Python / Rust itself, etc.), a decoder API is also considered in Phase 3 and beyond:
 
 ```rust
 pub fn decode_binary(bytes: &[u8]) -> Result<DecodedAst, DecodeError>
 ```
 
-Use by ox-jsdoc itself is not assumed (typed AST / lazy decoder is sufficient),
-but documenting the format specification provides a reference for other-language
-implementations.
+Use by ox-jsdoc itself is not assumed (typed AST / lazy decoder is sufficient), but documenting the format specification provides a reference for other-language implementations.
 
 ---
 
@@ -757,12 +683,12 @@ implementations.
 
 ### Items eliminated
 
-| Current (JSON approach)              | Binary AST                                                       |
-| ------------------------------------ | ---------------------------------------------------------------- |
-| `serde_json::to_string` (Rust)       | Flat binary write-out (close to memcpy)                          |
-| String allocation for every field    | String table + source slicing                                    |
-| `JSON.parse` (JS)                    | No parsing — DataView reads                                      |
-| Eager object creation for every node | Lazy on-demand property access                                   |
+| Current (JSON approach) | Binary AST |
+| --- | --- |
+| `serde_json::to_string` (Rust) | Flat binary write-out (close to memcpy) |
+| String allocation for every field | String table + source slicing |
+| `JSON.parse` (JS) | No parsing — DataView reads |
+| Eager object creation for every node | Lazy on-demand property access |
 | JSON serialize for 45 TypeNode kinds | Integrated within the same Binary AST (no dedicated path needed) |
 
 ### Measurement plan

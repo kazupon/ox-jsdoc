@@ -1,53 +1,37 @@
 # Benchmark Strategy
 
-Binary AST is **primarily aimed at performance gains**, and the Phase 1.3 cutover
-direction is also driven by performance comparisons. The benchmark strategy is
-designed around the following five aspects.
+Binary AST is **primarily aimed at performance gains**, and the Phase 1.3 cutover direction is also driven by performance comparisons. The benchmark strategy is designed around the following five aspects.
 
 ## Design overview
 
-The effects of the Binary AST migration are **distributed across multiple layers**,
-so benchmarks measure each layer independently and then form an overall judgment
-based on user-visible end-to-end metrics.
+The effects of the Binary AST migration are **distributed across multiple layers**, so benchmarks measure each layer independently and then form an overall judgment based on user-visible end-to-end metrics.
 
 Key design goals:
 
-- **Independent measurement across 5 layers**: parser standalone / Rust lazy decoder /
-  JS lazy decoder / binding end-to-end / competitor comparison. Makes bottlenecks
-  identifiable
-- **Multi-dimensional metrics**: In addition to time (ns/us/ms), measure
-  **memory, allocation count, buffer size, dedup rate, and cache hit rate**
-  (verifying the core effects of the lazy decoder)
-- **Separate batch scenarios**: Confirm scaling characteristics for single (N=1),
-  medium (N=100), and large (N=1000) (verifying batch benefits such as String dedup
-  and NodeList skipping)
-- **Independently measure the performance delta of toggling compat_mode**: Capture in
-  isolation how the 2x size of Extended Data affects performance
-- **Objective Phase 1.3 cutover decision**: Quantitatively define required KPIs and
-  decide cutover by attainment (eliminating subjective evaluation)
+- **Independent measurement across 5 layers**: parser standalone / Rust lazy decoder / JS lazy decoder / binding end-to-end / competitor comparison. Makes bottlenecks identifiable
+- **Multi-dimensional metrics**: In addition to time (ns/us/ms), measure **memory, allocation count, buffer size, dedup rate, and cache hit rate** (verifying the core effects of the lazy decoder)
+- **Separate batch scenarios**: Confirm scaling characteristics for single (N=1), medium (N=100), and large (N=1000) (verifying batch benefits such as String dedup and NodeList skipping)
+- **Independently measure the performance delta of toggling compat_mode**: Capture in isolation how the 2x size of Extended Data affects performance
+- **Objective Phase 1.3 cutover decision**: Quantitatively define required KPIs and decide cutover by attainment (eliminating subjective evaluation)
 
 ### Convenience names (function names inside the benchmark scripts)
 
-To distinguish the typed AST version from the binary AST version inside the benchmarks,
-we use the following convenience names (the production API uses the same `parse(text)`
-signature in both):
+To distinguish the typed AST version from the binary AST version inside the benchmarks, we use the following convenience names (the production API uses the same `parse(text)` signature in both):
 
-| Name in benchmarks                   | Actual entity                                     | Source                                                                           |
-| ------------------------------------ | ------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `parseTyped` / `parseTypedNapi`      | The current `parse` via `crates/ox_jsdoc`         | Until before the Phase 1.3 cutover                                               |
-| `parseBinary` / `parseBinaryNapi`    | The new `parse` via `crates/ox_jsdoc_binary`      | Phase 1.1 onward                                                                 |
-| `parseTypedWasm` / `parseBinaryWasm` | Same as above (WASM binding versions)             | Same as above                                                                    |
-| `parseBatchBinary`                   | The new `parseBatch(items)` API (binary AST only) | [js-decoder.md "JS Public API"](./js-decoder.md#js-public-api-parse--parsebatch) |
+| Name in benchmarks | Actual entity | Source |
+| --- | --- | --- |
+| `parseTyped` / `parseTypedNapi` | The current `parse` via `crates/ox_jsdoc` | Until before the Phase 1.3 cutover |
+| `parseBinary` / `parseBinaryNapi` | The new `parse` via `crates/ox_jsdoc_binary` | Phase 1.1 onward |
+| `parseTypedWasm` / `parseBinaryWasm` | Same as above (WASM binding versions) | Same as above |
+| `parseBatchBinary` | The new `parseBatch(items)` API (binary AST only) | [js-decoder.md "JS Public API"](./js-decoder.md#js-public-api-parse--parsebatch) |
 
-These are defined as import aliases at the top of each script under
-`tasks/benchmark/scripts/` (they are not function names in production code).
+These are defined as import aliases at the top of each script under `tasks/benchmark/scripts/` (they are not function names in production code).
 
 ## 1. Measurement targets (5 layers)
 
 ### (a) Rust parser standalone
 
-Directly compare the parse times of both parsers. Pure parser performance excluding
-NAPI/WASM overhead.
+Directly compare the parse times of both parsers. Pure parser performance excluding NAPI/WASM overhead.
 
 ```text
 crates/ox_jsdoc/         (typed AST)         baseline
@@ -58,8 +42,7 @@ Tool: `criterion` (Rust's standard benchmarking framework)
 
 ### (b) Rust lazy decoder
 
-Time to retrieve various properties from the Binary AST byte stream. Verifies the
-**effectiveness of lazy access** (confirming that unaccessed parts are not materialized).
+Time to retrieve various properties from the Binary AST byte stream. Verifies the **effectiveness of lazy access** (confirming that unaccessed parts are not materialized).
 
 Scenarios:
 
@@ -69,15 +52,13 @@ Scenarios:
 
 ### (c) JS lazy decoder
 
-Access a Binary AST received via NAPI/WASM through the JS lazy classes. Run the same
-scenarios as (b) on the Rust side, but in JS.
+Access a Binary AST received via NAPI/WASM through the JS lazy classes. Run the same scenarios as (b) on the Rust side, but in JS.
 
 ### (d) JS bindings end-to-end
 
 Total time of the `parse()` / `parseBatch()` calls users actually invoke:
 
-- Rust parser -> binary output -> NAPI/WASM transfer -> JS lazy class construction ->
-  one property access
+- Rust parser -> binary output -> NAPI/WASM transfer -> JS lazy class construction -> one property access
 
 This is the **primary practical metric**.
 
@@ -95,46 +76,46 @@ Side-by-side comparison with existing baselines:
 
 ### Time
 
-| Metric                                                     | Unit         | Method                        |
-| ---------------------------------------------------------- | ------------ | ----------------------------- |
-| **Parse time**                                             | ns / us / ms | criterion (Rust), mitata (JS) |
-| **Encode time** (binary writer alone)                      | ns           | criterion                     |
-| **Decode time** (lazy class construction)                  | ns           | criterion / mitata            |
-| **JSON.parse time** (for comparison with the current path) | us           | mitata                        |
-| **Throughput** (comments per second)                       | comments/sec | derived                       |
+| Metric | Unit | Method |
+| --- | --- | --- |
+| **Parse time** | ns / us / ms | criterion (Rust), mitata (JS) |
+| **Encode time** (binary writer alone) | ns | criterion |
+| **Decode time** (lazy class construction) | ns | criterion / mitata |
+| **JSON.parse time** (for comparison with the current path) | us | mitata |
+| **Throughput** (comments per second) | comments/sec | derived |
 
 ### Memory
 
-| Metric                                                      | Unit  | Method                                                                             |
-| ----------------------------------------------------------- | ----- | ---------------------------------------------------------------------------------- |
-| **Peak memory**                                             | MB    | `dhat` (Rust), Node `process.memoryUsage()`                                        |
-| **Allocation count**                                        | count | `dhat-rs`                                                                          |
-| **Memory in lazy state** vs **memory after eager (toJSON)** | MB    | before/after diff with `process.memoryUsage` (the core effect of the lazy decoder) |
+| Metric | Unit | Method |
+| --- | --- | --- |
+| **Peak memory** | MB | `dhat` (Rust), Node `process.memoryUsage()` |
+| **Allocation count** | count | `dhat-rs` |
+| **Memory in lazy state** vs **memory after eager (toJSON)** | MB | before/after diff with `process.memoryUsage` (the core effect of the lazy decoder) |
 
 ### Size (transfer efficiency)
 
-| Metric                                           | Unit      | Method                                                 |
-| ------------------------------------------------ | --------- | ------------------------------------------------------ |
-| **Binary size** (buffer size)                    | byte      | encoder output length                                  |
-| **JSON output size** (for comparison)            | byte      | serializer output length                               |
-| **size reduction ratio** (binary / JSON)         | %         | derived (transfer reduction at the NAPI/WASM boundary) |
-| **Extended Data average size** (basic vs compat) | byte/node | summary inside the encoder                             |
+| Metric | Unit | Method |
+| --- | --- | --- |
+| **Binary size** (buffer size) | byte | encoder output length |
+| **JSON output size** (for comparison) | byte | serializer output length |
+| **size reduction ratio** (binary / JSON) | % | derived (transfer reduction at the NAPI/WASM boundary) |
+| **Extended Data average size** (basic vs compat) | byte/node | summary inside the encoder |
 
 ### Batch benefit effects (string dedup / NodeList skipping)
 
-| Metric                                                                           | Unit  | Method                                                                                                 |
-| -------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------ |
-| **String dedup rate** (unique / total)                                           | %     | summary inside the encoder (sharing rate of identical tag names etc. during batch)                     |
-| **String Data section size** vs **naive total**                                  | byte  | summary inside the encoder                                                                             |
+| Metric | Unit | Method |
+| --- | --- | --- |
+| **String dedup rate** (unique / total) | % | summary inside the encoder (sharing rate of identical tag names etc. during batch) |
+| **String Data section size** vs **naive total** | byte | summary inside the encoder |
 | **Number of emitted NodeLists** vs **number of empty-array NodeList candidates** | count | summary inside the encoder (compared against the encoding.md estimate of "~26 KB saved per 100-batch") |
 
 ### Lazy decoder effect (cache hit rate)
 
-| Metric                                                  | Unit  | Method                                                           |
-| ------------------------------------------------------- | ----- | ---------------------------------------------------------------- |
+| Metric | Unit | Method |
+| --- | --- | --- |
 | **Proxy construction count** (number of accessed nodes) | count | counter hook in the decoder (paired with testing.md category 15) |
-| **Cache hit rate** (re-access / first access)           | %     | same as above                                                    |
-| **Number of unvisited nodes** (lazy effect indicator)   | count | total node count - proxy construction count                      |
+| **Cache hit rate** (re-access / first access) | % | same as above |
+| **Number of unvisited nodes** (lazy effect indicator) | count | total node count - proxy construction count |
 
 ## 3. Benchmark fixtures
 
@@ -253,8 +234,7 @@ fn memory_profile_typescript_checker() {
 
 ### Scenario F: Performance delta of toggling compat_mode
 
-Pairs with testing.md category 16. With the same input, toggle `compat_mode` ON/OFF
-and compare buffer size and processing time:
+Pairs with testing.md category 16. With the same input, toggle `compat_mode` ON/OFF and compare buffer size and processing time:
 
 ```javascript
 // mitata
@@ -276,9 +256,7 @@ bench('size: compat', () => encode(source, { compat_mode: true }).byteLength)
 
 ### Scenario G: Isolated measurement of batch dedup effects
 
-Independently measure the **String dedup** and **inline list metadata** effects
-(NodeList wrapper elimination + Path B-leaf inline string-leaf), both
-emphasized in format.md / encoding.md:
+Independently measure the **String dedup** and **inline list metadata** effects (NodeList wrapper elimination + Path B-leaf inline string-leaf), both emphasized in format.md / encoding.md:
 
 ```text
 fixtures/bench_batch/
@@ -301,8 +279,7 @@ bench('batch_with_empty_arrays', () => parseBatchBinary(batchEmptyArrays))
 
 ### Scenario H: Measuring lazy / sparse access
 
-Pairs with testing.md category 15. Visualize the lazy effect by the ratio of
-**proxy construction count vs total node count**:
+Pairs with testing.md category 15. Visualize the lazy effect by the ratio of **proxy construction count vs total node count**:
 
 ```javascript
 // Insert a counter hook to measure
@@ -334,34 +311,32 @@ bench('cache hit rate', () => {
 
 #### Time (parse performance)
 
-| KPI                        | Target                | Goal (Binary AST vs typed AST)     | Judgment     |
-| -------------------------- | --------------------- | ---------------------------------- | ------------ |
-| **Parse time (single)**    | typescript-checker.ts | **2x or more faster**              | Required     |
-| **Parse time (batch 100)** | source/\* x 100       | **3x or more faster**              | Required     |
-| **end-to-end (NAPI)**      | parse(text)           | **3x or more faster**              | Required     |
-| **end-to-end (WASM)**      | parse(text)           | **2x or more faster**              | Recommended  |
-| **lazy sparse access**     | tag count only        | **1/10 or less** of typed AST time | Recommended  |
-| **vs comment-parser**      | all source fixtures   | **Close the gap to within 5x**     | Stretch goal |
+| KPI | Target | Goal (Binary AST vs typed AST) | Judgment |
+| --- | --- | --- | --- |
+| **Parse time (single)** | typescript-checker.ts | **2x or more faster** | Required |
+| **Parse time (batch 100)** | source/\* x 100 | **3x or more faster** | Required |
+| **end-to-end (NAPI)** | parse(text) | **3x or more faster** | Required |
+| **end-to-end (WASM)** | parse(text) | **2x or more faster** | Recommended |
+| **lazy sparse access** | tag count only | **1/10 or less** of typed AST time | Recommended |
+| **vs comment-parser** | all source fixtures | **Close the gap to within 5x** | Stretch goal |
 
 #### Transfer efficiency (buffer size)
 
-| KPI                                       | Target                                                                                                          | Goal                                           | Judgment    |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ----------- |
-| **size reduction ratio** (binary / JSON)  | typescript-checker.ts                                                                                           | **40% or less** (= 60% smaller than JSON)      | Required    |
-| **String dedup rate** (batch_dedup_heavy) | batch 100 with shared tag names                                                                                 | **50% or more reduction**                      | Recommended |
-| **Empty NodeList reduction** (batch 100)  | [encoding.md "NodeList optimization"](./encoding.md#nodelist-optimization-skip-empty-arrays-option-a2) estimate | Verify a measured **~1100 / ~26 KB reduction** | Recommended |
+| KPI | Target | Goal | Judgment |
+| --- | --- | --- | --- |
+| **size reduction ratio** (binary / JSON) | typescript-checker.ts | **40% or less** (= 60% smaller than JSON) | Required |
+| **String dedup rate** (batch_dedup_heavy) | batch 100 with shared tag names | **50% or more reduction** | Recommended |
+| **Empty NodeList reduction** (batch 100) | [encoding.md "NodeList optimization"](./encoding.md#nodelist-optimization-skip-empty-arrays-option-a2) estimate | Verify a measured **~1100 / ~26 KB reduction** | Recommended |
 
 #### Memory
 
-| KPI                                             | Target                 | Goal                                   | Judgment    |
-| ----------------------------------------------- | ---------------------- | -------------------------------------- | ----------- |
-| **Peak memory**                                 | typescript-checker.ts  | **At or below** typed AST              | Recommended |
-| **Memory in lazy state**                        | sparse access scenario | **1/3 or less** of typed AST           | Recommended |
-| **Proxy construction count / total node count** | sparse access          | **5% or less** (lazy effect indicator) | Recommended |
+| KPI | Target | Goal | Judgment |
+| --- | --- | --- | --- |
+| **Peak memory** | typescript-checker.ts | **At or below** typed AST | Recommended |
+| **Memory in lazy state** | sparse access scenario | **1/3 or less** of typed AST | Recommended |
+| **Proxy construction count / total node count** | sparse access | **5% or less** (lazy effect indicator) | Recommended |
 
--> Execute the Phase 1.3 cutover when **all required items** are met; otherwise
-reconsider the design. Recommended items are continuous improvement targets
-after the cutover.
+-> Execute the Phase 1.3 cutover when **all required items** are met; otherwise reconsider the design. Recommended items are continuous improvement targets after the cutover.
 
 ### Regression detection criteria (after Phase 1.3)
 
@@ -389,8 +364,7 @@ after the cutover.
 
 ### Per-PR benchmark report
 
-When a PR makes changes that affect performance, paste the following into the PR
-description:
+When a PR makes changes that affect performance, paste the following into the PR description:
 
 ```markdown
 ## Benchmark results
@@ -414,9 +388,7 @@ Test environment: Apple M1 Max, Node.js v24.15, Rust 1.92 (release)
 
 ### Periodic report (per alpha release)
 
-Save benchmark results as
-`tasks/benchmark/results/benchmark-results-YYYY-MM-DD.md` so the history is trackable
-(consolidated under the same `tasks/benchmark/` directory as the scripts).
+Save benchmark results as `tasks/benchmark/results/benchmark-results-YYYY-MM-DD.md` so the history is trackable (consolidated under the same `tasks/benchmark/` directory as the scripts).
 
 ## 8. CI integration
 
@@ -466,17 +438,16 @@ tasks/benchmark/
 
 ## 10. Per-Phase benchmark addition schedule
 
-The sub-phase numbers per Phase align with the Phase structure in
-[phases.md](./phases.md) under "crate / package layout" (1.0a-d, 1.1a-d, 1.2a-d).
+The sub-phase numbers per Phase align with the Phase structure in [phases.md](./phases.md) under "crate / package layout" (1.0a-d, 1.1a-d, 1.2a-d).
 
-| Phase     | Benchmarks added                                                                                                                                                                                     |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1.0a-d    | (Not yet at the performance measurement stage; only skeleton verification)                                                                                                                           |
-| 1.1a      | Add Rust encoder standalone benchmarks via criterion; add Scenario F (compat_mode toggle performance/size delta) alongside the encoder feature                                                       |
-| 1.1b-c    | Add Rust decoder standalone benchmarks via criterion, with memory metrics (dhat: peak / allocation count) at the same time                                                                           |
-| 1.1d      | (JS decoder standalone benchmarks are run after binding integration; skipped here)                                                                                                                   |
-| 1.2a      | (Parser implementation only; no benchmarks added)                                                                                                                                                    |
-| 1.2b      | Add benchmarks via NAPI binding (Scenario A: single parse, B: batch, G: batch dedup effects); also measure the transfer efficiency KPI (size reduction ratio)                                        |
-| 1.2c      | Add benchmarks via WASM binding + Scenario H (lazy/sparse access, proxy construction count hook) + (alpha release) all scenarios including competitor comparison (Scenario D)                        |
-| 1.2d      | benchmarks: **4-way comparison** (napi/wasm x typed/binary), **judgment: confirm KPI attainment** (required items across time + transfer efficiency + memory) -> Phase 1.3 cutover GO/NO-GO decision |
-| After 1.3 | Integrate regression detection into CI (parse time / peak memory / binary size)                                                                                                                      |
+| Phase | Benchmarks added |
+| --- | --- |
+| 1.0a-d | (Not yet at the performance measurement stage; only skeleton verification) |
+| 1.1a | Add Rust encoder standalone benchmarks via criterion; add Scenario F (compat_mode toggle performance/size delta) alongside the encoder feature |
+| 1.1b-c | Add Rust decoder standalone benchmarks via criterion, with memory metrics (dhat: peak / allocation count) at the same time |
+| 1.1d | (JS decoder standalone benchmarks are run after binding integration; skipped here) |
+| 1.2a | (Parser implementation only; no benchmarks added) |
+| 1.2b | Add benchmarks via NAPI binding (Scenario A: single parse, B: batch, G: batch dedup effects); also measure the transfer efficiency KPI (size reduction ratio) |
+| 1.2c | Add benchmarks via WASM binding + Scenario H (lazy/sparse access, proxy construction count hook) + (alpha release) all scenarios including competitor comparison (Scenario D) |
+| 1.2d | benchmarks: **4-way comparison** (napi/wasm x typed/binary), **judgment: confirm KPI attainment** (required items across time + transfer efficiency + memory) -> Phase 1.3 cutover GO/NO-GO decision |
+| After 1.3 | Integrate regression detection into CI (parse time / peak memory / binary size) |

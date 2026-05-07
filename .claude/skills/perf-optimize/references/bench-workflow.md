@@ -25,12 +25,12 @@ Three numbers per line:
 
 ## Interpretation
 
-| Output line                                           | Meaning                                              |
-| ----------------------------------------------------- | ---------------------------------------------------- |
-| `Performance has improved.` and `(p < 0.05)`          | Real improvement                                     |
-| `Performance has regressed.` and `(p < 0.05)`         | Real regression — investigate or revert              |
-| `No change in performance detected.` and `(p > 0.05)` | Likely no effect, or change is below noise floor     |
-| `Change within noise threshold.`                      | Borderline; consider re-running with more iterations |
+| Output line | Meaning |
+| --- | --- |
+| `Performance has improved.` and `(p < 0.05)` | Real improvement |
+| `Performance has regressed.` and `(p < 0.05)` | Real regression — investigate or revert |
+| `No change in performance detected.` and `(p > 0.05)` | Likely no effect, or change is below noise floor |
+| `Change within noise threshold.` | Borderline; consider re-running with more iterations |
 
 The mean (middle number of `change:`) is what to quote when reporting the result:
 

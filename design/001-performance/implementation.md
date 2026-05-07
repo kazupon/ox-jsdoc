@@ -1,8 +1,6 @@
 # Implementation Guidance
 
-This page is the entry point for implementation guidance.
-The detailed content is split into smaller documents so each design area can be
-read and updated independently.
+This page is the entry point for implementation guidance. The detailed content is split into smaller documents so each design area can be read and updated independently.
 
 ## Contents
 

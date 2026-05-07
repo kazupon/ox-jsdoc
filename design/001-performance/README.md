@@ -1,11 +1,8 @@
 # ox-jsdoc Performance Design
 
-This directory contains the performance design documents for `ox-jsdoc`.
-They are based on ideas observed in the `oxc` project, but they describe
-how those ideas should be adapted for `ox-jsdoc`, not copied verbatim.
+This directory contains the performance design documents for `ox-jsdoc`. They are based on ideas observed in the `oxc` project, but they describe how those ideas should be adapted for `ox-jsdoc`, not copied verbatim.
 
-This set of documents was split out from [`design/index.md`](../index.md)
-to keep the design easier to read and evolve.
+This set of documents was split out from [`design/index.md`](../index.md) to keep the design easier to read and evolve.
 
 Related documents:
 

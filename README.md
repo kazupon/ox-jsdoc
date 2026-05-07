@@ -4,13 +4,11 @@ High-performance JSDoc parser inspired by the `oxc` project.
 
 ## Status
 
-> [!WARNING]
-> This project is still WIP, so don't use in production.
+> [!WARNING] This project is still WIP, so don't use in production.
 
 ## Development
 
-This repository uses Vite+ as the task runner. Install `vp` before running the
-project tasks:
+This repository uses Vite+ as the task runner. Install `vp` before running the project tasks:
 
 ```sh
 curl -fsSL https://vite.plus | bash
@@ -24,14 +22,12 @@ vpr check     # or `vp run check`, lint for Rust and JavaScript codes
 vpr test      # or `vp run test`, test for Rust and JavaScript codes
 ```
 
-`vpr check` runs the Rust license-header task and `cargo check`.
-The header task checks Rust sources for:
+`vpr check` runs the Rust license-header task and `cargo check`. The header task checks Rust sources for:
 
 - non-empty `@author`
 - `@license MIT`
 
-The first run builds the local `xtask` crate automatically through Cargo. You
-can also run the task directly:
+The first run builds the local `xtask` crate automatically through Cargo. You can also run the task directly:
 
 ```sh
 cargo run -p xtask -- headers:check

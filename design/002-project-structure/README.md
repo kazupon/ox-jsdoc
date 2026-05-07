@@ -1,15 +1,13 @@
 # Project Structure
 
-This document describes the repository layout to use before the first
-implementation of `ox-jsdoc`.
+This document describes the repository layout to use before the first implementation of `ox-jsdoc`.
 
 The project needs two things at the same time:
 
 1. a Rust implementation that can be developed and benchmarked independently
 2. a JavaScript package that can expose the parser to JS users
 
-The structure should keep these concerns separate without making the initial
-repository too large.
+The structure should keep these concerns separate without making the initial repository too large.
 
 ## Goals
 
@@ -17,8 +15,7 @@ repository too large.
 - Keep the JavaScript package as a workspace package.
 - Keep NAPI / JS transfer code outside the core parser crate.
 - Keep performance fixtures and benchmarks at repository level.
-- Leave room for validator, analyzer, serializer, and future toolchain
-  integration without restructuring the repository.
+- Leave room for validator, analyzer, serializer, and future toolchain integration without restructuring the repository.
 
 ## Non-goals for the Initial Layout
 
@@ -77,8 +74,7 @@ Pros:
 Cons:
 
 - the public JavaScript package lives under `napi/` rather than `packages/`
-- if a pure JS wrapper grows substantially, it may later need a separate
-  `packages/ox-jsdoc` package
+- if a pure JS wrapper grows substantially, it may later need a separate `packages/ox-jsdoc` package
 
 Decision:
 
@@ -202,8 +198,7 @@ The initial workspace crates should be:
 
 ### pnpm workspace
 
-Root `package.json` should be private.
-Root `pnpm-workspace.yaml` should include JavaScript-facing package directories:
+Root `package.json` should be private. Root `pnpm-workspace.yaml` should include JavaScript-facing package directories:
 
 ```yaml
 packages:
@@ -211,16 +206,13 @@ packages:
   - 'packages/*'
 ```
 
-`packages/*` is included from the beginning so a future pure JS wrapper can be
-added without changing the workspace shape.
-It does not need to exist in v1.
+`packages/*` is included from the beginning so a future pure JS wrapper can be added without changing the workspace shape. It does not need to exist in v1.
 
 ## Rust Core Crate
 
 `crates/ox_jsdoc` is the core implementation crate.
 
-It should not depend on NAPI.
-It should expose:
+It should not depend on NAPI. It should expose:
 
 - `parse_comment`
 - `ParseOptions`
@@ -262,12 +254,9 @@ It should own:
 - `src-js/index.d.ts`
 - Rust NAPI bridge in `src/lib.rs`
 
-The public npm package can be named `ox-jsdoc` initially.
-If a scoped package name is preferred later, that can be changed before the first
-publish.
+The public npm package can be named `ox-jsdoc` initially. If a scoped package name is preferred later, that can be changed before the first publish.
 
-The NAPI package should call into `ox_jsdoc`.
-It should not duplicate parser logic.
+The NAPI package should call into `ox_jsdoc`. It should not duplicate parser logic.
 
 Initial JS API should be small:
 
@@ -275,8 +264,7 @@ Initial JS API should be small:
 export function parseComment(sourceText: string, options?: ParseOptions): ParseOutput
 ```
 
-The JS package should remain JSON-first.
-Raw transfer support should not affect the initial package layout.
+The JS package should remain JSON-first. Raw transfer support should not affect the initial package layout.
 
 ## Fixtures
 
@@ -286,9 +274,7 @@ Performance fixtures should live at repository level:
 fixtures/perf/
 ```
 
-They should not live under `crates/` or `napi/`.
-Both Rust benchmarks and future JS/toolchain benchmarks should be able to reuse
-the same fixture corpus.
+They should not live under `crates/` or `napi/`. Both Rust benchmarks and future JS/toolchain benchmarks should be able to reuse the same fixture corpus.
 
 Use sidecar JSON metadata:
 
@@ -297,8 +283,7 @@ fixtures/perf/malformed/unclosed-inline-tag.jsdoc
 fixtures/perf/malformed/unclosed-inline-tag.json
 ```
 
-The `.jsdoc` file is exact parser input.
-The `.json` file is metadata and expected behavior.
+The `.jsdoc` file is exact parser input. The `.json` file is metadata and expected behavior.
 
 ## Benchmarks
 
@@ -308,8 +293,7 @@ Benchmarks should start under:
 tasks/benchmark/
 ```
 
-This keeps benchmarks out of the core crate while still allowing them to depend
-on workspace crates.
+This keeps benchmarks out of the core crate while still allowing them to depend on workspace crates.
 
 Initial benchmark framework:
 
@@ -321,17 +305,13 @@ Initial benchmark targets:
 - `validator.rs`
 - `serializer.rs`
 
-CodSpeed integration should be deferred until benchmark names and fixture buckets
-are stable.
+CodSpeed integration should be deferred until benchmark names and fixture buckets are stable.
 
 ## Relationship to `refers/`
 
-`refers/` contains git submodules used for research and compatibility reference.
-It should not be part of either workspace.
+`refers/` contains git submodules used for research and compatibility reference. It should not be part of either workspace.
 
-Reference sources may be used to derive fixtures, but the benchmark fixture
-corpus should live under `fixtures/perf/` so it remains stable even if submodule
-contents change.
+Reference sources may be used to derive fixtures, but the benchmark fixture corpus should live under `fixtures/perf/` so it remains stable even if submodule contents change.
 
 ## Decision Summary
 
@@ -344,6 +324,4 @@ Use this v1 structure:
 - Keep `packages/*` reserved for future JS wrapper packages
 - Keep `refers/*` outside Rust and pnpm workspaces
 
-This layout keeps the core parser independent, keeps the JS package manageable,
-and leaves enough room for the validator / analyzer / serializer pipeline
-without over-splitting the repository before the first implementation exists.
+This layout keeps the core parser independent, keeps the JS package manageable, and leaves enough room for the validator / analyzer / serializer pipeline without over-splitting the repository before the first implementation exists.

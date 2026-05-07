@@ -4,8 +4,7 @@ High-performance JSDoc parser for the browser, powered by WebAssembly.
 
 This package provides the same `parse()` API as the native `ox-jsdoc` Node.js binding, but runs in any browser environment via a 58 KB WASM binary.
 
-> [!WARNING]
-> This project is still unstable, so don't use in production.
+> [!WARNING] This project is still unstable, so don't use in production.
 
 ## Installation
 

@@ -12,9 +12,7 @@ Examples:
 
 ## Direction 2. Keep expensive normalization for later phases
 
-Tag-specific, mode-specific, and context-sensitive rules are often better handled
-after parsing. The parser should preserve enough information for later analysis
-instead of eagerly normalizing everything.
+Tag-specific, mode-specific, and context-sensitive rules are often better handled after parsing. The parser should preserve enough information for later analysis instead of eagerly normalizing everything.
 
 Examples:
 
@@ -25,8 +23,7 @@ Examples:
 
 ## Direction 3. Split nodes when their semantic roles differ
 
-If two syntactic forms play different semantic roles, they should not be merged
-just because their surface syntax looks similar.
+If two syntactic forms play different semantic roles, they should not be merged just because their surface syntax looks similar.
 
 Examples:
 
@@ -44,8 +41,7 @@ Once the AST stabilizes, at least representative nodes should be checked for:
 - enum size
 - performance-sensitive field ordering
 
-The goal is not to freeze an ABI too early.
-The goal is to detect accidental regressions.
+The goal is not to freeze an ABI too early. The goal is to detect accidental regressions.
 
 ## Direction 5. Treat serializer shape as part of the design, even with JSON transfer
 
@@ -64,8 +60,7 @@ Even before raw transfer exists, the serializer is part of the performance story
 
 The parser should follow a **borrowed slice first, normalized string later** policy.
 
-In the parser hot path, these values should normally stay as source-backed
-`Span` + `&'a str` data instead of owned strings:
+In the parser hot path, these values should normally stay as source-backed `Span` + `&'a str` data instead of owned strings:
 
 - description text
 - block tag `raw_body`
@@ -82,28 +77,20 @@ Normalized strings should be produced only when a later phase needs them, for ex
 - rendered link labels
 - serializer-owned JS output strings
 
-This keeps the parser cheap while preserving enough information for validator,
-analyzer, formatter, and serializer layers.
+This keeps the parser cheap while preserving enough information for validator, analyzer, formatter, and serializer layers.
 
-Descriptions should not be flattened into one string at parse time.
-They should preserve line-level syntax and inline-tag boundaries:
+Descriptions should not be flattened into one string at parse time. They should preserve line-level syntax and inline-tag boundaries:
 
 ```text
 JsdocBlock.description_lines = [JsdocDescriptionLine(slice)]
 JsdocBlock.inline_tags = [JsdocInlineTag(slice)]
 ```
 
-This is important for real-world API documentation where `{@link}` and
-`{@linkcode}` occur frequently, and where later consumers need accurate spans
-for lint diagnostics, formatting, and rendering.
+This is important for real-world API documentation where `{@link}` and `{@linkcode}` occur frequently, and where later consumers need accurate spans for lint diagnostics, formatting, and rendering.
 
-Fenced code blocks should also be tracked as scanner state.
-Inside a fence, `@foo` and `{@link ...}`-looking text should not be eagerly
-treated as normal block or inline tags.
+Fenced code blocks should also be tracked as scanner state. Inside a fence, `@foo` and `{@link ...}`-looking text should not be eagerly treated as normal block or inline tags.
 
-The scanner can be byte-oriented in v1, but it should keep shallow state rather
-than relying on naive whitespace splitting.
-Important markers and states include:
+The scanner can be byte-oriented in v1, but it should keep shallow state rather than relying on naive whitespace splitting. Important markers and states include:
 
 - ASCII markers: `@`, `{`, `}`, `[`, `]`, `(`, `)`, `<`, `>`, `|`, `=`, `-`, quotes, backticks, and line breaks
 - `brace_depth`
@@ -114,8 +101,7 @@ Important markers and states include:
 - fence state
 - line-start / after-star-prefix state
 
-This prevents common real-world forms from being split at the wrong boundary,
-including:
+This prevents common real-world forms from being split at the wrong boundary, including:
 
 - `[opts.maxLength=Infinity]`
 - `[subject="world"]`
@@ -132,6 +118,4 @@ The v1 rule should be:
 5. move tag-specific string normalization to validator or later phases
 6. keep long or TypeScript-like type text as a raw range until a type parser is required
 
-Tag names and other frequently compared small tokens can start as borrowed strings.
-If measurement later shows lookup or comparison cost is significant, an
-`Ident`-like pre-hashed representation can be considered.
+Tag names and other frequently compared small tokens can start as borrowed strings. If measurement later shows lookup or comparison cost is significant, an `Ident`-like pre-hashed representation can be considered.

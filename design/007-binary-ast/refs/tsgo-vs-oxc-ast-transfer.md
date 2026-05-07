@@ -6,10 +6,10 @@ Investigation date: 2026-04-13
 
 ## Differences in Design Philosophy
 
-|                   | oxc (Raw Transfer)                  | tsgo (Binary AST)                                       |
-| ----------------- | ----------------------------------- | ------------------------------------------------------- |
-| **Core question** | "How do we eliminate the boundary?" | "How do we make data crossing the boundary compact?"    |
-| **Process model** | **Same process** (NAPI binding)     | **Separate processes** (Go server + JS client over IPC) |
+|  | oxc (Raw Transfer) | tsgo (Binary AST) |
+| --- | --- | --- |
+| **Core question** | "How do we eliminate the boundary?" | "How do we make data crossing the boundary compact?" |
+| **Process model** | **Same process** (NAPI binding) | **Separate processes** (Go server + JS client over IPC) |
 
 ---
 
@@ -51,10 +51,10 @@ Go heap          IPC pipe        JS Uint8Array
 
 ## Details of Boundary Crossing
 
-| Aspect                 | oxc                                                                           | tsgo                                            |
-| ---------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------- |
-| **Data copies**        | None (Rust writes directly to the JS buffer)                                  | Two (Go → binary encode, binary → JS receive)   |
-| **Serialization**      | None (raw `repr(C)` struct layout)                                            | Yes (28 bytes/node flat format)                 |
+| Aspect | oxc | tsgo |
+| --- | --- | --- |
+| **Data copies** | None (Rust writes directly to the JS buffer) | Two (Go → binary encode, binary → JS receive) |
+| **Serialization** | None (raw `repr(C)` struct layout) | Yes (28 bytes/node flat format) |
 | **JS object creation** | Eager: materialize all nodes as JS objects / Lazy: read on demand via getters | Always Lazy (`RemoteNode` reads via `DataView`) |
 
 ---
@@ -148,22 +148,22 @@ Because it consumes 6 GiB of virtual memory, it is managed with a two-tier cache
 
 ## Span / Position Handling
 
-|                         | oxc                                                               | tsgo                                                                       |
-| ----------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Internal representation | UTF-8                                                             | UTF-8                                                                      |
-| Conversion for JS       | Convert UTF-8 → UTF-16 on the Rust side, then write to the buffer | Convert UTF-8 → UTF-16 on the Go side, then encode                         |
-| Optimization            | Bulk conversion via `span_converter`                              | O(log n) binary search via `PositionMap`; ASCII-only files skip conversion |
+|  | oxc | tsgo |
+| --- | --- | --- |
+| Internal representation | UTF-8 | UTF-8 |
+| Conversion for JS | Convert UTF-8 → UTF-16 on the Rust side, then write to the buffer | Convert UTF-8 → UTF-16 on the Go side, then encode |
+| Optimization | Bulk conversion via `span_converter` | O(log n) binary search via `PositionMap`; ASCII-only files skip conversion |
 
 ---
 
 ## Platform Constraints
 
-| Constraint      | oxc                                                               | tsgo                                                     |
-| --------------- | ----------------------------------------------------------------- | -------------------------------------------------------- |
-| Architecture    | **64-bit little-endian only**                                     | Cross-platform                                           |
-| Node.js version | >= 22                                                             | No constraint                                            |
-| Memory          | 6 GiB virtual memory per parse                                    | Proportional to AST size (small)                         |
-| Concurrency     | Async parsing runs on threads; deserialization on the main thread | The Go server handles concurrency, the JS client is thin |
+| Constraint | oxc | tsgo |
+| --- | --- | --- |
+| Architecture | **64-bit little-endian only** | Cross-platform |
+| Node.js version | >= 22 | No constraint |
+| Memory | 6 GiB virtual memory per parse | Proportional to AST size (small) |
+| Concurrency | Async parsing runs on threads; deserialization on the main thread | The Go server handles concurrency, the JS client is thin |
 
 ---
 
@@ -247,14 +247,14 @@ tsgo's Binary AST is a protocol explicitly designed for transfer:
 
 ### Comparison
 
-| Aspect                          | oxc Raw Transfer                              | tsgo Binary AST                                    |
-| ------------------------------- | --------------------------------------------- | -------------------------------------------------- |
-| **Essence**                     | Direct memory sharing                         | A serialization protocol                           |
-| **Design intent**               | "Don't serialize"                             | "Serialize efficiently"                            |
-| **Format specification**        | Decided by the Rust compiler (implicit)       | Explicit protocol specification                    |
-| **Impact of Rust-side changes** | The JS-side deserializer can break            | Only the encoder updates; the JS side stays stable |
-| **Portability**                 | 64-bit LE + NAPI only                         | Full support for NAPI / WASM / IPC / files         |
-| **Per-environment JS code**     | Environment-dependent (Raw Transfer specific) | **The same decoder for all environments**          |
+| Aspect | oxc Raw Transfer | tsgo Binary AST |
+| --- | --- | --- |
+| **Essence** | Direct memory sharing | A serialization protocol |
+| **Design intent** | "Don't serialize" | "Serialize efficiently" |
+| **Format specification** | Decided by the Rust compiler (implicit) | Explicit protocol specification |
+| **Impact of Rust-side changes** | The JS-side deserializer can break | Only the encoder updates; the JS side stays stable |
+| **Portability** | 64-bit LE + NAPI only | Full support for NAPI / WASM / IPC / files |
+| **Per-environment JS code** | Environment-dependent (Raw Transfer specific) | **The same decoder for all environments** |
 
 ### Implications for ox-jsdoc
 

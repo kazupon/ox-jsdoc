@@ -4,9 +4,7 @@
 
 ### Strategy B: AST compatibility only, delegate runtime to jsdoccomment
 
-ox-jsdoc's responsibility is limited to **parse speed and AST shape compatibility** only.
-The runtime layer required for eslint-plugin-jsdoc operation (comment attachment, type parser,
-stringify, fixer, esquery integration) is provided by jsdoccomment as-is.
+ox-jsdoc's responsibility is limited to **parse speed and AST shape compatibility** only. The runtime layer required for eslint-plugin-jsdoc operation (comment attachment, type parser, stringify, fixer, esquery integration) is provided by jsdoccomment as-is.
 
 ```
 eslint-plugin-jsdoc
@@ -24,10 +22,7 @@ jsdoccomment (runtime layer unchanged)
         +-- future:  ox-jsdoc (compat_mode) used directly
 ```
 
-If ox-jsdoc's `compat_mode` output matches jsdoccomment's AST shape,
-simply swapping jsdoccomment's `parseComment()` internal implementation with ox-jsdoc
-will allow all eslint-plugin-jsdoc rules (type parser dependent, fixer, comment attachment included)
-to work as-is.
+If ox-jsdoc's `compat_mode` output matches jsdoccomment's AST shape, simply swapping jsdoccomment's `parseComment()` internal implementation with ox-jsdoc will allow all eslint-plugin-jsdoc rules (type parser dependent, fixer, comment attachment included) to work as-is.
 
 ### Scope of This Strategy
 
@@ -57,12 +52,9 @@ to work as-is.
 
 ## Context
 
-ox-jsdoc's AST output matches `@es-joy/jsdoccomment`'s node type names and basic structure,
-but there are differences in field presence/absence that prevent direct parser swapping.
+ox-jsdoc's AST output matches `@es-joy/jsdoccomment`'s node type names and basic structure, but there are differences in field presence/absence that prevent direct parser swapping.
 
-Given that benchmarks show JS binding (NAPI) performance is roughly on par with comment-parser,
-implementing a jsdoccomment compatibility mode as part of AST stabilization
-ahead of future Binary AST introduction.
+Given that benchmarks show JS binding (NAPI) performance is roughly on par with comment-parser, implementing a jsdoccomment compatibility mode as part of AST stabilization ahead of future Binary AST introduction.
 
 User decisions:
 
@@ -84,10 +76,7 @@ User decisions:
 
 ## Phase 1: Source-Preserving Field Extraction and Output
 
-Current state: scanner.rs strips the JSDoc margin (whitespace before `*`, the `*` itself,
-space after `*`) and passes content to context.rs, but the stripped information is discarded.
-The Rust AST has fields like delimiter, but they contain hardcoded values.
-The serializer does not output them.
+Current state: scanner.rs strips the JSDoc margin (whitespace before `*`, the `*` itself, space after `*`) and passes content to context.rs, but the stripped information is discarded. The Rust AST has fields like delimiter, but they contain hardcoded values. The serializer does not output them.
 
 ### Step 1.1: scanner.rs -- Add Margin Metadata to LogicalLine
 
@@ -100,16 +89,13 @@ pub post_delimiter: &'a str, // space after *
 pub line_end: &'a str,       // line ending (\n, \r\n, or "")
 ```
 
-Capture slices of the currently-skipped portions in the margin stripping loop
-of `logical_lines()`. No algorithm change, only slice capture additions.
+Capture slices of the currently-skipped portions in the margin stripping loop of `logical_lines()`. No algorithm change, only slice capture additions.
 
 ### Step 1.2: context.rs -- Propagate Margin Data to AST
 
-- `parse_description_lines()`: Propagate LogicalLine's initial/delimiter/post_delimiter
-  to JsdocDescriptionLine (replacing current hardcoded `""`, `"*"`, `" "`)
+- `parse_description_lines()`: Propagate LogicalLine's initial/delimiter/post_delimiter to JsdocDescriptionLine (replacing current hardcoded `""`, `"*"`, `" "`)
 - `parse_jsdoc_tag()`: Get delimiter/post_delimiter/initial/line_end from the tag's first line
-- `parse_comment()`: Detect JsdocBlock's delimiter_line_break (whether `/**` is followed by a newline)
-  and preterminal_line_break (whether `*/` is preceded by a newline)
+- `parse_comment()`: Detect JsdocBlock's delimiter_line_break (whether `/**` is followed by a newline) and preterminal_line_break (whether `*/` is preceded by a newline)
 
 ### Step 1.3: ast.rs -- Add New Fields to JsdocBlock
 
@@ -140,17 +126,14 @@ pub struct SerializeOptions {
 
 When `compat_mode: true`:
 
-- JsdocBlock: output delimiter, postDelimiter, initial, terminal, lineEnd,
-  delimiterLineBreak, preterminalLineBreak
-- JsdocTag: output delimiter, postDelimiter, postTag, postType, postName,
-  initial, lineEnd
+- JsdocBlock: output delimiter, postDelimiter, initial, terminal, lineEnd, delimiterLineBreak, preterminalLineBreak
+- JsdocTag: output delimiter, postDelimiter, postTag, postType, postName, initial, lineEnd
 - Exclude ox-jsdoc-specific fields: optional, defaultValue, rawBody, body
 - JsdocInlineTag: exclude rawBody, map format "unknown" to "plain"
 
 **JsdocTag delimiter/postDelimiter/initial edge cases:**
 
-In jsdoccomment, these fields conditionally become empty strings
-(commentParserToESTree.js lines 380-382):
+In jsdoccomment, these fields conditionally become empty strings (commentParserToESTree.js lines 380-382):
 
 ```javascript
 initial: endLine ? init : '',           // empty for single-line comments
@@ -158,14 +141,13 @@ postDelimiter: lastDescriptionLine ? pd : '',  // empty when tag is on opening l
 delimiter: lastDescriptionLine ? de : '',      // empty when tag is on opening line
 ```
 
-| Case                                                          | delimiter | postDelimiter | initial |
-| ------------------------------------------------------------- | --------- | ------------- | ------- |
-| `/** @param name */` (single-line, endLine=0)                 | `""`      | `""`          | `""`    |
-| `/**\n@param name\n*/` (tag on line 1, lastDescriptionLine=1) | `""`      | `""`          | `" "`   |
-| Normal multi-line (description precedes tag)                  | `"*"`     | `" "`         | `" "`   |
+| Case | delimiter | postDelimiter | initial |
+| --- | --- | --- | --- |
+| `/** @param name */` (single-line, endLine=0) | `""` | `""` | `""` |
+| `/**\n@param name\n*/` (tag on line 1, lastDescriptionLine=1) | `""` | `""` | `" "` |
+| Normal multi-line (description precedes tag) | `"*"` | `" "` | `" "` |
 
-When `lastDescriptionLine` is `0` (JS falsy value), delimiter/postDelimiter
-become empty strings. The serializer must reproduce this condition.
+When `lastDescriptionLine` is `0` (JS falsy value), delimiter/postDelimiter become empty strings. The serializer must reproduce this condition.
 
 `compat_mode: false` (default): same output as current
 
@@ -173,8 +155,7 @@ When `empty_string_for_null: true`:
 
 - rawType, name, namepathOrURL, text: None -> `""` conversion
 
-Replace existing From trait of serialize_comment_json with a `new(block, opts)` method
-to accept SerializeOptions.
+Replace existing From trait of serialize_comment_json with a `new(block, opts)` method to accept SerializeOptions.
 
 ## Phase 2: Line Index Metadata
 
@@ -196,17 +177,10 @@ Within parse_comment():
 - Track LogicalLine indices (0-based, `/**` line is 0)
 - `description_start_line`: index of the first non-empty block description line
 - `description_end_line`: index of the last non-empty block description line
-- `last_description_line`: **index of the first tag line or end line**
-  (Despite the name, this represents "description boundary" not "last description line".
-  In jsdoccomment's implementation, it stores the idx of the first line where `tag || end` appears.
-  When the value is `0`, it becomes JS falsy, causing JsdocTag's delimiter/postDelimiter
-  to become empty strings -- note this edge case.)
+- `last_description_line`: **index of the first tag line or end line** (Despite the name, this represents "description boundary" not "last description line". In jsdoccomment's implementation, it stores the idx of the first line where `tag || end` appears. When the value is `0`, it becomes JS falsy, causing JsdocTag's delimiter/postDelimiter to become empty strings -- note this edge case.)
 - `end_line`: total LogicalLine count - 1
-- `has_preterminal_description`: 1 when block description text exists on the `*/` line
-  (when `*/` line has description and no lastTag is active)
-- `has_preterminal_tag_description`: 1 when tag description text exists on the `*/` line
-  (when `*/` line has description and lastTag is active,
-  or when tag and end are on the same line)
+- `has_preterminal_description`: 1 when block description text exists on the `*/` line (when `*/` line has description and no lastTag is active)
+- `has_preterminal_tag_description`: 1 when tag description text exists on the `*/` line (when `*/` line has description and lastTag is active, or when tag and end are on the same line)
 
 ### Step 2.3: serializer/json.rs -- Output Line Metadata in compat_mode
 
@@ -252,10 +226,7 @@ When compat_mode is enabled:
 
 ### Background
 
-Many eslint-plugin-jsdoc rules (57+) depend not only on jsdoccomment's ESTree AST but also
-directly on comment-parser's `jsdoc.source[]` array and `source[].tokens` objects.
-Formatting rules (15+) in particular mutate tokens fields directly to implement fixes,
-and eslint-plugin-jsdoc rules will not work without this structure.
+Many eslint-plugin-jsdoc rules (57+) depend not only on jsdoccomment's ESTree AST but also directly on comment-parser's `jsdoc.source[]` array and `source[].tokens` objects. Formatting rules (15+) in particular mutate tokens fields directly to implement fixes, and eslint-plugin-jsdoc rules will not work without this structure.
 
 ### source/tokens Structure Overview
 
@@ -295,8 +266,7 @@ After Phase 1 completion, the following information will be available in ox-jsdo
 
 ### Implementation Approach: Reconstruction in the Serializer
 
-When `compat_mode: true`, the serializer **reconstructs** the `source[]` array
-from arena AST fields.
+When `compat_mode: true`, the serializer **reconstructs** the `source[]` array from arena AST fields.
 
 ```
 Arena AST (unchanged)
@@ -313,8 +283,7 @@ Serializer (compat_mode only)
   +-- JsdocBlock.terminal etc  -> source[last] (closing line */)
 ```
 
-Each `source` entry has a `number` (0-based line number) and a `tokens` object.
-The `source` string is generated by concatenating all tokens fields.
+Each `source` entry has a `number` (0-based line number) and a `tokens` object. The `source` string is generated by concatenating all tokens fields.
 
 ### Step 6.1: Add Source Array Construction Logic to Serializer
 
@@ -395,14 +364,11 @@ struct SerTokens {
 }
 ```
 
-Field names exactly match comment-parser's `Tokens` type.
-The `source` string is generated by concatenating all tokens fields
-(same reconstruction rules as comment-parser's `stringify()`).
+Field names exactly match comment-parser's `Tokens` type. The `source` string is generated by concatenating all tokens fields (same reconstruction rules as comment-parser's `stringify()`).
 
 ### Step 6.3: Attach source Array to JsdocTag
 
-In comment-parser, `tag.source` holds a subset of lines belonging to that tag.
-The serializer also reconstructs this:
+In comment-parser, `tag.source` holds a subset of lines belonging to that tag. The serializer also reconstructs this:
 
 ```rust
 fn build_tag_source_array(tag: &JsdocTag<'_>, start_line: u32) -> Vec<SerSourceLine> {
@@ -439,49 +405,37 @@ Add `source` field to SerBlock/SerTag when `compat_mode: true`:
 
 **Do not include source array in Binary AST (recommended).**
 
-The source array can be reconstructed from arena AST fields, so there is no need
-to complicate the Binary AST format.
-Share the reconstruction logic as a JS utility and call it from the Binary AST decoder:
+The source array can be reconstructed from arena AST fields, so there is no need to complicate the Binary AST format. Share the reconstruction logic as a JS utility and call it from the Binary AST decoder:
 
 ```
 Binary AST -> Decoder -> Lazy Nodes -> reconstructSourceArray(node) -> source[]
 ```
 
-Since the JSON serializer and Binary AST decoder can use the same reconstruction logic,
-extract `buildSourceArray(block)` as a JS utility in a shared package.
+Since the JSON serializer and Binary AST decoder can use the same reconstruction logic, extract `buildSourceArray(block)` as a JS utility in a shared package.
 
 ## Verification
 
 ### Existing Tests and Benchmark Regression
 
 1. Verify all tests pass with `cargo test`
-2. Verify no performance regression with `cargo bench --bench parser` and
-   `cargo bench --bench serializer`
+2. Verify no performance regression with `cargo bench --bench parser` and `cargo bench --bench serializer`
 3. Verify no JS binding regression with `pnpm benchmark:ox-jsdoc`
 
 ### jsdoccomment Compatibility Tests
 
-Based on jsdoccomment's test suite (`refers/jsdoccomment/test/`),
-verify that ox-jsdoc's `compat_mode: true, empty_string_for_null: true` output
-matches jsdoccomment's output.
+Based on jsdoccomment's test suite (`refers/jsdoccomment/test/`), verify that ox-jsdoc's `compat_mode: true, empty_string_for_null: true` output matches jsdoccomment's output.
 
 #### Test Data Sources
 
-- `refers/jsdoccomment/test/commentParserToESTree.test.js` -- 16 tests,
-  inline expected AST structure. Verifies all fields of JsdocBlock/JsdocTag/
-  JsdocDescriptionLine/JsdocTypeLine/JsdocInlineTag
-- `refers/jsdoccomment/test/parseComment.test.js` -- 19 tests,
-  including 4 inline tag formats (plain, pipe, space, prefix)
-- `refers/jsdoccomment/test/fixture/roundTripData.js` -- 32 comment blocks,
-  round-trip (parse -> AST -> string reconstruction) verification
+- `refers/jsdoccomment/test/commentParserToESTree.test.js` -- 16 tests, inline expected AST structure. Verifies all fields of JsdocBlock/JsdocTag/ JsdocDescriptionLine/JsdocTypeLine/JsdocInlineTag
+- `refers/jsdoccomment/test/parseComment.test.js` -- 19 tests, including 4 inline tag formats (plain, pipe, space, prefix)
+- `refers/jsdoccomment/test/fixture/roundTripData.js` -- 32 comment blocks, round-trip (parse -> AST -> string reconstruction) verification
 
 #### Test Strategy
 
 **Level 1: Field Existence Tests (Rust unit tests)**
 
-Add Rust integration tests in `crates/ox_jsdoc/tests/compat/`.
-Verify that expected fields exist in compat_mode JSON output
-and ox-jsdoc-specific fields are excluded.
+Add Rust integration tests in `crates/ox_jsdoc/tests/compat/`. Verify that expected fields exist in compat_mode JSON output and ox-jsdoc-specific fields are excluded.
 
 Target checklist:
 
@@ -511,11 +465,9 @@ null vs empty string:
 
 **Level 2: AST Value Match Tests (JS integration -- dynamic comparison with jsdoccomment's actual parser)**
 
-Call jsdoccomment's actual parser at test execution time and compare dynamically with ox-jsdoc's output.
-No dependency on static JSON expected-value files.
+Call jsdoccomment's actual parser at test execution time and compare dynamically with ox-jsdoc's output. No dependency on static JSON expected-value files.
 
-Test runner: Node.js test script (vitest or node:test)
-Dependencies: `@es-joy/jsdoccomment` (devDependencies), `ox-jsdoc` (workspace)
+Test runner: Node.js test script (vitest or node:test) Dependencies: `@es-joy/jsdoccomment` (devDependencies), `ox-jsdoc` (workspace)
 
 Test procedure:
 
@@ -573,9 +525,7 @@ source/tokens array (after Phase 6 completion):
 - `source[]` element count matches
 - Each `source[i].number` matches (0-based line number)
 - Each `source[i].source` matches (original text reconstruction)
-- Each `source[i].tokens` -- all 12 fields match
-  (start, delimiter, postDelimiter, tag, postTag, type, postType,
-  name, postName, description, end, lineEnd)
+- Each `source[i].tokens` -- all 12 fields match (start, delimiter, postDelimiter, tag, postTag, type, postType, name, postName, description, end, lineEnd)
 - `tag.source[]` element count and each entry matches
 
 Comparison exclusions (stripped in assertCompatible):
@@ -584,8 +534,7 @@ Comparison exclusions (stripped in assertCompatible):
 - `parsedType` -- both null (ox-jsdoc not implemented, jsdoccomment without type parser)
 - ox-jsdoc-specific fields -- already excluded in compat_mode
 
-Since tests depend on jsdoccomment's actual parser, differences are automatically detected
-on jsdoccomment version upgrades. No static JSON expected-value maintenance required.
+Since tests depend on jsdoccomment's actual parser, differences are automatically detected on jsdoccomment version upgrades. No static JSON expected-value maintenance required.
 
 **Level 3: Round-Trip Tests (comparison with jsdoccomment's estreeToString)**
 
@@ -617,9 +566,7 @@ for (const { comment } of roundTripData) {
 }
 ```
 
-After Phase 6 completion, ox-jsdoc's compat_mode output includes the `source[]` array,
-so it can be passed directly to comment-parser's `stringify()` to reconstruct the comment string.
-No need to implement stringify functionality in ox-jsdoc itself.
+After Phase 6 completion, ox-jsdoc's compat_mode output includes the `source[]` array, so it can be passed directly to comment-parser's `stringify()` to reconstruct the comment string. No need to implement stringify functionality in ox-jsdoc itself.
 
 **Level 4: Inline Tag Format Tests**
 
@@ -640,9 +587,7 @@ For each format:
 
 #### Test Fixture Management
 
-Fixtures are created within the ox-jsdoc repository.
-**No static JSON expected-value files are created** -- expected values are
-dynamically generated from jsdoccomment's actual parser at test execution time.
+Fixtures are created within the ox-jsdoc repository. **No static JSON expected-value files are created** -- expected values are dynamically generated from jsdoccomment's actual parser at test execution time.
 
 ```
 tests/
@@ -676,15 +621,11 @@ The following are accepted as differences from jsdoccomment (excluded in tests):
 
 ## Implementation Notes on Differences from jsdoccomment
 
-After thorough review of jsdoccomment's implementation code, the following subtle behavioral
-differences affect compat_mode compatibility. Each must be considered during Phase implementation.
+After thorough review of jsdoccomment's implementation code, the following subtle behavioral differences affect compat_mode compatibility. Each must be considered during Phase implementation.
 
 ### Note 1: `lineEnd` Exists on JsdocTag ESTree Node
 
-jsdoccomment's `commentParserToESTree()` destructures comment-parser's tokens,
-excluding `end`, `delimiter`, `postDelimiter`, `start`, and spreads the remaining
-as `...tkns` onto JsdocTag (line 333). Since comment-parser's tokens include
-the `lineEnd` field, JsdocTag also **includes** `lineEnd`.
+jsdoccomment's `commentParserToESTree()` destructures comment-parser's tokens, excluding `end`, `delimiter`, `postDelimiter`, `start`, and spreads the remaining as `...tkns` onto JsdocTag (line 333). Since comment-parser's tokens include the `lineEnd` field, JsdocTag also **includes** `lineEnd`.
 
 ```javascript
 // commentParserToESTree.js 327-334
@@ -699,30 +640,22 @@ const {
 const tagObj = { ...tkns, ... };  // <- lineEnd ends up on JsdocTag
 ```
 
-**Resolution**: Add `line_end` to `JsdocTag` in Phase 1.3, and output it as
-`lineEnd` on the JsdocTag ESTree node when compat_mode is enabled.
+**Resolution**: Add `line_end` to `JsdocTag` in Phase 1.3, and output it as `lineEnd` on the JsdocTag ESTree node when compat_mode is enabled.
 
 ### Note 2: `rawType` Has Encapsulating `{}` Stripped
 
-jsdoccomment's `rawType` has the leading `{` and trailing `}` removed via
-`stripEncapsulatingBrackets()`. For multi-line types, removal is from the
-first line's beginning and the last line's end.
+jsdoccomment's `rawType` has the leading `{` and trailing `}` removed via `stripEncapsulatingBrackets()`. For multi-line types, removal is from the first line's beginning and the last line's end.
 
-**Resolution**: When compat_mode is enabled, output `rawType` with `{}` stripped,
-matching jsdoccomment. ox-jsdoc's `JsdocTypeSource.raw` should already have braces
-stripped, but verify during implementation.
+**Resolution**: When compat_mode is enabled, output `rawType` with `{}` stripped, matching jsdoccomment. ox-jsdoc's `JsdocTypeSource.raw` should already have braces stripped, but verify during implementation.
 
 - `compat_mode: false` (default): maintain current ox-jsdoc `rawType` output
 - `compat_mode: true`: output `rawType` with `{}` stripped, matching jsdoccomment
 
 ### Note 3: First JsdocTypeLine/JsdocDescriptionLine Has Empty String Fields
 
-In jsdoccomment, the **first** JsdocTypeLine and JsdocDescriptionLine within a tag have
-`delimiter`, `postDelimiter`, `initial` all set to `""` (empty string).
-Lines from the second onward have actual margin values (`"*"`, `" "`, `" "` etc.).
+In jsdoccomment, the **first** JsdocTypeLine and JsdocDescriptionLine within a tag have `delimiter`, `postDelimiter`, `initial` all set to `""` (empty string). Lines from the second onward have actual margin values (`"*"`, `" "`, `" "` etc.).
 
-This reflects comment-parser's source structure where the first line of a tag shares
-the same line as the tag name and thus has no independent delimiter.
+This reflects comment-parser's source structure where the first line of a tag shares the same line as the tag name and thus has no independent delimiter.
 
 ```javascript
 // Example: @param {string} name - desc
@@ -731,48 +664,35 @@ typeLines[0] = { delimiter: '', postDelimiter: '', initial: '', rawType: 'string
 typeLines[1] = { delimiter: '*', postDelimiter: ' ', initial: ' ', rawType: 'number}' }
 ```
 
-Similarly, description text on the same line as `/**` also has
-`delimiter: ""`, `postDelimiter: ""`.
+Similarly, description text on the same line as `/**` also has `delimiter: ""`, `postDelimiter: ""`.
 
-**Resolution**: In Phase 1.2 context.rs, set delimiter/postDelimiter/initial to empty strings
-for TypeLines/DescriptionLines generated from a tag's first line.
-Phase 6 source reconstruction also follows this rule.
+**Resolution**: In Phase 1.2 context.rs, set delimiter/postDelimiter/initial to empty strings for TypeLines/DescriptionLines generated from a tag's first line. Phase 6 source reconstruction also follows this rule.
 
 ### Note 4: Tag-Specific Parse Rules (`noTypes`/`noNames`/`@template`)
 
-jsdoccomment's `parseComment()` customizes comment-parser's tokenizers,
-skipping type or name parsing for specific tags:
+jsdoccomment's `parseComment()` customizes comment-parser's tokenizers, skipping type or name parsing for specific tags:
 
-**`defaultNoTypes`** -- tags that skip type parsing:
-`@default`, `@defaultvalue`, `@description`, `@example`, `@file`,
-`@fileoverview`, `@license`, `@overview`, `@see`, `@summary` etc.
+**`defaultNoTypes`** -- tags that skip type parsing: `@default`, `@defaultvalue`, `@description`, `@example`, `@file`, `@fileoverview`, `@license`, `@overview`, `@see`, `@summary` etc.
 
-**`defaultNoNames`** -- tags that skip name parsing:
-`@returns`, `@return`, `@throws`, `@exception`, `@access`,
-`@lends`, `@class`, `@constructor` etc.
+**`defaultNoNames`** -- tags that skip name parsing: `@returns`, `@return`, `@throws`, `@exception`, `@access`, `@lends`, `@class`, `@constructor` etc.
 
-**`@template` special handling** -- custom parsing of comma-separated template parameters.
-Also supports bracketed default values `[T=default]`.
+**`@template` special handling** -- custom parsing of comma-separated template parameters. Also supports bracketed default values `[T=default]`.
 
-**`@see` `{@link}` special handling** (`hasSeeWithLink`) -- when `@see` tag's value
-starts with `{@link ...}`, name parsing is skipped.
+**`@see` `{@link}` special handling** (`hasSeeWithLink`) -- when `@see` tag's value starts with `{@link ...}`, name parsing is skipped.
 
-**Resolution**: ox-jsdoc's parser needs to implement these tag-specific rules.
-If the current parser performs generic TagBody extraction, add logic to switch
-type/name extraction on/off based on tag name.
-This may require parser improvements as a prerequisite for Phase 1.
+**Resolution**: ox-jsdoc's parser needs to implement these tag-specific rules. If the current parser performs generic TagBody extraction, add logic to switch type/name extraction on/off based on tag name. This may require parser improvements as a prerequisite for Phase 1.
 
 ### Note 5: description Joining Logic and Empty Lines in descriptionLines
 
 #### Three-Way Comparison
 
-| Behavior                 | ox-jsdoc (current) | oxc_jsdoc                                                          | jsdoccomment                                                                        |
-| ------------------------ | ------------------ | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| Empty line handling      | excluded           | `parsed()`: excluded / `parsed_preserving_whitespace()`: preserved | compact: excluded for both block and tag descriptions / preserve: preserved         |
-| descriptionLines empties | **excluded**       | no descriptionLines concept                                        | compact: **block excluded, tag trailing empties excluded** / preserve: **included** |
-| Spacing mode             | none               | method-based (2 variants)                                          | option (compact/preserve)                                                           |
-| tagDescriptionSeen       | none               | none                                                               | present (ignored until type closes)                                                 |
-| Leading/trailing empties | dropped            | dropped (parsed)                                                   | compact: excluded / preserve: included                                              |
+| Behavior | ox-jsdoc (current) | oxc_jsdoc | jsdoccomment |
+| --- | --- | --- | --- |
+| Empty line handling | excluded | `parsed()`: excluded / `parsed_preserving_whitespace()`: preserved | compact: excluded for both block and tag descriptions / preserve: preserved |
+| descriptionLines empties | **excluded** | no descriptionLines concept | compact: **block excluded, tag trailing empties excluded** / preserve: **included** |
+| Spacing mode | none | method-based (2 variants) | option (compact/preserve) |
+| tagDescriptionSeen | none | none | present (ignored until type closes) |
+| Leading/trailing empties | dropped | dropped (parsed) | compact: excluded / preserve: included |
 
 #### Detailed descriptionLines Behavior by jsdoccomment Spacing
 
@@ -798,24 +718,15 @@ if (((spacing === 'compact' && description) || lastTag) ||
 **`description` joined text (compact mode):**
 
 - Block description: empty lines already excluded by outer condition, not included in joining
-- Tag description: additional condition (lines 482-483):
-  `!(spacing === 'compact' && holder.description && description === '')`
-  -> When description text already exists, joining of empty descriptions is skipped
+- Tag description: additional condition (lines 482-483): `!(spacing === 'compact' && holder.description && description === '')` -> When description text already exists, joining of empty descriptions is skipped
 
 #### Issues
 
-1. **Empty lines excluded from descriptionLines**: ox-jsdoc's `parse_description_lines()`
-   skips empty lines with `line.content.trim().is_empty()`. In jsdoccomment's preserve mode,
-   empty lines are preserved as `JsdocDescriptionLine { description: "" }`.
-   compat_mode + preserve must match this behavior.
+1. **Empty lines excluded from descriptionLines**: ox-jsdoc's `parse_description_lines()` skips empty lines with `line.content.trim().is_empty()`. In jsdoccomment's preserve mode, empty lines are preserved as `JsdocDescriptionLine { description: "" }`. compat_mode + preserve must match this behavior.
 
-2. **Missing `tagDescriptionSeen` flag**: In jsdoccomment, for multi-line types,
-   tag description lines are ignored until the type closes with `}`. Neither ox-jsdoc
-   nor oxc_jsdoc has this control. compat_mode output will be inconsistent for multi-line types.
-   Condition: `tagDescriptionSeen ||= Boolean(lastTag && (rawType === '' || rawType?.endsWith('}')))`
+2. **Missing `tagDescriptionSeen` flag**: In jsdoccomment, for multi-line types, tag description lines are ignored until the type closes with `}`. Neither ox-jsdoc nor oxc_jsdoc has this control. compat_mode output will be inconsistent for multi-line types. Condition: `tagDescriptionSeen ||= Boolean(lastTag && (rawType === '' || rawType?.endsWith('}')))`
 
-3. **Joined text differences**: ox-jsdoc's `normalize_lines()` drops leading/trailing empty lines,
-   but jsdoccomment's preserve mode includes them. The `description` field values may differ.
+3. **Joined text differences**: ox-jsdoc's `normalize_lines()` drops leading/trailing empty lines, but jsdoccomment's preserve mode includes them. The `description` field values may differ.
 
 #### Resolution
 
@@ -844,14 +755,11 @@ for line in lines {
 }
 ```
 
-This change applies regardless of compat_mode (internal Rust AST change).
-Including empty lines has no impact on oxlint lint rules (empty descriptionLines
-are simply additional entries with description: `""`).
+This change applies regardless of compat_mode (internal Rust AST change). Including empty lines has no impact on oxlint lint rules (empty descriptionLines are simply additional entries with description: `""`).
 
 **Compact mode filtering in the serializer layer:**
 
-The Rust AST always preserves empty lines, but in compat_mode + compact,
-the serializer filters empty lines to match jsdoccomment's behavior:
+The Rust AST always preserves empty lines, but in compat_mode + compact, the serializer filters empty lines to match jsdoccomment's behavior:
 
 - **Block description descriptionLines**: exclude entries where description is empty string
 - **Tag description descriptionLines**: always output the first descriptionLine, exclude subsequent empty lines
@@ -863,34 +771,25 @@ When compat_mode is disabled: maintain current ox-jsdoc behavior.
 
 **`description` joined text:**
 
-Maintain `normalize_lines()`'s leading/trailing empty line dropping.
-This behavior approximately matches jsdoccomment's compact mode joining result.
+Maintain `normalize_lines()`'s leading/trailing empty line dropping. This behavior approximately matches jsdoccomment's compact mode joining result.
 
 **`tagDescriptionSeen` flag:**
 
-Add logic to the parser to skip description lines until the type closes with `}`
-for tags with multi-line types.
-Implement as part of Phase 0 (parser modifications), alongside Note 4's tag-specific parse rules.
+Add logic to the parser to skip description lines until the type closes with `}` for tags with multi-line types. Implement as part of Phase 0 (parser modifications), alongside Note 4's tag-specific parse rules.
 
 **`spacing` mode support:**
 
-Add `spacing` field to SerializeOptions (handled in Note 7).
-compat_mode default is compact. In preserve mode, preserve empty lines as `'\n'`
-in description joining.
+Add `spacing` field to SerializeOptions (handled in Note 7). compat_mode default is compact. In preserve mode, preserve empty lines as `'\n'` in description joining.
 
 ### Note 6: Single Empty descriptionLine Removal
 
-When a tag has exactly one description line and its description is an empty string,
-jsdoccomment truncates the `descriptionLines` array to length 0.
+When a tag has exactly one description line and its description is an empty string, jsdoccomment truncates the `descriptionLines` array to length 0.
 
-**Resolution**: Implement this filtering in Phase 6's source reconstruction
-or in the serializer.
+**Resolution**: Implement this filtering in Phase 6's source reconstruction or in the serializer.
 
 ### Note 7: `spacing` Option
 
-jsdoccomment's `commentParserToESTree()` accepts a `spacing` option
-(`'compact'` or `'preserve'`, default `'compact'`).
-In compact mode, empty description lines are filtered and description joining changes.
+jsdoccomment's `commentParserToESTree()` accepts a `spacing` option (`'compact'` or `'preserve'`, default `'compact'`). In compact mode, empty description lines are filtered and description joining changes.
 
 **Resolution**: When compat_mode is enabled, match jsdoccomment's behavior.
 
@@ -914,35 +813,31 @@ pub struct SerializeOptions {
 
 Scope of spacing's effect (when compat_mode):
 
-| Target                          | compact                                                    | preserve                       |
-| ------------------------------- | ---------------------------------------------------------- | ------------------------------ |
-| Block `descriptionLines[]`      | **Exclude** entries with empty description                 | Include all entries            |
-| Tag `descriptionLines[]`        | Always include first entry, **exclude** subsequent empties | Include all entries            |
-| Block `description` joined text | Skip empty lines during joining                            | Preserve empty lines as `'\n'` |
-| Tag `description` joined text   | Skip empty description joining when text already exists    | Preserve empty lines as `'\n'` |
-| `typeLines[]` rawType joining   | Trim and join                                              | Preserve whitespace            |
+| Target | compact | preserve |
+| --- | --- | --- |
+| Block `descriptionLines[]` | **Exclude** entries with empty description | Include all entries |
+| Tag `descriptionLines[]` | Always include first entry, **exclude** subsequent empties | Include all entries |
+| Block `description` joined text | Skip empty lines during joining | Preserve empty lines as `'\n'` |
+| Tag `description` joined text | Skip empty description joining when text already exists | Preserve empty lines as `'\n'` |
+| `typeLines[]` rawType joining | Trim and join | Preserve whitespace |
 
 See Note 5 for detailed conditional branching.
 
 ### Note 8: Optional Field JSON Output
 
-In jsdoccomment, `undefined` (unset) fields are not output in JSON.
-Optional fields such as `hasPreterminalTagDescription`, `descriptionStartLine`,
-`descriptionEndLine`, `lastDescriptionLine` must **omit the field entirely**
-when the value is absent, rather than outputting `null`.
+In jsdoccomment, `undefined` (unset) fields are not output in JSON. Optional fields such as `hasPreterminalTagDescription`, `descriptionStartLine`, `descriptionEndLine`, `lastDescriptionLine` must **omit the field entirely** when the value is absent, rather than outputting `null`.
 
-**Resolution**: Use serde's `#[serde(skip_serializing_if = "Option::is_none")]`.
-Apply explicitly in Phase 2.3.
+**Resolution**: Use serde's `#[serde(skip_serializing_if = "Option::is_none")]`. Apply explicitly in Phase 2.3.
 
 ### Note 9: source Reconstruction When Opening/Closing Lines Have Content
 
 #### Three-Way Comparison
 
-| Case             | comment-parser                                                | oxc_jsdoc          | ox-jsdoc                                |
-| ---------------- | ------------------------------------------------------------- | ------------------ | --------------------------------------- |
-| `/**` handling   | Preserved as `tokens.delimiter="/**"`                         | Stripped by caller | `body_range()` skips 3 bytes            |
-| `*/` handling    | Coexists on same line as `tokens.end="*/"`                    | Stripped by caller | `body_range()` removes trailing 2 bytes |
-| `*` on `*/` line | **Not** consumed as delimiter (`!rest.startsWith(end)` guard) | N/A                | May be consumed as margin `*`           |
+| Case | comment-parser | oxc_jsdoc | ox-jsdoc |
+| --- | --- | --- | --- |
+| `/**` handling | Preserved as `tokens.delimiter="/**"` | Stripped by caller | `body_range()` skips 3 bytes |
+| `*/` handling | Coexists on same line as `tokens.end="*/"` | Stripped by caller | `body_range()` removes trailing 2 bytes |
+| `*` on `*/` line | **Not** consumed as delimiter (`!rest.startsWith(end)` guard) | N/A | May be consumed as margin `*` |
 
 #### Problematic Cases
 
@@ -975,18 +870,15 @@ comment-parser's final source entry:
 
 #### Resolution
 
-When compat_mode is enabled, reproduce the same behavior as comment-parser's source structure.
-Implement Phase 6's source reconstruction logic following comment-parser's rules:
+When compat_mode is enabled, reproduce the same behavior as comment-parser's source structure. Implement Phase 6's source reconstruction logic following comment-parser's rules:
 
 **comment-parser rules:**
 
 1. `/**` always goes into source[0]'s `tokens.delimiter`
 2. If content exists on the same line as `/**`, it goes into source[0]'s `tokens.description`
 3. `*/` goes into `tokens.end` of the line it appears on (not a separate line)
-4. `*` on the `*/` line is **not** consumed as `tokens.delimiter`
-   (`!rest.startsWith(markers.end)` guard)
-5. If `/**` and `*/` are on the same line, source array is 1 entry:
-   `{ delimiter: "/**", ..., description: "content", ..., end: "*/" }`
+4. `*` on the `*/` line is **not** consumed as `tokens.delimiter` (`!rest.startsWith(markers.end)` guard)
+5. If `/**` and `*/` are on the same line, source array is 1 entry: `{ delimiter: "/**", ..., description: "content", ..., end: "*/" }`
 
 **Phase 6 implementation:**
 
@@ -1010,31 +902,25 @@ source reconstruction decision logic:
    -> end="*/"
 ```
 
-Use `delimiter_line_break` and `preterminal_line_break` values added in Phase 1
-to determine the case.
+Use `delimiter_line_break` and `preterminal_line_break` values added in Phase 1 to determine the case.
 
 ### Note 10: `@` Prefix Removal
 
-jsdoccomment removes `@` from the `tag` field (`tag.replace(/^@/v, '')`).
-comment-parser's source[].tokens.tag stores with `@` prefix (`"@param"`).
+jsdoccomment removes `@` from the `tag` field (`tag.replace(/^@/v, '')`). comment-parser's source[].tokens.tag stores with `@` prefix (`"@param"`).
 
 **Resolution**: When compat_mode is enabled, match comment-parser's behavior:
 
-- ESTree AST `JsdocTag.tag` field -> without `@` (`"param"`)
-  -- jsdoccomment's `commentParserToESTree()` removes it
-- source[].tokens.tag -> with `@` (`"@param"`)
-  -- comment-parser's source structure as-is
+- ESTree AST `JsdocTag.tag` field -> without `@` (`"param"`) -- jsdoccomment's `commentParserToESTree()` removes it
+- source[].tokens.tag -> with `@` (`"@param"`) -- comment-parser's source structure as-is
 
-Verify at implementation time whether ox-jsdoc's Rust AST (`JsdocTagName.value`)
-already stores without `@`. If so:
+Verify at implementation time whether ox-jsdoc's Rust AST (`JsdocTagName.value`) already stores without `@`. If so:
 
 - compat_mode ESTree output: output as-is
 - Phase 6 source reconstruction: re-prepend `@` to tokens.tag to produce `"@param"`
 
 ### Note 11: Handling `name` on a Separate Line
 
-jsdoccomment's `commentParserToESTree()` (lines 337-356) scans subsequent source entries
-when the tag's `name` token is not on the tag line:
+jsdoccomment's `commentParserToESTree()` (lines 337-356) scans subsequent source entries when the tag's `name` token is not on the tag line:
 
 ```javascript
 if (!tokens.name) {
@@ -1055,26 +941,20 @@ if (!tokens.name) {
 }
 ```
 
-In this case, JsdocTag's `postTag` and `postType` become `''` (empty string),
-and `estreeToString()` detects this condition to insert a newline
-(functioning as a marker indicating that name is on the next line).
+In this case, JsdocTag's `postTag` and `postType` become `''` (empty string), and `estreeToString()` detects this condition to insert a newline (functioning as a marker indicating that name is on the next line).
 
-**Resolution**: In ox-jsdoc's parser, names are normally extracted from the same line
-as the tag. Cases where this spans multiple lines include:
+**Resolution**: In ox-jsdoc's parser, names are normally extracted from the same line as the tag. Cases where this spans multiple lines include:
 
 - Multi-line types where name is on the line after the closing `}`
 - Tag name immediately followed by a newline, with name on the next line
 
-In compat_mode, the serializer must output `postTag: ""` and `postType: ""`
-when name is on a separate line. Phase 6's source reconstruction must also
-account for this case.
+In compat_mode, the serializer must output `postTag: ""` and `postType: ""` when name is on a separate line. Phase 6's source reconstruction must also account for this case.
 
 ## Test Strategy Amendments
 
 ### Amendment 1: Level 2 Test API Call
 
-`parseComment()`'s signature is `(commentOrNode, indent)` with 2 arguments.
-Use `commentParserToESTree()` for ESTree conversion:
+`parseComment()`'s signature is `(commentOrNode, indent)` with 2 arguments. Use `commentParserToESTree()` for ESTree conversion:
 
 ```javascript
 // Before (incorrect):
@@ -1088,16 +968,13 @@ const expected = commentParserToESTree(parsed, 'jsdoc')
 
 ### Amendment 2: parsedType Comparison Exclusion
 
-jsdoccomment stores `jsdoc-type-pratt-parser`'s AST in `parsedType` when a valid type
-is present (not null). ox-jsdoc always outputs null.
+jsdoccomment stores `jsdoc-type-pratt-parser`'s AST in `parsedType` when a valid type is present (not null). ox-jsdoc always outputs null.
 
-**Resolution**: **Strip `parsedType` from both** in assertCompatible().
-Even when ox-jsdoc is null and jsdoccomment is non-null, exclude from comparison.
+**Resolution**: **Strip `parsedType` from both** in assertCompatible(). Even when ox-jsdoc is null and jsdoccomment is non-null, exclude from comparison.
 
 ### Amendment 3: Add `spacing` Mode Tests
 
-Add preserve mode tests in addition to compact mode (default).
-Include spacing-specific test cases in Level 2 tests:
+Add preserve mode tests in addition to compact mode (default). Include spacing-specific test cases in Level 2 tests:
 
 ```javascript
 for (const spacing of ['compact', 'preserve']) {
@@ -1134,15 +1011,8 @@ Phase 1.1 -> 1.2 -> 1.3 -> 1.4 (Critical path: source-preserving fields)
                            Phase 6 (source/tokens array reconstruction)
 ```
 
-Phase 1 has the largest blast radius, and Phases 2-6 depend on Phase 1.4's SerializeOptions.
-Phase 6 can only build a complete source array once all fields from Phases 1-2 are available,
-so it is implemented last.
+Phase 1 has the largest blast radius, and Phases 2-6 depend on Phase 1.4's SerializeOptions. Phase 6 can only build a complete source array once all fields from Phases 1-2 are available, so it is implemented last.
 
-Phase 6 is directly tied to eslint-plugin-jsdoc rule compatibility, so Phase 6 is required
-if integration with eslint-plugin-jsdoc is the goal.
-For jsdoccomment AST-level compatibility only, Phases 1-5 are sufficient.
+Phase 6 is directly tied to eslint-plugin-jsdoc rule compatibility, so Phase 6 is required if integration with eslint-plugin-jsdoc is the goal. For jsdoccomment AST-level compatibility only, Phases 1-5 are sufficient.
 
-Note 4 (tag-specific parse rules) may require parser improvements as a prerequisite for Phase 1.
-noTypes/noNames/template special handling is a parser-layer concern that cannot be addressed
-by the serializer alone. Before starting implementation, verify ox-jsdoc parser's current behavior
-and if necessary, prioritize parser modifications as Phase 0.
+Note 4 (tag-specific parse rules) may require parser improvements as a prerequisite for Phase 1. noTypes/noNames/template special handling is a parser-layer concern that cannot be addressed by the serializer alone. Before starting implementation, verify ox-jsdoc parser's current behavior and if necessary, prioritize parser modifications as Phase 0.

@@ -1,16 +1,10 @@
 # ox-jsdoc Binary AST Design
 
-This directory contains the formal design documents for the ox-jsdoc
-**Binary AST format**. By combining insights from the tsgo Binary AST and the
-oxc raw transfer lazy decoder, it defines a single format that works across
-NAPI / WASM / IPC environments.
+This directory contains the formal design documents for the ox-jsdoc **Binary AST format**. By combining insights from the tsgo Binary AST and the oxc raw transfer lazy decoder, it defines a single format that works across NAPI / WASM / IPC environments.
 
 ## Overview
 
-The Rust side of the JSDoc parser runs at nanosecond speeds, but transferring
-the AST to JS through JSON serialization and `JSON.parse` introduces enough
-overhead to slow it down to comment-parser levels. The Binary AST eliminates
-this boundary cost and achieves the following:
+The Rust side of the JSDoc parser runs at nanosecond speeds, but transferring the AST to JS through JSON serialization and `JSON.parse` introduces enough overhead to slow it down to comment-parser levels. The Binary AST eliminates this boundary cost and achieves the following:
 
 1. Removes the `serde_json` dependency on the Rust side
 2. Removes `JSON.parse` on the JS side
@@ -21,21 +15,15 @@ this boundary cost and achieves the following:
 
 ## Design core
 
-- **The parser builds the Binary AST directly (Approach c-1)**: removes the
-  typed AST struct hierarchy and has the parser write the Binary AST directly
-  into the arena
-- **Same lazy decoder pattern in both languages**: both Rust and JS operate
-  under the same model of "lazily expanding the Binary AST"
-- **Zero-copy sharing**: the arena memory is viewed directly from JS through
-  the NAPI Buffer / WASM `memory.buffer`
-- **Batch support**: stores N comments in a single buffer (String dedup,
-  reduced NAPI calls)
+- **The parser builds the Binary AST directly (Approach c-1)**: removes the typed AST struct hierarchy and has the parser write the Binary AST directly into the arena
+- **Same lazy decoder pattern in both languages**: both Rust and JS operate under the same model of "lazily expanding the Binary AST"
+- **Zero-copy sharing**: the arena memory is viewed directly from JS through the NAPI Buffer / WASM `memory.buffer`
+- **Batch support**: stores N comments in a single buffer (String dedup, reduced NAPI calls)
 - **compat_mode is handled within the single format**: switched via Header bit0 flag
 
 ## Document structure
 
-Each chapter is split into an independent file. We recommend reading them in
-order during implementation:
+Each chapter is split into an independent file. We recommend reading them in order during implementation:
 
 ### Design premises
 
@@ -69,9 +57,7 @@ order during implementation:
    - Common Data (6-bit, small per-kind data)
    - Node catalog matrix (60 nodes + 1 Sentinel + 1 reserved-only `NodeList` discriminant = 62 entries; `NodeList` is reserved-only and never emitted by the encoder)
 
-   Each section follows the unified structure of "Design overview / Layout /
-   Field details / Implementation sketch / Size and performance / Differences
-   from tsgo", accompanied by SVG diagrams.
+   Each section follows the unified structure of "Design overview / Layout / Field details / Implementation sketch / Size and performance / Differences from tsgo", accompanied by SVG diagrams.
 
 4. [Encoding (Tree, Variant, compat_mode)](./encoding.md)
    - Handling nodes with variants
@@ -110,9 +96,7 @@ order during implementation:
 
 7. [Testing Strategy](./testing.md)
    - Design overview (3-axis structure + per-Phase staged adoption)
-   - **16 test categories** (unit / encoder / decoder / Roundtrip / compatibility /
-     JS / cross-binding / edge cases / Visitor / memory safety / Fuzzing / Snapshot /
-     performance / **bit-level** / **lazy/cache** / **compat switching**)
+   - **16 test categories** (unit / encoder / decoder / Roundtrip / compatibility / JS / cross-binding / edge cases / Visitor / memory safety / Fuzzing / Snapshot / performance / **bit-level** / **lazy/cache** / **compat switching**)
    - Per-Phase test addition schedule
    - Reuse of existing test assets (50-70% reduction)
 
@@ -154,9 +138,7 @@ The investigation history and external research are bundled under `./refs/`:
 
 ### Design alternatives (not adopted)
 
-- [`./refs/construction-methods.md`](./refs/construction-methods.md) —
-  Comparison of Binary AST construction alternatives (Approaches a / b / c-2 vs
-  the adopted c-1, full breakdown of Layer 1-2 alternatives)
+- [`./refs/construction-methods.md`](./refs/construction-methods.md) — Comparison of Binary AST construction alternatives (Approaches a / b / c-2 vs the adopted c-1, full breakdown of Layer 1-2 alternatives)
 
 ### External research and existing materials
 

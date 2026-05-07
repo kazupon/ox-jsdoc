@@ -1,8 +1,6 @@
 # Performance Measurement Strategy
 
-Performance work should be measurement-driven.
-`ox-jsdoc` should avoid speculative optimization and instead decide based on
-repeatable measurements against realistic inputs.
+Performance work should be measurement-driven. `ox-jsdoc` should avoid speculative optimization and instead decide based on repeatable measurements against realistic inputs.
 
 ## What should be measured
 
@@ -23,8 +21,7 @@ This keeps the project honest about where time is actually spent.
 
 ## What should not be measured only in aggregate
 
-A single end-to-end benchmark is not enough.
-At least three levels should exist:
+A single end-to-end benchmark is not enough. At least three levels should exist:
 
 1. **Micro benchmarks**
    - scanner-only or parser-only hot paths
@@ -39,8 +36,7 @@ At least three levels should exist:
 3. **Corpus benchmarks**
    - realistic multi-comment inputs collected from real-world JSDoc usage
 
-If everything is measured only end-to-end, it becomes difficult to tell whether
-a regression comes from scanning, AST construction, validation, or serialization.
+If everything is measured only end-to-end, it becomes difficult to tell whether a regression comes from scanning, AST construction, validation, or serialization.
 
 ## Recommended benchmark corpus
 
@@ -75,13 +71,11 @@ The benchmark corpus should include at least these buckets:
   - incomplete inline tags
   - ambiguous or partially broken name/value splits
 
-This matters because an optimization that helps `@param` may hurt long descriptions,
-and an optimization that helps simple types may hurt malformed recovery.
+This matters because an optimization that helps `@param` may hurt long descriptions, and an optimization that helps simple types may hurt malformed recovery.
 
 ## Comparison baselines
 
-`ox-jsdoc` should not rely on only one comparison target.
-Its benchmark strategy should distinguish between external baselines and internal baselines.
+`ox-jsdoc` should not rely on only one comparison target. Its benchmark strategy should distinguish between external baselines and internal baselines.
 
 #### External baselines
 
@@ -115,8 +109,7 @@ Neither is a perfect apples-to-apples match:
 - `jsdoc` is not just a parser and includes broader processing concerns
 - toolchain comparisons include rule-engine and integration costs that are not parser-only costs
 
-So the comparison should not be framed as a simplistic “faster or slower than X”.
-It should answer more useful questions such as:
+So the comparison should not be framed as a simplistic “faster or slower than X”. It should answer more useful questions such as:
 
 - how expensive is `ox-jsdoc` on common comments
 - how much overhead comes from richer AST structure
@@ -132,21 +125,18 @@ The more important regression guard is `ox-jsdoc` itself, measured stage by stag
 3. parser + validator
 4. parser + validator + serializer
 
-This is necessary because external comparisons alone do not show where regressions come from.
-If performance drops, the project needs to know whether the regression came from:
+This is necessary because external comparisons alone do not show where regressions come from. If performance drops, the project needs to know whether the regression came from:
 
 - scanning
 - AST construction
 - validation
 - serialization
 
-The internal baseline should therefore be the primary tool for day-to-day optimization work,
-while external baselines should serve as contextual reference points.
+The internal baseline should therefore be the primary tool for day-to-day optimization work, while external baselines should serve as contextual reference points.
 
 ## Fixture strategy
 
-Parser fixtures should not come from only one source.
-`ox-jsdoc` needs fixtures that balance:
+Parser fixtures should not come from only one source. `ox-jsdoc` needs fixtures that balance:
 
 - compatibility with canonical JSDoc behavior
 - robustness against raw parsing edge cases
@@ -167,8 +157,7 @@ Parser fixtures should not come from only one source.
    - real-world and toolchain-oriented source
    - use it for parameter-path shapes, mode-sensitive type syntax, escaping behavior, and practical lint-driven comment patterns
 
-`refers/jsdoc` alone is important, but it is not sufficient.
-The fixture set should reflect both parser correctness and ecosystem realism.
+`refers/jsdoc` alone is important, but it is not sufficient. The fixture set should reflect both parser correctness and ecosystem realism.
 
 #### Recommended adoption order
 
@@ -176,8 +165,7 @@ The fixture set should reflect both parser correctness and ecosystem realism.
 2. Add `refers/comment-parser` cases to harden raw parsing behavior and recovery.
 3. Add `refers/eslint-plugin-jsdoc` cases once parser and validator behavior are stable enough to test realistic toolchain inputs.
 
-Fixture planning should mirror benchmark planning.
-The suite should intentionally cover:
+Fixture planning should mirror benchmark planning. The suite should intentionally cover:
 
 - common cases
 - special-tag cases
@@ -186,9 +174,7 @@ The suite should intentionally cover:
 
 #### Fixture file layout
 
-Performance fixtures should use sidecar JSON metadata.
-The `.jsdoc` file should contain only the exact bytes passed to the parser.
-Metadata should live in a sibling `.json` file with the same basename.
+Performance fixtures should use sidecar JSON metadata. The `.jsdoc` file should contain only the exact bytes passed to the parser. Metadata should live in a sibling `.json` file with the same basename.
 
 Recommended layout:
 
@@ -239,10 +225,7 @@ Example sidecar `.json` metadata:
 }
 ```
 
-Use sidecar JSON instead of YAML frontmatter because span and byte-offset tests
-must parse the fixture input exactly as-is.
-Frontmatter would shift offsets and force benchmark code to strip metadata
-before parsing.
+Use sidecar JSON instead of YAML frontmatter because span and byte-offset tests must parse the fixture input exactly as-is. Frontmatter would shift offsets and force benchmark code to strip metadata before parsing.
 
 The metadata format should stay small at first:
 
@@ -256,15 +239,13 @@ The metadata format should stay small at first:
 
 #### Recommended adoption order for external comparison
 
-External comparisons do not all need to exist from day one.
-A practical order is:
+External comparisons do not all need to exist from day one. A practical order is:
 
 1. `comment-parser` as the first parser-level baseline
 2. `jsdoc` as an ecosystem-level reference
 3. toolchain-level comparisons once `ox-jsdoc` is integrated into lint-oriented workflows
 
-This order keeps early measurement simple while leaving room to demonstrate
-the larger practical advantage of `ox-jsdoc` later.
+This order keeps early measurement simple while leaving room to demonstrate the larger practical advantage of `ox-jsdoc` later.
 
 ## Primary comparison rules
 
@@ -276,9 +257,7 @@ Performance changes should be evaluated with a few stable questions:
 - Does this move work from parser to validator, and is that shift acceptable?
 - Does this improve throughput only by losing useful source fidelity?
 
-This is important because not every speedup is a good trade.
-For example, flattening description structure may speed up parsing a little while
-hurting linting, formatting, and diagnostics.
+This is important because not every speedup is a good trade. For example, flattening description structure may speed up parsing a little while hurting linting, formatting, and diagnostics.
 
 ## Initial tooling direction
 
@@ -292,9 +271,7 @@ Reasons:
 - it is sufficient for parser / validator / serializer stage benchmarks
 - it avoids selecting a less proven benchmark stack before the parser exists
 
-`divan` should not be the first benchmark framework.
-It can be revisited later if the project needs a simpler benchmark harness or
-if measurement shows that `criterion2` overhead / ergonomics becomes a problem.
+`divan` should not be the first benchmark framework. It can be revisited later if the project needs a simpler benchmark harness or if measurement shows that `criterion2` overhead / ergonomics becomes a problem.
 
 The first benchmark crate or module should support:
 
@@ -303,8 +280,7 @@ The first benchmark crate or module should support:
 - simple memory-oriented regression checks where feasible
 - CI-visible regression tracking for representative cases
 
-The main goal is not to build a large benchmarking system immediately.
-The main goal is to make performance claims testable from the beginning.
+The main goal is not to build a large benchmarking system immediately. The main goal is to make performance claims testable from the beginning.
 
 Recommended initial layout once the Rust workspace exists:
 
@@ -323,14 +299,11 @@ The first parser benchmark should measure:
 - malformed recovery comments
 - fixture corpus parsing
 
-CodSpeed integration should be deferred until benchmarks are stable enough to be
-useful in CI. Local benchmark repeatability should come first.
+CodSpeed integration should be deferred until benchmarks are stable enough to be useful in CI. Local benchmark repeatability should come first.
 
 ## Post-measurement performance design items
 
-The following items should remain explicit deferred design topics.
-They should not be adopted before parser benchmarks and representative fixtures
-exist.
+The following items should remain explicit deferred design topics. They should not be adopted before parser benchmarks and representative fixtures exist.
 
 1. **`Ident`-like pre-hashed tag names**
    - revisit if tag lookup or tag-name comparison appears in hot profiles
@@ -369,9 +342,7 @@ This order follows the implementation order of the system itself.
 
 ## Practical rule for optimization work
 
-No low-level optimization should be adopted just because it looks fast in theory.
-Before adding complexity such as specialized scanners, extra caching, or more
-aggressive AST packing, the project should be able to show:
+No low-level optimization should be adopted just because it looks fast in theory. Before adding complexity such as specialized scanners, extra caching, or more aggressive AST packing, the project should be able to show:
 
 - which benchmark regressed
 - which phase regressed

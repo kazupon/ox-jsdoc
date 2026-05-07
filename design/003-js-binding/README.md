@@ -2,12 +2,9 @@
 
 ## Context
 
-The Rust core parser, validator, analyzer, and serializer are working.
-The next step is to create NAPI bindings so JS/Node.js consumers can use
-`ox-jsdoc`.
+The Rust core parser, validator, analyzer, and serializer are working. The next step is to create NAPI bindings so JS/Node.js consumers can use `ox-jsdoc`.
 
-Design document `002-project-structure` specifies placing the binding crate
-under `napi/ox-jsdoc/` and exposing a JS API through JSON-first transfer.
+Design document `002-project-structure` specifies placing the binding crate under `napi/ox-jsdoc/` and exposing a JS API through JSON-first transfer.
 
 ## Goals
 
@@ -186,8 +183,7 @@ members = [
 
 ## Testing
 
-JS binding tests use vitest.
-Test files are placed under `napi/ox-jsdoc/test/`.
+JS binding tests use vitest. Test files are placed under `napi/ox-jsdoc/test/`.
 
 ### What to test
 
@@ -245,9 +241,7 @@ vpr test
 
 ### Overview
 
-npm publishing is done through GitHub Actions, not locally.
-A matrix build compiles binaries for each platform, then `@napi-rs/cli`
-commands generate and publish platform-specific packages.
+npm publishing is done through GitHub Actions, not locally. A matrix build compiles binaries for each platform, then `@napi-rs/cli` commands generate and publish platform-specific packages.
 
 The workflow follows the oxc `reusable_release.yml` pattern.
 
@@ -262,8 +256,7 @@ on:
       - .github/workflows/release.yml
 ```
 
-Auto-publishes when the `version` field in `napi/ox-jsdoc/package.json`
-changes on the main branch.
+Auto-publishes when the `version` field in `napi/ox-jsdoc/package.json` changes on the main branch.
 
 ### Workflow Structure
 
@@ -430,8 +423,7 @@ The main package declares `optionalDependencies`:
 }
 ```
 
-npm installs only the `optionalDependencies` entry that matches the user's
-platform.
+npm installs only the `optionalDependencies` entry that matches the user's platform.
 
 ### Prerequisites
 

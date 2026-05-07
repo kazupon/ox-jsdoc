@@ -49,10 +49,10 @@ Findings:
 
 ## JS Binding: parse vs parseMultiple (source fixtures, mitata)
 
-| Fixture                               | parse (one-by-one) | parseMultiple (batch) | comment-parser | Batch improvement |
-| ------------------------------------- | -----------------: | --------------------: | -------------: | ----------------: |
-| `source/typed-api-client` (3 blocks)  |             308 µs |                119 µs |        15.9 µs |              2.6x |
-| `source/vue-i18n-composer` (5 blocks) |             406 µs |                142 µs |        19.5 µs |              2.9x |
+| Fixture | parse (one-by-one) | parseMultiple (batch) | comment-parser | Batch improvement |
+| --- | --: | --: | --: | --: |
+| `source/typed-api-client` (3 blocks) | 308 µs | 119 µs | 15.9 µs | 2.6x |
+| `source/vue-i18n-composer` (5 blocks) | 406 µs | 142 µs | 19.5 µs | 2.9x |
 
 Findings:
 
@@ -68,6 +68,4 @@ Findings:
 | JS parseMultiple (batch) | **7-8x slower**   | Batch processing, ESLint plugin    |
 | JS parse (one-by-one)    | **16-21x slower** | Individual comment parsing         |
 
-The Rust parser is very fast. The JS binding bottleneck is NAPI object
-construction overhead, not parsing. The value of ox-jsdoc's JS binding is
-integration with the Rust ecosystem, not raw JS-side speed.
+The Rust parser is very fast. The JS binding bottleneck is NAPI object construction overhead, not parsing. The value of ox-jsdoc's JS binding is integration with the Rust ecosystem, not raw JS-side speed.

@@ -16,8 +16,7 @@ Therefore:
 - The AST should stay **raw-transfer friendly**.
 - But raw transfer should not distort the core AST design.
 
-In other words, a stable-ish layout is desirable, but transport-only fields
-should not be inserted into the core AST.
+In other words, a stable-ish layout is desirable, but transport-only fields should not be inserted into the core AST.
 
 ## 2. Ultra-Low-Level Lexer Micro-Optimizations
 
@@ -28,8 +27,7 @@ In `oxc`, the following are well justified for a JS/TS parser:
 - UTF-8-safe search tables
 - aggressive pointer walking
 
-For `ox-jsdoc` v1, the cost-benefit tradeoff is likely different.
-JSDoc parsing has a different input size and a different grammar profile.
+For `ox-jsdoc` v1, the cost-benefit tradeoff is likely different. JSDoc parsing has a different input size and a different grammar profile.
 
 What should be borrowed here is the optimization mindset, not the exact implementation.
 
@@ -39,27 +37,15 @@ A reasonable starting point is:
 - control flow that keeps branches under control
 - arena-backed output
 
-Low-level micro-optimizations should be considered only after profiling shows
-that they are worth the complexity.
+Low-level micro-optimizations should be considered only after profiling shows that they are worth the complexity.
 
 ## 3. Strong Semantic Graph Identity Inside the Core AST
 
-`oxc` has a rich semantic graph with concepts such as `NodeId`, `ScopeId`,
-`SymbolId`, and `ReferenceId`.
+`oxc` has a rich semantic graph with concepts such as `NodeId`, `ScopeId`, `SymbolId`, and `ReferenceId`.
 
-> [!NOTE]
-> This does not refer only to lint-specific data.
-> It includes analysis-oriented IDs and graph information such as semantic IDs,
-> def-use relationships, cross-reference tracking, scope / symbol resolution
-> results, and other higher-level analysis data used by validators, analyzers,
-> linters, or formatters.
-> The design direction here is to keep such data outside the core AST itself.
+> [!NOTE] This does not refer only to lint-specific data. It includes analysis-oriented IDs and graph information such as semantic IDs, def-use relationships, cross-reference tracking, scope / symbol resolution results, and other higher-level analysis data used by validators, analyzers, linters, or formatters. The design direction here is to keep such data outside the core AST itself.
 
-At the current stage, `ox-jsdoc` does not need to ship that as part of the
-core AST by default.
-If later we need JSDoc cross-reference resolution, integration with the code AST,
-analysis caches for linting or formatting, or IDE-style reference features,
-those can be added as outer-layer data structures.
+At the current stage, `ox-jsdoc` does not need to ship that as part of the core AST by default. If later we need JSDoc cross-reference resolution, integration with the code AST, analysis caches for linting or formatting, or IDE-style reference features, those can be added as outer-layer data structures.
 
 For now:
 
@@ -70,8 +56,7 @@ This keeps the core AST lean.
 
 ## 4. Transport Complexity Inside Parser Core
 
-`oxc`'s NAPI parser supports sync / async and eager / lazy transfer modes.
-That is an integration-layer concern, not a parser-core concern.
+`oxc`'s NAPI parser supports sync / async and eager / lazy transfer modes. That is an integration-layer concern, not a parser-core concern.
 
 `ox-jsdoc` should keep these layers separate:
 

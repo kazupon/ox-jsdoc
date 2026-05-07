@@ -2,11 +2,9 @@
 
 ## Goals
 
-`ox-jsdoc` should remain fast enough for large codebases without becoming
-unnecessarily rigid or transport-driven.
+`ox-jsdoc` should remain fast enough for large codebases without becoming unnecessarily rigid or transport-driven.
 
-The goal is not to recreate `oxc` as-is.
-The goal is to adapt the parts of its design that are genuinely useful for JSDoc parsing.
+The goal is not to recreate `oxc` as-is. The goal is to adapt the parts of its design that are genuinely useful for JSDoc parsing.
 
 The main goals are:
 
@@ -19,18 +17,13 @@ The main goals are:
 
 The following directions can be treated as fixed assumptions for now:
 
-1. **Arena allocator**
-   AST memory assumes an `oxc_allocator`-style arena model.
+1. **Arena allocator** AST memory assumes an `oxc_allocator`-style arena model.
 
-2. **JSON-first JS transfer**
-   Transfer to JS starts with JSON, not raw transfer.
+2. **JSON-first JS transfer** Transfer to JS starts with JSON, not raw transfer.
 
-3. **Diagnostics based on the `oxc` model**
-   Parser diagnostics should be designed in the same general direction as
-   `oxc_diagnostics` and the `oxc` parser error model.
+3. **Diagnostics based on the `oxc` model** Parser diagnostics should be designed in the same general direction as `oxc_diagnostics` and the `oxc` parser error model.
 
-These choices preserve the most important performance characteristics while
-avoiding premature commitment to the most specialized parts of `oxc`.
+These choices preserve the most important performance characteristics while avoiding premature commitment to the most specialized parts of `oxc`.
 
 ## What to Take as Reference from `oxc`
 
@@ -38,10 +31,7 @@ avoiding premature commitment to the most specialized parts of `oxc`.
 
 This is the most important design principle.
 
-One reason `oxc` stays fast is that it does not try to perform every expensive
-correctness check during parsing.
-Some syntax-adjacent checks, binding work, symbol resolution, and higher-level
-validity checks are deferred to later phases.
+One reason `oxc` stays fast is that it does not try to perform every expensive correctness check during parsing. Some syntax-adjacent checks, binding work, symbol resolution, and higher-level validity checks are deferred to later phases.
 
 `ox-jsdoc` should follow the same direction.
 
@@ -63,11 +53,11 @@ These should be pushed to later semantic validation and analysis phases.
 
 `ox-jsdoc` should think in at least three layers:
 
-| Layer         | Primary role                                 | What it does                                                                                      | What it does not do                                             |
-| ------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| **parser**    | Build syntax trees                           | comment structure recognition, AST construction, spans, raw syntax retention, limited recovery    | final tag meaning, final mode decisions, strict validation      |
-| **validator** | Apply validity rules and light normalization | built-in/custom tag rules, type/namepath/parameter-path checks, mode-sensitive rules, diagnostics | consumer-facing high-level derived data                         |
-| **analyzer**  | Produce consumer-oriented facts              | data for linters, formatters, renderers, and other consumers                                      | rebuilding the parse tree, defining validation rules themselves |
+| Layer | Primary role | What it does | What it does not do |
+| --- | --- | --- | --- |
+| **parser** | Build syntax trees | comment structure recognition, AST construction, spans, raw syntax retention, limited recovery | final tag meaning, final mode decisions, strict validation |
+| **validator** | Apply validity rules and light normalization | built-in/custom tag rules, type/namepath/parameter-path checks, mode-sensitive rules, diagnostics | consumer-facing high-level derived data |
+| **analyzer** | Produce consumer-oriented facts | data for linters, formatters, renderers, and other consumers | rebuilding the parse tree, defining validation rules themselves |
 
 #### Concrete examples by layer
 
@@ -141,11 +131,9 @@ Why this matters for performance:
 - traversal reads less memory
 - following child nodes becomes easier to reason about
 
-If every node stores too much unrelated data directly, parsing and traversal pay
-for unnecessary memory traffic on every comment.
+If every node stores too much unrelated data directly, parsing and traversal pay for unnecessary memory traffic on every comment.
 
-`oxc` cares not only about arenas, but also about keeping common nodes small.
-`ox-jsdoc` should adopt the same principle.
+`oxc` cares not only about arenas, but also about keeping common nodes small. `ox-jsdoc` should adopt the same principle.
 
 Rules worth adopting:
 
@@ -161,8 +149,7 @@ Rules worth adopting:
 Examples already reflected in the current design:
 
 - `JsdocDescriptionLine<'a>` and `JsdocInlineTag<'a>`
-  - line-level text and inline-tag boundaries are exposed separately, so rules
-    can traverse inline tags without flattening all description syntax
+  - line-level text and inline-tag boundaries are exposed separately, so rules can traverse inline tags without flattening all description syntax
 - `JsdocTagBody<'a>`
   - generic bodies and `@borrows` bodies are separated
 - `JsdocTagValue<'a>`
@@ -170,9 +157,7 @@ Examples already reflected in the current design:
 - `JsdocTypeSource` and future `JsdocType`
   - raw type syntax and the internal type tree are separated
 
-For example, if description data tried to inline every possible future text,
-inline-code, fenced-code, and inline-tag case into one large node, then even a
-plain description line would require traversing a larger shape than necessary.
+For example, if description data tried to inline every possible future text, inline-code, fenced-code, and inline-tag case into one large node, then even a plain description line would require traversing a larger shape than necessary.
 
 The current design lets common cases stay small:
 
@@ -180,13 +165,11 @@ The current design lets common cases stay small:
 - inline tags use `JsdocInlineTag`
 - fenced code can remain scanner state or become a future `JsdocFencedCodeBlock`
 
-The important goal is not byte-for-byte similarity with `oxc_ast`.
-The real goal is to keep common-path nodes small and understandable.
+The important goal is not byte-for-byte similarity with `oxc_ast`. The real goal is to keep common-path nodes small and understandable.
 
 ### 3. Lossless-Enough Parsing
 
-`oxc` preserves enough source information to support diagnostics, formatting,
-and downstream analysis. `ox-jsdoc` should do the same at the level needed for JSDoc.
+`oxc` preserves enough source information to support diagnostics, formatting, and downstream analysis. `ox-jsdoc` should do the same at the level needed for JSDoc.
 
 What should be preserved:
 
@@ -196,9 +179,7 @@ What should be preserved:
 - generic tag-body structure
 - raw tag body for parts whose final meaning is deferred
 
-This is why `raw_body` and generic body extraction belong in the core design.
-They are not only correctness features. They are also performance choices,
-because they reduce the need for eager normalization inside the parser.
+This is why `raw_body` and generic body extraction belong in the core design. They are not only correctness features. They are also performance choices, because they reduce the need for eager normalization inside the parser.
 
 #### Example 1. Accurate spans
 
@@ -301,8 +282,7 @@ Useful representation:
 }
 ```
 
-The key point is that `@param` and `@since` should not collapse into one raw string
-at parse time. A minimal generic structure is already valuable.
+The key point is that `@param` and `@since` should not collapse into one raw string at parse time. A minimal generic structure is already valuable.
 
 This helps because:
 
@@ -342,8 +322,7 @@ Preserving `raw_body` means:
 - tag-specific parsers can be applied later
 - source fidelity remains better during recovery and diagnostics
 
-So `raw_body` is not just a fallback. It is a deliberate escape hatch that keeps
-the parser from doing expensive eager interpretation.
+So `raw_body` is not just a fallback. It is a deliberate escape hatch that keeps the parser from doing expensive eager interpretation.
 
 #### Example 6. Why this matters for performance
 
@@ -367,12 +346,9 @@ That split keeps the parse hot path short for common JSDoc comments.
 
 ### 4. Borrowed Slice First, Normalized String Later
 
-`ox-jsdoc` should treat source text as the primary storage for parsed strings.
-The parser should preserve spans and borrowed slices whenever possible, and
-create normalized strings only when a later phase actually needs them.
+`ox-jsdoc` should treat source text as the primary storage for parsed strings. The parser should preserve spans and borrowed slices whenever possible, and create normalized strings only when a later phase actually needs them.
 
-This follows the same broad performance direction as `oxc`: avoid copying text
-on the common path, and allocate only for cases that require normalization.
+This follows the same broad performance direction as `oxc`: avoid copying text on the common path, and allocate only for cases that require normalization.
 
 The parser hot path should avoid creating owned strings for:
 
@@ -382,11 +358,9 @@ The parser hot path should avoid creating owned strings for:
 - raw type text
 - parameter and name tokens
 
-Those values should initially remain tied to the original source text through
-`Span` and borrowed string slices.
+Those values should initially remain tied to the original source text through `Span` and borrowed string slices.
 
-Normalization should be delayed to validator, analyzer, formatter, or serializer
-layers when the consumer needs one of these forms:
+Normalization should be delayed to validator, analyzer, formatter, or serializer layers when the consumer needs one of these forms:
 
 - unescaped text
 - whitespace-normalized descriptions
@@ -397,8 +371,7 @@ layers when the consumer needs one of these forms:
 
 #### Why descriptions must remain structured
 
-Real-world projects contain many inline tags in descriptions.
-For example, API-documentation-heavy sources commonly use forms such as:
+Real-world projects contain many inline tags in descriptions. For example, API-documentation-heavy sources commonly use forms such as:
 
 ```js
 /**
@@ -417,10 +390,7 @@ JsdocBlock.inline_tags = [
 ]
 ```
 
-Flattening this into one string would make later phases rediscover the inline tag
-boundary. Keeping line-level description syntax plus direct inline-tag nodes
-during parsing is both more accurate and cheaper for consumers such as linters,
-formatters, and renderers.
+Flattening this into one string would make later phases rediscover the inline tag boundary. Keeping line-level description syntax plus direct inline-tag nodes during parsing is both more accurate and cheaper for consumers such as linters, formatters, and renderers.
 
 This matters in real-world corpora:
 
@@ -428,14 +398,11 @@ This matters in real-world corpora:
 - `../../oss/intlify/vue-i18n` contains many `{@link}` references and long `@remarks`
 - `refers/eslint-plugin-jsdoc` contains lint-oriented inline-tag edge cases
 
-The exact counts are benchmark inputs, not part of the AST contract.
-The design consequence is stable: inline-tag boundaries should be preserved
-instead of rebuilt from flattened strings.
+The exact counts are benchmark inputs, not part of the AST contract. The design consequence is stable: inline-tag boundaries should be preserved instead of rebuilt from flattened strings.
 
 #### Fence-aware scanning
 
-Fenced code blocks should be tracked as scanner state.
-Inside a fenced block, text that looks like a tag should usually remain text:
+Fenced code blocks should be tracked as scanner state. Inside a fenced block, text that looks like a tag should usually remain text:
 
 ````js
 /**
@@ -447,14 +414,11 @@ Inside a fenced block, text that looks like a tag should usually remain text:
  */
 ````
 
-The scanner therefore needs a cheap `fence` state for description and example
-parsing. This is not a request for a full Markdown parser. It is a small state
-machine that prevents expensive or incorrect rediscovery later.
+The scanner therefore needs a cheap `fence` state for description and example parsing. This is not a request for a full Markdown parser. It is a small state machine that prevents expensive or incorrect rediscovery later.
 
 #### Scanner state should be shallow
 
-The scanner should be byte-oriented, but it should not be a naive
-`split_whitespace` parser.
+The scanner should be byte-oriented, but it should not be a naive `split_whitespace` parser.
 
 Important ASCII markers include:
 
@@ -480,8 +444,7 @@ This is necessary because real comments contain forms such as:
 - `{@linkcode Command | entry command}`
 - fenced `@example` blocks
 
-The principle is not to fully parse every nested language immediately.
-The principle is to avoid splitting strings at obviously wrong boundaries.
+The principle is not to fully parse every nested language immediately. The principle is to avoid splitting strings at obviously wrong boundaries.
 
 #### Allocation rule
 
@@ -491,21 +454,15 @@ The default rule should be:
 2. keep `raw_body` for unresolved or tag-specific interpretations
 3. allocate into the arena only when a normalized string is required
 
-For v1, tag names and frequently compared small tokens can remain borrowed
-strings. If measurement shows tag lookup or name comparison is hot, an
-`Ident`-like interned or pre-hashed representation can be considered later.
+For v1, tag names and frequently compared small tokens can remain borrowed strings. If measurement shows tag lookup or name comparison is hot, an `Ident`-like interned or pre-hashed representation can be considered later.
 
 ### 5. Use Generated Code for Structural Repetition
 
-`oxc` does not maintain layout assertions, visitors, and transfer helpers entirely by hand.
-`ox-jsdoc` should also generate code when the repetition is structural.
+`oxc` does not maintain layout assertions, visitors, and transfer helpers entirely by hand. `ox-jsdoc` should also generate code when the repetition is structural.
 
-Here, “structural repetition” means code that must be updated in many places
-whenever the AST changes, even though the updates follow a mostly mechanical pattern.
+Here, “structural repetition” means code that must be updated in many places whenever the AST changes, even though the updates follow a mostly mechanical pattern.
 
-If nodes such as `JsdocBlock`, `JsdocTag`, `JsdocDescriptionLine`,
-`JsdocInlineTag`, and future `JsdocType` nodes are maintained by hand across
-multiple support layers, the risk of drift is high.
+If nodes such as `JsdocBlock`, `JsdocTag`, `JsdocDescriptionLine`, `JsdocInlineTag`, and future `JsdocType` nodes are maintained by hand across multiple support layers, the risk of drift is high.
 
 Typical drift-prone areas:
 
@@ -539,8 +496,7 @@ Examples:
 - `walk_jsdoc_inline_tag`
 - `walk_jsdoc_type`
 
-These mostly follow the same pattern: visit children in order.
-If derived from AST definitions, they become much harder to forget or desynchronize.
+These mostly follow the same pattern: visit children in order. If derived from AST definitions, they become much harder to forget or desynchronize.
 
 ##### 2. Layout assertions
 
@@ -556,8 +512,7 @@ Even without immediate raw transfer, `ox-jsdoc` should detect regressions such a
 - representative nodes growing unexpectedly
 - field ordering drifting
 
-This is not about freezing ABI too early.
-It is about protecting performance-sensitive assumptions.
+This is not about freezing ABI too early. It is about protecting performance-sensitive assumptions.
 
 ##### 3. Serializer boilerplate
 
@@ -586,8 +541,7 @@ then a good part of the serializer boilerplate can be generated instead of repea
 
 #### Why this matters for performance
 
-This is not only about raw runtime speed.
-At first, it matters even more as a way to keep the design from drifting.
+This is not only about raw runtime speed. At first, it matters even more as a way to keep the design from drifting.
 
 Generated support code helps:
 
@@ -599,8 +553,7 @@ In other words, it protects performance-sensitive invariants as the AST evolves.
 
 #### Recommended generation order for `ox-jsdoc`
 
-There is no need to generate everything at once.
-A practical order is:
+There is no need to generate everything at once. A practical order is:
 
 1. visitor / walker
    - changes in the AST quickly require it
@@ -616,16 +569,14 @@ This captures the useful part of the `oxc` approach without importing unnecessar
 
 ### 6. Separate Fast Paths from Cold Paths
 
-`oxc` consistently keeps common cases short and pushes rare cases to the back.
-`ox-jsdoc` should do the same.
+`oxc` consistently keeps common cases short and pushes rare cases to the back. `ox-jsdoc` should do the same.
 
 Definitions:
 
 - **fast path**: the short, simple path used for common input
 - **cold path**: the heavier path used for rare input or error-heavy situations
 
-The important point is not only _what_ can be parsed, but _in what order_ and
-at _what cost_ cases are parsed.
+The important point is not only _what_ can be parsed, but _in what order_ and at _what cost_ cases are parsed.
 
 Two parsers may accept the same final input set:
 
@@ -685,8 +636,7 @@ For example, when reading a normal `@param`, the parser should not also try:
 - the `@memberof!` parser
 - custom-tag-specific rule logic
 
-The fast path should follow a simple rule:
-extract a generic shape first, look for special interpretation only when necessary.
+The fast path should follow a simple rule: extract a generic shape first, look for special interpretation only when necessary.
 
 #### Cases that should go to the cold path
 
@@ -723,8 +673,7 @@ More concretely, cold path entry conditions include:
 - needing custom tag dictionary lookup
 - needing validator-driven deeper semantic interpretation
 
-So the cold path is not only “the failure path”.
-It is also the path taken when input is clearly outside the common shape.
+So the cold path is not only “the failure path”. It is also the path taken when input is clearly outside the common shape.
 
 #### Why this separation matters
 
@@ -754,8 +703,7 @@ Another way to say this:
 1. run a cheap generic parse first
 2. move only the necessary cases into deeper interpretation
 
-This does not lower correctness.
-It protects throughput for the common case.
+This does not lower correctness. It protects throughput for the common case.
 
 #### Implementation guidance for this separation
 
@@ -763,24 +711,19 @@ It protects throughput for the common case.
 
 While reading normal description text, inline-tag and block-tag checks should stay minimal.
 
-In practice, that means paying special attention only at boundaries where meaning may change,
-such as `@`, `{@`, or line boundaries, instead of increasing branching on every character.
+In practice, that means paying special attention only at boundaries where meaning may change, such as `@`, `{@`, or line boundaries, instead of increasing branching on every character.
 
 ##### 2. Extract common built-in tags into a generic shape quickly
 
-Frequent tags such as `@param`, `@returns`, and `@throws` should first be parsed
-into something like `type? + value? + description?`.
+Frequent tags such as `@param`, `@returns`, and `@throws` should first be parsed into something like `type? + value? + description?`.
 
-At this stage, `JsdocTagBody::Generic` plus `raw_body` is often enough.
-Specialized AST variants and strict normalization do not need to happen immediately.
+At this stage, `JsdocTagBody::Generic` plus `raw_body` is often enough. Specialized AST variants and strict normalization do not need to happen immediately.
 
 ##### 3. Push specialized interpretation backward
 
-Strict handling of `@variation`, `@memberof!`, `@borrows`, and custom tags
-should mostly live in validator logic.
+Strict handling of `@variation`, `@memberof!`, `@borrows`, and custom tags should mostly live in validator logic.
 
-Instead of attaching many special parsers directly to the parse hot path,
-the parser should preserve the fact that “this tag may need deeper interpretation later”.
+Instead of attaching many special parsers directly to the parse hot path, the parser should preserve the fact that “this tag may need deeper interpretation later”.
 
 ##### 4. Use rollback only where it is truly needed
 
@@ -804,13 +747,11 @@ Often it is enough on success to keep:
 - a span
 - no fully constructed explanation string
 
-Detailed messages, suggestions, and extra spans should be created only when failure actually occurs,
-or in validator / analyzer phases.
+Detailed messages, suggestions, and extra spans should be created only when failure actually occurs, or in validator / analyzer phases.
 
 ##### 6. Make cold-path boundaries visible in the code
 
-Fast-path / cold-path separation tends to erode during implementation.
-It helps if the boundaries are visible through helper functions or explicit phase transitions.
+Fast-path / cold-path separation tends to erode during implementation. It helps if the boundaries are visible through helper functions or explicit phase transitions.
 
 Examples:
 
@@ -820,5 +761,4 @@ Examples:
 
 This keeps it clear how far a normal comment travels through cheap logic before entering slower logic.
 
-This does **not** mean recreating every byte-level lexer trick from `oxc`.
-For `ox-jsdoc`, it means keeping the normal JSDoc path short and pushing exceptional handling later.
+This does **not** mean recreating every byte-level lexer trick from `oxc`. For `ox-jsdoc`, it means keeping the normal JSDoc path short and pushing exceptional handling later.

@@ -2,9 +2,7 @@
 
 Review target: `design/binary-ast-draft.md` (2965 lines before fixes → 3109 lines after fixes)
 
-The previous reviews (`binary-ast-draft-v2-review.md`, `binary-ast-draft-v2-final-review.md`)
-already produced 20+ fixes, but a maximum-effort full re-read uncovered **8 new
-inconsistencies**, all of which have been **fully resolved** (2026-04-19).
+The previous reviews (`binary-ast-draft-v2-review.md`, `binary-ast-draft-v2-final-review.md`) already produced 20+ fixes, but a maximum-effort full re-read uncovered **8 new inconsistencies**, all of which have been **fully resolved** (2026-04-19).
 
 ## Status: All findings resolved
 
@@ -36,23 +34,15 @@ inconsistencies**, all of which have been **fully resolved** (2026-04-19).
   - bit0 = description_lines, bit1 = tags, bit2 = inline_tags
   ```
 
-JsdocBlock appears as **an example for both the Children type and the Extended type**.
-Since there is only one Node Data slot, both cannot hold simultaneously.
-**Implementers cannot decide where to place the Children bitmask**.
+JsdocBlock appears as **an example for both the Children type and the Extended type**. Since there is only one Node Data slot, both cannot hold simultaneously. **Implementers cannot decide where to place the Children bitmask**.
 
-**Real impact**: the **empty-array skip optimization** for descriptionLines/tags/inlineTags
-(L1203-1238) requires the bitmask, but its placement is undefined.
-JsdocTag alone explicitly states "Extended Data byte 0" at L776-791,
-but JsdocBlock has no such explicit specification.
+**Real impact**: the **empty-array skip optimization** for descriptionLines/tags/inlineTags (L1203-1238) requires the bitmask, but its placement is undefined. JsdocTag alone explicitly states "Extended Data byte 0" at L776-791, but JsdocBlock has no such explicit specification.
 
 **Proposed fix**:
 
-- Change the example at L1035 from "JsdocBlock" (inappropriate because it is Extended type)
-  to a pure Children-type node (e.g., the existing TypeFunction, or JsdocBorrowsTagBody).
-- Add "byte 0: Children bitmask (u8)" to the JsdocBlock Extended Data layout at L766
-  and update the size to **17 bytes (basic) / 41 bytes (compat)**.
-- If alignment is taken into account, use byte 0 = bitmask + byte 1 = padding,
-  giving **18 bytes (basic) / 42 bytes (compat)**.
+- Change the example at L1035 from "JsdocBlock" (inappropriate because it is Extended type) to a pure Children-type node (e.g., the existing TypeFunction, or JsdocBorrowsTagBody).
+- Add "byte 0: Children bitmask (u8)" to the JsdocBlock Extended Data layout at L766 and update the size to **17 bytes (basic) / 41 bytes (compat)**.
+- If alignment is taken into account, use byte 0 = bitmask + byte 1 = padding, giving **18 bytes (basic) / 42 bytes (compat)**.
 
 ---
 
@@ -67,11 +57,7 @@ but JsdocBlock has no such explicit specification.
 
 **The meanings of bit 0/1 are completely reversed**. A decoder can only implement one of them correctly.
 
-**Proposed fix**:
-L919-921 is more detailed and clearer in its explanation
-(`only meaningful when bit0 = 1`), so treat that as authoritative.
-Split the TypeMethodSignature row at L1074 into its own row stating
-`bit0 = quote_present, bit1 = quote_style`.
+**Proposed fix**: L919-921 is more detailed and clearer in its explanation (`only meaningful when bit0 = 1`), so treat that as authoritative. Split the TypeMethodSignature row at L1074 into its own row stating `bit0 = quote_present, bit1 = quote_style`.
 
 ```
 | `TypeStringValue` / `TypeProperty` | bit0 = quote (Single/Double), bit1 = quote_present |
@@ -84,9 +70,7 @@ Split the TypeMethodSignature row at L1074 into its own row stating
 
 **Location**: L913-928 (TypeMethodSignature details)
 
-**Problem**:
-L923-927 states "represented as a Children bitmask" with "bit0 = parameters, bit1 = return_type,
-bit2 = type_parameters", but **the physical placement of the bitmask is not specified**.
+**Problem**: L923-927 states "represented as a Children bitmask" with "bit0 = parameters, bit1 = return_type, bit2 = type_parameters", but **the physical placement of the bitmask is not specified**.
 
 - Extended Data is 2 bytes (only the name string index, L917).
 - Common Data already uses 2 bits (quote_present, quote_style) → 4 bits remain.
@@ -119,11 +103,9 @@ Common Data:
 Note: every string index below is a **u16** (per the Extended Data convention, lines 707-722).
 ```
 
-The actual "string index is u16" convention is at **L744-753**
-(L707-722 covers the string table and Diagnostics section).
+The actual "string index is u16" convention is at **L744-753** (L707-722 covers the string table and Diagnostics section).
 
-**Proposed fix**: Correct to "lines 744-753", or change the reference to point to the
-`#### string index is u16 (2 bytes)` subsection of the `### Extended Data section`.
+**Proposed fix**: Correct to "lines 744-753", or change the reference to point to the `#### string index is u16 (2 bytes)` subsection of the `### Extended Data section`.
 
 ---
 
@@ -136,8 +118,7 @@ The actual "string index is u16" convention is at **L744-753**
 - L326: fields `type_source?, value?, separator?, description?`
 - L1067: Common Data bit0 = has_dash_separator
 - L1480: visitor key `['typeSource', 'value']`
-- → typeSource / value are child nodes, separator is packed into Common Data,
-  but the **storage location of description? is unclear**.
+- → typeSource / value are child nodes, separator is packed into Common Data, but the **storage location of description? is unclear**.
 - L765 Extended Data table does not include JsdocGenericTagBody.
 
 **Options**:
@@ -190,17 +171,13 @@ Encoder tests and hex-dump snapshots are meaningless while the encoder is unimpl
 
 **Problem**:
 
-- TypeStringValue / Property: `bit0 = quote(Single/Double), bit1 = quote_present`
-  (presence + style separated form, 2 bits)
+- TypeStringValue / Property: `bit0 = quote(Single/Double), bit1 = quote_present` (presence + style separated form, 2 bits)
 - TypeObjectField (L1077): `bits[2:3] = quote` (combined 3-state form, 2 bits)
 - TypeSpecialNamePath (L1076): `bit2-3 = quote` (combined 3-state form, 2 bits)
 
-All represent the same `Option<QuoteStyle>` but use different encodings.
-(Combined 3-state uses None=0, Single=1, Double=2 in 2 bits;
-presence + style separated uses quote_present=0/1 + style=0/1 in 2 bits — same bit count.)
+All represent the same `Option<QuoteStyle>` but use different encodings. (Combined 3-state uses None=0, Single=1, Double=2 in 2 bits; presence + style separated uses quote_present=0/1 + style=0/1 in 2 bits — same bit count.)
 
-**Proposed fix**: Unify all nodes on the combined 3-state form (None=0, Single=1, Double=2)
-to make the encoding style consistent and simplify decoder implementation.
+**Proposed fix**: Unify all nodes on the combined 3-state form (None=0, Single=1, Double=2) to make the encoding style consistent and simplify decoder implementation.
 
 ---
 
@@ -208,10 +185,7 @@ to make the encoding style consistent and simplify decoder implementation.
 
 **Location**: described in prose (L839-868, L1030-1054, L1063-1079)
 
-**Problem**:
-The current text explains "this is Children type" / "this is Extended type" in prose,
-but a single table covering **all 60 kinds × Node Data type × Common Data usage × Extended Data size**
-would let decoder implementers grasp every node at a glance.
+**Problem**: The current text explains "this is Children type" / "this is Extended type" in prose, but a single table covering **all 60 kinds × Node Data type × Common Data usage × Extended Data size** would let decoder implementers grasp every node at a glance.
 
 **Proposed fix**: Add a new subsection:
 
@@ -236,11 +210,9 @@ would let decoder implementers grasp every node at a glance.
 - **NodeList 0x7F, Sentinel 0x00** references match in every location ✓
 - **Pos/End in UTF-16 code units, relative values, base_offset added on the JS side** convention is consistent ✓
 - **compat_mode = Header bit0** + RemoteSourceFile retention + lazy decoder branching ✓
-- **Phase 1.0a-d / 1.1a-d / 1.2a-d / 1.3** sub-phase structure aligns across implementation phases,
-  tests, and bench schedule (excluding #6) ✓
+- **Phase 1.0a-d / 1.1a-d / 1.2a-d / 1.3** sub-phase structure aligns across implementation phases, tests, and bench schedule (excluding #6) ✓
 - **JsdocTag's 8-bit Children bitmask** placement (Extended Data byte 0) and visitor-key bit ordering ✓
-- **Section concatenation order** (Header → RootIndex → StringOffsets → StringData →
-  ExtData → Diagnostics → Nodes) matches at L548 and L1827 ✓
+- **Section concatenation order** (Header → RootIndex → StringOffsets → StringData → ExtData → Diagnostics → Nodes) matches at L548 and L1827 ✓
 
 ---
 
@@ -257,23 +229,17 @@ Phase C: Nice to Have
   #7 (quote style unification) → #8 (matrix table)
 ```
 
-#1, #2, and #3 are **mutually independent** and can be done in parallel.
-#4 and #5 are also independent. #6 is independent of the others.
-#7 and #8 are independent of everything else.
+#1, #2, and #3 are **mutually independent** and can be done in parallel. #4 and #5 are also independent. #6 is independent of the others. #7 and #8 are independent of everything else.
 
 ---
 
 ## Additional fixes: consistency of dependent files under `.notes/` (2026-04-19)
 
-All 9 references from the design document (`design/binary-ast-draft.md`) to files under
-`.notes/` were verified, and **2 outdated descriptions were found and updated**.
+All 9 references from the design document (`design/binary-ast-draft.md`) to files under `.notes/` were verified, and **2 outdated descriptions were found and updated**.
 
 ### `binary-ast-batch-processing.md` (4 references)
 
-**Problem**: The conclusion of Discussion 2 "Rust encoder API" still listed **approach c-2**
-(parser → typed AST → binary writer, two-stage) whereas the current design uses
-**approach c-1** (parser writes Binary AST directly into the arena, typed AST removed),
-making the documents inconsistent.
+**Problem**: The conclusion of Discussion 2 "Rust encoder API" still listed **approach c-2** (parser → typed AST → binary writer, two-stage) whereas the current design uses **approach c-1** (parser writes Binary AST directly into the arena, typed AST removed), making the documents inconsistent.
 
 **Fix**:
 
@@ -283,8 +249,7 @@ making the documents inconsistent.
 
 ### `js-rust-transfer.md` (1 reference)
 
-**Problem**: The entire "Approach" section was outdated, ending with the conclusion
-"Phase 1 = JSON, Phase 2 = raw transfer". The current design has already adopted Binary AST.
+**Problem**: The entire "Approach" section was outdated, ending with the conclusion "Phase 1 = JSON, Phase 2 = raw transfer". The current design has already adopted Binary AST.
 
 **Fix**:
 
@@ -300,8 +265,7 @@ making the documents inconsistent.
 Updated the reference description at L70 of `design/binary-ast-draft.md`:
 
 - Old: `js-rust-transfer.md — selection rationale from the ox-jsdoc perspective`
-- New: `js-rust-transfer.md — history of selecting JSON / Raw Transfer / Binary AST
-(background leading to the adoption of Binary AST)`
+- New: `js-rust-transfer.md — history of selecting JSON / Raw Transfer / Binary AST (background leading to the adoption of Binary AST)`
 
 ### References confirmed consistent (no change required)
 

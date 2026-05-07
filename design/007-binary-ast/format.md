@@ -116,11 +116,11 @@ Examples: 0x10 = Major 1, Minor 0 (initial release)
 
 **Compatibility rules**:
 
-| Buffer version                            | Decoder version | Behavior                                                                         |
-| ----------------------------------------- | --------------- | -------------------------------------------------------------------------------- |
-| Different Major                           | -               | Error (format incompatible)                                                      |
-| Same Major, buffer Minor <= decoder Minor | -               | OK (decoder supports all fields)                                                 |
-| Same Major, buffer Minor > decoder Minor  | -               | Warning + continue (unknown fields are ignored, only known fields are processed) |
+| Buffer version | Decoder version | Behavior |
+| --- | --- | --- |
+| Different Major | - | Error (format incompatible) |
+| Same Major, buffer Minor <= decoder Minor | - | OK (decoder supports all fields) |
+| Same Major, buffer Minor > decoder Minor | - | Warning + continue (unknown fields are ignored, only known fields are processed) |
 
 **Minor-bumping changes** (backward compatible):
 
@@ -195,10 +195,10 @@ function checkVersion(buffer) {
 
 An **8-bit bitfield** that controls the decoder's interpretation mode.
 
-| Bit       | Usage         | Description                                                                                                                                                                                                                               |
-| --------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| bit0      | `compat_mode` | jsdoccomment compatibility mode (see [encoding.md "Relationship with compat_mode"](./encoding.md#relationship-with-compat_mode) for details, [../005-jsdoccomment-compat/README.md](../005-jsdoccomment-compat/README.md) for background) |
-| bits[7:1] | Reserved      | zero-fill, reserved for future capability flags                                                                                                                                                                                           |
+| Bit | Usage | Description |
+| --- | --- | --- |
+| bit0 | `compat_mode` | jsdoccomment compatibility mode (see [encoding.md "Relationship with compat_mode"](./encoding.md#relationship-with-compat_mode) for details, [../005-jsdoccomment-compat/README.md](../005-jsdoccomment-compat/README.md) for background) |
+| bits[7:1] | Reserved | zero-fill, reserved for future capability flags |
 
 When `compat_mode` is on:
 
@@ -216,14 +216,14 @@ Reserved for future use (zero-fill). Anticipated uses:
 
 Each section's **byte offset from the head of the buffer**. By reading these values alone, the decoder can jump to any section in O(1).
 
-| Field                  | Typical value range              | Notes                                   |
-| ---------------------- | -------------------------------- | --------------------------------------- |
-| Root Index Array start | `40` (immediately after Header)  | Always begins at a fixed position       |
-| String Offsets start   | `40 + 12N` (Header + Root Array) | N = root count                          |
-| String Data start      | After String Offsets             | Post-dedup string region                |
-| Extended Data start    | After String Data                | 8-byte aligned                          |
-| Diagnostics start      | After Extended Data              | 4 bytes are reserved even when M=0      |
-| Nodes start            | After Diagnostics                | Begins from the sentinel node `node[0]` |
+| Field | Typical value range | Notes |
+| --- | --- | --- |
+| Root Index Array start | `40` (immediately after Header) | Always begins at a fixed position |
+| String Offsets start | `40 + 12N` (Header + Root Array) | N = root count |
+| String Data start | After String Offsets | Post-dedup string region |
+| Extended Data start | After String Data | 8-byte aligned |
+| Diagnostics start | After Extended Data | 4 bytes are reserved even when M=0 |
+| Nodes start | After Diagnostics | Begins from the sentinel node `node[0]` |
 
 Sections are laid out contiguously **in the order defined in the Header** (= the order above). The decoder can compute each section's size from the difference between adjacent section offsets.
 
@@ -288,27 +288,27 @@ class RemoteSourceFile {
 
 ### Size and extension headroom
 
-| Item                 | Value                     | Notes                                                                                     |
-| -------------------- | ------------------------- | ----------------------------------------------------------------------------------------- |
-| Header fixed size    | 40 bytes                  | Independent of version (we recommend keeping it at 40 bytes even on a Major bump)         |
-| Version region       | 1 byte (4 + 4 bits)       | Major has 16 variants, Minor 16 per Major                                                 |
-| Flag region          | 1 byte (only bit0 in use) | 7 bits reserved                                                                           |
-| Reserved region      | 2 bytes (bytes 2-3)       | Can be extended to a u16 capability flags etc.                                            |
-| Section offset count | 6 (u32 × 6)               | Adding new sections requires use of the reserved region + Header size growth (Major bump) |
-| Payload upper bound  | u32 (4 GB)                | The maximum size of a single buffer                                                       |
+| Item | Value | Notes |
+| --- | --- | --- |
+| Header fixed size | 40 bytes | Independent of version (we recommend keeping it at 40 bytes even on a Major bump) |
+| Version region | 1 byte (4 + 4 bits) | Major has 16 variants, Minor 16 per Major |
+| Flag region | 1 byte (only bit0 in use) | 7 bits reserved |
+| Reserved region | 2 bytes (bytes 2-3) | Can be extended to a u16 capability flags etc. |
+| Section offset count | 6 (u32 × 6) | Adding new sections requires use of the reserved region + Header size growth (Major bump) |
+| Payload upper bound | u32 (4 GB) | The maximum size of a single buffer |
 
 ### Differences from tsgo
 
-| Item                   | tsgo                                    | ox-jsdoc                                                       |
-| ---------------------- | --------------------------------------- | -------------------------------------------------------------- |
-| Header size            | Variable (around 16-32 bytes)           | **Fixed 40 bytes**                                             |
-| Version location       | Upper 8 bits of an LE u32               | **u8 directly at byte 0** (LE/BE-agnostic, debugging friendly) |
-| Version format         | Subfield within a u32                   | **Major + Minor 4-bit pack**                                   |
-| compat_mode flag       | None                                    | **Present** (bit0, jsdoccomment compatibility)                 |
-| Section count          | 4-5 (SourceFile / Strings / Extended)   | **6** (+ Root / Diagnostics)                                   |
-| Total node count field | None (back-computed from buffer length) | **Explicit** (makes decoder initialization direct)             |
-| Root count N           | 1 (fixed)                               | **N (batch support)**                                          |
-| Diagnostic             | Separate channel                        | **Same buffer** (Diagnostics section)                          |
+| Item | tsgo | ox-jsdoc |
+| --- | --- | --- |
+| Header size | Variable (around 16-32 bytes) | **Fixed 40 bytes** |
+| Version location | Upper 8 bits of an LE u32 | **u8 directly at byte 0** (LE/BE-agnostic, debugging friendly) |
+| Version format | Subfield within a u32 | **Major + Minor 4-bit pack** |
+| compat_mode flag | None | **Present** (bit0, jsdoccomment compatibility) |
+| Section count | 4-5 (SourceFile / Strings / Extended) | **6** (+ Root / Diagnostics) |
+| Total node count field | None (back-computed from buffer length) | **Explicit** (makes decoder initialization direct) |
+| Root count N | 1 (fixed) | **N (batch support)** |
+| Diagnostic | Separate channel | **Same buffer** (Diagnostics section) |
 
 ox-jsdoc prioritizes **batch processing + lazy decoder + debuggability**, so the Header carries many explicit fields. The tsgo Header is a minimal design that requires decoder-side knowledge, whereas ox-jsdoc aims for a general-purpose API that handles parse results in many ways.
 
@@ -332,11 +332,11 @@ Key design goals:
 
 ### Layout
 
-| Offset (relative) | Type | Field                                                                    |
-| ----------------- | ---- | ------------------------------------------------------------------------ |
-| 12\*i + 0         | u32  | root[i].node_index (root node index in the Nodes section)                |
-| 12\*i + 4         | u32  | root[i].source_offset_in_data (sourceText start position in String Data) |
-| 12\*i + 8         | u32  | root[i].base_offset (absolute offset in the original file)               |
+| Offset (relative) | Type | Field |
+| --- | --- | --- |
+| 12\*i + 0 | u32 | root[i].node_index (root node index in the Nodes section) |
+| 12\*i + 4 | u32 | root[i].source_offset_in_data (sourceText start position in String Data) |
+| 12\*i + 8 | u32 | root[i].base_offset (absolute offset in the original file) |
 
 Basic metadata:
 
@@ -353,9 +353,7 @@ The index of the root node (= the corresponding `JsdocBlock`) within the Nodes s
 
 - **When `= 0`**: indicates **parse failure** and points to the sentinel node (all zeros) at the head of the Nodes section. The JS API expresses this as `result.asts[i] === null`
 - **When `> 0`**: parse succeeded. References the corresponding node in the Nodes section
-- On parse success, multiple roots are placed contiguously in the Nodes section
-  (e.g., `root[0]` points to `node[1]`, `node[2..k1]` are descendants of `root[0]`,
-  `root[1]` points to `node[k1+1]`, …)
+- On parse success, multiple roots are placed contiguously in the Nodes section (e.g., `root[0]` points to `node[1]`, `node[2..k1]` are descendants of `root[0]`, `root[1]` points to `node[k1+1]`, …)
 - By the convention that each root node has **`parent index = 0` (= sentinel)**, root detection is possible via `node.parent == 0`
 
 #### `source_offset_in_data` (u32)
@@ -389,14 +387,14 @@ parseBatch([
 
 Contents of the Root Index Array (LE u32 representation, size 24 bytes):
 
-| Offset | u32 value    | Meaning                                                                                  |
-| ------ | ------------ | ---------------------------------------------------------------------------------------- |
-| 0-3    | `0x00000001` | `root[0].node_index = 1` (first `JsdocBlock` in Nodes)                                   |
-| 4-7    | `0x00000000` | `root[0].source_offset_in_data = 0` (start of String Data)                               |
-| 8-11   | `0x00000064` | `root[0].base_offset = 100`                                                              |
-| 12-15  | `0x00000005` | `root[1].node_index = 5` (descendants of root[0] are `node[1..4]`, root[1] is `node[5]`) |
-| 16-19  | `0x0000000F` | `root[1].source_offset_in_data = 15` (after the byte length of sourceText[0])            |
-| 20-23  | `0x000000C8` | `root[1].base_offset = 200`                                                              |
+| Offset | u32 value | Meaning |
+| --- | --- | --- |
+| 0-3 | `0x00000001` | `root[0].node_index = 1` (first `JsdocBlock` in Nodes) |
+| 4-7 | `0x00000000` | `root[0].source_offset_in_data = 0` (start of String Data) |
+| 8-11 | `0x00000064` | `root[0].base_offset = 100` |
+| 12-15 | `0x00000005` | `root[1].node_index = 5` (descendants of root[0] are `node[1..4]`, root[1] is `node[5]`) |
+| 16-19 | `0x0000000F` | `root[1].source_offset_in_data = 15` (after the byte length of sourceText[0]) |
+| 20-23 | `0x000000C8` | `root[1].base_offset = 200` |
 
 In the String Data section, `"/** @param x */"` (15 bytes) + `"/** @returns y */"` (17 bytes) are concatenated at the head (32 bytes total, followed by unique strings).
 
@@ -414,8 +412,7 @@ roots = [
 - `node_index = 0` points to the sentinel → the JS API expresses this as `result.asts[1] === null`
 - `source_offset_in_data` and `base_offset` **retain valid values even on failure** (for source position recovery)
   - The location of the failed comment can be reconstructed as `[base_offset, base_offset + sourceText.length]`
-- Failure details come from the Diagnostics section entry with `root_index = 1`
-  (see [Diagnostics section](#diagnostics-section-4--8m-bytes) for details)
+- Failure details come from the Diagnostics section entry with `root_index = 1` (see [Diagnostics section](#diagnostics-section-4--8m-bytes) for details)
 - **On failure, at least one diagnostic with the corresponding root_index is required** by convention
 
 ### Lazy decoder implementation sketch
@@ -520,21 +517,10 @@ This design lets most strings simply reference the source buffer, minimizing mem
 
 #### Limits
 
-- K ≤ **2³⁰ − 2** (the `TypeTag::String` Node Data payload is 30-bit and
-  one slot — `0x3FFF_FFFF` — is reserved as the
-  [`STRING_PAYLOAD_NONE_SENTINEL`](#node-data-bit-packing-32-bit) for
-  optional fields). Practical buffers stay far below this — the
-  typescript-checker.ts fixture interns ≈ 1.5 K unique strings.
-- Diagnostics' `message_index` is **u32** in the wire format (8-byte
-  entry: `(root_index: u32, message_index: u32)`) and shares the same
-  cap.
-- Extended Data string slots use [`StringField` (offset:u32, length:u16)](#stringfield-encoding)
-  directly — no String Offsets index — so they have no separate K-cap.
-- On overflow the encoder **panics** (`expect("string table overflow")`
-  in `StringTableBuilder::intern_at_offset_for_leaf` / `intern_for_leaf`).
-  No `Result` API is exposed: at u32-scale capacity the panic acts as a
-  loud "you've out-grown the format" signal, not a runtime error path
-  callers should plan around.
+- K ≤ **2³⁰ − 2** (the `TypeTag::String` Node Data payload is 30-bit and one slot — `0x3FFF_FFFF` — is reserved as the [`STRING_PAYLOAD_NONE_SENTINEL`](#node-data-bit-packing-32-bit) for optional fields). Practical buffers stay far below this — the typescript-checker.ts fixture interns ≈ 1.5 K unique strings.
+- Diagnostics' `message_index` is **u32** in the wire format (8-byte entry: `(root_index: u32, message_index: u32)`) and shares the same cap.
+- Extended Data string slots use [`StringField` (offset:u32, length:u16)](#stringfield-encoding) directly — no String Offsets index — so they have no separate K-cap.
+- On overflow the encoder **panics** (`expect("string table overflow")` in `StringTableBuilder::intern_at_offset_for_leaf` / `intern_for_leaf`). No `Result` API is exposed: at u32-scale capacity the panic acts as a loud "you've out-grown the format" signal, not a runtime error path callers should plan around.
 
 ### String Data section (variable, UTF-8)
 
@@ -563,26 +549,23 @@ Notes:
 
 Only strings that cannot be expressed by source positions are appended to the unique strings region. Concrete examples:
 
-| Case                          | Example                                                                                     |
-| ----------------------------- | ------------------------------------------------------------------------------------------- |
-| Escape-sequence-resolved      | Interpret the source string `"hello\nworld"` and store the resolved `"hello<newline>world"` |
-| Joined multi-line description | The result of joining a description that spans line breaks under compat_mode                |
-| Normalized values             | Trimmed, case-folded, etc.                                                                  |
+| Case | Example |
+| --- | --- |
+| Escape-sequence-resolved | Interpret the source string `"hello\nworld"` and store the resolved `"hello<newline>world"` |
+| Joined multi-line description | The result of joining a description that spans line breaks under compat_mode |
+| Normalized values | Trimmed, case-folded, etc. |
 
 In ox-jsdoc's current typed AST, **most strings are source slices**, so the unique strings region is expected to **stay small** (typically < 10% overhead).
 
 ### How string references are encoded
 
-There are **three** on-wire encodings for a string reference, picked at write time
-based on storage location and string size. All three resolve to a slice of the
-String Data section; the encoding determines whether an extra String Offsets
-table lookup is required.
+There are **three** on-wire encodings for a string reference, picked at write time based on storage location and string size. All three resolve to a slice of the String Data section; the encoding determines whether an extra String Offsets table lookup is required.
 
-| Storage location                                | Encoding                               | Width  | None sentinel                        | Usage                                                                                                                                      |
-| ----------------------------------------------- | -------------------------------------- | ------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Node Data payload — `StringInline` (`0b11`)** | Packed `(offset:u22, length:u8)`       | 30-bit | (never None)                         | Short string-leaf nodes (length ≤ 255 byte and offset ≤ 4 MB-1) — most JSDoc tag names, type names, etc.                                   |
-| **Node Data payload — `String` (`0b01`)**       | String Offsets table index             | 30-bit | `0x3FFFFFFF`                         | String-leaf nodes whose value is too long (≥ 256 byte) or whose String Data offset exceeds 4 MB; also used for diagnostics `message_index` |
-| **Extended Data slot — `StringField` (inline)** | Inline `(offset:u32, length:u16)` pair | 6-byte | `(offset = 0xFFFF_FFFF, length = 0)` | All ED string slots in JsdocBlock, JsdocTag, JsdocDescriptionLine compat tail, etc.                                                        |
+| Storage location | Encoding | Width | None sentinel | Usage |
+| --- | --- | --- | --- | --- |
+| **Node Data payload — `StringInline` (`0b11`)** | Packed `(offset:u22, length:u8)` | 30-bit | (never None) | Short string-leaf nodes (length ≤ 255 byte and offset ≤ 4 MB-1) — most JSDoc tag names, type names, etc. |
+| **Node Data payload — `String` (`0b01`)** | String Offsets table index | 30-bit | `0x3FFFFFFF` | String-leaf nodes whose value is too long (≥ 256 byte) or whose String Data offset exceeds 4 MB; also used for diagnostics `message_index` |
+| **Extended Data slot — `StringField` (inline)** | Inline `(offset:u32, length:u16)` pair | 6-byte | `(offset = 0xFFFF_FFFF, length = 0)` | All ED string slots in JsdocBlock, JsdocTag, JsdocDescriptionLine compat tail, etc. |
 
 Selection rules at write time:
 
@@ -594,14 +577,9 @@ The dual-tag string-leaf path is **Path B-leaf** — see `tasks/benchmark/result
 
 ### Encoder dedup behavior
 
-The encoder keeps a **`FxHashMap<&str, Entry>`** (`StringTableBuilder::dedup`)
-that records each interned string's `(StringField, optional StringIndex)`
-pair. On insertion the lookup returns the existing entry; otherwise a
-fresh slot is appended to `data_buffer` and recorded.
+The encoder keeps a **`FxHashMap<&str, Entry>`** (`StringTableBuilder::dedup`) that records each interned string's `(StringField, optional StringIndex)` pair. On insertion the lookup returns the existing entry; otherwise a fresh slot is appended to `data_buffer` and recorded.
 
-The actual API is split into two free-of-`Result` paths because
-overflow is treated as a panic-only "you've out-grown the format"
-condition (see "Limits" above):
+The actual API is split into two free-of-`Result` paths because overflow is treated as a panic-only "you've out-grown the format" condition (see "Limits" above):
 
 ```rust
 // ED slot path (used by JsdocBlock / JsdocTag / JsdocInlineTag /
@@ -617,9 +595,7 @@ pub fn intern(&mut self, s: &str) -> StringField { ... }
 pub fn intern_for_leaf_payload(&mut self, s: &str) -> LeafStringPayload { ... }
 ```
 
-Dedup applies to **every** intern call. Zero-copy source slices and
-appended unique strings share the same dedup map, so two distinct
-emit sites that resolve to the same byte range collapse to one entry.
+Dedup applies to **every** intern call. Zero-copy source slices and appended unique strings share the same dedup map, so two distinct emit sites that resolve to the same byte range collapse to one entry.
 
 ### Quantitative example of batch effect
 
@@ -701,13 +677,13 @@ Key points:
 
 ### Differences from tsgo
 
-| Item                      | tsgo                               | ox-jsdoc                                                                                                                                                                                                                           |
-| ------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| String Offsets entry size | 8 bytes (u32 start + u32 end)      | **8 bytes (same)**, used only by long string-leaf nodes + diagnostics                                                                                                                                                              |
-| String Data structure     | Single sourceText + unique strings | **Multiple sourceText concatenated + unique strings** (batch support)                                                                                                                                                              |
-| String reference encoding | u32 index everywhere               | **`StringInline` (22-bit offset + 8-bit length)** for short string-leaf nodes / **`String` (30-bit index)** for long string-leaf nodes / **`StringField` (32-bit offset + 16-bit length, inline 6-byte slot)** for ED string slots |
-| Dedup                     | Encoder uses a HashMap             | Same (still applies to all paths)                                                                                                                                                                                                  |
-| String upper bound        | u32 max (~4G)                      | **String Data 4 GB** (limited by `StringField.offset` u32) / **String Offsets table 2³⁰ entries** for long-leaf path / **inline-leaf path 4 MB-1 offset × 255 byte length**                                                        |
+| Item | tsgo | ox-jsdoc |
+| --- | --- | --- |
+| String Offsets entry size | 8 bytes (u32 start + u32 end) | **8 bytes (same)**, used only by long string-leaf nodes + diagnostics |
+| String Data structure | Single sourceText + unique strings | **Multiple sourceText concatenated + unique strings** (batch support) |
+| String reference encoding | u32 index everywhere | **`StringInline` (22-bit offset + 8-bit length)** for short string-leaf nodes / **`String` (30-bit index)** for long string-leaf nodes / **`StringField` (32-bit offset + 16-bit length, inline 6-byte slot)** for ED string slots |
+| Dedup | Encoder uses a HashMap | Same (still applies to all paths) |
+| String upper bound | u32 max (~4G) | **String Data 4 GB** (limited by `StringField.offset` u32) / **String Offsets table 2³⁰ entries** for long-leaf path / **inline-leaf path 4 MB-1 offset × 255 byte length** |
 
 ox-jsdoc primarily targets **batch processing**, hence multiple sourceText are concatenated. Compared to tsgo's single u32 index, ox-jsdoc has three separate encodings tuned for different sizes/locations, eliminating the offsets-table indirection on the hot path.
 
@@ -729,8 +705,7 @@ Extended Data is a **variable-length section** that holds the additional fields 
 Examples of stored information:
 
 - String index for string fields (tag name, type expression, parameter name, description, etc.)
-- Children bitmask for child nodes
-  (since the bitmask cannot be placed in the payload of an Extended-type Node Data, it goes at byte 0 of the Extended Data)
+- Children bitmask for child nodes (since the bitmask cannot be placed in the payload of an Extended-type Node Data, it goes at byte 0 of the Extended Data)
 - Additional metadata for compat_mode (line indices, boolean flags)
 - Structural data specific to TypeNode (e.g., literal count of `TypeTemplateLiteral`)
 
@@ -738,24 +713,18 @@ Examples of stored information:
 
 Data stored in Extended Data is composed of **5 field types + padding**:
 
-| Type                           | Size      | Usage                                                                      | Applies to                                      | None sentinel                        |
-| ------------------------------ | --------- | -------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------ |
-| **`StringField`**              | 6 bytes   | Inline `(offset: u32, length: u16)` reference into the String Data section | Almost all Extended Data nodes                  | `(offset = 0xFFFF_FFFF, length = 0)` |
-| **u8 Children bitmask**        | 1 byte    | Bitmask for child node presence (visitor order)                            | `JsdocBlock`, `JsdocTag`, `JsdocGenericTagBody` | -                                    |
-| **u16 metadata**               | 2 bytes   | Element counts etc.                                                        | `TypeTemplateLiteral` (literal count)           | -                                    |
-| **u32 line index** ★exception  | 4 bytes   | Line number in the original file                                           | `JsdocBlock` (**compat only**)                  | `0xFFFFFFFF`                         |
-| **u8 boolean flag** ★exception | 1 byte    | `bool` or `Option<u8>`                                                     | `JsdocBlock` (**compat only**)                  | `0xFF`                               |
-| (padding)                      | 1-6 bytes | Type-boundary alignment (u16 / u32 / 8-byte record boundary)               | Many                                            | -                                    |
+| Type | Size | Usage | Applies to | None sentinel |
+| --- | --- | --- | --- | --- |
+| **`StringField`** | 6 bytes | Inline `(offset: u32, length: u16)` reference into the String Data section | Almost all Extended Data nodes | `(offset = 0xFFFF_FFFF, length = 0)` |
+| **u8 Children bitmask** | 1 byte | Bitmask for child node presence (visitor order) | `JsdocBlock`, `JsdocTag`, `JsdocGenericTagBody` | - |
+| **u16 metadata** | 2 bytes | Element counts etc. | `TypeTemplateLiteral` (literal count) | - |
+| **u32 line index** ★exception | 4 bytes | Line number in the original file | `JsdocBlock` (**compat only**) | `0xFFFFFFFF` |
+| **u8 boolean flag** ★exception | 1 byte | `bool` or `Option<u8>` | `JsdocBlock` (**compat only**) | `0xFF` |
+| (padding) | 1-6 bytes | Type-boundary alignment (u16 / u32 / 8-byte record boundary) | Many | - |
 
 **The main role is the `StringField`**; the others are auxiliary or exceptional. In particular, **the use of u32 / u8 is localized to the compat extension portion of `JsdocBlock`**.
 
-A `StringField` carries `(offset, length)` directly so the reader slices
-String Data without going through the offsets table — see the
-`### Extended Data StringField slot (6 bytes)` subsection below for the
-on-wire encoding. String-leaf nodes (Comment AST `JsdocText` / `JsdocTagName`
-/ … and TypeNode Pattern 1 `TypeName` / `TypeNumber` / …) keep using a
-30-bit `StringIndex` packed into Node Data and do **not** allocate an
-Extended Data record at all.
+A `StringField` carries `(offset, length)` directly so the reader slices String Data without going through the offsets table — see the `### Extended Data StringField slot (6 bytes)` subsection below for the on-wire encoding. String-leaf nodes (Comment AST `JsdocText` / `JsdocTagName` / … and TypeNode Pattern 1 `TypeName` / `TypeNumber` / …) keep using a 30-bit `StringIndex` packed into Node Data and do **not** allocate an Extended Data record at all.
 
 ### Critical decoder conventions
 
@@ -806,18 +775,14 @@ Reasons:
 
 When `compat_mode = ON`, some nodes get an extra portion appended to their Extended Data:
 
-| Node                   |    basic |                                        compat extension | compat total |
-| ---------------------- | -------: | ------------------------------------------------------: | -----------: |
-| `JsdocBlock`           | 68 bytes |                     + 22 bytes (u32×4 + u8×2 + padding) |     90 bytes |
-| `JsdocTag`             | 38 bytes |                + 42 bytes (StringField×7 = 7 × 6 bytes) |     80 bytes |
-| `JsdocDescriptionLine` |  0 bytes | (switches to Extended type, + 24 bytes = 4×StringField) |     24 bytes |
-| `JsdocTypeLine`        |  0 bytes | (switches to Extended type, + 24 bytes = 4×StringField) |     24 bytes |
+| Node | basic | compat extension | compat total |
+| --- | --: | --: | --: |
+| `JsdocBlock` | 68 bytes | + 22 bytes (u32×4 + u8×2 + padding) | 90 bytes |
+| `JsdocTag` | 38 bytes | + 42 bytes (StringField×7 = 7 × 6 bytes) | 80 bytes |
+| `JsdocDescriptionLine` | 0 bytes | (switches to Extended type, + 24 bytes = 4×StringField) | 24 bytes |
+| `JsdocTypeLine` | 0 bytes | (switches to Extended type, + 24 bytes = 4×StringField) | 24 bytes |
 
-The basic JsdocBlock / JsdocTag sizes include 6 bytes of inline list
-metadata (`head_index: u32` + `count: u16`) per variable-length child list:
-JsdocBlock has 3 lists (descriptionLines / tags / inlineTags) at bytes
-50-67, JsdocTag has 3 lists (typeLines / descriptionLines / inlineTags) at
-bytes 20-37. See "List metadata in Extended Data" later in this document.
+The basic JsdocBlock / JsdocTag sizes include 6 bytes of inline list metadata (`head_index: u32` + `count: u16`) per variable-length child list: JsdocBlock has 3 lists (descriptionLines / tags / inlineTags) at bytes 50-67, JsdocTag has 3 lists (typeLines / descriptionLines / inlineTags) at bytes 20-37. See "List metadata in Extended Data" later in this document.
 
 The decoder reads Header bit0 to branch (each node references it via a `compat` getter through the sourceFile).
 
@@ -825,11 +790,11 @@ The decoder reads Header bit0 to branch (each node references it via a `compat` 
 
 Each Extended Data field is **aligned to a byte boundary appropriate for its type**:
 
-| Type | Boundary               | Reason                                                            |
-| ---- | ---------------------- | ----------------------------------------------------------------- |
-| u8   | 1-byte (no constraint) | Any position OK                                                   |
-| u16  | **2-byte boundary**    | Required by `DataView.getUint16`                                  |
-| u32  | **4-byte boundary**    | Required by `DataView.getUint32`; avoids CPU misalignment penalty |
+| Type | Boundary | Reason |
+| --- | --- | --- |
+| u8 | 1-byte (no constraint) | Any position OK |
+| u16 | **2-byte boundary** | Required by `DataView.getUint16` |
+| u32 | **4-byte boundary** | Required by `DataView.getUint32`; avoids CPU misalignment penalty |
 
 To meet boundaries, **insert padding (zero-fill) as needed**.
 
@@ -871,11 +836,7 @@ See the tables and subsections that follow for the concrete layout of each node.
 
 ### Extended Data StringField slot (6 bytes)
 
-Every string reference inside Extended Data is stored as a **6-byte
-`StringField`** holding `(offset: u32, length: u16)` directly. Readers
-slice String Data without going through the offsets table, so the per-slot
-read collapses to a single `from_le_bytes` plus one bounded `Uint8Array`
-view.
+Every string reference inside Extended Data is stored as a **6-byte `StringField`** holding `(offset: u32, length: u16)` directly. Readers slice String Data without going through the offsets table, so the per-slot read collapses to a single `from_le_bytes` plus one bounded `Uint8Array` view.
 
 ```text
 StringField (6 bytes, little-endian, NOT naturally aligned)
@@ -886,43 +847,28 @@ StringField (6 bytes, little-endian, NOT naturally aligned)
 
 Reasons:
 
-- **One hop instead of two**: Extended Data slots used to store a u16
-  index that the decoder dereferenced through the String Offsets table
-  (`(start, end)` pair) and then sliced String Data. The `StringField`
-  encoding fuses the two reads into one.
-- **No offsets-table churn for ED-only strings**: when a string never
-  appears as a string-leaf node, its `(start, end)` pair is never
-  written to the offsets table at all (the encoder allocates an offsets
-  entry lazily on first leaf use).
-- **`Uint32Array[idx] + Uint16Array[idx]` decode pattern in the JS
-  decoder still wins over `DataView.getUint16` thanks to the surrounding
-  Extended Data 8-byte alignment of the record start.**
+- **One hop instead of two**: Extended Data slots used to store a u16 index that the decoder dereferenced through the String Offsets table (`(start, end)` pair) and then sliced String Data. The `StringField` encoding fuses the two reads into one.
+- **No offsets-table churn for ED-only strings**: when a string never appears as a string-leaf node, its `(start, end)` pair is never written to the offsets table at all (the encoder allocates an offsets entry lazily on first leaf use).
+- **`Uint32Array[idx] + Uint16Array[idx]` decode pattern in the JS decoder still wins over `DataView.getUint16` thanks to the surrounding Extended Data 8-byte alignment of the record start.**
 
 **Limits**:
 
-- `offset` is u32 → up to **4 GiB** of String Data (well above the
-  30-bit Extended Data offset cap of ~1 GiB).
-- `length` is u16 → up to **65,535 bytes** per individual string
-  (covers any realistic JSDoc description / tag-name / type source).
+- `offset` is u32 → up to **4 GiB** of String Data (well above the 30-bit Extended Data offset cap of ~1 GiB).
+- `length` is u16 → up to **65,535 bytes** per individual string (covers any realistic JSDoc description / tag-name / type source).
 
-**None sentinel**: `(offset = 0xFFFF_FFFF, length = 0)` (`StringField::NONE`).
-The combined comparison never collides with any valid empty-string slot
-because real `(0, 0)` references the leading prelude entry (the empty
-string itself).
+**None sentinel**: `(offset = 0xFFFF_FFFF, length = 0)` (`StringField::NONE`). The combined comparison never collides with any valid empty-string slot because real `(0, 0)` references the leading prelude entry (the empty string itself).
 
-Nodes that hold Extended Data within the comment AST (the 6 TypeNode
-Extended Data variants are covered in the next section "TypeNode
-Extended Data layout (pattern 3 details)"):
+Nodes that hold Extended Data within the comment AST (the 6 TypeNode Extended Data variants are covered in the next section "TypeNode Extended Data layout (pattern 3 details)"):
 
-| Node                   | Size                          | Data content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ---------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `JsdocBlock`           | 68 bytes (90 bytes in compat) | Basic portion: Children bitmask (u8) + reserved (u8, alignment) + `description` `StringField` (6) + 7 delimiters (`StringField`×7 = 42) + 3 list metadata slots (3 × 6 = 18 bytes for `descriptionLines` / `tags` / `inlineTags`) = **68 bytes**. In `compat_mode`, the following is appended **after** the basic portion: reserved 2 bytes (u32 alignment) + `end_line` (u32) + `description_start_line` (u32, `0xFFFFFFFF` for None) + `description_end_line` (u32, ditto) + `last_description_line` (u32, ditto) + `has_preterminal_description` (u8) + `has_preterminal_tag_description` (u8, `0xFF` for None) + reserved 2 bytes (trailing alignment) = **22 bytes** added |
-| `JsdocTag`             | 38 bytes (80 bytes in compat) | Basic portion: Children bitmask (u8) + reserved (u8) + `default_value` `StringField` (6) + `description` `StringField` (6) + `raw_body` `StringField` (6) + 3 list metadata slots (3 × 6 = 18 bytes for `typeLines` / `descriptionLines` / `inlineTags`) = **38 bytes**. `tag` (JsdocTagName), `raw_type` (JsdocTypeSource), `name` (JsdocTagNameValue), `parsed_type` (TypeNode), and `body` (JsdocTagBody) are **placed as child nodes** (since they are span-bearing structs). `optional` is stored in Common Data bit0. In compat, 7 delimiters (`StringField`×7 = 42 bytes) are appended after                                                                             |
-| `JsdocInlineTag`       | 18 bytes                      | `namepath_or_url` `StringField` (6) + `text` `StringField` (6) + `raw_body` `StringField` (6) = **18 bytes**. `tag` (the inline-tag name, `link` / `tutorial` / …) is **reserved**: the spec previously described it as a child node, but the current emitter intentionally drops it. Consumers that need the inline-tag name should derive it from the node's source `range`. Each Optional uses `StringField::NONE` as the absent marker                                                                                                                                                                                                                                      |
-| `JsdocParameterName`   | 12 bytes                      | `path` `StringField` (6, required) + `default_value` `StringField` (6, `StringField::NONE` = None). `optional` is stored in Common Data bit0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `JsdocGenericTagBody`  | 8 bytes                       | Children bitmask (u8, bit0=typeSource, bit1=value) + reserved (u8, alignment) + `description` `StringField` (6, `StringField::NONE` = None) = **8 bytes**. `type_source` (JsdocTypeSource) and `value` (JsdocTagValue) are **placed as child nodes** (since they are span-bearing structs). `separator` is stored in Common Data bit0 (has_dash_separator)                                                                                                                                                                                                                                                                                                                      |
-| `JsdocDescriptionLine` | 24 bytes (compat only)        | `description` `StringField` (6, required) + 3 delimiters (`delimiter`, `post_delimiter`, `initial`) `StringField`×3 = 4 × `StringField` = **24 bytes**. **No Extended Data outside compat** (Node Data is set to String type 0b01 and `description` is stored directly in the 30-bit string index). In compat, Node Data switches to Extended type 0b10 and the 4 string fields including `description` move to Extended Data                                                                                                                                                                                                                                                   |
-| `JsdocTypeLine`        | 24 bytes (compat only)        | `raw_type` `StringField` (6, required) + 3 delimiters (`delimiter`, `post_delimiter`, `initial`) `StringField`×3 = 4 × `StringField` = **24 bytes**. **No Extended Data outside compat** (Node Data is set to String type 0b01 and `raw_type` is stored directly in the 30-bit string index). In compat, Node Data switches to Extended type 0b10 and the 4 string fields including `raw_type` move to Extended Data                                                                                                                                                                                                                                                            |
+| Node | Size | Data content |
+| --- | --- | --- |
+| `JsdocBlock` | 68 bytes (90 bytes in compat) | Basic portion: Children bitmask (u8) + reserved (u8, alignment) + `description` `StringField` (6) + 7 delimiters (`StringField`×7 = 42) + 3 list metadata slots (3 × 6 = 18 bytes for `descriptionLines` / `tags` / `inlineTags`) = **68 bytes**. In `compat_mode`, the following is appended **after** the basic portion: reserved 2 bytes (u32 alignment) + `end_line` (u32) + `description_start_line` (u32, `0xFFFFFFFF` for None) + `description_end_line` (u32, ditto) + `last_description_line` (u32, ditto) + `has_preterminal_description` (u8) + `has_preterminal_tag_description` (u8, `0xFF` for None) + reserved 2 bytes (trailing alignment) = **22 bytes** added |
+| `JsdocTag` | 38 bytes (80 bytes in compat) | Basic portion: Children bitmask (u8) + reserved (u8) + `default_value` `StringField` (6) + `description` `StringField` (6) + `raw_body` `StringField` (6) + 3 list metadata slots (3 × 6 = 18 bytes for `typeLines` / `descriptionLines` / `inlineTags`) = **38 bytes**. `tag` (JsdocTagName), `raw_type` (JsdocTypeSource), `name` (JsdocTagNameValue), `parsed_type` (TypeNode), and `body` (JsdocTagBody) are **placed as child nodes** (since they are span-bearing structs). `optional` is stored in Common Data bit0. In compat, 7 delimiters (`StringField`×7 = 42 bytes) are appended after |
+| `JsdocInlineTag` | 18 bytes | `namepath_or_url` `StringField` (6) + `text` `StringField` (6) + `raw_body` `StringField` (6) = **18 bytes**. `tag` (the inline-tag name, `link` / `tutorial` / …) is **reserved**: the spec previously described it as a child node, but the current emitter intentionally drops it. Consumers that need the inline-tag name should derive it from the node's source `range`. Each Optional uses `StringField::NONE` as the absent marker |
+| `JsdocParameterName` | 12 bytes | `path` `StringField` (6, required) + `default_value` `StringField` (6, `StringField::NONE` = None). `optional` is stored in Common Data bit0 |
+| `JsdocGenericTagBody` | 8 bytes | Children bitmask (u8, bit0=typeSource, bit1=value) + reserved (u8, alignment) + `description` `StringField` (6, `StringField::NONE` = None) = **8 bytes**. `type_source` (JsdocTypeSource) and `value` (JsdocTagValue) are **placed as child nodes** (since they are span-bearing structs). `separator` is stored in Common Data bit0 (has_dash_separator) |
+| `JsdocDescriptionLine` | 24 bytes (compat only) | `description` `StringField` (6, required) + 3 delimiters (`delimiter`, `post_delimiter`, `initial`) `StringField`×3 = 4 × `StringField` = **24 bytes**. **No Extended Data outside compat** (Node Data is set to String type 0b01 and `description` is stored directly in the 30-bit string index). In compat, Node Data switches to Extended type 0b10 and the 4 string fields including `description` move to Extended Data |
+| `JsdocTypeLine` | 24 bytes (compat only) | `raw_type` `StringField` (6, required) + 3 delimiters (`delimiter`, `post_delimiter`, `initial`) `StringField`×3 = 4 × `StringField` = **24 bytes**. **No Extended Data outside compat** (Node Data is set to String type 0b01 and `raw_type` is stored directly in the 30-bit string index). In compat, Node Data switches to Extended type 0b10 and the 4 string fields including `raw_type` move to Extended Data |
 
 The decoder branches on the `compat_mode` flag (Header bit0) per node kind because the size differs.
 
@@ -946,16 +892,9 @@ JsdocTag Extended Data byte 0 (Children bitmask, 8 bits):
   bit7 = inlineTags (ditto)
 ```
 
-Bits 5-7 do **not** correspond to a child slot in the next_sibling chain;
-the actual list head/count for each list lives in the per-list metadata
-slots placed at bytes 20-37 of the Extended Data block (see byte-level
-layout below). The bits are kept for the visitor framework so a fast
-`if (bitmask & X) != 0` check can decide whether to walk the list at all.
+Bits 5-7 do **not** correspond to a child slot in the next_sibling chain; the actual list head/count for each list lives in the per-list metadata slots placed at bytes 20-37 of the Extended Data block (see byte-level layout below). The bits are kept for the visitor framework so a fast `if (bitmask & X) != 0` check can decide whether to walk the list at all.
 
-Child nodes are written in DFS pre-order: the fixed children (`tag`,
-`rawType`, `name`, `parsedType`, `body`) come first as direct siblings
-under the parent, then each list's elements follow in `typeLines →
-descriptionLines → inlineTags` order, also as direct siblings.
+Child nodes are written in DFS pre-order: the fixed children (`tag`, `rawType`, `name`, `parsedType`, `body`) come first as direct siblings under the parent, then each list's elements follow in `typeLines → descriptionLines → inlineTags` order, also as direct siblings.
 
 ### JsdocBlock Children bitmask (Extended Data byte 0)
 
@@ -973,15 +912,9 @@ JsdocBlock Extended Data byte 0 (Children bitmask, 3 bits used):
   bit3-7 = reserved (0)
 ```
 
-The bits do **not** correspond to a child slot in the next_sibling chain;
-each list's actual head/count lives in the per-list metadata slots placed
-at bytes 50-67 of the Extended Data block (see byte-level layout below).
-They are retained for the visitor framework so a fast
-`if (bitmask & X) != 0` check can decide whether to walk the list at all.
+The bits do **not** correspond to a child slot in the next_sibling chain; each list's actual head/count lives in the per-list metadata slots placed at bytes 50-67 of the Extended Data block (see byte-level layout below). They are retained for the visitor framework so a fast `if (bitmask & X) != 0` check can decide whether to walk the list at all.
 
-Child nodes are written in DFS pre-order, list-by-list, as direct siblings
-under the JsdocBlock (`descriptionLines → tags → inlineTags`). The
-continued layout of `JsdocBlock` Extended Data:
+Child nodes are written in DFS pre-order, list-by-list, as direct siblings under the JsdocBlock (`descriptionLines → tags → inlineTags`). The continued layout of `JsdocBlock` Extended Data:
 
 ![JsdocBlock Extended Data complete field layout (basic 68 + compat 22 = 90 bytes)](./diagrams/jsdocblock-extended-data-layout.svg)
 
@@ -1017,12 +950,7 @@ byte 88-89: reserved (u16, trailing alignment)
 
 ### JsdocTag complete byte-level layout (basic 38 + compat 42 = 80 bytes)
 
-The compat tail of `JsdocTag` is 7 consecutive `StringField` slots
-preserving the source-level whitespace around the tag header (matching
-jsdoccomment's per-tag delimiter fields). All slots are required (the
-compat mode by design always emits them), so `StringField::NONE` is not
-used here — empty source whitespace is interned as a 0-length slice into
-the COMMON_STRINGS prelude entry for `""`.
+The compat tail of `JsdocTag` is 7 consecutive `StringField` slots preserving the source-level whitespace around the tag header (matching jsdoccomment's per-tag delimiter fields). All slots are required (the compat mode by design always emits them), so `StringField::NONE` is not used here — empty source whitespace is interned as a 0-length slice into the COMMON_STRINGS prelude entry for `""`.
 
 Byte-level layout (text format):
 
@@ -1054,29 +982,21 @@ byte 74-79: line_end       (StringField)
 - Parent / Next sibling: u32 (supports up to 4G nodes)
 - Extended Data offset (in Node Data payload): 30-bit (per Node Data spec, supports a section size up to 1 G)
 
-Every wire field stays u32 / 30-bit (the string-leaf payload reuses the
-30-bit Node Data payload). See `### Limits` of the String Offsets section
-above (`K ≤ 2³⁰ − 2`) for the per-section caps and overflow handling.
+Every wire field stays u32 / 30-bit (the string-leaf payload reuses the 30-bit Node Data payload). See `### Limits` of the String Offsets section above (`K ≤ 2³⁰ − 2`) for the per-section caps and overflow handling.
 
-In practice this never trips in real workloads: per-file batches in oxlint
-intern at most a few thousand unique strings, and even the
-typescript-checker.ts fixture (the largest measured) interns ≈ 1.5 K
-strings — six orders of magnitude below the 2³⁰−2 cap.
+In practice this never trips in real workloads: per-file batches in oxlint intern at most a few thousand unique strings, and even the typescript-checker.ts fixture (the largest measured) interns ≈ 1.5 K strings — six orders of magnitude below the 2³⁰−2 cap.
 
 The string and child node configurations of TypeNode are classified into the following 3 patterns by variant:
 
-1. **"String only" type** — only `value: &str`, no children
-   → Set the node's own Node Data to **`StringInline` (`0b11`)** when the value fits the inline-leaf encoding (length ≤ 255 byte AND offset ≤ 4 MB-1) — packs `(offset:u22, length:u8)` into the 30-bit payload directly. Falls back to **`String` (`0b01`)** + 30-bit String Offsets index for longer values. No child nodes (saves 24 bytes/node overhead).
+1. **"String only" type** — only `value: &str`, no children → Set the node's own Node Data to **`StringInline` (`0b11`)** when the value fits the inline-leaf encoding (length ≤ 255 byte AND offset ≤ 4 MB-1) — packs `(offset:u22, length:u8)` into the 30-bit payload directly. Falls back to **`String` (`0b01`)** + 30-bit String Offsets index for longer values. No child nodes (saves 24 bytes/node overhead).
    - Applies to: `TypeName`, `TypeNumber`, `TypeStringValue`, `TypeProperty`, `TypeSpecialNamePath`
    - Auxiliary information (quote, special_type, etc.) is stored in Common Data
 
-2. **"Children only" type** — no string fields, has fixed-arity child nodes
-   → Set Node Data to **Children type (0b00)** and store a 30-bit bitmask
+2. **"Children only" type** — no string fields, has fixed-arity child nodes → Set Node Data to **Children type (0b00)** and store a 30-bit bitmask
    - Applies to: `TypeFunction`, `TypeParenthesis`, `TypeNullable`, `TypeNotNullable`, `TypeOptional`, `TypeVariadic`, `TypeConditional`, `TypeInfer`, `TypeKeyOf`, `TypeTypeOf`, `TypeImport`, `TypePredicate`, `TypeAsserts`, `TypeAssertsPlain`, `TypeReadonlyArray`, `TypeNamePath`, `TypeObjectField`, `TypeJsdocObjectField`, `TypeIndexedAccessIndex`, `TypeCallSignature`, `TypeConstructorSignature`, `TypeReadonlyProperty`
    - Booleans / small enums (constructor, arrow, parenthesis, brackets, dot, etc.) are stored in Common Data
 
-3. **"String + children" mixed / special structure / variable child list** — has both strings and children, or carries a variable-length child list whose `(head_index, count)` lives in Extended Data
-   → Set Node Data to **Extended type (0b10)** and store an offset into Extended Data. See the "TypeNode Extended Data layout" table below for detailed layouts.
+3. **"String + children" mixed / special structure / variable child list** — has both strings and children, or carries a variable-length child list whose `(head_index, count)` lives in Extended Data → Set Node Data to **Extended type (0b10)** and store an offset into Extended Data. See the "TypeNode Extended Data layout" table below for detailed layouts.
    - **Mixed string + 0/1 child** (Extended Data starts with a `StringField` slot): `TypeKeyValue`, `TypeIndexSignature`, `TypeMappedType`, `TypeMethodSignature`, `TypeTemplateLiteral`, `TypeSymbol`
    - **Variable child list** (Extended Data starts with a `(head:u32, count:u16)` list metadata slot at byte 0; list children are direct siblings under the parent, walked `count` times): `TypeUnion`, `TypeIntersection`, `TypeGeneric`, `TypeObject`, `TypeTuple`, `TypeTypeParameter`, `TypeParameterList`. (Migrated from "Children only" to Pattern 3 in the NodeList-wrapper-elimination format change — see `tasks/benchmark/results/2026-04-23-…`.)
    - `TypeSymbol` has a structure of `value: &str + element: Option<TypeNode>`; whether `element` is present or not, it always uses Extended Data (consistency-first; consumes 6 bytes even when `element` is absent)
@@ -1093,14 +1013,14 @@ Most TypeNodes can be expressed as either **"a single string (literal/identifier
 
 However, the following 6 kinds have **"strings + child nodes" or "special array structures"**, so they cannot be represented by Node Data alone, and we split auxiliary information out into Extended Data:
 
-| Node kind             | Structure                                                                  | Typical source examples                   |
-| --------------------- | -------------------------------------------------------------------------- | ----------------------------------------- |
-| `TypeKeyValue`        | String (key) + Option<TypeNode> (value) + boolean × 2                      | `{ a: string, b?: number, ...c: string }` |
-| `TypeIndexSignature`  | String (key) + TypeNode (right)                                            | `{[K]: string}`                           |
-| `TypeMappedType`      | String (key) + TypeNode (right)                                            | `{[K in T]: U}` style                     |
-| `TypeMethodSignature` | String (name) + 3 children (params/return/typeParams) + 2 booleans + quote | Method definitions in `(...) => T` form   |
-| `TypeTemplateLiteral` | Variable-length string array + interpolations as direct children           | `text${e1}middle${e2}tail`                |
-| `TypeSymbol`          | String (value) + Option<TypeNode> (element)                                | `Symbol(MyClass)`, `MyClass(2)`           |
+| Node kind | Structure | Typical source examples |
+| --- | --- | --- |
+| `TypeKeyValue` | String (key) + Option<TypeNode> (value) + boolean × 2 | `{ a: string, b?: number, ...c: string }` |
+| `TypeIndexSignature` | String (key) + TypeNode (right) | `{[K]: string}` |
+| `TypeMappedType` | String (key) + TypeNode (right) | `{[K in T]: U}` style |
+| `TypeMethodSignature` | String (name) + 3 children (params/return/typeParams) + 2 booleans + quote | Method definitions in `(...) => T` form |
+| `TypeTemplateLiteral` | Variable-length string array + interpolations as direct children | `text${e1}middle${e2}tail` |
+| `TypeSymbol` | String (value) + Option<TypeNode> (element) | `Symbol(MyClass)`, `MyClass(2)` |
 
 Key design goals:
 
@@ -1111,13 +1031,7 @@ Key design goals:
 
 ### Common conventions
 
-All the string slots below are **6-byte `StringField`** (per the
-convention in the `### Extended Data StringField slot (6 bytes)`
-subsection of the prior `### Extended Data section`). Metadata such as
-literal counts is unified as **u16** (no measured case exceeds the u16
-limit: of 226 JSDoc comments in typescript-checker.ts,
-`TypeTemplateLiteral` count is 0, and a JSDoc template literal with
-65K segments is physically impossible).
+All the string slots below are **6-byte `StringField`** (per the convention in the `### Extended Data StringField slot (6 bytes)` subsection of the prior `### Extended Data section`). Metadata such as literal counts is unified as **u16** (no measured case exceeds the u16 limit: of 226 JSDoc comments in typescript-checker.ts, `TypeTemplateLiteral` count is 0, and a JSDoc template literal with 65K segments is physically impossible).
 
 ### `TypeKeyValue` (Extended Data 6 bytes)
 
@@ -1224,14 +1138,14 @@ Examples:
 
 ### Size comparison table
 
-| Node kind             |               Extended Data |      Common Data (used bits) | Child count                                  |
-| --------------------- | --------------------------: | ---------------------------: | -------------------------------------------- |
-| `TypeKeyValue`        |                 **6 bytes** |  2 bits (optional, variadic) | 0 or 1 (TypeNode)                            |
-| `TypeIndexSignature`  |                 **6 bytes** |                       0 bits | 1 (TypeNode required)                        |
-| `TypeMappedType`      |                 **6 bytes** |                       0 bits | 1 (TypeNode required)                        |
-| `TypeMethodSignature` |                 **6 bytes** | 4 bits (quote + has\_\* × 2) | 1-3 (params/return/typeParams)               |
-| `TypeTemplateLiteral` | **2 + 6N bytes** (variable) |                       0 bits | Variable (interpolations as direct children) |
-| `TypeSymbol`          |                 **6 bytes** |          1 bit (has_element) | 0 or 1 (TypeNode)                            |
+| Node kind | Extended Data | Common Data (used bits) | Child count |
+| --- | --: | --: | --- |
+| `TypeKeyValue` | **6 bytes** | 2 bits (optional, variadic) | 0 or 1 (TypeNode) |
+| `TypeIndexSignature` | **6 bytes** | 0 bits | 1 (TypeNode required) |
+| `TypeMappedType` | **6 bytes** | 0 bits | 1 (TypeNode required) |
+| `TypeMethodSignature` | **6 bytes** | 4 bits (quote + has\_\* × 2) | 1-3 (params/return/typeParams) |
+| `TypeTemplateLiteral` | **2 + 6N bytes** (variable) | 0 bits | Variable (interpolations as direct children) |
+| `TypeSymbol` | **6 bytes** | 1 bit (has_element) | 0 or 1 (TypeNode) |
 
 **Design highlights**:
 
@@ -1279,19 +1193,15 @@ function decodeTypeKeyValue(view, extendedOffset, commonData) {
 
 ### Differences from tsgo
 
-| Item                     | tsgo                                  | ox-jsdoc                                                                                   |
-| ------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Target                   | TypeScript types like `TypeReference` | **JSDoc-extended types** (TypeKeyValue, TypeMappedType, etc.)                              |
-| Extended Data unit       | Variable (per struct)                 | **6 bytes / 2+6N bytes** (minimum unit, one inline StringField)                            |
-| String reference width   | u32 index → offsets table             | **`StringField` (u32 offset + u16 length, 6 bytes)** inline (no offsets-table indirection) |
-| Child reconstruction     | parent index + order                  | **Same** (convention reused)                                                               |
-| Boolean / enum placement | NodeFlags or directly in Node Data    | **Consolidated in 6 bits of Common Data**                                                  |
+| Item | tsgo | ox-jsdoc |
+| --- | --- | --- |
+| Target | TypeScript types like `TypeReference` | **JSDoc-extended types** (TypeKeyValue, TypeMappedType, etc.) |
+| Extended Data unit | Variable (per struct) | **6 bytes / 2+6N bytes** (minimum unit, one inline StringField) |
+| String reference width | u32 index → offsets table | **`StringField` (u32 offset + u16 length, 6 bytes)** inline (no offsets-table indirection) |
+| Child reconstruction | parent index + order | **Same** (convention reused) |
+| Boolean / enum placement | NodeFlags or directly in Node Data | **Consolidated in 6 bits of Common Data** |
 
-ox-jsdoc must support **JSDoc-extended types (originating from Closure
-Compiler)**, so it adds 6 kinds of structures not present in TypeScript's
-standard TypeNodes (TypeKeyValue, TypeSymbol, etc.). Each of these nodes
-is expressed as 24 bytes fixed + 6 bytes Extended (just one inline
-`StringField`) = 30 bytes total (effective).
+ox-jsdoc must support **JSDoc-extended types (originating from Closure Compiler)**, so it adds 6 kinds of structures not present in TypeScript's standard TypeNodes (TypeKeyValue, TypeSymbol, etc.). Each of these nodes is expressed as 24 bytes fixed + 6 bytes Extended (just one inline `StringField`) = 30 bytes total (effective).
 
 ## Diagnostics section (4 + 8M bytes)
 
@@ -1388,12 +1298,12 @@ result.diagnostics[1] // { rootIndex: 2, message: "expected JSDoc /** start" }
 
 Per-root parse failure is expressed by **`root.node_index = 0` (sentinel)** (see [Root Index Array](#root-index-array-12n-bytes) for details). The following conventions then apply:
 
-| Item                         | Convention                                                                                                         |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Sentinel root detection      | `roots[i].node_index == 0`                                                                                         |
-| Diagnostic required          | **On failure, at least one diagnostic with `root_index = i` must exist**                                           |
-| Failure position             | Not included in Diagnostics. The JS side reconstructs it from the input `BatchItem.baseOffset + sourceText.length` |
-| Minimum diagnostic condition | The parser must always attach at least a "parse failed"-equivalent message                                         |
+| Item | Convention |
+| --- | --- |
+| Sentinel root detection | `roots[i].node_index == 0` |
+| Diagnostic required | **On failure, at least one diagnostic with `root_index = i` must exist** |
+| Failure position | Not included in Diagnostics. The JS side reconstructs it from the input `BatchItem.baseOffset + sourceText.length` |
+| Minimum diagnostic condition | The parser must always attach at least a "parse failed"-equivalent message |
 
 This enables reliable error handling on the JS API side:
 
@@ -1499,15 +1409,15 @@ The path to the **8-byte fixed** structure of `Diagnostic { root_index, message_
 
 A full source survey of `refers/eslint-plugin-jsdoc/` revealed the following (see [batch-processing.md](./batch-processing.md#point-1-where-to-store-the-diagnostic-array) for details):
 
-| Considered field       | Necessary    | Reason                                                                        |
-| ---------------------- | ------------ | ----------------------------------------------------------------------------- |
-| `message` (string)     | **Required** | Used in `validTypes.js:253-258` (1 site only)                                 |
-| `code` (string)        | Not needed   | Comes from comment-parser, never used by eslint-plugin-jsdoc                  |
-| `line` (u32)           | Not needed   | Same as above                                                                 |
-| `critical` (bool)      | Not needed   | Same as above                                                                 |
-| `severity` (enum)      | Not needed   | **Decided by ESLint rule configuration** (cannot be determined by the parser) |
-| `source_range` (Span)  | Not needed   | **Reconstructable from the AST node span** (`iterateJsdoc.js:1916-1918`)      |
-| Per-block `problems[]` | Not needed   | Never read at all                                                             |
+| Considered field | Necessary | Reason |
+| --- | --- | --- |
+| `message` (string) | **Required** | Used in `validTypes.js:253-258` (1 site only) |
+| `code` (string) | Not needed | Comes from comment-parser, never used by eslint-plugin-jsdoc |
+| `line` (u32) | Not needed | Same as above |
+| `critical` (bool) | Not needed | Same as above |
+| `severity` (enum) | Not needed | **Decided by ESLint rule configuration** (cannot be determined by the parser) |
+| `source_range` (Span) | Not needed | **Reconstructable from the AST node span** (`iterateJsdoc.js:1916-1918`) |
+| Per-block `problems[]` | Not needed | Never read at all |
 
 → **`{ root_index, message_index }`** suffices in the Binary AST. Fixed at 8 bytes to minimize transfer cost and layout complexity.
 
@@ -1542,13 +1452,13 @@ When all roots parse successfully:
 
 ### Differences from tsgo
 
-| Item                 | tsgo                                                              | ox-jsdoc                                             |
-| -------------------- | ----------------------------------------------------------------- | ---------------------------------------------------- |
-| Diagnostics section  | **None** (assumes single SourceFile, errors via separate channel) | **Present** (required for batch support)             |
-| Diagnostic structure | TypeScript's `Diagnostic` interface                               | `{ root_index, message_index }` 8 bytes              |
-| Linkage              | Per SourceFile                                                    | Per root (each comment in the batch)                 |
-| Sort                 | Unspecified                                                       | **`root_index` ascending** for binary search support |
-| severity             | Yes                                                               | No (decided by ESLint)                               |
+| Item | tsgo | ox-jsdoc |
+| --- | --- | --- |
+| Diagnostics section | **None** (assumes single SourceFile, errors via separate channel) | **Present** (required for batch support) |
+| Diagnostic structure | TypeScript's `Diagnostic` interface | `{ root_index, message_index }` 8 bytes |
+| Linkage | Per SourceFile | Per root (each comment in the batch) |
+| Sort | Unspecified | **`root_index` ascending** for binary search support |
+| severity | Yes | No (decided by ESLint) |
 
 ox-jsdoc primarily targets **batch processing + ESLint integration**, so Diagnostics are designed to be efficiently transferred as part of the Binary AST. We refer to tsgo's Diagnostic structure but optimize for ESLint use cases.
 
@@ -1624,11 +1534,11 @@ The range a node occupies in the source, expressed as **"relative UTF-16 code un
 
 The payload body. Type tag 2-bit + payload 30-bit (see "Node Data bit packing (32 bit)" for details).
 
-| Type Tag            | Meaning                   | Payload interpretation                                                                    |
-| ------------------- | ------------------------- | ----------------------------------------------------------------------------------------- |
-| `0b00` Children     | Child node bitmask        | bit n = has the n-th child in visitor order                                               |
-| `0b01` String       | String Offsets index      | 30-bit index → String Offsets table (long-string fallback for string-leaf nodes)          |
-| `0b10` Extended     | Extended Data offset      | 30-bit byte offset → Extended Data section                                                |
+| Type Tag | Meaning | Payload interpretation |
+| --- | --- | --- |
+| `0b00` Children | Child node bitmask | bit n = has the n-th child in visitor order |
+| `0b01` String | String Offsets index | 30-bit index → String Offsets table (long-string fallback for string-leaf nodes) |
+| `0b10` Extended | Extended Data offset | 30-bit byte offset → Extended Data section |
 | `0b11` StringInline | Inline `(offset, length)` | Packed `(offset:u22, length:u8)` → direct slice into String Data (short-string fast path) |
 
 #### Parent index (u32) — bytes 16-19
@@ -1645,9 +1555,7 @@ The index of the next sibling node having the same parent.
 
 - Range: `0 ≤ next_sibling < P+1` (`0` = no sibling, last child)
 - To find the first child: `parent.first_child = parent_index + 1`; subsequent siblings are followed via `current.next_sibling`
-- The next_sibling chain handles variable-length child lists; the parent's
-  Extended Data block stores `(head_index, count)` per list so the decoder
-  knows where each list starts and how many siblings to consume
+- The next_sibling chain handles variable-length child lists; the parent's Extended Data block stores `(head_index, count)` per list so the decoder knows where each list starts and how many siblings to consume
 
 ### Tree reconstruction algorithm
 
@@ -1884,22 +1792,22 @@ Example: `TypeName "Foo"` (length 3, offset 24 in String Data) → `node_data = 
 
 ### Reference targets per type tag
 
-|      Type tag       | Payload                   | Reference target                                           | Range (decoder)                         |
-| :-----------------: | ------------------------- | ---------------------------------------------------------- | --------------------------------------- |
-|   `0b00` Children   | bitmask 30-bit            | Nodes array (contiguous children + next_sibling)           | bit n = the n-th child in visitor order |
-|    `0b01` String    | index 30-bit              | String Offsets → String Data (long-string fallback, 2-hop) | 1 string                                |
-|   `0b10` Extended   | offset 30-bit             | Extended Data                                              | 1 struct (size determined by node kind) |
-| `0b11` StringInline | `(offset:u22, length:u8)` | String Data direct slice (short-string fast path, 1-hop)   | 1 string, length ≤ 255, offset ≤ 4 MB-1 |
+| Type tag | Payload | Reference target | Range (decoder) |
+| :-: | --- | --- | --- |
+| `0b00` Children | bitmask 30-bit | Nodes array (contiguous children + next_sibling) | bit n = the n-th child in visitor order |
+| `0b01` String | index 30-bit | String Offsets → String Data (long-string fallback, 2-hop) | 1 string |
+| `0b10` Extended | offset 30-bit | Extended Data | 1 struct (size determined by node kind) |
+| `0b11` StringInline | `(offset:u22, length:u8)` | String Data direct slice (short-string fast path, 1-hop) | 1 string, length ≤ 255, offset ≤ 4 MB-1 |
 
 ### Per-node-kind type tag determination rules
 
 The encoder determines the Node Data type tag from the node kind by the following rules:
 
-| Node kind structure                                              | Type tag(s)                                               | Examples                                                                               |
-| ---------------------------------------------------------------- | :-------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Single string only (literal / identifier)                        | `0b11` StringInline (≤ 255 byte) / `0b01` String (longer) | `JsdocText`, `JsdocTagName`, `TypeName`, `TypeNumber` — encoder picks per-emit by size |
-| Children only (compositional, fixed-arity)                       | `0b00` Children                                           | `TypeFunction`, `TypeApplication`                                                      |
-| Mixed string + children / variable list / Extended Data required | `0b10` Extended                                           | `JsdocBlock`, `JsdocTag`, `TypeKeyValue`, `TypeUnion`, `TypeObject`                    |
+| Node kind structure | Type tag(s) | Examples |
+| --- | :-- | --- |
+| Single string only (literal / identifier) | `0b11` StringInline (≤ 255 byte) / `0b01` String (longer) | `JsdocText`, `JsdocTagName`, `TypeName`, `TypeNumber` — encoder picks per-emit by size |
+| Children only (compositional, fixed-arity) | `0b00` Children | `TypeFunction`, `TypeApplication` |
+| Mixed string + children / variable list / Extended Data required | `0b10` Extended | `JsdocBlock`, `JsdocTag`, `TypeKeyValue`, `TypeUnion`, `TypeObject` |
 
 See "Node catalog matrix" for detailed per-node-kind assignments.
 
@@ -1930,26 +1838,26 @@ In implementation, the decoder pays the dispatch cost **only for nodes accessed*
 
 ### Size and performance characteristics
 
-| Item                             | Value                   | Notes                                                                  |
-| -------------------------------- | ----------------------- | ---------------------------------------------------------------------- |
-| Node Data field size             | Fixed 4 bytes (u32)     | Node record bytes 12-15                                                |
-| Type tag                         | 2 bit                   | All 4 states are now in use                                            |
-| Payload                          | 30 bit                  | Up to 1G entries / 1GB-equivalent offsets / 4 MB × 255 byte for inline |
-| Dispatch cost                    | shift + mask + branch   | Branch-predictor friendly                                              |
-| Retrieval cost (`String` type)   | 1 + 2 memory references | NodeData → Offset → Data                                               |
-| Retrieval cost (`StringInline`)  | 1 + 1 memory reference  | NodeData → Data (Offsets-table hop eliminated)                         |
-| Retrieval cost (`Extended` type) | 1 + 1 memory reference  | NodeData → Extended Data                                               |
+| Item | Value | Notes |
+| --- | --- | --- |
+| Node Data field size | Fixed 4 bytes (u32) | Node record bytes 12-15 |
+| Type tag | 2 bit | All 4 states are now in use |
+| Payload | 30 bit | Up to 1G entries / 1GB-equivalent offsets / 4 MB × 255 byte for inline |
+| Dispatch cost | shift + mask + branch | Branch-predictor friendly |
+| Retrieval cost (`String` type) | 1 + 2 memory references | NodeData → Offset → Data |
+| Retrieval cost (`StringInline`) | 1 + 1 memory reference | NodeData → Data (Offsets-table hop eliminated) |
+| Retrieval cost (`Extended` type) | 1 + 1 memory reference | NodeData → Extended Data |
 
 ### Differences from tsgo
 
-| Item                 | tsgo                        | ox-jsdoc                                                                                             |
-| -------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Type tag location    | Upper 2 bits                | **Same** (compatible)                                                                                |
-| Type tag values      | 0b00 / 0b01 / 0b10 / 0b11   | **Same encoding, different meaning for 0b11** (StringInline vs Reserved)                             |
-| Common Data location | Inside Node Data (low bits) | **Separated to byte 1**                                                                              |
-| Payload bit count    | 24-bit (with Common in)     | **30-bit** (freed by separating Common)                                                              |
-| Limits               | ~16M entries / 16MB offset  | **~1G / 1GB** for `String`/`Extended`; 4 MB × 255 byte for `StringInline`                            |
-| Use of 0b11          | Reserved (decoder error)    | **`StringInline`** — short string-leaf payload `(offset:u22, length:u8)` packed inline (Path B-leaf) |
+| Item | tsgo | ox-jsdoc |
+| --- | --- | --- |
+| Type tag location | Upper 2 bits | **Same** (compatible) |
+| Type tag values | 0b00 / 0b01 / 0b10 / 0b11 | **Same encoding, different meaning for 0b11** (StringInline vs Reserved) |
+| Common Data location | Inside Node Data (low bits) | **Separated to byte 1** |
+| Payload bit count | 24-bit (with Common in) | **30-bit** (freed by separating Common) |
+| Limits | ~16M entries / 16MB offset | **~1G / 1GB** for `String`/`Extended`; 4 MB × 255 byte for `StringInline` |
+| Use of 0b11 | Reserved (decoder error) | **`StringInline`** — short string-leaf payload `(offset:u22, length:u8)` packed inline (Path B-leaf) |
 
 By the policy shift of **separating Common Data + expanding payload**, ox-jsdoc raises the batch-processing capacity ceiling 64x (16 MB → 1 GB). The unused `0b11` slot was later reclaimed for `StringInline` (Path B-leaf), eliminating the String Offsets table hop on the dominant short-string-leaf path.
 
@@ -1987,35 +1895,35 @@ Composition within byte 1 (8 bits):
 
 Classified into 4 patterns by node kind (see the node-kind table for details):
 
-| Pattern                                | Bits used | Examples                                                  |
-| -------------------------------------- | --------: | --------------------------------------------------------- |
-| A. 1-bit boolean                       |         1 | `JsdocTag.optional`, `JsdocParameterName.optional`        |
-| B. 2-bit enum (3-4 states)             |         2 | `TypeStringValue.quote` (None/Single/Double)              |
-| C. 3-bit enum (5-8 states)             |         3 | `JsdocInlineTag.format` (Plain/Pipe/Space/Prefix/Unknown) |
-| D. Compound field (boolean × N + enum) |       3-4 | `TypeMethodSignature` (2-bit quote + 2 booleans)          |
+| Pattern | Bits used | Examples |
+| --- | --: | --- |
+| A. 1-bit boolean | 1 | `JsdocTag.optional`, `JsdocParameterName.optional` |
+| B. 2-bit enum (3-4 states) | 2 | `TypeStringValue.quote` (None/Single/Double) |
+| C. 3-bit enum (5-8 states) | 3 | `JsdocInlineTag.format` (Plain/Pipe/Space/Prefix/Unknown) |
+| D. Compound field (boolean × N + enum) | 3-4 | `TypeMethodSignature` (2-bit quote + 2 booleans) |
 
 The maximum bits used is **4 / 6** (`TypeMethodSignature`, `TypeObjectField`, `TypeSpecialNamePath`). The remaining 2 bits are reserved for future extension.
 
 ### Per-node-kind usage
 
-| Node kind                                           | Usage                                                                                                                                                                                                                                                            |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `JsdocTag`                                          | bit0 = optional                                                                                                                                                                                                                                                  |
-| `JsdocInlineTag`                                    | bits[0:2] = format (5 variants: Plain/Pipe/Space/Prefix/Unknown)                                                                                                                                                                                                 |
-| `JsdocGenericTagBody`                               | bit0 = has_dash_separator (compresses presence/absence of `Option<JsdocSeparator>`)                                                                                                                                                                              |
-| `JsdocParameterName`                                | bit0 = optional                                                                                                                                                                                                                                                  |
-| `TypeNullable` / `TypeNotNullable` / `TypeOptional` | bit0 = position (Prefix/Suffix)                                                                                                                                                                                                                                  |
-| `TypeVariadic`                                      | bit0 = position, bit1 = square_brackets                                                                                                                                                                                                                          |
-| `TypeGeneric`                                       | bit0 = brackets (Angle/Square), bit1 = dot                                                                                                                                                                                                                       |
-| `TypeFunction`                                      | bit0 = constructor, bit1 = arrow, bit2 = parenthesis                                                                                                                                                                                                             |
-| `TypeObject`                                        | bits[0:2] = separator (5 variants + None)                                                                                                                                                                                                                        |
-| `TypeStringValue` / `TypeProperty`                  | bits[0:1] = quote (3-state: 0=None / 1=Single / 2=Double). Note: `TypeStringValue.quote` is `QuoteStyle` (Required), so the encoder always writes 1 or 2 (the `0=None` state is unused). `TypeProperty.quote` is `Option<QuoteStyle>`, so all 3 states are valid |
-| `TypeMethodSignature`                               | bits[0:1] = quote (3-state: 0=None / 1=Single / 2=Double), bit2 = has_parameters (a TypeParameterList child is emitted when set), bit3 = has_type_parameters (ditto)                                                                                             |
-| `TypeNamePath`                                      | bits[0:1] = path_type (4 variants)                                                                                                                                                                                                                               |
-| `TypeSpecialNamePath`                               | bits[0:1] = special_type (3 variants) + bits[2:3] = quote (3-state)                                                                                                                                                                                              |
-| `TypeObjectField`                                   | bit0 = optional, bit1 = readonly, bits[2:3] = quote (3-state)                                                                                                                                                                                                    |
-| `TypeKeyValue`                                      | bit0 = optional, bit1 = variadic                                                                                                                                                                                                                                 |
-| `TypeSymbol`                                        | bit0 = has_element (Some/None for Option<TypeNode>)                                                                                                                                                                                                              |
+| Node kind | Usage |
+| --- | --- |
+| `JsdocTag` | bit0 = optional |
+| `JsdocInlineTag` | bits[0:2] = format (5 variants: Plain/Pipe/Space/Prefix/Unknown) |
+| `JsdocGenericTagBody` | bit0 = has_dash_separator (compresses presence/absence of `Option<JsdocSeparator>`) |
+| `JsdocParameterName` | bit0 = optional |
+| `TypeNullable` / `TypeNotNullable` / `TypeOptional` | bit0 = position (Prefix/Suffix) |
+| `TypeVariadic` | bit0 = position, bit1 = square_brackets |
+| `TypeGeneric` | bit0 = brackets (Angle/Square), bit1 = dot |
+| `TypeFunction` | bit0 = constructor, bit1 = arrow, bit2 = parenthesis |
+| `TypeObject` | bits[0:2] = separator (5 variants + None) |
+| `TypeStringValue` / `TypeProperty` | bits[0:1] = quote (3-state: 0=None / 1=Single / 2=Double). Note: `TypeStringValue.quote` is `QuoteStyle` (Required), so the encoder always writes 1 or 2 (the `0=None` state is unused). `TypeProperty.quote` is `Option<QuoteStyle>`, so all 3 states are valid |
+| `TypeMethodSignature` | bits[0:1] = quote (3-state: 0=None / 1=Single / 2=Double), bit2 = has_parameters (a TypeParameterList child is emitted when set), bit3 = has_type_parameters (ditto) |
+| `TypeNamePath` | bits[0:1] = path_type (4 variants) |
+| `TypeSpecialNamePath` | bits[0:1] = special_type (3 variants) + bits[2:3] = quote (3-state) |
+| `TypeObjectField` | bit0 = optional, bit1 = readonly, bits[2:3] = quote (3-state) |
+| `TypeKeyValue` | bit0 = optional, bit1 = variadic |
+| `TypeSymbol` | bit0 = has_element (Some/None for Option<TypeNode>) |
 
 For node kinds other than these (`JsdocBlock`, `JsdocText`, `TypeName`, etc.), Common Data is unused (always 0).
 
@@ -2070,12 +1978,12 @@ function getMethodSignatureHasParameters(view, nodeIndex) {
 
 tsgo holds a separate **32-bit `NodeFlags`** field on the node record (a group of semantic-analysis flags such as Ambient, HasImplicitReturn, HasExplicitReturn, etc.). ox-jsdoc does not adopt this:
 
-| Aspect           | tsgo                                                                           | ox-jsdoc                                       |
-| ---------------- | ------------------------------------------------------------------------------ | ---------------------------------------------- |
-| Flag region      | 32-bit `NodeFlags` (common to all nodes)                                       | 6-bit Common Data (usage varies per node kind) |
-| Usage            | Intermediate state of semantic analysis (Ambient, NamespaceAugmentation, etc.) | Small syntactic flags (optional, quote, etc.)  |
-| Necessity        | Required for the TypeScript checker                                            | Unnecessary for parser-only                    |
-| Node record size | 32 bytes                                                                       | **24 bytes** (NodeFlags removed + Kind u8)     |
+| Aspect | tsgo | ox-jsdoc |
+| --- | --- | --- |
+| Flag region | 32-bit `NodeFlags` (common to all nodes) | 6-bit Common Data (usage varies per node kind) |
+| Usage | Intermediate state of semantic analysis (Ambient, NamespaceAugmentation, etc.) | Small syntactic flags (optional, quote, etc.) |
+| Necessity | Required for the TypeScript checker | Unnecessary for parser-only |
+| Node record size | 32 bytes | **24 bytes** (NodeFlags removed + Kind u8) |
 
 ox-jsdoc is a **parser-only implementation with no semantic analysis**, so flags equivalent to NodeFlags do not exist. 6 bits of Common Data adequately covers per-node-kind syntactic flags.
 
@@ -2115,41 +2023,30 @@ Decoders read `(head, count)` from the slot and walk `next_sibling` exactly `cou
 
 ### Comment AST (15 kinds)
 
-| Kind | Node name              | Node Data type                            | Common Data             | Extended Data (basic / compat) |
-| ---- | ---------------------- | ----------------------------------------- | ----------------------- | ------------------------------ |
-| 0x01 | `JsdocBlock`           | Extended                                  | (unused)                | 68 / 90 bytes                  |
-| 0x02 | `JsdocDescriptionLine` | String ‖ StringInline / Extended (compat) | (unused)                | 0 / 24 bytes                   |
-| 0x03 | `JsdocTag`             | Extended                                  | bit0=optional           | 38 / 80 bytes                  |
-| 0x04 | `JsdocTagName`         | String ‖ StringInline                     | (unused)                | -                              |
-| 0x05 | `JsdocTagNameValue`    | String ‖ StringInline                     | (unused)                | -                              |
-| 0x06 | `JsdocTypeSource`      | String ‖ StringInline                     | (unused)                | -                              |
-| 0x07 | `JsdocTypeLine`        | String ‖ StringInline / Extended (compat) | (unused)                | 0 / 24 bytes                   |
-| 0x08 | `JsdocInlineTag`       | Extended                                  | bits[0:2]=format        | 18 bytes                       |
-| 0x09 | `JsdocGenericTagBody`  | Extended                                  | bit0=has_dash_separator | 8 bytes                        |
-| 0x0A | `JsdocBorrowsTagBody`  | Children                                  | (unused)                | - (reserved, see note)         |
-| 0x0B | `JsdocRawTagBody`      | String ‖ StringInline                     | (unused)                | - (reserved, see note)         |
-| 0x0C | `JsdocParameterName`   | Extended                                  | bit0=optional           | 12 bytes                       |
-| 0x0D | `JsdocNamepathSource`  | String ‖ StringInline                     | (unused)                | -                              |
-| 0x0E | `JsdocIdentifier`      | String ‖ StringInline                     | (unused)                | -                              |
-| 0x0F | `JsdocText`            | String ‖ StringInline                     | (unused)                | -                              |
+| Kind | Node name | Node Data type | Common Data | Extended Data (basic / compat) |
+| --- | --- | --- | --- | --- |
+| 0x01 | `JsdocBlock` | Extended | (unused) | 68 / 90 bytes |
+| 0x02 | `JsdocDescriptionLine` | String ‖ StringInline / Extended (compat) | (unused) | 0 / 24 bytes |
+| 0x03 | `JsdocTag` | Extended | bit0=optional | 38 / 80 bytes |
+| 0x04 | `JsdocTagName` | String ‖ StringInline | (unused) | - |
+| 0x05 | `JsdocTagNameValue` | String ‖ StringInline | (unused) | - |
+| 0x06 | `JsdocTypeSource` | String ‖ StringInline | (unused) | - |
+| 0x07 | `JsdocTypeLine` | String ‖ StringInline / Extended (compat) | (unused) | 0 / 24 bytes |
+| 0x08 | `JsdocInlineTag` | Extended | bits[0:2]=format | 18 bytes |
+| 0x09 | `JsdocGenericTagBody` | Extended | bit0=has_dash_separator | 8 bytes |
+| 0x0A | `JsdocBorrowsTagBody` | Children | (unused) | - (reserved, see note) |
+| 0x0B | `JsdocRawTagBody` | String ‖ StringInline | (unused) | - (reserved, see note) |
+| 0x0C | `JsdocParameterName` | Extended | bit0=optional | 12 bytes |
+| 0x0D | `JsdocNamepathSource` | String ‖ StringInline | (unused) | - |
+| 0x0E | `JsdocIdentifier` | String ‖ StringInline | (unused) | - |
+| 0x0F | `JsdocText` | String ‖ StringInline | (unused) | - |
 
-> **Note**: every "String ‖ StringInline" entry above means the encoder
-> picks `TypeTag::StringInline` (0b11, payload = `(offset:u22, length:u8)`)
-> when the value is short enough (length ≤ 255 byte AND String Data
-> offset ≤ 4 MB-1) and falls back to `TypeTag::String` (0b01, payload =
-> 30-bit String Offsets index) otherwise — see
-> [Per-node-kind type tag determination rules](#per-node-kind-type-tag-determination-rules).
+> **Note**: every "String ‖ StringInline" entry above means the encoder picks `TypeTag::StringInline` (0b11, payload = `(offset:u22, length:u8)`) when the value is short enough (length ≤ 255 byte AND String Data offset ≤ 4 MB-1) and falls back to `TypeTag::String` (0b01, payload = 30-bit String Offsets index) otherwise — see [Per-node-kind type tag determination rules](#per-node-kind-type-tag-determination-rules).
 
 > **Reserved Comment-AST Kinds**:
 >
-> - **0x0A `JsdocBorrowsTagBody`** and **0x0B `JsdocRawTagBody`** — the
->   typed AST defines `JsdocTagBody::Borrows` / `JsdocTagBody::Raw`
->   variants (for `@borrows source as target` / opaque tag bodies), but
->   no parser path currently produces them. `@borrows` and friends are
->   emitted as `JsdocGenericTagBody` (Kind 0x09). The discriminants are
->   reserved so a future specialization can be added without renumbering.
-> - **`JsdocInlineTag.tag`** (the inline-tag name) is also currently
->   dropped during emit; see the `JsdocInlineTag` row above.
+> - **0x0A `JsdocBorrowsTagBody`** and **0x0B `JsdocRawTagBody`** — the typed AST defines `JsdocTagBody::Borrows` / `JsdocTagBody::Raw` variants (for `@borrows source as target` / opaque tag bodies), but no parser path currently produces them. `@borrows` and friends are emitted as `JsdocGenericTagBody` (Kind 0x09). The discriminants are reserved so a future specialization can be added without renumbering.
+> - **`JsdocInlineTag.tag`** (the inline-tag name) is also currently dropped during emit; see the `JsdocInlineTag` row above.
 
 ### TypeNode (45 kinds)
 
@@ -2157,67 +2054,65 @@ Classified per "TypeNode string/child configuration is split into 3 patterns by 
 
 #### Pattern 1: String only (5 kinds)
 
-Node Data type tag is **`TypeTag::String` (0b01) ‖ `TypeTag::StringInline` (0b11)**
-— the encoder picks per-emit by size (see [Per-node-kind type tag
-determination rules](#per-node-kind-type-tag-determination-rules)).
+Node Data type tag is **`TypeTag::String` (0b01) ‖ `TypeTag::StringInline` (0b11)** — the encoder picks per-emit by size (see [Per-node-kind type tag determination rules](#per-node-kind-type-tag-determination-rules)).
 
-| Kind | Node name             | Common Data                                                         |
-| ---- | --------------------- | ------------------------------------------------------------------- |
-| 0x80 | `TypeName`            | (unused)                                                            |
-| 0x81 | `TypeNumber`          | (unused)                                                            |
-| 0x82 | `TypeStringValue`     | bits[0:1] = quote (3-state)                                         |
-| 0xA3 | `TypeProperty`        | bits[0:1] = quote (3-state)                                         |
+| Kind | Node name | Common Data |
+| --- | --- | --- |
+| 0x80 | `TypeName` | (unused) |
+| 0x81 | `TypeNumber` | (unused) |
+| 0x82 | `TypeStringValue` | bits[0:1] = quote (3-state) |
+| 0xA3 | `TypeProperty` | bits[0:1] = quote (3-state) |
 | 0x8F | `TypeSpecialNamePath` | bits[0:1] = special_type (3 variants) + bits[2:3] = quote (3-state) |
 
 #### Pattern 2: Children only (Children type 0b00, 22 kinds)
 
 The bitmask is stored in the 30-bit payload of Node Data. Visitor order of children follows the visitor keys.
 
-| Node name                                           | Common Data                                             | Child count                          |
-| --------------------------------------------------- | ------------------------------------------------------- | ------------------------------------ |
-| `TypeFunction`                                      | bit0=constructor, bit1=arrow, bit2=parenthesis          | 3 (parameters/return/typeParameters) |
-| `TypeParenthesis`                                   | (unused)                                                | 1                                    |
-| `TypeNullable` / `TypeNotNullable` / `TypeOptional` | bit0=position                                           | 1                                    |
-| `TypeVariadic`                                      | bit0=position, bit1=square_brackets                     | 1                                    |
-| `TypeConditional`                                   | (unused)                                                | 4                                    |
-| `TypeInfer` / `TypeKeyOf` / `TypeTypeOf`            | (unused)                                                | 1                                    |
-| `TypeImport`                                        | (unused)                                                | 1 (element)                          |
-| `TypePredicate`                                     | (unused)                                                | 2 (left + right)                     |
-| `TypeAsserts`                                       | (unused)                                                | 2 (left + right)                     |
-| `TypeAssertsPlain`                                  | (unused)                                                | 1 (element)                          |
-| `TypeReadonlyArray`                                 | (unused)                                                | 1                                    |
-| `TypeNamePath`                                      | bits[0:1] = path_type                                   | 2 (left + right)                     |
-| `TypeObjectField`                                   | bit0=optional, bit1=readonly, bits[2:3]=quote (3-state) | 1-2 (key required + right Option)    |
-| `TypeJsdocObjectField`                              | (unused)                                                | 2                                    |
-| `TypeIndexedAccessIndex`                            | (unused)                                                | 1                                    |
-| `TypeCallSignature` / `TypeConstructorSignature`    | (unused)                                                | 3 (parameters/return/typeParameters) |
-| `TypeReadonlyProperty`                              | (unused)                                                | 1                                    |
+| Node name | Common Data | Child count |
+| --- | --- | --- |
+| `TypeFunction` | bit0=constructor, bit1=arrow, bit2=parenthesis | 3 (parameters/return/typeParameters) |
+| `TypeParenthesis` | (unused) | 1 |
+| `TypeNullable` / `TypeNotNullable` / `TypeOptional` | bit0=position | 1 |
+| `TypeVariadic` | bit0=position, bit1=square_brackets | 1 |
+| `TypeConditional` | (unused) | 4 |
+| `TypeInfer` / `TypeKeyOf` / `TypeTypeOf` | (unused) | 1 |
+| `TypeImport` | (unused) | 1 (element) |
+| `TypePredicate` | (unused) | 2 (left + right) |
+| `TypeAsserts` | (unused) | 2 (left + right) |
+| `TypeAssertsPlain` | (unused) | 1 (element) |
+| `TypeReadonlyArray` | (unused) | 1 |
+| `TypeNamePath` | bits[0:1] = path_type | 2 (left + right) |
+| `TypeObjectField` | bit0=optional, bit1=readonly, bits[2:3]=quote (3-state) | 1-2 (key required + right Option) |
+| `TypeJsdocObjectField` | (unused) | 2 |
+| `TypeIndexedAccessIndex` | (unused) | 1 |
+| `TypeCallSignature` / `TypeConstructorSignature` | (unused) | 3 (parameters/return/typeParameters) |
+| `TypeReadonlyProperty` | (unused) | 1 |
 
 #### Pattern 3: Mixed string + children (Extended type 0b10, 13 kinds)
 
 The 7 kinds in the first half of the table (Union, Intersection, Generic, Object, Tuple, TypeParameter, ParameterList) own an 8-byte ED block that consists of one inline list metadata slot (head_index: u32 + count: u16, padded to 8 bytes). `TypeGeneric.left` is the parent's first direct child (no Children bitmask).
 
-| Node name             | Common Data                                                    | Extended Data                                | Child count                                  |
-| --------------------- | -------------------------------------------------------------- | -------------------------------------------- | -------------------------------------------- |
-| `TypeUnion`           | (unused)                                                       | 8 bytes (elements list metadata)             | Variable (elements)                          |
-| `TypeIntersection`    | (unused)                                                       | 8 bytes (elements list metadata)             | Variable (elements)                          |
-| `TypeGeneric`         | bit0=brackets, bit1=dot                                        | 8 bytes (elements list metadata)             | 1 left + Variable (elements)                 |
-| `TypeObject`          | bits[0:2] = separator                                          | 8 bytes (elements list metadata)             | Variable (elements)                          |
-| `TypeTuple`           | (unused)                                                       | 8 bytes (elements list metadata)             | Variable (elements)                          |
-| `TypeTypeParameter`   | (unused)                                                       | 8 bytes (elements list metadata)             | Variable                                     |
-| `TypeParameterList`   | (unused)                                                       | 8 bytes (elements list metadata)             | Variable (elements)                          |
-| `TypeKeyValue`        | bit0=optional, bit1=variadic                                   | 6 bytes (key StringField)                    | 0 or 1                                       |
-| `TypeIndexSignature`  | (unused)                                                       | 6 bytes (key StringField)                    | 1 (right)                                    |
-| `TypeMappedType`      | (unused)                                                       | 6 bytes (key StringField)                    | 1 (right)                                    |
-| `TypeMethodSignature` | bits[0:1]=quote, bit2=has_parameters, bit3=has_type_parameters | 6 bytes (name StringField)                   | 1-3 (parameters?/return/typeParameters?)     |
-| `TypeTemplateLiteral` | (unused)                                                       | 2+6N bytes (literal count + N × StringField) | Variable (interpolations as direct children) |
-| `TypeSymbol`          | bit0=has_element                                               | 6 bytes (value StringField)                  | 0 or 1 (element)                             |
+| Node name | Common Data | Extended Data | Child count |
+| --- | --- | --- | --- |
+| `TypeUnion` | (unused) | 8 bytes (elements list metadata) | Variable (elements) |
+| `TypeIntersection` | (unused) | 8 bytes (elements list metadata) | Variable (elements) |
+| `TypeGeneric` | bit0=brackets, bit1=dot | 8 bytes (elements list metadata) | 1 left + Variable (elements) |
+| `TypeObject` | bits[0:2] = separator | 8 bytes (elements list metadata) | Variable (elements) |
+| `TypeTuple` | (unused) | 8 bytes (elements list metadata) | Variable (elements) |
+| `TypeTypeParameter` | (unused) | 8 bytes (elements list metadata) | Variable |
+| `TypeParameterList` | (unused) | 8 bytes (elements list metadata) | Variable (elements) |
+| `TypeKeyValue` | bit0=optional, bit1=variadic | 6 bytes (key StringField) | 0 or 1 |
+| `TypeIndexSignature` | (unused) | 6 bytes (key StringField) | 1 (right) |
+| `TypeMappedType` | (unused) | 6 bytes (key StringField) | 1 (right) |
+| `TypeMethodSignature` | bits[0:1]=quote, bit2=has_parameters, bit3=has_type_parameters | 6 bytes (name StringField) | 1-3 (parameters?/return/typeParameters?) |
+| `TypeTemplateLiteral` | (unused) | 2+6N bytes (literal count + N × StringField) | Variable (interpolations as direct children) |
+| `TypeSymbol` | bit0=has_element | 6 bytes (value StringField) | 0 or 1 (element) |
 
 #### Others
 
-| Node name                                                | Usage                                                                          |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Node name | Usage |
+| --- | --- |
 | `TypeNull` / `TypeUndefined` / `TypeAny` / `TypeUnknown` | Leaf (no Common Data, no Extended Data, Node Data payload also has no meaning) |
-| `TypeUniqueSymbol`                                       | Leaf (same as above)                                                           |
+| `TypeUniqueSymbol` | Leaf (same as above) |
 
 Note: Pattern 1 (String type) nodes store the string index directly in the Node Data payload, so they do not use Extended Data. Common Data is also unused for the most part.

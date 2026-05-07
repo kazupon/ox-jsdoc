@@ -7,8 +7,7 @@ The AST should support two primary consumers:
 1. `oxlint`, where JSDoc comments are parsed from comments collected by `oxc_parser`.
 2. ESLint-compatible tooling, where rule authors expect an ESTree-like shape.
 
-The design must also preserve the performance principles in
-`design/001-performance`:
+The design must also preserve the performance principles in `design/001-performance`:
 
 - keep the parser hot path small
 - use arena allocation and borrowed source slices
@@ -39,9 +38,7 @@ Every visitable node should have:
 - optional `range` / `loc` only in JS-facing serialization
 - child fields that can be described by visitor keys
 
-For Rust implementation, node structs should not use a field named `type`.
-The node kind is represented by the Rust struct or enum variant.
-When serialized to JS or JSON, the node kind should be emitted as `"type"`.
+For Rust implementation, node structs should not use a field named `type`. The node kind is represented by the Rust struct or enum variant. When serialized to JS or JSON, the node kind should be emitted as `"type"`.
 
 Example JS-facing shape:
 
@@ -58,9 +55,7 @@ Example JS-facing shape:
 
 ### 2. Source-preserving syntax layer
 
-Lint rules need more than semantic data.
-They often inspect whitespace, delimiter lines, raw type text, tag order,
-description lines, and exact spans for fixes.
+Lint rules need more than semantic data. They often inspect whitespace, delimiter lines, raw type text, tag order, description lines, and exact spans for fixes.
 
 The AST should preserve:
 
@@ -78,8 +73,7 @@ This is intentionally stronger than a doclet-style semantic model.
 
 ### 3. Parser does not finalize semantics
 
-The parser should extract syntax and recover from malformed input.
-It should not decide every tag's final meaning.
+The parser should extract syntax and recover from malformed input. It should not decide every tag's final meaning.
 
 The following belong to later phases:
 
@@ -90,13 +84,11 @@ The following belong to later phases:
 - complete parameter-path validation
 - rule-specific diagnostics
 
-The parser may classify obvious common syntax, but it must preserve raw forms so
-later phases can reinterpret them.
+The parser may classify obvious common syntax, but it must preserve raw forms so later phases can reinterpret them.
 
 ### 4. Future extension without AST churn
 
-The AST should allow adding richer structures later without breaking the basic
-rule-facing shape.
+The AST should allow adding richer structures later without breaking the basic rule-facing shape.
 
 Planned extension points:
 
@@ -108,8 +100,7 @@ Planned extension points:
 - tag dictionaries and mode-specific validation facts
 - comment attachment metadata for `oxlint` / ESLint integrations
 
-The first version should not eagerly implement every extension, but it should
-reserve stable locations for them.
+The first version should not eagerly implement every extension, but it should reserve stable locations for them.
 
 ## Relationship to Existing Ecosystem
 
@@ -126,12 +117,9 @@ reserve stable locations for them.
 - optional `jsdoc-type-pratt-parser` type AST
 - utilities for locating comments attached to ESLint AST nodes
 
-`ox-jsdoc` should be closer to the `@es-joy/jsdoccomment` AST shape than to
-`comment-parser`'s raw result shape.
+`ox-jsdoc` should be closer to the `@es-joy/jsdoccomment` AST shape than to `comment-parser`'s raw result shape.
 
-The goal is not byte-for-byte compatibility.
-The goal is to provide a rule-friendly AST with stable node kinds and visitor
-keys, while keeping Rust-side performance and arena allocation.
+The goal is not byte-for-byte compatibility. The goal is to provide a rule-friendly AST with stable node kinds and visitor keys, while keeping Rust-side performance and arena allocation.
 
 ## Layered Architecture
 
@@ -265,9 +253,7 @@ const jsdocVisitorKeys = {
 }
 ```
 
-If `parsedType` is absent or `null`, traversal skips it.
-When type parsing is added, `JsdocType*` visitor keys should be merged in the
-same way `@es-joy/jsdoccomment` merges `jsdoc-type-pratt-parser` visitor keys.
+If `parsedType` is absent or `null`, traversal skips it. When type parsing is added, `JsdocType*` visitor keys should be merged in the same way `@es-joy/jsdoccomment` merges `jsdoc-type-pratt-parser` visitor keys.
 
 ## Rust AST Shape
 
@@ -289,10 +275,7 @@ pub struct JsdocBlock<'a> {
 }
 ```
 
-`description` is a convenience string slice or arena-normalized string for the
-top-level description.
-`description_lines` is the source-preserving representation used by formatter
-and lint rules.
+`description` is a convenience string slice or arena-normalized string for the top-level description. `description_lines` is the source-preserving representation used by formatter and lint rules.
 
 ```rust
 pub struct JsdocDescriptionLine<'a> {
@@ -327,8 +310,7 @@ pub struct JsdocTag<'a> {
 }
 ```
 
-`JsdocTag` intentionally has both ESTree-like convenience fields and an optional
-structured `body`.
+`JsdocTag` intentionally has both ESTree-like convenience fields and an optional structured `body`.
 
 The convenience fields are for lint rules:
 
@@ -339,8 +321,7 @@ The convenience fields are for lint rules:
 - `optional`
 - `default_value`
 
-The structured `body` is for future richer analysis without forcing every rule
-to understand low-level variants.
+The structured `body` is for future richer analysis without forcing every rule to understand low-level variants.
 
 ```rust
 pub struct JsdocTagName<'a> {
@@ -386,9 +367,7 @@ pub enum JsdocInlineTagFormat {
 }
 ```
 
-The inline tag shape follows the practical rule-facing model used by
-`@es-joy/jsdoccomment` while keeping raw body text for custom inline tags and
-future re-parsing.
+The inline tag shape follows the practical rule-facing model used by `@es-joy/jsdoccomment` while keeping raw body text for custom inline tags and future re-parsing.
 
 ## Structured Tag Body
 
@@ -478,8 +457,7 @@ pub enum JsdocType<'a> {
 }
 ```
 
-The v1 parser should not be blocked on implementing `JsdocType`.
-It should fill `raw_type` / `type_source` and leave `parsed_type = None`.
+The v1 parser should not be blocked on implementing `JsdocType`. It should fill `raw_type` / `type_source` and leave `parsed_type = None`.
 
 Later, a type parser can run as:
 
@@ -490,8 +468,7 @@ JsdocTypeSource.raw
   -> validator / analyzer / lint rules
 ```
 
-This preserves future extensibility without making the parse hot path pay for
-type parsing.
+This preserves future extensibility without making the parse hot path pay for type parsing.
 
 ## Namepaths and Parameter Paths
 
@@ -525,15 +502,13 @@ pub struct JsdocParameterName<'a> {
 }
 ```
 
-This lets v1 support common lint rules quickly while still leaving room for
-strict path validation and precise fixes.
+This lets v1 support common lint rules quickly while still leaving room for strict path validation and precise fixes.
 
 ## Comment Attachment
 
 Comment attachment should not live inside `JsdocBlock`.
 
-For `oxlint`, attachment belongs to the integration layer that has access to
-the JavaScript / TypeScript AST and the comment list from `oxc_parser`.
+For `oxlint`, attachment belongs to the integration layer that has access to the JavaScript / TypeScript AST and the comment list from `oxc_parser`.
 
 Recommended shape:
 
@@ -552,8 +527,7 @@ This keeps the core parser reusable:
 - oxlint integration
 - ESLint-compatible binding
 
-The parser should not know whether a comment documents a function, class,
-variable declaration, overload, or export declaration.
+The parser should not know whether a comment documents a function, class, variable declaration, overload, or export declaration.
 
 ## JS / JSON Shape
 
@@ -624,8 +598,7 @@ interface JsdocInlineTag {
 }
 ```
 
-The JS shape can include `loc` as an option, but Rust AST nodes should keep only
-byte spans.
+The JS shape can include `loc` as an option, but Rust AST nodes should keep only byte spans.
 
 ## Migration From Current AST
 
@@ -653,17 +626,13 @@ TypeExpression   -> JsdocTypeSource first, JsdocType later
 TagValueToken    -> JsdocTagValue
 ```
 
-The biggest structural change is moving from an interleaved description tree to
-an ESTree-like line-oriented shape.
+The biggest structural change is moving from an interleaved description tree to an ESTree-like line-oriented shape.
 
-However, the design should not lose the ability to represent text and inline
-tags structurally.
-The recommended compromise is:
+However, the design should not lose the ability to represent text and inline tags structurally. The recommended compromise is:
 
 - `descriptionLines` preserves formatter/linter line structure
 - `inlineTags` exposes all inline tags as direct visitable children
-- future `JsdocText` / `JsdocInlineCode` / `JsdocFencedCodeBlock` nodes can be
-  added if rules need deeper description traversal
+- future `JsdocText` / `JsdocInlineCode` / `JsdocFencedCodeBlock` nodes can be added if rules need deeper description traversal
 
 ## Compatibility Policy
 
@@ -680,8 +649,7 @@ The AST should optimize for stable rule-facing fields:
 - `typeLines`
 - `inlineTags`
 
-Internal Rust representation may evolve as long as the JS-facing shape remains
-compatible.
+Internal Rust representation may evolve as long as the JS-facing shape remains compatible.
 
 Fields likely to remain stable:
 
@@ -704,18 +672,15 @@ Fields allowed to evolve:
 
 1. Should `JsdocBlock.description` be `""` or `null` when no description exists?
 
-   Recommendation: JS-facing shape should use `""`; Rust can use
-   `Option<&str>` internally.
+   Recommendation: JS-facing shape should use `""`; Rust can use `Option<&str>` internally.
 
 2. Should malformed type expressions produce `rawType`?
 
-   Recommendation: yes. `parsedType` can be `null`, and parser diagnostics can
-   describe the malformed range.
+   Recommendation: yes. `parsedType` can be `null`, and parser diagnostics can describe the malformed range.
 
 3. Should unknown inline tags be parsed into `JsdocInlineTag`?
 
-   Recommendation: yes. Use `format: "unknown"` when link-style parsing cannot
-   classify the body.
+   Recommendation: yes. Use `format: "unknown"` when link-style parsing cannot classify the body.
 
 4. Should comment attachment be part of the AST?
 
@@ -723,16 +688,13 @@ Fields allowed to evolve:
 
 5. Should type parsing run by default?
 
-   Recommendation: no for the parser hot path. Make it an option or a later
-   phase.
+   Recommendation: no for the parser hot path. Make it an option or a later phase.
 
 ## Summary
 
-`ox-jsdoc` should expose an ESTree-like JSDoc AST for lint tooling while keeping
-the Rust parser fast and source-preserving.
+`ox-jsdoc` should expose an ESTree-like JSDoc AST for lint tooling while keeping the Rust parser fast and source-preserving.
 
-The public shape should be close to `@es-joy/jsdoccomment` because that model is
-already proven in ESLint JSDoc rules.
+The public shape should be close to `@es-joy/jsdoccomment` because that model is already proven in ESLint JSDoc rules.
 
 The internal design should still follow the performance documents:
 
@@ -743,5 +705,4 @@ The internal design should still follow the performance documents:
 - raw syntax preservation
 - delayed type/namepath/semantic interpretation
 
-This gives `ox-jsdoc` a practical v1 AST for oxlint and ESLint, without closing
-the door on richer JSDoc structure later.
+This gives `ox-jsdoc` a practical v1 AST for oxlint and ESLint, without closing the door on richer JSDoc structure later.

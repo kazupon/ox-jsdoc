@@ -17,3 +17,6 @@ catalog:
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'
+
+minimumReleaseAgeExclude:
+  - '@kazupon/vp-config'
