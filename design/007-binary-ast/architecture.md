@@ -8,7 +8,7 @@ Key decisions:
 
 - **Philosophy B (offset-based format)**: oxc's "Rust struct memory layout = transfer format" (Raw Transfer) does not work in WASM or 32-bit environments, so it is not adopted. We use a tsgo-style **designed offset-based format** to support both WASM and NAPI
 - **Approach c-1 (parser builds the Binary AST directly)**: instead of going through a typed AST struct, the parser writes Binary AST bytes directly into the arena. No encoder step (= parsing = encoding); eliminates memory duplication and unnecessary walk passes
-- **Same lazy decoder pattern in both languages**: both Rust and JS operate under the same model of "lazily expanding the Binary AST in place". Code generation (Phase 4) produces both lazy decoders from a single schema
+- **Same lazy decoder pattern in both languages**: both Rust and JS operate under the same model of "lazily expanding the Binary AST in place". The current decoder tables are hand-maintained; Phase 4 code generation will produce both lazy decoders from a single schema
 - **Zero-copy sharing**: the arena memory is viewed directly from JS through the NAPI Buffer / WASM `memory.buffer` (no memcpy)
 - **Shared decoder package**: `@ox-jsdoc/decoder` is shared by both NAPI and WASM bindings. Since it does not depend on where the bytes come from, format changes propagate to both bindings simultaneously
 
@@ -71,8 +71,8 @@ Reference notes:
 Design core:
 
 - **The parser builds the Binary AST directly** (Approach c-1): the parser does not go through the current typed AST and writes Binary AST format bytes directly into the arena during parsing. No encoder step is required (parsing = encoding)
-- **typed AST removed**: the Binary AST in the arena is the single source of truth. The Rust struct hierarchy (`JsdocBlock<'a>`, `TypeNode<'a>`, etc.) is replaced by records in the Binary AST
-- **Rust-side walker also goes through the lazy decoder**: when walking the AST on the Rust side, access goes through thin wrappers like `LazyJsdocBlock`, using the same lazy decoder pattern as the JS side. These are allocated on the heap (separate from the arena) per traverse
+- **typed AST removed from the binary parser path**: the Binary AST in the arena is the single source of truth for `crates/ox_jsdoc_binary`. The Rust struct hierarchy (`JsdocBlock<'a>`, `TypeNode<'a>`, etc.) is replaced by records in the Binary AST for this path
+- **Rust-side walker also goes through the lazy decoder**: when walking the AST on the Rust side, access goes through thin `Copy` value wrappers like `LazyJsdocBlock`, using the same lazy decoder pattern as the JS side. These wrappers are passed by value and do not allocate `Box` storage per node
 - **Same pattern in both languages**: both Rust and JS operate under the same model of "lazily expanding the Binary AST on access". This avoids double memory on the arena and maximizes performance
 - **No encoder step exists** (handoff to NAPI/WASM is zero-copy reference only)
 
@@ -129,37 +129,36 @@ The per-binding differences are confined to a **thin wrapper layer**:
 | Lifecycle management | NAPI Buffer reference counting | Detach detection on wasm.memory grow |
 | Entry point | Direct `parse()` call | `parse()` after `initWasm()` |
 
-#### Package structure (consistent with phases.md)
+#### Package structure
 
-The decoder classes are split into a separate shared package. Phase 1.0-1.2 keep new and old in coexistence, so the binary version is placed with the `-binary` suffix (renamed at the Phase 1.3 cutover; see [phases.md "crate / package layout"](./phases.md#crate--package-layout-coexistence--shared-decoder)):
+The decoder classes are split into a separate shared package. The current repository keeps the binary implementation in the `ox-jsdoc-binary` packages while the shared decoder lives at `packages/decoder`:
 
 ```text
 ox-jsdoc/
 ├── napi/
-│   ├── ox-jsdoc/             ← Existing typed AST version (replaced with binary at Phase 1.3 cutover)
-│   └── ox-jsdoc-binary/      ← New binary AST version (Phase 1.2b)
-│       ├── src-rs/           (Rust)
+│   └── ox-jsdoc-binary/
+│       ├── src/lib.rs        (Rust NAPI binding)
 │       └── src-js/           (binding-specific wrapper only, imports @ox-jsdoc/decoder)
 │
 ├── wasm/
-│   ├── ox-jsdoc/             ← Existing
-│   └── ox-jsdoc-binary/      ← New (Phase 1.2c)
-│       ├── src-rs/
+│   └── ox-jsdoc-binary/
+│       ├── src/lib.rs        (Rust WASM binding)
 │       └── src-js/           (binding-specific wrapper only, imports @ox-jsdoc/decoder)
 │
-└── npm/
-    └── @ox-jsdoc/
-        └── decoder/          ← Shared decoder (Phase 1.1d)
-            └── src/
-                ├── RemoteSourceFile.js   (decoder root, Header parsing)
-                ├── nodes/
-                │   ├── RemoteJsdocBlock.js
-                │   ├── RemoteJsdocTag.js
-                │   └── type-nodes/...
-                ├── helpers.js            (extOffsetOf, childAtVisitorIndex, etc.)
-                ├── kind-dispatch.js      (KIND_TABLE, code-generated at Phase 4)
-                ├── visitor-keys.js
-                └── protocol.js           (constants for Kind values, offsets, masks, etc.)
+├── packages/
+│   └── decoder/              ← Shared @ox-jsdoc/decoder package
+│       └── src/
+│           ├── index.ts
+│           └── internal/
+│               ├── source-file.ts        (decoder root, Header parsing)
+│               ├── helpers.ts            (extOffsetOf, childAtVisitorIndex, etc.)
+│               ├── kind-dispatch.ts      (KIND_TABLE, hand-written until Phase 4)
+│               ├── constants.ts          (Kind values, offsets, masks, etc.)
+│               └── nodes/
+│                   ├── jsdoc.ts
+│                   └── type-nodes.ts
+└── crates/
+    └── ox_jsdoc_binary/      ← Parser, writer, format constants, Rust decoder
 ```
 
 Benefits:
@@ -181,10 +180,9 @@ let result = parse(&arena, source, options);
 
 // Example Rust walker usage (linters, etc.)
 let block = result.lazy_root;
-for tag in block.tags() {  // ← Allocates LazyJsdocTag on the Rust heap on access
+for tag in block.tags() {  // ← Returns Copy LazyJsdocTag values; no per-node heap allocation
     println!("{}", tag.name());  // ← Reads the string on further access
 }
-// Once walking finishes and lazy nodes are dropped, the heap is freed too
 
 // IPC / network use case (single comment)
 let result: ParseBytesResult = parse_to_bytes(source_text, options);

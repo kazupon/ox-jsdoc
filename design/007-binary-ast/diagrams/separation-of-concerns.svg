@@ -41,7 +41,7 @@
   <text x="460" y="378" text-anchor="middle" font-size="12" fill="#3da558" font-family="monospace">LazyJsdocBlock</text>
   <text x="460" y="398" text-anchor="middle" font-size="12" fill="#3da558" font-family="monospace">LazyJsdocTag</text>
   <text x="460" y="418" text-anchor="middle" font-size="12" fill="#3da558" font-family="monospace">LazyTypeNode, etc.</text>
-  <text x="460" y="446" text-anchor="middle" font-size="10" fill="#666" font-style="italic">Built on Rust heap on access (stack value type + Copy, no Box allocation)</text>
+  <text x="460" y="446" text-anchor="middle" font-size="10" fill="#666" font-style="italic">Copy stack value wrappers on access (no Box allocation)</text>
 
   <!-- Rust walker side annotation (right side) -->
   <line x1="685" y1="395" x2="725" y2="395" stroke="#888" stroke-width="1" stroke-dasharray="3,2"/>

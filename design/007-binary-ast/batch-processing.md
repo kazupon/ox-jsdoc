@@ -216,16 +216,21 @@ interface ParseResult {
 }
 
 // New batch API
-parseBatch(items: BatchItem[], options?: ParseOptions): BatchResult
+parseBatch(items: BatchItem[], options?: BatchParseOptions): BatchResult
 
 interface BatchItem {
   sourceText: string
-  baseOffset?: number  // offset within the original file (for ESLint, default 0)
+  baseOffset?: number  // UTF-8 byte offset within the original file (default 0)
                        // added to each node's Pos/End
+}
+
+interface BatchParseOptions extends Omit<ParseOptions, 'baseOffset'> {
+  output?: 'ast' | 'jsdoccomment-input'
 }
 
 interface BatchResult {
   asts: (RemoteJsdocBlock | null)[]  // one per item; null = parse failed (root_index = 0)
+  blocks?: (JsdocCommentInput | null)[] // present when output === 'jsdoccomment-input'
   diagnostics: BatchDiagnostic[]     // across all items
 }
 
@@ -288,7 +293,7 @@ Reason for non-adoption: Breaks backward compatibility with the existing API (PR
 | --- | --- |
 | Root representation on failure | `roots[i] = 0` (points to the sentinel node index) |
 | Diagnostic required | **On failure, at least one diagnostic is always attached** (the parser guarantees this; if it does not currently, we adopt the convention of always attaching a minimal "parse failed" diagnostic) |
-| Failure location | Not included in the Binary AST. Reconstructed on the JS side from `BatchItem.baseOffset + sourceText.length` |
+| Failure location | Not included in the Binary AST. Reconstructed on the JS side from `BatchItem.baseOffset + utf8ByteLength(sourceText)` |
 
 ### Example behavior
 
@@ -310,7 +315,7 @@ errors[0].message  // "expected '}' for inline tag" etc.
 // Retrieve the position of the failed comment (reconstructed from the input)
 const item = items[1]
 const start = item.baseOffset
-const end = start + item.sourceText.length
+const end = start + utf8ByteLength(item.sourceText)
 ```
 
 ### Other options considered (not adopted)

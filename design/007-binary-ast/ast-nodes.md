@@ -20,7 +20,9 @@ Notes:
 - `JsdocSeparator` (an enum with only `Dash`) is not made a node; it is embedded as a bit in the parent `JsdocGenericTagBody`'s Common Data (described later).
 - The Rust internal `JsdocType` enum (Parsed/Raw) does not get a wrapper in the Binary AST; instead, `JsdocTag.parsedType` directly points to a TypeNode (one of Kind 0x80-0xFF) (1:1 correspondence with the existing JSON output).
 
-## Comment AST (`crates/ox_jsdoc/src/ast.rs`)
+## Comment AST (Binary AST shape)
+
+The current binary implementation emits comment nodes from `crates/ox_jsdoc_binary/src/parser/` through writer functions under `crates/ox_jsdoc_binary/src/writer/nodes/comment_ast.rs`; the decoder shape is implemented in `crates/ox_jsdoc_binary/src/decoder/nodes/comment_ast.rs` and `packages/decoder/src/internal/nodes/jsdoc.ts`.
 
 | # | Kind | Main fields | Notes |
 | --- | --- | --- | --- |

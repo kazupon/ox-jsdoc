@@ -171,7 +171,7 @@ Expected to complete with about 463 lines of mechanical rewrite.
 
 ## Phase 2: Batch support + public encoder API
 
-Phase 1 only handles single comments (N=1). Phase 2 adds batch processing and externally-public APIs.
+Current status: implemented in `crates/ox_jsdoc_binary` and exposed through the `ox-jsdoc-binary` NAPI / WASM packages. This section is retained as the historical phase definition and as the checklist for the shipped API surface.
 
 - **Batch support**: Root Index Array, Diagnostics section, `parseBatch()` API, `BatchItem` struct
 - **Public Rust API** (post-typed-AST API; see [rust-impl.md "Public Rust API"](./rust-impl.md#public-rust-api)):
@@ -203,7 +203,7 @@ Phase 1-2 contain breaking changes, so proceed in the following order:
 3. **Phase 1.2a-c**: full parser implementation + add the NAPI/WASM bindings in coexistence as new packages (alpha-release `ox-jsdoc-binary` as a separate npm package)
 4. **Phase 1.2d**: KPI decision via 4-way benchmark → cutover GO/NO-GO decision
 5. **Phase 1.3**: cutover atomic PR (GO case: completely remove the typed AST path and rewrite validator/analyzer to the lazy decoder API. NO-GO case: delete the binary crate)
-6. **Phase 2-3**: add batch support, public APIs, format spec documentation, and other externally-public additions
+6. **Phase 2-3**: batch support and public byte APIs are implemented; continue format spec documentation and other externally-public additions
 
 ## crate / package layout (coexistence + shared decoder)
 

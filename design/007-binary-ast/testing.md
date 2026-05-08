@@ -140,7 +140,7 @@ Place the following under `fixtures/edge_cases/`:
 | --- | --- |
 | `empty_comment.jsdoc` | `/** */` (minimum) |
 | `single_tag.jsdoc` | Single tag |
-| `unicode_heavy.jsdoc` | Strings with UTF-16 surrogates (UTF-8 → UTF-16 conversion boundary) |
+| `unicode_heavy.jsdoc` | Strings with non-ASCII / surrogate-pair text; verifies byte-offset ranges and source slicing |
 | `parse_failure.jsdoc` | Invalid JSDoc (root index = 0 sentinel) |
 | `large_batch_100.json` | 100-comment batch |
 | `string_table_overflow.json` | 64K+ unique strings (overflow test) |

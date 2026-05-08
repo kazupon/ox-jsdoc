@@ -135,7 +135,7 @@
     <text x="120" y="62" text-anchor="middle" font-size="10" fill="#666" font-style="italic">(BatchItem.baseOffset)</text>
     <line x1="20" y1="75" x2="220" y2="75" stroke="#888" stroke-dasharray="2,2"/>
     <text x="120" y="92" text-anchor="middle" font-size="10" fill="#666" font-weight="bold">Unit:</text>
-    <text x="120" y="108" text-anchor="middle" font-size="10" fill="#444">UTF-16 code unit</text>
+    <text x="120" y="108" text-anchor="middle" font-size="10" fill="#444">UTF-8 byte offset</text>
     <text x="120" y="124" text-anchor="middle" font-size="9" fill="#666" font-style="italic">(absolute pos = base_offset + node.pos)</text>
   </g>
 

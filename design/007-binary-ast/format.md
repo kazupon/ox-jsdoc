@@ -25,12 +25,13 @@ The following conventions apply to all multi-byte numbers, strings, and bit repr
 
 ### Position units (Pos / End)
 
-- **Node `Pos` / `End` are UTF-16 code unit offsets** (relative to the root's sourceText)
-- **Encoding-time UTF-8 → UTF-16 conversion** happens on the Rust side (same policy as tsgo / oxc raw transfer)
+- **Node `Pos` / `End` are UTF-8 byte offsets** (relative to the root's sourceText)
+- The Rust writer stores the parser-emitted `Span.start` / `Span.end` directly. It does **not** build a UTF-8 → UTF-16 conversion map.
 - Reasons:
-  - JavaScript toolchains such as ESLint and the TypeScript LSP expect positions in UTF-16 code units, so converting once at encode time is more efficient than converting every time on the JS side
-  - JSDoc comments have a high ASCII ratio, so building the conversion map can be skipped in the ASCII-only case (a similar optimization to tsgo's `containsNonASCII` flag)
-- Absolute offset calculation: `baseOffset + pos` (performed on the JS decoder side; `baseOffset` is the value stored in the root index array, and follows the unit of the input `BatchItem.baseOffset` = it is natural for the JS side to use UTF-16 as well)
+  - The parser, String Data, zero-copy source slices, and oxc comment ranges all use byte offsets, so keeping byte offsets avoids per-node conversion and preserves direct source slicing.
+  - ASCII-only comments still behave identically to UTF-16 offsets, which covers the common JSDoc hot path.
+- Absolute offset calculation: `baseOffset + pos` (performed on the JS decoder side; `baseOffset` is the value stored in the root index array and uses the same UTF-8 byte-offset unit as `Pos` / `End`).
+- Consumers that need UTF-16 code unit positions for an ESLint/LSP-facing API must convert at that integration boundary.
 
 ### Bit numbering
 
@@ -363,13 +364,13 @@ The **byte offset** that indicates where the corresponding sourceText is stored 
 - The head of the String Data section places each BatchItem's sourceText **concatenated in input order** (see the "String Table" section for details)
 - Using this field, the source text for root [i] can be obtained from `String Data start + source_offset_in_data`
 - String fields of nodes belonging to the root (tag names, type expressions, etc.) basically reference slices within this sourceText via string indices (zero-copy)
-- Note that the unit is **UTF-8 bytes** (different from the UTF-16 code units used by Pos/End). This is because String Data is stored in UTF-8
+- Note that the unit is **UTF-8 bytes**, the same unit used by node Pos/End. This is because String Data is stored in UTF-8
 
 #### `base_offset` (u32)
 
 The absolute offset within the original file/module (the value the user passed as `BatchItem.baseOffset`). Used for ESLint and other lint/IDE integrations.
 
-- **The unit is UTF-16 code units** (the same as the relative Pos/End on a node, which is the natural unit on the JS side)
+- **The unit is UTF-8 bytes** (the same as the relative Pos/End on a node)
 - The absolute position of each node is computed on the **JS decoder side as `baseOffset + node.pos`** (see the "Nodes section (24 bytes/node)" section for details)
 - If the input omits `baseOffset`, `0` is stored
 - Each root has an independent value, so it is theoretically possible to **mix comments from multiple files into one buffer** (ox-jsdoc itself assumes a single file, but the format permits this in general)
@@ -411,7 +412,7 @@ roots = [
 
 - `node_index = 0` points to the sentinel → the JS API expresses this as `result.asts[1] === null`
 - `source_offset_in_data` and `base_offset` **retain valid values even on failure** (for source position recovery)
-  - The location of the failed comment can be reconstructed as `[base_offset, base_offset + sourceText.length]`
+  - The location of the failed comment can be reconstructed as `[base_offset, base_offset + utf8ByteLength(sourceText)]`
 - Failure details come from the Diagnostics section entry with `root_index = 1` (see [Diagnostics section](#diagnostics-section-4--8m-bytes) for details)
 - **On failure, at least one diagnostic with the corresponding root_index is required** by convention
 
@@ -468,11 +469,11 @@ Design advantages:
 - **Fixed 12 bytes/root**: random access `roots[i]` is **O(1)** (only multiplication + offset addition)
 - **Contiguous memory layout**: CPU prefetch friendly, high cache locality
 - **Small overhead relative to the entire batch**: 1.2 KB for 100 roots vs hundreds of KB to several MB total
-- **No specialization needed for N=1**: the same decoder code runs for both `parse(text)` and `parseBatch(items)`
+- **No format specialization needed for N=1**: the same decoder code and Root Index Array shape are used for both `parse(text)` and `parseBatch(items)`
 
 ### Special handling for N=1 (single comment)
 
-The `parse(text)` API is also internally processed as `parseBatch([{sourceText: text}])`. In this case:
+The `parse(text)` API uses a dedicated Rust entry point (`parse_to_bytes`) rather than routing through `parseBatch`, but it emits the same N=1 binary format. In this case:
 
 - N = 1, the Root Array is 12 bytes (minimal overhead)
 - `roots[0].base_offset = 0` (default)
@@ -775,14 +776,16 @@ Reasons:
 
 When `compat_mode = ON`, some nodes get an extra portion appended to their Extended Data:
 
-| Node | basic | compat extension | compat total |
-| --- | --: | --: | --: |
-| `JsdocBlock` | 68 bytes | + 22 bytes (u32×4 + u8×2 + padding) | 90 bytes |
-| `JsdocTag` | 38 bytes | + 42 bytes (StringField×7 = 7 × 6 bytes) | 80 bytes |
-| `JsdocDescriptionLine` | 0 bytes | (switches to Extended type, + 24 bytes = 4×StringField) | 24 bytes |
-| `JsdocTypeLine` | 0 bytes | (switches to Extended type, + 24 bytes = 4×StringField) | 24 bytes |
+| Node | basic | compat extension | compat total | preserveWhitespace addition |
+| --- | --: | --: | --: | --: |
+| `JsdocBlock` | 68 bytes | + 22 bytes (u32×4 + u8×2 + padding) | 90 bytes | +8 bytes when Common Data bit0 is set |
+| `JsdocTag` | 38 bytes | + 42 bytes (StringField×7 = 7 × 6 bytes) | 80 bytes | +8 bytes when Common Data bit1 is set |
+| `JsdocDescriptionLine` | 0 bytes | (switches to Extended type, + 24 bytes = 4×StringField) | 24 bytes | - |
+| `JsdocTypeLine` | 0 bytes | (switches to Extended type, + 24 bytes = 4×StringField) | 24 bytes | - |
 
 The basic JsdocBlock / JsdocTag sizes include 6 bytes of inline list metadata (`head_index: u32` + `count: u16`) per variable-length child list: JsdocBlock has 3 lists (descriptionLines / tags / inlineTags) at bytes 50-67, JsdocTag has 3 lists (typeLines / descriptionLines / inlineTags) at bytes 20-37. See "List metadata in Extended Data" later in this document.
+
+When `preserveWhitespace` / `preserve_whitespace` is enabled and a node has a description, the writer appends an 8-byte `description_raw_span` (`start:u32`, `end:u32`, both UTF-8 byte offsets relative to the root sourceText) to the **end** of the JsdocBlock / JsdocTag Extended Data record. This option is orthogonal to `compat_mode`: basic+preserve and compat+preserve are both valid.
 
 The decoder reads Header bit0 to branch (each node references it via a `compat` getter through the sourceFile).
 
@@ -830,6 +833,11 @@ byte 86    : has_preterminal_description     (u8)
 byte 87    : has_preterminal_tag_description (u8)
 byte 88-89 : padding (u16 = 2 B)             ← trailing alignment
                                               ← End of compat (byte 90)
+
+[Optional preserveWhitespace tail; appended after the basic or compat portion]
+byte last-8..last-5 : description_raw_span.start (u32, UTF-8 byte offset)
+byte last-4..last-1 : description_raw_span.end   (u32, UTF-8 byte offset)
+                                              ← Total: 76 bytes (basic) / 98 bytes (compat)
 ```
 
 See the tables and subsections that follow for the concrete layout of each node.
@@ -862,8 +870,8 @@ Nodes that hold Extended Data within the comment AST (the 6 TypeNode Extended Da
 
 | Node | Size | Data content |
 | --- | --- | --- |
-| `JsdocBlock` | 68 bytes (90 bytes in compat) | Basic portion: Children bitmask (u8) + reserved (u8, alignment) + `description` `StringField` (6) + 7 delimiters (`StringField`×7 = 42) + 3 list metadata slots (3 × 6 = 18 bytes for `descriptionLines` / `tags` / `inlineTags`) = **68 bytes**. In `compat_mode`, the following is appended **after** the basic portion: reserved 2 bytes (u32 alignment) + `end_line` (u32) + `description_start_line` (u32, `0xFFFFFFFF` for None) + `description_end_line` (u32, ditto) + `last_description_line` (u32, ditto) + `has_preterminal_description` (u8) + `has_preterminal_tag_description` (u8, `0xFF` for None) + reserved 2 bytes (trailing alignment) = **22 bytes** added |
-| `JsdocTag` | 38 bytes (80 bytes in compat) | Basic portion: Children bitmask (u8) + reserved (u8) + `default_value` `StringField` (6) + `description` `StringField` (6) + `raw_body` `StringField` (6) + 3 list metadata slots (3 × 6 = 18 bytes for `typeLines` / `descriptionLines` / `inlineTags`) = **38 bytes**. `tag` (JsdocTagName), `raw_type` (JsdocTypeSource), `name` (JsdocTagNameValue), `parsed_type` (TypeNode), and `body` (JsdocTagBody) are **placed as child nodes** (since they are span-bearing structs). `optional` is stored in Common Data bit0. In compat, 7 delimiters (`StringField`×7 = 42 bytes) are appended after |
+| `JsdocBlock` | 68 / 76 bytes (90 / 98 bytes in compat) | Basic portion: Children bitmask (u8) + reserved (u8, alignment) + `description` `StringField` (6) + 7 delimiters (`StringField`×7 = 42) + 3 list metadata slots (3 × 6 = 18 bytes for `descriptionLines` / `tags` / `inlineTags`) = **68 bytes**. In `compat_mode`, the following is appended **after** the basic portion: reserved 2 bytes (u32 alignment) + `end_line` (u32) + `description_start_line` (u32, `0xFFFFFFFF` for None) + `description_end_line` (u32, ditto) + `last_description_line` (u32, ditto) + `has_preterminal_description` (u8) + `has_preterminal_tag_description` (u8, `0xFF` for None) + reserved 2 bytes (trailing alignment) = **22 bytes** added. With `preserve_whitespace`, an 8-byte `description_raw_span` is appended at the final tail and Common Data bit0 is set |
+| `JsdocTag` | 38 / 46 bytes (80 / 88 bytes in compat) | Basic portion: Children bitmask (u8) + reserved (u8) + `default_value` `StringField` (6) + `description` `StringField` (6) + `raw_body` `StringField` (6) + 3 list metadata slots (3 × 6 = 18 bytes for `typeLines` / `descriptionLines` / `inlineTags`) = **38 bytes**. `tag` (JsdocTagName), `raw_type` (JsdocTypeSource), `name` (JsdocTagNameValue), `parsed_type` (TypeNode), and `body` (JsdocTagBody) are **placed as child nodes** (since they are span-bearing structs). `optional` is stored in Common Data bit0. In compat, 7 delimiters (`StringField`×7 = 42 bytes) are appended after. With `preserve_whitespace`, an 8-byte `description_raw_span` is appended at the final tail and Common Data bit1 is set |
 | `JsdocInlineTag` | 18 bytes | `namepath_or_url` `StringField` (6) + `text` `StringField` (6) + `raw_body` `StringField` (6) = **18 bytes**. `tag` (the inline-tag name, `link` / `tutorial` / …) is **reserved**: the spec previously described it as a child node, but the current emitter intentionally drops it. Consumers that need the inline-tag name should derive it from the node's source `range`. Each Optional uses `StringField::NONE` as the absent marker |
 | `JsdocParameterName` | 12 bytes | `path` `StringField` (6, required) + `default_value` `StringField` (6, `StringField::NONE` = None). `optional` is stored in Common Data bit0 |
 | `JsdocGenericTagBody` | 8 bytes | Children bitmask (u8, bit0=typeSource, bit1=value) + reserved (u8, alignment) + `description` `StringField` (6, `StringField::NONE` = None) = **8 bytes**. `type_source` (JsdocTypeSource) and `value` (JsdocTagValue) are **placed as child nodes** (since they are span-bearing structs). `separator` is stored in Common Data bit0 (has_dash_separator) |
@@ -946,6 +954,11 @@ byte 86:    has_preterminal_description (u8)
 byte 87:    has_preterminal_tag_description (u8, 0xFF for None)
 byte 88-89: reserved (u16, trailing alignment)
                                     ← End of compat (90 bytes total)
+
+[Continues when preserveWhitespace = ON and Common Data bit0 is set]
+byte last-8..last-5: description_raw_span.start (u32, UTF-8 byte offset)
+byte last-4..last-1: description_raw_span.end   (u32, UTF-8 byte offset)
+                                    ← End of preserve tail (76 bytes basic / 98 bytes compat)
 ```
 
 ### JsdocTag complete byte-level layout (basic 38 + compat 42 = 80 bytes)
@@ -974,11 +987,16 @@ byte 62-67: post_name      (StringField)
 byte 68-73: initial        (StringField)
 byte 74-79: line_end       (StringField)
                                     ← End of compat (80 bytes total)
+
+[Continues when preserveWhitespace = ON and Common Data bit1 is set]
+byte last-8..last-5: description_raw_span.start (u32, UTF-8 byte offset)
+byte last-4..last-1: description_raw_span.end   (u32, UTF-8 byte offset)
+                                    ← End of preserve tail (46 bytes basic / 88 bytes compat)
 ```
 
 ### Pos/End and Extended Data offset stay u32
 
-- Pos/End: u32 (UTF-16 code units, relative to the root's sourceText)
+- Pos/End: u32 (UTF-8 byte offsets, relative to the root's sourceText)
 - Parent / Next sibling: u32 (supports up to 4G nodes)
 - Extended Data offset (in Node Data payload): 30-bit (per Node Data spec, supports a section size up to 1 G)
 
@@ -1302,7 +1320,7 @@ Per-root parse failure is expressed by **`root.node_index = 0` (sentinel)** (see
 | --- | --- |
 | Sentinel root detection | `roots[i].node_index == 0` |
 | Diagnostic required | **On failure, at least one diagnostic with `root_index = i` must exist** |
-| Failure position | Not included in Diagnostics. The JS side reconstructs it from the input `BatchItem.baseOffset + sourceText.length` |
+| Failure position | Not included in Diagnostics. The JS side reconstructs it from the input `BatchItem.baseOffset + utf8ByteLength(sourceText)` |
 | Minimum diagnostic condition | The parser must always attach at least a "parse failed"-equivalent message |
 
 This enables reliable error handling on the JS API side:
@@ -1481,16 +1499,16 @@ Key design goals:
 
 ### Layout
 
-| Offset | Type | Field                                                               |
-| ------ | ---- | ------------------------------------------------------------------- |
-| 0      | u8   | Kind (node kind, max 255 variants)                                  |
-| 1      | u8   | Common Data (lower 6 bits used, upper 2 bits reserved)              |
-| 2-3    | u16  | (reserved / alignment)                                              |
-| 4-7    | u32  | Pos (relative UTF-16 code unit offset within the root's sourceText) |
-| 8-11   | u32  | End (relative UTF-16 code unit offset within the root's sourceText) |
-| 12-15  | u32  | Node Data (type tag 2-bit + payload 30-bit)                         |
-| 16-19  | u32  | Parent index (0 = root or none)                                     |
-| 20-23  | u32  | Next sibling index (0 = no sibling)                                 |
+| Offset | Type | Field                                                         |
+| ------ | ---- | ------------------------------------------------------------- |
+| 0      | u8   | Kind (node kind, max 255 variants)                            |
+| 1      | u8   | Common Data (lower 6 bits used, upper 2 bits reserved)        |
+| 2-3    | u16  | (reserved / alignment)                                        |
+| 4-7    | u32  | Pos (relative UTF-8 byte offset within the root's sourceText) |
+| 8-11   | u32  | End (relative UTF-8 byte offset within the root's sourceText) |
+| 12-15  | u32  | Node Data (type tag 2-bit + payload 30-bit)                   |
+| 16-19  | u32  | Parent index (0 = root or none)                               |
+| 20-23  | u32  | Next sibling index (0 = no sibling)                           |
 
 Basic metadata:
 
@@ -1523,12 +1541,12 @@ Alignment region to align `Pos` to a **u32 boundary (byte 4)**. Always zero. To 
 
 #### Pos / End (u32 × 2) — bytes 4-11
 
-The range a node occupies in the source, expressed as **"relative UTF-16 code unit offsets from the start of the root's sourceText"** (same policy as tsgo / oxc raw transfer).
+The range a node occupies in the source, expressed as **"relative UTF-8 byte offsets from the start of the root's sourceText"**. The encoder writes the parser's `Span.start` / `Span.end` directly.
 
-- Range: `0 ≤ pos ≤ end ≤ root.sourceText.length` (UTF-16 code units)
+- Range: `0 ≤ pos ≤ end ≤ utf8ByteLength(root.sourceText)`
 - The **absolute position** is computed by the JS decoder as `roots[r].base_offset + pos` (adding the root array's `base_offset`)
-- For ASCII-only sourceText, UTF-8 byte offsets and UTF-16 code unit offsets coincide, so the encoder can apply a **`containsNonASCII` flag** to skip conversion
-- The unit usable directly with ESLint / TypeScript LSP (`Node.range` / `Range.start` compatible)
+- For ASCII-only sourceText, UTF-8 byte offsets and UTF-16 code unit offsets coincide
+- Consumers that require UTF-16 code unit positions must convert from byte offsets using the original source text at the host integration boundary
 
 #### Node Data (u32) — bytes 12-15
 
@@ -1609,9 +1627,9 @@ node[4].first_child = node[5]  (node[5].parent == 4 ✓)
 
 ### Pos / End units and conversion to absolute positions
 
-#### Why UTF-16
+#### Why byte offsets
 
-JavaScript's string APIs (`String.length`, `slice`, `Range.start`) are all based on UTF-16 code units, so we make ESLint / LSP integration **conversion-free**.
+The parser and oxc comment ranges use byte offsets, and String Data is stored as UTF-8. Keeping Pos/End in the same unit lets the writer store spans directly and lets the decoder slice the original source bytes without a side table.
 
 #### Conversion to absolute position (JS decoder)
 
@@ -1626,9 +1644,9 @@ function getAbsoluteRange(rootIdx: number, node: NodeRecord) {
 }
 ```
 
-#### ASCII-only optimization
+#### Host-side UTF-16 conversion
 
-When sourceText is ASCII-only, UTF-8 byte offsets equal UTF-16 code unit offsets, so the encoder can skip building the conversion map by **not setting the `containsNonASCII` flag** (in practice most JSDoc comments are ASCII).
+JavaScript strings expose indices in UTF-16 code units. The Binary AST decoder still reports byte ranges; any ESLint / LSP adapter that needs UTF-16 positions performs conversion from byte offsets using the original full source text. ASCII-only inputs require no effective conversion because byte offsets and UTF-16 code unit offsets are equal.
 
 ### Lazy decoder implementation sketch
 
@@ -1689,7 +1707,7 @@ The fixed size of **24 bytes/node** is **25% more compact** than tsgo's Node Lay
 | Node Data payload  | 24-bit                       | **30-bit** (after splitting out Common Data) |
 | Parent index       | u32                          | **u32** (same)                               |
 | Next sibling index | u32                          | **u32** (same)                               |
-| Pos / End          | u32 (UTF-16 relative)        | **u32 (UTF-16 relative)** (same)             |
+| Pos / End          | u32 (UTF-16 relative)        | **u32 (UTF-8 byte relative)**                |
 | node[0] sentinel   | Yes                          | **Yes** (same)                               |
 | Roots              | Single SourceFile            | **N (batch, managed by Root Array)**         |
 
@@ -1908,7 +1926,8 @@ The maximum bits used is **4 / 6** (`TypeMethodSignature`, `TypeObjectField`, `T
 
 | Node kind | Usage |
 | --- | --- |
-| `JsdocTag` | bit0 = optional |
+| `JsdocBlock` | bit0 = has_description_raw_span (set when `preserve_whitespace` appended the 8-byte raw span tail) |
+| `JsdocTag` | bit0 = optional, bit1 = has_description_raw_span (set when `preserve_whitespace` appended the 8-byte raw span tail) |
 | `JsdocInlineTag` | bits[0:2] = format (5 variants: Plain/Pipe/Space/Prefix/Unknown) |
 | `JsdocGenericTagBody` | bit0 = has_dash_separator (compresses presence/absence of `Option<JsdocSeparator>`) |
 | `JsdocParameterName` | bit0 = optional |
@@ -1925,7 +1944,7 @@ The maximum bits used is **4 / 6** (`TypeMethodSignature`, `TypeObjectField`, `T
 | `TypeKeyValue` | bit0 = optional, bit1 = variadic |
 | `TypeSymbol` | bit0 = has_element (Some/None for Option<TypeNode>) |
 
-For node kinds other than these (`JsdocBlock`, `JsdocText`, `TypeName`, etc.), Common Data is unused (always 0).
+For node kinds other than these (`JsdocText`, `TypeName`, etc.), Common Data is unused (always 0).
 
 ### Read/write implementation sketch
 
@@ -2023,11 +2042,11 @@ Decoders read `(head, count)` from the slot and walk `next_sibling` exactly `cou
 
 ### Comment AST (15 kinds)
 
-| Kind | Node name | Node Data type | Common Data | Extended Data (basic / compat) |
+| Kind | Node name | Node Data type | Common Data | Extended Data |
 | --- | --- | --- | --- | --- |
-| 0x01 | `JsdocBlock` | Extended | (unused) | 68 / 90 bytes |
+| 0x01 | `JsdocBlock` | Extended | bit0=has_description_raw_span | 68 / 76 / 90 / 98 bytes |
 | 0x02 | `JsdocDescriptionLine` | String ‖ StringInline / Extended (compat) | (unused) | 0 / 24 bytes |
-| 0x03 | `JsdocTag` | Extended | bit0=optional | 38 / 80 bytes |
+| 0x03 | `JsdocTag` | Extended | bit0=optional, bit1=has_description_raw_span | 38 / 46 / 80 / 88 bytes |
 | 0x04 | `JsdocTagName` | String ‖ StringInline | (unused) | - |
 | 0x05 | `JsdocTagNameValue` | String ‖ StringInline | (unused) | - |
 | 0x06 | `JsdocTypeSource` | String ‖ StringInline | (unused) | - |
@@ -2040,6 +2059,8 @@ Decoders read `(head, count)` from the slot and walk `next_sibling` exactly `cou
 | 0x0D | `JsdocNamepathSource` | String ‖ StringInline | (unused) | - |
 | 0x0E | `JsdocIdentifier` | String ‖ StringInline | (unused) | - |
 | 0x0F | `JsdocText` | String ‖ StringInline | (unused) | - |
+
+For `JsdocBlock` and `JsdocTag`, the four Extended Data sizes are ordered as basic / basic+preserveWhitespace / compat / compat+preserveWhitespace.
 
 > **Note**: every "String ‖ StringInline" entry above means the encoder picks `TypeTag::StringInline` (0b11, payload = `(offset:u22, length:u8)`) when the value is short enough (length ≤ 255 byte AND String Data offset ≤ 4 MB-1) and falls back to `TypeTag::String` (0b01, payload = 30-bit String Offsets index) otherwise — see [Per-node-kind type tag determination rules](#per-node-kind-type-tag-determination-rules).
 

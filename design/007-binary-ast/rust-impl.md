@@ -12,7 +12,7 @@ Key design decisions:
 - **Removal of typed AST struct hierarchy**: There are no Rust structs such as `JsdocBlock<'a>` or `TypeNode<'a>`; instead, **lazy wrappers** like `LazyJsdocBlock<'a>` are built on top of the Binary AST (symmetric with the JS-side `RemoteJsdocBlock`).
 - **Lazy nodes are stack value types** (`#[derive(Copy, Clone)]`, 24-32 bytes or less): This completely eliminates the heap allocation cost of `Box::new` (about 10x speedup in Rust walkers).
 - **Build the Binary AST on an arena allocator (e.g. bumpalo)** and share it **zero-copy** as a NAPI Buffer / WASM memory at parser exit.
-- **Code generation synchronizes Rust and JS**: From the AST schema, `binary_writer_generated.rs` / `lazy_decoder_generated.rs` / `decoder.generated.js` are emitted simultaneously.
+- **Code generation synchronizes Rust and JS (Phase 4)**: the current writer / decoder tables are hand-written, and Phase 4 will emit `binary_writer_generated.rs` / `lazy_decoder_generated.rs` / `decoder.generated.js` from the AST schema.
 - **Internal API symmetric with the JS decoder**: Maintain correspondences such as `LazySourceFile` (Rust) <-> `RemoteSourceFile` (JS), `ext_offset` <-> `extOffsetOf`, and `KIND_TABLE` <-> `KIND_TABLE` (js).
 
 ## Parser-Integrated Binary Writer
@@ -45,11 +45,10 @@ When the Rust-side linter / semantic analyzer etc. wants to walk the AST:
 let block: LazyJsdocBlock = result.lazy_root;
 // LazyJsdocBlock is a thin wrapper holding a reference to the Binary AST bytes and a node index.
 
-// Allocate LazyJsdocTag on the Rust heap on demand at access time
+// Iterate stack-value LazyJsdocTag wrappers on demand; no Box allocation.
 for tag in block.tags() {
     println!("name = {}", tag.name());  // String is also read lazily
 }
-// Once the walk ends and LazyJsdocTag is dropped, the heap is also freed.
 ```
 
 ### Lazy nodes are stack value types (no Box allocation)
@@ -423,17 +422,15 @@ In both environments, no encoder step (serializing the byte stream) is required.
 ```text
 1. Reserve 40 bytes for the Header (offsets are written back later)
 2. Initialize the String Table (place each BatchItem's sourceText into String Data in order, as UTF-8)
-3. For each BatchItem's sourceText, **build a UTF-8 -> UTF-16 conversion map**
-   (skip optimization with an identity map if ASCII-only)
-4. The parser, while reading tokens, **writes them directly into the arena in Binary AST format**.
+3. The parser, while reading tokens, **writes them directly into the arena in Binary AST format**.
    When each node is recognized:
    a. Determine the Kind
    b. Register string fields in the String Table (prefer zero-copy substrings, as UTF-8)
-   c. Convert the node's Pos/End to **UTF-16 code unit offsets** and write into the 24-byte record
+   c. Write the parser-emitted `Span.start` / `Span.end` as **UTF-8 byte offsets** into the 24-byte record
    d. Pack node-specific data into Common Data + Node Data
    e. If Extended Data is needed, append to the Extended Data buffer
    f. Append the 24-byte node record to the Nodes buffer (written as LE u32)
-5. **Variable-length child arrays use inline list metadata in Extended Data**
+4. **Variable-length child arrays use inline list metadata in Extended Data**
    (NodeList-wrapper-elimination format change). For each list field on the
    parent (e.g. `JsdocBlock.tags`, `JsdocTag.descriptionLines`,
    `TypeUnion.elements`):
@@ -455,23 +452,23 @@ In both environments, no encoder step (serializing the byte stream) is required.
       `EMPTY_NODE_LIST`. The Children bitmask bit for the list slot is
       retained on the parent for the visitor framework but is no longer
       consulted by the lazy decoder
-6. **String-leaf nodes pick `TypeTag::StringInline (0b11)` when the value
+5. **String-leaf nodes pick `TypeTag::StringInline (0b11)` when the value
    fits the inline encoding** (length ≤ 255 byte AND String Data offset ≤
    4 MB-1) — packs `(offset:u22, length:u8)` directly into the 30-bit Node
    Data payload, skipping the String Offsets table indirection. Long /
    distant values fall back to `TypeTag::String (0b01)` + `StringIndex`.
    See `BinaryWriter::intern_string_payload` and the `intern_*_for_leaf_payload`
    helpers (Path B-leaf optimization)
-7. Resolve forward references for parent-child links via backpatching:
+6. Resolve forward references for parent-child links via backpatching:
    - parent index: At child write time, the parent's index is already known, so set it
    - next sibling: When the next node is written, patch the corresponding bytes of the previous node
-8. Write the root metadata for each BatchItem (node_index, source_offset, base_offset)
+7. Write the root metadata for each BatchItem (node_index, source_offset, base_offset)
    into the Root Index Array
-9. Sort diagnostics in ascending root_index order and write into the Diagnostics section
+8. Sort diagnostics in ascending root_index order and write into the Diagnostics section
    (empty-skip: when no diagnostics were emitted, skip the sort entirely)
-10. Concatenate all sections:
+9. Concatenate all sections:
     Header + RootIndexArray + StringOffsets + StringData + ExtData + Diagnostics + Nodes
-11. Write back each offset in the Header (LE u32)
+10. Write back each offset in the Header (LE u32)
 ```
 
 ### Backpatching details (parent / next_sibling)
@@ -518,81 +515,15 @@ impl<'a> NodeWriter<'a> {
 
 The **parent index** does not need backpatching because the parent's index is already known when the child is written. **next_sibling** is patched into bytes 20-23 of the previous sibling at the moment the next sibling is emitted.
 
-### Utf16PositionMap (UTF-8 → UTF-16 conversion)
+### Position offsets (UTF-8 byte offsets)
 
-Converts each sourceText's UTF-8 byte offset to a UTF-16 code unit offset for the wire format's Pos/End fields. Lives at [`crate::utf16::Utf16PositionMap`] and is rebuilt per root via [`BinaryWriter::set_source_for_root`] before the matching `emit_block` walk. The algorithm mirrors tsgo's `internal/ast/positionmap.go` — sparse delta table per non-ASCII character + binary search lookup.
+The wire format stores node `Pos` / `End` as the parser's UTF-8 byte offsets. `BinaryWriter::emit_node_record` writes `span.start` and `span.end` directly into bytes 4-11 of the 24-byte node record. There is no `Utf16PositionMap`, no per-root conversion table, and no ASCII-only branch in the writer.
 
-```rust
-pub struct Utf16PositionMap {
-    /// True when the source contains no byte ≥ 0x80, so byte and UTF-16
-    /// offsets coincide and no table lookup is required.
-    ascii_only: bool,
-    /// Sparse — one entry per multi-byte character. Empty for
-    /// ASCII-only sources.
-    entries: Vec<Entry>,
-}
-
-#[derive(Copy, Clone)]
-struct Entry {
-    /// UTF-8 byte offset right after the multi-byte character.
-    utf8_pos: u32,
-    /// Cumulative `(utf8 − utf16)` delta after this character.
-    delta: u32,
-}
-
-impl Utf16PositionMap {
-    /// Build a map for the given source text. ASCII-only sources allocate
-    /// nothing; sources with K multi-byte characters allocate K × 8 bytes.
-    pub fn build(source: &str) -> Self {
-        // SIMD-vectorized fast pre-check (`str::is_ascii`).
-        if source.is_ascii() {
-            return Self { ascii_only: true, entries: Vec::new() };
-        }
-        // Walk the source and record one entry per multi-byte character.
-        let bytes = source.as_bytes();
-        let mut entries = Vec::with_capacity(bytes.len() / 4);
-        let mut delta: u32 = 0;
-        let mut i = 0usize;
-        while i < bytes.len() {
-            if bytes[i] < 0x80 { i += 1; continue; }
-            let ch = source[i..].chars().next().unwrap();
-            let utf8_size = ch.len_utf8() as u32;
-            delta += utf8_size - ch.len_utf16() as u32;
-            i += utf8_size as usize;
-            entries.push(Entry { utf8_pos: i as u32, delta });
-        }
-        Self { ascii_only: false, entries }
-    }
-
-    /// Identity map for the "no source set yet" initial state.
-    pub const fn identity() -> Self {
-        Self { ascii_only: true, entries: Vec::new() }
-    }
-
-    /// O(log K) lookup; identity for ASCII-only sources.
-    #[inline]
-    pub fn utf8_to_utf16(&self, byte_offset: u32) -> u32 {
-        if self.ascii_only { return byte_offset; }
-        let pos = self.entries.partition_point(|e| e.utf8_pos <= byte_offset);
-        if pos == 0 { byte_offset } else { byte_offset - self.entries[pos - 1].delta }
-    }
-}
-```
-
-Per-character delta rules (mirrors tsgo `PositionMap`):
-
-| Code point        | UTF-8 bytes |  UTF-16 code units | delta |
-| ----------------- | ----------: | -----------------: | ----: |
-| U+0000..U+007F    |           1 |                  1 |     0 |
-| U+0080..U+07FF    |           2 |                  1 |    +1 |
-| U+0800..U+FFFF    |           3 |                  1 |    +2 |
-| U+10000..U+10FFFF |           4 | 2 (surrogate pair) |    +2 |
-
-**Effect of the ASCII-only optimization**: In practice, most JSDoc comments consist of ASCII only, so both table construction and lookup cost are zero — `Utf16PositionMap::build` returns the identity map after a single SIMD-accelerated `str::is_ascii()` scan.
+This keeps the parser span unit, zero-copy source slicing, `description_raw_span`, and `BatchItem.baseOffset` in one offset domain. Host integrations that need UTF-16 code unit positions for ESLint / LSP-facing APIs convert from byte offsets using the original source text outside the Binary AST writer/decoder.
 
 ## Code generation
 
-The binary writer per node kind (Rust) and the lazy decoder (Rust + JS) are auto-generated from the AST schema. Manual maintenance cannot keep up with 60 kinds + visitor keys + the 6-bit common data table.
+The current implementation is hand-written. Phase 4 will move the binary writer per node kind (Rust), the lazy decoder (Rust + JS), kind dispatch, and visitor keys to generated code from a shared AST schema. Until then, the hand-maintained Rust and JS tables are the source of truth.
 
 Schema specification:
 
@@ -601,7 +532,7 @@ Schema specification:
 - Field mapping into 6-bit common data
 - Extended Data layout (with/without compat_mode)
 
-Output:
+Planned output:
 
 - Rust: `binary_writer_generated.rs` (the `write_*` function for each node kind, called from the parser)
 - Rust: `lazy_decoder_generated.rs` (lazy wrappers per node kind such as `LazyJsdocBlock`, `#[derive(Copy, Clone)]` stack value-type structs)
@@ -610,9 +541,9 @@ Output:
 - JS: `decoder.generated.js` (RemoteNode subclasses, visitor keys)
 - JS: `protocol.js` (constants: Kind values, offsets, masks)
 
-Because the Rust and JS lazy decoders are generated from the same schema, the semantics of field access are guaranteed to remain consistent.
+Once Phase 4 lands, the Rust and JS lazy decoders will be generated from the same schema so field-access semantics stay consistent automatically.
 
-The JS decoder is emitted into a **shared decoder package** (e.g. `@ox-jsdoc/decoder`), and the NAPI binding and WASM binding each import it. Since both bindings share the format specification (LE byte order, UTF-16 positions, etc.), the same decoder classes work as-is. Only binding-specific code (buffer acquisition, initialization, lifecycle) is implemented in separate packages.
+The JS decoder lives in the **shared decoder package** (`@ox-jsdoc/decoder`), and the NAPI binding and WASM binding each import it. Since both bindings share the format specification (LE byte order, byte-offset positions, etc.), the same decoder classes work as-is. Only binding-specific code (buffer acquisition, initialization, lifecycle) is implemented in separate packages.
 
 ## Public Rust API
 
@@ -630,6 +561,7 @@ pub struct ParseOptions {
     pub fence_aware: bool,             // suppress @tag recognition inside fenced code blocks
     pub parse_types: bool,             // enable type expression parser for `{...}`
     pub type_parse_mode: type_data::ParseMode, // jsdoc | closure | typescript (only when parse_types)
+    pub preserve_whitespace: bool,     // append description_raw_span tails for descriptionRaw / descriptionText(true)
 }
 
 // --- Single comment ---------------------------------------------------------

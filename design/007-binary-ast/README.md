@@ -44,7 +44,7 @@ Each chapter is split into an independent file. We recommend reading them in ord
 ### Binary format details
 
 3. [Binary Format](./format.md)
-   - Conventions (LE / UTF-8 / UTF-16 Pos/End / bit ordering)
+   - Conventions (LE / UTF-8 / byte-offset Pos/End / bit ordering)
    - Section layout (7 sections)
    - Header (40 bytes) and Protocol Version
    - Root Index Array (12N bytes)
@@ -81,7 +81,7 @@ Each chapter is split into an independent file. We recommend reading them in ord
    - Design overview (Approach c-1 / typed AST removed / stack value type / JS decoder symmetry)
    - Parser-Integrated Binary Writer (Approach c-1)
    - Processing flow + Backpatching (parent / next_sibling)
-   - PositionMap (UTF-8 → UTF-16 conversion, ASCII-only fast path)
+   - Position offsets (parser-emitted UTF-8 byte offsets)
    - Rust-side lazy decoder (`LazyJsdocBlock`, etc., stack value type Copy)
    - `LazySourceFile` (the decoder's root)
    - Helper functions (`ext_offset`, `child_at_visitor_index`)

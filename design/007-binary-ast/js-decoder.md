@@ -2,7 +2,7 @@
 
 ## Design overview
 
-The JS-side Binary AST decoder is designed to deliver **lazy expansion + zero-copy + full environment support (Node/Deno/Bun/Browser)**. It mirrors the Rust side (LazySourceFile + LazyJsdocBlock, etc.) with a **fully symmetric structure**, enabling both languages to be generated simultaneously from a single AST schema.
+The JS-side Binary AST decoder is designed to deliver **lazy expansion + zero-copy + full environment support (Node/Deno/Bun/Browser)**. It mirrors the Rust side (LazySourceFile + LazyJsdocBlock, etc.) with a **fully symmetric structure**. The current implementation is hand-written; Phase 4 will generate both languages from a single AST schema.
 
 Key decisions:
 
@@ -514,10 +514,10 @@ for (const tag of tags) {
 
 ## Visitor Keys
 
-Visitor keys for use by ESLint plugins are **planned** to be code-generated from the AST schema. Manual maintenance cannot keep up with the 60 kinds, so the export below is the **target shape**, not a currently-shipped artifact: as of this writing `@ox-jsdoc/decoder` does **not** export `jsdocVisitorKeys`. Consumers that need a visitor key map today should inline the table below or wait for the codegen rollout (tracked alongside the Phase 4 codegen work — see [`README.md`](./README.md) "Code generation").
+Visitor keys for use by ESLint plugins are shipped today as a hand-maintained export from `@ox-jsdoc/decoder`, and the NAPI / WASM bindings re-export it for convenience. Phase 4 still plans to code-generate this table from the AST schema, but consumers can already import `jsdocVisitorKeys` from either the shared decoder package or a binding package.
 
 ```javascript
-// generated/visitor-keys.js (planned export — not yet shipped)
+// @ox-jsdoc/decoder
 export const jsdocVisitorKeys = {
   JsdocBlock: ['descriptionLines', 'tags', 'inlineTags'],
   // parsedType points directly to a TypeNode (TypeName, etc.)
@@ -575,6 +575,16 @@ interface Diagnostic {
                    // (in Binary AST: a String Offsets index → restored to a string)
 }
 
+interface ParseOptions {
+  fenceAware?: boolean
+  parseTypes?: boolean
+  typeParseMode?: 'jsdoc' | 'closure' | 'typescript'
+  compatMode?: boolean
+  preserveWhitespace?: boolean  // enables descriptionRaw / descriptionText(true)
+  emptyStringForNull?: boolean  // NAPI decoder option for compat toJSON parity
+  baseOffset?: number           // UTF-8 byte offset, single-comment only
+}
+
 interface ParseResult {
   ast: RemoteJsdocBlock | null  // Internally backed by the lazy decoder
   diagnostics: Diagnostic[]      // message only (no rootIndex needed since it's a single result)
@@ -587,16 +597,21 @@ interface ParseResult {
 }
 
 // New batch API
-parseBatch(items: BatchItem[], options?: ParseOptions): BatchResult
+parseBatch(items: BatchItem[], options?: BatchParseOptions): BatchResult
 
 interface BatchItem {
   sourceText: string
-  baseOffset?: number  // Offset within the original file (for ESLint, default 0)
+  baseOffset?: number  // UTF-8 byte offset within the original file (default 0)
                        // Added to each node's relative Pos/End to produce absolute positions
+}
+
+interface BatchParseOptions extends Omit<ParseOptions, 'baseOffset'> {
+  output?: 'ast' | 'jsdoccomment-input'
 }
 
 interface BatchResult {
   asts: (RemoteJsdocBlock | null)[]  // Corresponds to each item; null = parse failed
+  blocks?: (JsdocCommentInput | null)[] // Present when output === 'jsdoccomment-input'
   diagnostics: BatchDiagnostic[]      // Across all items
   sourceFile: RemoteSourceFile        // Same lifetime contract as ParseResult.sourceFile
   free?: () => void                   // WASM only (see ParseResult.free)
@@ -637,7 +652,7 @@ const items = program.comments.map(c => ({
 
 const result = parseBatch(items)
 
-// Node ranges are absolute offsets within the original jsCode
+// Node ranges are absolute UTF-8 byte offsets within the original jsCode
 result.asts[0]?.tags[0].range // → [142, 158], etc.
 
 // Check for parse failures
@@ -651,7 +666,7 @@ if (result.asts[1] === null) {
 
 - When `RootIndexArray[i].node_index === 0` (sentinel), the JS API represents it as `result.asts[i] === null`
 - On failure, at least one `BatchDiagnostic` always corresponds with `rootIndex === i`
-- The position of the failed comment is recovered from the input `items[i]` (`baseOffset` + `sourceText.length`)
+- The position of the failed comment is recovered from the input `items[i]` (`baseOffset` + `utf8ByteLength(sourceText)`)
 
 ### Replacing the existing `parse()` API (at the 1.0 release)
 
