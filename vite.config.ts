@@ -24,7 +24,6 @@ export default defineConfig({
   fmt: defineFmtConfig({
     ignorePatterns
   }),
-  // @ts-expect-error -- TODO(vp-config): The type of `lint` is not correctly inferred. It should be `LintConfig` instead of `LintConfig[]`.
   lint: defineLintConfig({
     ignorePatterns,
     comments: {

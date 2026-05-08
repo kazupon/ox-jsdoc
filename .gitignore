@@ -12,6 +12,8 @@ napi/ox-jsdoc-binary/src-js/bindings.js
 napi/ox-jsdoc-binary/src-js/ox_jsdoc_binary.*.node
 packages/eslint-plugin-jsdoc/.README
 packages/eslint-plugin-jsdoc/coverage
+packages/jsdoccomment/coverage/
+packages/jsdoccomment/.dts/
 .notes/
 .playwright-cli
 tasks/benchmark/.tmp

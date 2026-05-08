@@ -35,32 +35,20 @@
     "defaults, not op_mini all"
   ],
   "scripts": {
-    "start": "static -p 8070",
-    "copy": "cp -R node_modules/prismjs/ demo/vendor/prismjs/ && cp -R node_modules/@webcoder49/code-input/ demo/vendor/@webcoder49/code-input/ && cp node_modules/esquery/dist/esquery.esm.js demo/vendor/esquery/dist/esquery.esm.js && cp -R node_modules/jsdoc-type-pratt-parser/dist/esm demo/vendor/jsdoc-type-pratt-parser/dist && cp -R node_modules/comment-parser/es6 demo/vendor/comment-parser",
-    "build": "npm run copy && rollup -c && npm run types",
-    "docs": "typedoc-pkg --api-link es",
-    "eslint": "eslint .",
-    "lint": "npm run eslint --",
-    "open": "open ./coverage/index.html",
-    "prepublishOnly": "pnpm i && npm run build",
+    "build": "rollup -c && npm run types",
+    "prepublishOnly": "pnpm i && pnpm run build",
     "test": "vp test run",
     "tsc": "tsc",
     "types": "esm-d-ts gen ./src/index.js --output ./dist/index.d.ts --emitCTS"
   },
-  "typedocOptions": {
-    "dmtLinksService": {
-      "GitHub": "https://github.com/es-joy/jsdoccomment",
-      "NPM": "https://www.npmjs.com/package/@es-joy/jsdoccomment"
-    }
-  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/es-joy/jsdoccomment.git"
+    "url": "git+https://github.com/kazupon/ox-jsdoc.git",
+    "directory": "packages/jsdoccomment"
   },
   "bugs": {
-    "url": "https://github.com/es-joy/jsdoccomment/issues"
+    "url": "https://github.com/kazupon/ox-jsdoc/issues"
   },
-  "homepage": "https://github.com/es-joy/jsdoccomment",
   "engines": {
     "node": "^20.19.0 || ^22.13.0 || >=24"
   },
@@ -75,23 +63,16 @@
   "devDependencies": {
     "@babel/core": "^7.29.0",
     "@babel/preset-env": "^7.29.2",
-    "@brettz9/node-static": "^0.1.1",
     "@rollup/plugin-babel": "^7.0.0",
     "@vitest/coverage-v8": "4.1.4",
     "@types/esquery": "^1.5.4",
     "@types/estraverse": "^5.1.7",
     "@typescript-eslint/visitor-keys": "^8.58.0",
     "@typhonjs-build-test/esm-d-ts": "0.3.0",
-    "@typhonjs-typedoc/typedoc-pkg": "^0.4.2",
-    "@webcoder49/code-input": "^2.8.2",
     "eslint": "^9.39.2",
-    "eslint-config-ash-nazg": "39.11.1",
-    "eslint-plugin-jsdoc": "^62.8.1",
     "espree": "^11.2.0",
     "estraverse": "^5.3.0",
-    "prismjs": "^1.30.0",
     "rollup": "^4.60.1",
-    "typedoc": "^0.28.18",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.58.0",
     "vite-plus": "catalog:"
@@ -99,7 +80,6 @@
   "files": [
     "/dist",
     "/src",
-    "CHANGES.md",
     "LICENSE-MIT.txt"
   ]
 }
