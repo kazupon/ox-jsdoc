@@ -117,8 +117,8 @@ export class RemoteJsdocBlock implements RemoteNode {
   readonly hasPreterminalTagDescription: number | null
   /**
    * Raw description slice (with `*` prefix and blank lines intact).
-   * `null` outside compat mode (the wire field doesn't exist) or when
-   * the block has no description.
+   * `null` when the buffer was parsed without `preserveWhitespace: true`
+   * or when the block has no description.
    * See `design/008-oxlint-oxfmt-support/README.md` §4.3.
    */
   readonly descriptionRaw: string | null
@@ -128,7 +128,8 @@ export class RemoteJsdocBlock implements RemoteNode {
    * design §3). When `false` (default), returns the compact view (same
    * as `description`).
    * Returns `null` when no description is present, or when
-   * `preserveWhitespace=true` is requested on a basic-mode buffer.
+   * `preserveWhitespace=true` is requested on a buffer that was parsed
+   * without `preserveWhitespace: true`.
    */
   descriptionText(preserveWhitespace?: boolean): string | null
   toJsdocCommentInput(): JsdocCommentInput
@@ -173,8 +174,8 @@ export class RemoteJsdocTag implements RemoteNode {
   readonly lineEnd: string | null
   /**
    * Raw description slice (with `*` prefix and blank lines intact).
-   * `null` outside compat mode (the wire field doesn't exist) or when
-   * the tag has no description body.
+   * `null` when the buffer was parsed without `preserveWhitespace: true`
+   * or when the tag has no description body.
    * See `design/008-oxlint-oxfmt-support/README.md` §4.3.
    */
   readonly descriptionRaw: string | null
@@ -184,7 +185,8 @@ export class RemoteJsdocTag implements RemoteNode {
    * design §3). When `false` (default), returns the compact view (same
    * as `description`).
    * Returns `null` when no description is present, or when
-   * `preserveWhitespace=true` is requested on a basic-mode buffer.
+   * `preserveWhitespace=true` is requested on a buffer that was parsed
+   * without `preserveWhitespace: true`.
    */
   descriptionText(preserveWhitespace?: boolean): string | null
   toJSON(): Record<string, unknown>
