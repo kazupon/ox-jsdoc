@@ -67,9 +67,9 @@
     "create-options": "node ./src/bin/generateOptions.js",
     "lint": "eslint",
     "lint-fix": "eslint --fix",
-    "test-no-cov": "BABEL_ENV=test mocha",
+    "test-no-cov": "cross-env BABEL_ENV=test mocha",
     "test": "c8 pnpm run test-no-cov",
-    "test-cov": "TIMING=1 c8 --reporter text pnpm run test-no-cov",
+    "test-cov": "cross-env TIMING=1 c8 --reporter text pnpm run test-no-cov",
     "test-index": "pnpm run test-no-cov test/rules/index.js"
   },
   "dependencies": {
