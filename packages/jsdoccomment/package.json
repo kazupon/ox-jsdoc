@@ -1,6 +1,6 @@
 {
   "name": "@ox-jsdoc/jsdoccomment",
-  "version": "0.86.0",
+  "version": "0.0.11",
   "private": true,
   "author": {
     "name": "kazuya kawaguchi",
