@@ -8,6 +8,7 @@ import {
 const ignorePatterns = [
   '**/dist/**',
   'crates/**',
+  'CHANGELOG.md',
   'napi/ox-jsdoc/src-js/binding.*',
   'packages/jsdoccomment/**',
   'packages/eslint-plugin-jsdoc/**',
