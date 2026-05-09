@@ -1,9 +1,9 @@
-# 2026-05-09 — JSDoc linter hyperfine ベンチマーク
+# 2026-05-09 — JSDoc linter hyperfine benchmark
 
-`design/009-jsdoc-linter-benchmark/README.md` に基づく end-to-end CLI 計測 (shell driver + hyperfine 直接実行、`oxc-project/bench-linter` 形式)。
+End-to-end CLI measurement (shell driver + direct hyperfine, `oxc-project/bench-linter` style) based on `design/009-jsdoc-linter-benchmark/README.md`.
 
-**2 fixtures × 5 patterns × 1 rule set (combined) = 10 計測点**で、JS / TS の両方を実 multi-file project に対して計測。
-`combined` rule set = `jsdoc/empty-tags` + `jsdoc/require-param-description` + `jsdoc/require-param-type` (実用 lint 一式の代表値)。
+**2 fixtures × 5 patterns × 1 rule set (combined) = 10 measurement points**, covering both JS and TS against real multi-file projects.
+`combined` rule set = `jsdoc/empty-tags` + `jsdoc/require-param-description` + `jsdoc/require-param-type` (representative of a practical lint set).
 
 ## Fixtures
 
@@ -12,8 +12,8 @@
 | `js` | `refers/eslint-plugin-jsdoc/src/` | 86 | 28,741 | 1,170 | 659 (639 / 31) |
 | `ts` | `refers/vscode/src/` | 5,996 | 1,951,540 | 25,238 | 3471 (2 / 3411) |
 
-- `js` fixture: `eslint-plugin-jsdoc` のソースを ESLint default parser (espree) で lint
-- `ts` fixture: VS Code TS source を ESLint で lint する場合は `@typescript-eslint/parser` 必須 (Oxlint は TS native)
+- `js` fixture: lint the `eslint-plugin-jsdoc` source with the ESLint default parser (espree)
+- `ts` fixture: linting VS Code's TS source with ESLint requires `@typescript-eslint/parser` (Oxlint is TS-native)
 
 ## Patterns
 
