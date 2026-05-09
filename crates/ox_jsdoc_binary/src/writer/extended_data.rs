@@ -69,6 +69,14 @@ impl<'arena> ExtendedDataBuilder<'arena> {
         }
     }
 
+    /// Truncate the builder back to its post-[`Self::new`] state, keeping the
+    /// arena-backed buffer capacity. Used by
+    /// [`crate::writer::BinaryWriter::reset`] to recycle a writer across
+    /// per-comment parse calls.
+    pub(crate) fn reset(&mut self) {
+        self.buffer.truncate(0);
+    }
+
     /// Reserve `size` bytes for a new record, returning the resulting
     /// [`ExtOffset`].
     ///

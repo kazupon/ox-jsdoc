@@ -517,6 +517,37 @@ impl<'arena> StringTableBuilder<'arena> {
         offset
     }
 
+    /// Truncate the builder back to its post-[`Self::new`] state without
+    /// freeing arena memory. The arena-backed `offsets_buffer` /
+    /// `data_buffer` keep their capacity, so subsequent
+    /// [`Self::intern_for_leaf`] / [`Self::append_source_text`] calls reuse
+    /// the existing allocations instead of growing from zero on every
+    /// per-comment writer construction.
+    ///
+    /// Used by [`crate::writer::BinaryWriter::reset`] to recycle a single
+    /// writer across many parse calls (see
+    /// [`crate::parser::parse_into`] / [`crate::parser::parse_batch_into`]).
+    pub(crate) fn reset(&mut self) {
+        // Restore the prelude bytes. Truncate first so capacity is retained,
+        // then `extend_from_slice` reuses that capacity for the prelude.
+        let prelude_offsets_bytes = prelude_offsets();
+        let prelude_data_bytes = prelude_data();
+        self.offsets_buffer.truncate(0);
+        self.offsets_buffer.extend_from_slice(prelude_offsets_bytes);
+        self.data_buffer.truncate(0);
+        self.data_buffer.extend_from_slice(prelude_data_bytes);
+        self.count = COMMON_STRING_COUNT;
+        // Wipe dedup but keep the HashMap's bucket allocation (FxHashMap's
+        // `clear` retains capacity).
+        self.dedup.clear();
+        self.last_key_ptr = core::ptr::null();
+        self.last_key_len = 0;
+        self.last_entry = DedupEntry {
+            field: StringField::NONE,
+            index: None,
+        };
+    }
+
     /// Number of strings registered in the offsets table so far.
     #[inline]
     #[must_use]

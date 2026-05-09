@@ -522,6 +522,7 @@ dependencies = [
  "criterion2",
  "memchr",
  "oxc_allocator",
+ "oxc_jsdoc",
  "oxc_span",
  "rustc-hash",
  "smallvec",

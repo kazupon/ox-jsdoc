@@ -11,14 +11,16 @@
 use std::fs;
 use std::path::PathBuf;
 
-use criterion::{BatchSize, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use ox_jsdoc_binary::parser::{
     BatchItem, ParseOptions,
     context::{emit_block, parse_block_into_data},
-    parse, parse_batch_to_bytes, parse_to_bytes,
+    parse, parse_batch, parse_batch_into, parse_batch_to_bytes, parse_into, parse_to_bytes,
 };
 use ox_jsdoc_binary::writer::BinaryWriter;
 use oxc_allocator::Allocator;
+use oxc_jsdoc::JSDoc;
+use oxc_span::Span;
 
 fn fixture_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -93,6 +95,31 @@ fn bench_parse_full(c: &mut Criterion) {
     });
 }
 
+/// Same per-comment shape as `bench_parse_full` but routes through
+/// `parse_into` with a single recycled `BinaryWriter` shared across all
+/// 232 calls. Demonstrates the writer-reuse path's amortization of
+/// `BinaryWriter::new` (`StringTableBuilder::new` prelude memcpy + the
+/// per-buffer `ArenaVec::new_in`s) — the per-call overhead that dominates
+/// `parse()`'s per-comment self time.
+fn bench_parse_into_recycled(c: &mut Criterion) {
+    let blocks = load_fixture();
+    c.bench_function("parse_into (loop, full file, shared writer)", |b| {
+        b.iter(|| {
+            let arena = Allocator::default();
+            let mut writer = BinaryWriter::new(&arena);
+            for src in &blocks {
+                let _ = black_box(parse_into(
+                    &arena,
+                    src.as_str(),
+                    ParseOptions::default(),
+                    &mut writer,
+                ));
+            }
+            black_box(arena);
+        });
+    });
+}
+
 fn bench_parse_batch_to_bytes(c: &mut Criterion) {
     let blocks = load_fixture();
     let items: Vec<BatchItem<'_>> = blocks
@@ -107,6 +134,86 @@ fn bench_parse_batch_to_bytes(c: &mut Criterion) {
             let _ = black_box(parse_batch_to_bytes(&items, ParseOptions::default()));
         });
     });
+}
+
+/// `parse_batch` — typed-result single-batch entry point. Same shape as
+/// `parse_batch_to_bytes` but returns `BatchResult<'arena>` with lazy
+/// roots + an arena-backed `LazySourceFile`, the input pattern Rust
+/// callers use when they need to walk the parsed AST.
+fn bench_parse_batch_full(c: &mut Criterion) {
+    let blocks = load_fixture();
+    let items: Vec<BatchItem<'_>> = blocks
+        .iter()
+        .map(|s| BatchItem {
+            source_text: s.as_str(),
+            base_offset: 0,
+        })
+        .collect();
+    c.bench_function("parse_batch (single batch, full file, shared arena)", |b| {
+        b.iter(|| {
+            let arena = Allocator::default();
+            let _ = black_box(parse_batch(&arena, &items, ParseOptions::default()));
+            black_box(arena);
+        });
+    });
+}
+
+/// `oxc_jsdoc::JSDoc::new(...).tags()` per-comment loop — the Rust-direct
+/// reference parser used by oxlint's native JSDoc plugin. Mirrors the
+/// `tasks/benchmark/benches/oxc_jsdoc.rs` setup: strip `/**` / `*/`, build
+/// `JSDoc::new(inner, span)`, materialize `tags()` to trigger the lazy
+/// parse, accumulate `len()` for anti-DCE.
+///
+/// Lives next to the ox-jsdoc-binary entry-point benches so the per-comment
+/// numbers are taken under the same machine state and one cargo bench run.
+fn bench_oxc_jsdoc_loop(c: &mut Criterion) {
+    let blocks = load_fixture();
+    c.bench_function("oxc_jsdoc::JSDoc::new(...).tags() (loop, full file)", |b| {
+        b.iter(|| {
+            let mut tag_count = 0usize;
+            for source_text in &blocks {
+                let inner = source_text
+                    .strip_prefix("/**")
+                    .and_then(|s| s.strip_suffix("*/"))
+                    .unwrap_or(black_box(source_text.as_str()));
+                let span = Span::new(0, source_text.len() as u32);
+                let jsdoc = JSDoc::new(inner, span);
+                tag_count += jsdoc.tags().len();
+            }
+            black_box(tag_count);
+        });
+    });
+}
+
+/// `parse_batch_into` — typed-result single-batch entry point reusing a
+/// caller-supplied `BinaryWriter`. Hot-loop callers that drive many
+/// batches in a row can amortize the per-call writer construction
+/// (`StringTableBuilder::new` prelude memcpy + ArenaVec init) here.
+fn bench_parse_batch_into_recycled(c: &mut Criterion) {
+    let blocks = load_fixture();
+    let items: Vec<BatchItem<'_>> = blocks
+        .iter()
+        .map(|s| BatchItem {
+            source_text: s.as_str(),
+            base_offset: 0,
+        })
+        .collect();
+    c.bench_function(
+        "parse_batch_into (single batch, full file, shared writer)",
+        |b| {
+            b.iter(|| {
+                let arena = Allocator::default();
+                let mut writer = BinaryWriter::new(&arena);
+                let _ = black_box(parse_batch_into(
+                    &arena,
+                    &items,
+                    ParseOptions::default(),
+                    &mut writer,
+                ));
+                black_box(arena);
+            });
+        },
+    );
 }
 
 /// Phase 1 only: structural parse (no binary emission).
@@ -222,7 +329,11 @@ criterion_group!(
     benches,
     bench_parse_to_bytes_full,
     bench_parse_full,
+    bench_parse_into_recycled,
     bench_parse_batch_to_bytes,
+    bench_parse_batch_full,
+    bench_parse_batch_into_recycled,
+    bench_oxc_jsdoc_loop,
     bench_parse_block_into_data,
     bench_parse_plus_emit,
     bench_batch_parse_only,

@@ -9,7 +9,7 @@ use oxc_span::Span;
 
 use crate::format::diagnostics;
 use crate::format::header::{
-    self, COMPAT_MODE_BIT, DIAGNOSTICS_OFFSET_FIELD, EXTENDED_DATA_OFFSET_FIELD, FLAGS_OFFSET,
+    COMPAT_MODE_BIT, DIAGNOSTICS_OFFSET_FIELD, EXTENDED_DATA_OFFSET_FIELD, FLAGS_OFFSET,
     HEADER_SIZE, Header, NODE_COUNT_FIELD, NODES_OFFSET_FIELD, ROOT_ARRAY_OFFSET_FIELD,
     ROOT_COUNT_FIELD, SOURCE_TEXT_LENGTH_FIELD, STRING_DATA_OFFSET_FIELD,
     STRING_OFFSETS_OFFSET_FIELD, SUPPORTED_VERSION_BYTE, VERSION_OFFSET,
@@ -152,6 +152,47 @@ impl<'arena> BinaryWriter<'arena> {
             preserve_whitespace_span: false,
             arena,
         }
+    }
+
+    /// Truncate the writer back to its post-[`Self::new`] state without
+    /// freeing any arena memory. Per-section buffers retain their capacity
+    /// so subsequent emit calls reuse the existing allocations instead of
+    /// growing from zero on every per-comment writer construction.
+    ///
+    /// Pairs with [`crate::parser::parse_into`] /
+    /// [`crate::parser::parse_batch_into`] for hot-loop callers (lint
+    /// runners, doc generators) that want per-comment `parse()` semantics
+    /// without paying the per-call writer construction cost.
+    ///
+    /// Restores after `reset()`:
+    /// - the all-zero `node[0]` sentinel (preserved as the first 24 bytes
+    ///   of `nodes_buffer`),
+    /// - the [`super::string_table::COMMON_STRINGS`] prelude in the string
+    ///   table,
+    /// - `compat_mode` / `preserve_whitespace_span` cleared (callers must
+    ///   re-enable them on the recycled writer when needed).
+    pub fn reset(&mut self) {
+        // Header: keep version, clear flags (compat_mode / preserve_ws span
+        // bits are caller-controlled and must be re-set on the recycled writer).
+        self.header.flags = 0;
+
+        // Nodes buffer: keep the 24-byte sentinel, drop everything after it.
+        // truncate retains capacity.
+        self.nodes_buffer.truncate(NODE_RECORD_SIZE);
+
+        self.root_index_buffer.truncate(0);
+        self.diagnostics.truncate(0);
+        self.next_sibling_patch.truncate(0);
+
+        self.strings.reset();
+        self.extended.reset();
+
+        self.source_text_length = 0;
+        self.current_source_data_offset = 0;
+        self.current_source_length = 0;
+        self.current_source_ptr = 0;
+
+        self.preserve_whitespace_span = false;
     }
 
     /// Emit one 24-byte node record into the Nodes section and return its
@@ -795,6 +836,57 @@ impl<'arena> BinaryWriter<'arena> {
     /// across NAPI/WASM boundaries without lifetime concerns.
     #[must_use]
     pub fn finish(mut self) -> Vec<u8> {
+        let layout = self.prepare_finish_layout();
+        let mut out: Vec<u8> = vec![0u8; layout.total_size];
+        write_finish_layout(&self, &layout, &mut out);
+        out
+    }
+
+    /// Finish writing into the writer's owning arena and return the bytes
+    /// as `&'arena [u8]`. Avoids the heap [`Vec<u8>`] allocation +
+    /// [`Allocator::alloc_slice_copy`] step that callers like [`crate::parser::parse`]
+    /// would otherwise pay to materialize a `&'arena [u8]` view of
+    /// [`Self::finish`]'s output.
+    ///
+    /// Output bytes are byte-for-byte identical to [`Self::finish`] for the
+    /// same writer state.
+    #[must_use]
+    pub fn finish_into_arena(self) -> &'arena [u8] {
+        // Delegate to the borrow-based variant. `self` is dropped at the
+        // end of this scope; its arena-backed buffers are kept alive by
+        // the arena, and the returned slice is valid for `'arena`.
+        let mut writer = self;
+        writer.finish_into_arena_reusing()
+    }
+
+    /// Like [`Self::finish_into_arena`] but takes `&mut self` instead of
+    /// consuming, so the writer can subsequently be [`Self::reset`]ed and
+    /// reused for the next per-comment parse.
+    ///
+    /// Used by [`crate::parser::parse_into`] /
+    /// [`crate::parser::parse_batch_into`] to amortize writer construction
+    /// across many parse calls.
+    ///
+    /// The returned slice borrows from the writer's arena (lifetime
+    /// `'arena`), independent of the writer itself, so [`Self::reset`] can
+    /// be called immediately afterwards without invalidating it.
+    ///
+    /// Output bytes are byte-for-byte identical to [`Self::finish`] for the
+    /// same writer state.
+    #[must_use]
+    pub fn finish_into_arena_reusing(&mut self) -> &'arena [u8] {
+        let layout = self.prepare_finish_layout();
+        let arena = self.arena;
+        let mut out: ArenaVec<'arena, u8> = ArenaVec::with_capacity_in(layout.total_size, arena);
+        out.resize(layout.total_size, 0);
+        write_finish_layout(self, &layout, &mut out);
+        out.into_bump_slice()
+    }
+
+    /// Sort diagnostics + compute layout. Mutating helper shared by
+    /// [`Self::finish`] and [`Self::finish_into_arena`] — the only
+    /// pre-write side effect either path needs.
+    fn prepare_finish_layout(&mut self) -> FinishLayout {
         // -- 1. sort diagnostics by root_index ascending --------------------
         // Empty skip: most batches finish without diagnostics (parse success
         // path), so avoid the function-call overhead entirely. Unstable
@@ -806,10 +898,6 @@ impl<'arena> BinaryWriter<'arena> {
         }
 
         // -- 2. compute counts and section sizes ----------------------------
-        let node_count = self.node_count();
-        let root_count = self.root_count();
-        let diagnostic_count = self.diagnostics.len() as u32;
-
         let root_array_size = self.root_index_buffer.len();
         let string_offsets_size = self.strings.offsets_buffer.len();
         let string_data_size = self.strings.data_buffer.len();
@@ -831,86 +919,122 @@ impl<'arena> BinaryWriter<'arena> {
         let string_data_offset = string_offsets_offset + string_offsets_size as u32;
         // Pad after String Data so Extended Data starts 4-byte aligned.
         let extended_data_offset = align_up_4(string_data_offset + string_data_size as u32);
-        let string_data_padding =
-            (extended_data_offset - (string_data_offset + string_data_size as u32)) as usize;
         // Pad after Extended Data so Diagnostics starts 4-byte aligned.
         let diagnostics_offset = align_up_4(extended_data_offset + extended_data_size as u32);
-        let extended_data_padding =
-            (diagnostics_offset - (extended_data_offset + extended_data_size as u32)) as usize;
         // diagnostics_size is `4 + 8M` (always 4-aligned), so the next
         // boundary is automatically 4-aligned. Compute defensively anyway.
         let nodes_offset = align_up_4(diagnostics_offset + diagnostics_size as u32);
-        let diagnostics_padding =
-            (nodes_offset - (diagnostics_offset + diagnostics_size as u32)) as usize;
 
-        // -- 4. build the output buffer -------------------------------------
-        let total_size = HEADER_SIZE
-            + root_array_size
-            + string_offsets_size
-            + string_data_size
-            + string_data_padding
-            + extended_data_size
-            + extended_data_padding
-            + diagnostics_size
-            + diagnostics_padding
-            + nodes_size;
-        let mut out: Vec<u8> = Vec::with_capacity(total_size);
-        out.resize(HEADER_SIZE, 0);
+        let total_size = nodes_offset as usize + nodes_size;
 
-        // -- 4a. Header -----------------------------------------------------
-        out[VERSION_OFFSET] = self.header.version;
-        out[FLAGS_OFFSET] = self.header.flags;
-        // bytes 2-3 already zero (reserved)
-        write_u32(&mut out, ROOT_ARRAY_OFFSET_FIELD, root_array_offset);
-        write_u32(&mut out, STRING_OFFSETS_OFFSET_FIELD, string_offsets_offset);
-        write_u32(&mut out, STRING_DATA_OFFSET_FIELD, string_data_offset);
-        write_u32(&mut out, EXTENDED_DATA_OFFSET_FIELD, extended_data_offset);
-        write_u32(&mut out, DIAGNOSTICS_OFFSET_FIELD, diagnostics_offset);
-        write_u32(&mut out, NODES_OFFSET_FIELD, nodes_offset);
-        write_u32(&mut out, NODE_COUNT_FIELD, node_count);
-        write_u32(&mut out, SOURCE_TEXT_LENGTH_FIELD, self.source_text_length);
-        write_u32(&mut out, ROOT_COUNT_FIELD, root_count);
-        debug_assert_eq!(header::HEADER_SIZE, out.len());
-
-        // -- 4b. Root index array ------------------------------------------
-        out.extend_from_slice(&self.root_index_buffer);
-
-        // -- 4c. String Offsets / Data --------------------------------------
-        out.extend_from_slice(&self.strings.offsets_buffer);
-        out.extend_from_slice(&self.strings.data_buffer);
-        if string_data_padding > 0 {
-            out.resize(out.len() + string_data_padding, 0);
+        FinishLayout {
+            root_array_offset,
+            string_offsets_offset,
+            string_data_offset,
+            extended_data_offset,
+            diagnostics_offset,
+            nodes_offset,
+            root_array_size,
+            string_offsets_size,
+            string_data_size,
+            extended_data_size,
+            nodes_size,
+            total_size,
         }
-
-        // -- 4d. Extended Data ----------------------------------------------
-        out.extend_from_slice(&self.extended.buffer);
-        if extended_data_padding > 0 {
-            out.resize(out.len() + extended_data_padding, 0);
-        }
-
-        // -- 4e. Diagnostics: count header + 8-byte entries ----------------
-        out.extend_from_slice(&diagnostic_count.to_le_bytes());
-        for (root_index, message_index) in &self.diagnostics {
-            out.extend_from_slice(&root_index.to_le_bytes());
-            out.extend_from_slice(&message_index.to_le_bytes());
-        }
-        if diagnostics_padding > 0 {
-            out.resize(out.len() + diagnostics_padding, 0);
-        }
-
-        // -- 4f. Nodes ------------------------------------------------------
-        out.extend_from_slice(&self.nodes_buffer);
-
-        debug_assert_eq!(total_size, out.len(), "section sizes must match capacity");
-        debug_assert_eq!(
-            extended_data_offset & 3,
-            0,
-            "Extended Data must be 4-aligned"
-        );
-        debug_assert_eq!(diagnostics_offset & 3, 0, "Diagnostics must be 4-aligned");
-        debug_assert_eq!(nodes_offset & 3, 0, "Nodes must be 4-aligned");
-        out
     }
+}
+
+/// Pre-computed section offsets + sizes for [`BinaryWriter::finish`] /
+/// [`BinaryWriter::finish_into_arena`]. Computed once from
+/// [`BinaryWriter::prepare_finish_layout`] and consumed by
+/// [`write_finish_layout`].
+struct FinishLayout {
+    root_array_offset: u32,
+    string_offsets_offset: u32,
+    string_data_offset: u32,
+    extended_data_offset: u32,
+    diagnostics_offset: u32,
+    nodes_offset: u32,
+    root_array_size: usize,
+    string_offsets_size: usize,
+    string_data_size: usize,
+    extended_data_size: usize,
+    nodes_size: usize,
+    total_size: usize,
+}
+
+/// Write the header + every section into a pre-allocated, zero-initialized
+/// buffer of exactly [`FinishLayout::total_size`] bytes. Padding regions are
+/// covered by the caller's zero-init.
+fn write_finish_layout(writer: &BinaryWriter<'_>, layout: &FinishLayout, out: &mut [u8]) {
+    debug_assert_eq!(out.len(), layout.total_size);
+
+    let node_count = writer.node_count();
+    let root_count = writer.root_count();
+    let diagnostic_count = writer.diagnostics.len() as u32;
+
+    // -- Header ---------------------------------------------------------
+    out[VERSION_OFFSET] = writer.header.version;
+    out[FLAGS_OFFSET] = writer.header.flags;
+    // bytes 2-3 already zero (reserved)
+    write_u32(out, ROOT_ARRAY_OFFSET_FIELD, layout.root_array_offset);
+    write_u32(
+        out,
+        STRING_OFFSETS_OFFSET_FIELD,
+        layout.string_offsets_offset,
+    );
+    write_u32(out, STRING_DATA_OFFSET_FIELD, layout.string_data_offset);
+    write_u32(out, EXTENDED_DATA_OFFSET_FIELD, layout.extended_data_offset);
+    write_u32(out, DIAGNOSTICS_OFFSET_FIELD, layout.diagnostics_offset);
+    write_u32(out, NODES_OFFSET_FIELD, layout.nodes_offset);
+    write_u32(out, NODE_COUNT_FIELD, node_count);
+    write_u32(out, SOURCE_TEXT_LENGTH_FIELD, writer.source_text_length);
+    write_u32(out, ROOT_COUNT_FIELD, root_count);
+
+    // -- Root index array ----------------------------------------------
+    let root_start = layout.root_array_offset as usize;
+    out[root_start..root_start + layout.root_array_size].copy_from_slice(&writer.root_index_buffer);
+
+    // -- String Offsets / Data -----------------------------------------
+    let so_start = layout.string_offsets_offset as usize;
+    out[so_start..so_start + layout.string_offsets_size]
+        .copy_from_slice(&writer.strings.offsets_buffer);
+
+    let sd_start = layout.string_data_offset as usize;
+    out[sd_start..sd_start + layout.string_data_size].copy_from_slice(&writer.strings.data_buffer);
+    // String Data → Extended Data padding: already zero (out was zero-init).
+
+    // -- Extended Data --------------------------------------------------
+    let ed_start = layout.extended_data_offset as usize;
+    out[ed_start..ed_start + layout.extended_data_size].copy_from_slice(&writer.extended.buffer);
+    // Extended Data → Diagnostics padding: already zero.
+
+    // -- Diagnostics: count header + 8-byte entries --------------------
+    let diag_start = layout.diagnostics_offset as usize;
+    out[diag_start..diag_start + 4].copy_from_slice(&diagnostic_count.to_le_bytes());
+    let mut cursor = diag_start + 4;
+    for (root_index, message_index) in &writer.diagnostics {
+        out[cursor..cursor + 4].copy_from_slice(&root_index.to_le_bytes());
+        out[cursor + 4..cursor + 8].copy_from_slice(&message_index.to_le_bytes());
+        cursor += 8;
+    }
+    // Diagnostics → Nodes padding: already zero.
+
+    // -- Nodes ----------------------------------------------------------
+    let nodes_start = layout.nodes_offset as usize;
+    out[nodes_start..nodes_start + layout.nodes_size].copy_from_slice(&writer.nodes_buffer);
+
+    debug_assert_eq!(
+        layout.extended_data_offset & 3,
+        0,
+        "Extended Data must be 4-aligned"
+    );
+    debug_assert_eq!(
+        layout.diagnostics_offset & 3,
+        0,
+        "Diagnostics must be 4-aligned"
+    );
+    debug_assert_eq!(layout.nodes_offset & 3, 0, "Nodes must be 4-aligned");
 }
 
 /// Round `value` up to the next multiple of 4.
@@ -1026,10 +1150,7 @@ mod tests {
         let sf = LazySourceFile::new(&bytes).unwrap();
         // sourceText length is in bytes, not chars; ASCII-only here so they match.
         let expected = "/** @param x */".len() as u32;
-        assert_eq!(
-            read_u32_at(&bytes, header::SOURCE_TEXT_LENGTH_FIELD),
-            expected
-        );
+        assert_eq!(read_u32_at(&bytes, SOURCE_TEXT_LENGTH_FIELD), expected);
         // Spot-check the LazySourceFile path doesn't panic on the same buffer.
         assert_eq!(sf.node_count, 1);
     }

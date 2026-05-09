@@ -45,6 +45,7 @@ use oxc_span::Span;
 
 use crate::decoder::nodes::comment_ast::LazyJsdocBlock;
 use crate::decoder::source_file::LazySourceFile;
+use crate::writer::BinaryWriter;
 
 /// Options controlling parser behaviour.
 ///
@@ -102,14 +103,15 @@ impl Default for ParseOptions {
 
 /// One parser-emitted diagnostic.
 ///
-/// Arena-allocated so it can live alongside the Binary AST bytes without
-/// extra heap pressure. The on-wire representation lives in the
-/// `Diagnostics` section of the Binary AST, not in this struct directly;
-/// this is the convenient Rust-side handle returned by [`parse`].
+/// `message` borrows from the parser's `&'static` diagnostic message table
+/// (see [`parser_diagnostic_message`] / [`type_diagnostic_message`]) so the
+/// struct itself owns no heap or arena data; it is `Copy` and outlives any
+/// arena. The on-wire representation lives in the `Diagnostics` section of
+/// the Binary AST, not in this struct directly.
 #[derive(Debug, Clone, Copy)]
-pub struct Diagnostic<'arena> {
+pub struct Diagnostic {
     /// Human-readable description of the issue.
-    pub message: &'arena str,
+    pub message: &'static str,
     /// Source span the diagnostic refers to, when known.
     pub span: Option<Span>,
 }
@@ -132,7 +134,7 @@ pub struct ParseResult<'arena> {
     /// Header offsets. Constructed once and shared with every lazy node.
     pub source_file: LazySourceFile<'arena>,
     /// Diagnostics produced while parsing.
-    pub diagnostics: ArenaVec<'arena, Diagnostic<'arena>>,
+    pub diagnostics: ArenaVec<'arena, Diagnostic>,
 }
 
 /// Heap-owned counterpart of [`Diagnostic`] returned by [`parse_to_bytes`].
@@ -177,7 +179,63 @@ pub fn parse<'arena>(
     source: &'arena str,
     options: ParseOptions,
 ) -> ParseResult<'arena> {
-    use crate::writer::BinaryWriter;
+    // Use a freshly constructed writer. The shared body skips `reset()` —
+    // the writer is already in its post-`new()` state, and calling
+    // `reset()` here would re-pay the [`COMMON_STRINGS`] prelude memcpy
+    // for no reason.
+    let mut writer = BinaryWriter::new(arena);
+    parse_with_writer(arena, source, options, &mut writer)
+}
+
+/// Like [`parse`] but reuses a caller-supplied [`BinaryWriter`] across
+/// invocations.
+///
+/// The writer is reset back to its post-[`BinaryWriter::new`] state at the
+/// start of every call (preserving its arena-backed buffer capacity), so
+/// hot-loop callers can amortize the per-comment writer construction cost
+/// — most notably the [`crate::writer::string_table::COMMON_STRINGS`]
+/// prelude memcpy that dominates [`parse`]'s per-call self time on small
+/// comments.
+///
+/// The writer must be bound to the same arena that backs `source` and the
+/// returned [`ParseResult`].
+///
+/// Typical usage:
+///
+/// ```ignore
+/// let arena = Allocator::default();
+/// let mut writer = BinaryWriter::new(&arena);
+/// for src in comments {
+///     let result = parse_into(&arena, src, ParseOptions::default(), &mut writer);
+///     // …consume result before the next iteration; the lazy roots / bytes
+///     // borrow from `arena`, not from `writer`, so subsequent `reset()`
+///     // calls inside `parse_into` are safe.
+/// }
+/// ```
+pub fn parse_into<'arena>(
+    arena: &'arena Allocator,
+    source: &'arena str,
+    options: ParseOptions,
+    writer: &mut BinaryWriter<'arena>,
+) -> ParseResult<'arena> {
+    writer.reset();
+    parse_with_writer(arena, source, options, writer)
+}
+
+/// Inner shared body of [`parse`] and [`parse_into`]. Assumes the writer is
+/// in its post-[`BinaryWriter::new`] / post-[`BinaryWriter::reset`] state.
+fn parse_with_writer<'arena>(
+    arena: &'arena Allocator,
+    source: &'arena str,
+    options: ParseOptions,
+    writer: &mut BinaryWriter<'arena>,
+) -> ParseResult<'arena> {
+    if options.compat_mode {
+        writer.set_compat_mode(true);
+    }
+    if options.preserve_whitespace {
+        writer.set_preserve_whitespace_span(true);
+    }
 
     // Parse with relative spans (base_offset = 0). The root index entry's
     // base_offset captures the absolute position, and the lazy decoder's
@@ -189,13 +247,6 @@ pub fn parse<'arena>(
     };
     let parsed = context::parse_block_into_data(arena, source, 0, parser_options);
 
-    let mut writer = BinaryWriter::new(arena);
-    if options.compat_mode {
-        writer.set_compat_mode(true);
-    }
-    if options.preserve_whitespace {
-        writer.set_preserve_whitespace_span(true);
-    }
     // Source text is appended after the writer's pre-interned common
     // strings (`StringTableBuilder::new`); the returned offset is what
     // `push_root` needs to record so the decoder can locate the source
@@ -205,30 +256,30 @@ pub fn parse<'arena>(
     let root_node_index = if parsed.is_failure() {
         0
     } else {
-        context::emit_block(&mut writer, &parsed).unwrap_or(0)
+        context::emit_block(writer, &parsed).unwrap_or(0)
     };
     writer.push_root(root_node_index, source_offset, options.base_offset);
 
-    // Diagnostics: writer interns the message and records (root_index=0).
+    // Single pass over diagnostics: push to writer (interned, on-wire) and
+    // mirror into the Rust-side `arena_diagnostics` vec. `diag.message()`
+    // is a `&'static str` from the parser's static message table, so it
+    // borrows directly into the Diagnostic struct without an `alloc_str`.
+    let mut arena_diagnostics: ArenaVec<'arena, Diagnostic> = ArenaVec::new_in(arena);
     for diag in parsed.diagnostics() {
-        writer.push_diagnostic(0, diag.message());
+        let message = diag.message();
+        writer.push_diagnostic(0, message);
+        arena_diagnostics.push(Diagnostic {
+            message,
+            span: diag.span,
+        });
     }
 
-    let arena_diagnostics: ArenaVec<'arena, Diagnostic<'arena>> = {
-        let mut v = ArenaVec::new_in(arena);
-        for diag in parsed.diagnostics() {
-            v.push(Diagnostic {
-                message: arena.alloc_str(diag.message()),
-                span: diag.span,
-            });
-        }
-        v
-    };
-
-    let bytes_vec = writer.finish();
-    let binary_bytes: &'arena [u8] = arena.alloc_slice_copy(&bytes_vec);
+    // Build the bytes directly into the arena — saves the heap `Vec<u8>`
+    // allocation + the `arena.alloc_slice_copy` that the previous path
+    // paid to satisfy the `&'arena [u8]` lifetime needed by `LazySourceFile`.
+    let binary_bytes: &'arena [u8] = writer.finish_into_arena_reusing();
     let source_file_owned = LazySourceFile::new(binary_bytes)
-        .expect("BinaryWriter::finish() always produces a header-valid buffer");
+        .expect("BinaryWriter::finish_into_arena_reusing() always produces a header-valid buffer");
     let source_file_ref: &'arena LazySourceFile<'arena> = arena.alloc(source_file_owned);
 
     let lazy_root = if root_node_index == 0 {
@@ -316,15 +367,17 @@ pub struct BatchItem<'a> {
     pub base_offset: u32,
 }
 
-/// Arena-backed diagnostic emitted by [`parse_batch`].
+/// Diagnostic emitted by [`parse_batch`].
 ///
 /// Carries the `root_index` so callers can correlate each diagnostic with
 /// the matching `lazy_roots[root_index]` entry without re-decoding the
-/// `Diagnostics` section of the Binary AST.
+/// `Diagnostics` section of the Binary AST. `message` borrows from the
+/// parser's `&'static` message table, so this struct owns no arena data
+/// and is `Copy`.
 #[derive(Debug, Clone, Copy)]
-pub struct BatchDiagnostic<'arena> {
+pub struct BatchDiagnostic {
     /// Human-readable description of the issue.
-    pub message: &'arena str,
+    pub message: &'static str,
     /// Source span the diagnostic refers to, when known.
     pub span: Option<Span>,
     /// Index of the input item this diagnostic belongs to (`0..items.len()`).
@@ -358,7 +411,7 @@ pub struct BatchResult<'arena> {
     /// Decoder handle that wraps `binary_bytes`.
     pub source_file: LazySourceFile<'arena>,
     /// All diagnostics produced during the batch, in input order.
-    pub diagnostics: ArenaVec<'arena, BatchDiagnostic<'arena>>,
+    pub diagnostics: ArenaVec<'arena, BatchDiagnostic>,
 }
 
 /// Result of [`parse_batch_to_bytes`] — heap-owned bytes + diagnostics.
@@ -387,9 +440,35 @@ pub fn parse_batch<'arena>(
     items: &[BatchItem<'_>],
     options: ParseOptions,
 ) -> BatchResult<'arena> {
-    use crate::writer::BinaryWriter;
-
     let mut writer = BinaryWriter::new(arena);
+    parse_batch_with_writer(arena, items, options, &mut writer)
+}
+
+/// Like [`parse_batch`] but reuses a caller-supplied [`BinaryWriter`].
+///
+/// The writer is reset back to its post-[`BinaryWriter::new`] state at the
+/// start of every call so the same writer can drive many batches in a row
+/// without paying the per-call construction cost. See [`parse_into`] for
+/// the per-comment counterpart.
+pub fn parse_batch_into<'arena>(
+    arena: &'arena Allocator,
+    items: &[BatchItem<'_>],
+    options: ParseOptions,
+    writer: &mut BinaryWriter<'arena>,
+) -> BatchResult<'arena> {
+    writer.reset();
+    parse_batch_with_writer(arena, items, options, writer)
+}
+
+/// Inner shared body of [`parse_batch`] and [`parse_batch_into`]. Assumes
+/// the writer is already in its post-[`BinaryWriter::new`] /
+/// post-[`BinaryWriter::reset`] state.
+fn parse_batch_with_writer<'arena>(
+    arena: &'arena Allocator,
+    items: &[BatchItem<'_>],
+    options: ParseOptions,
+    writer: &mut BinaryWriter<'arena>,
+) -> BatchResult<'arena> {
     if options.compat_mode {
         writer.set_compat_mode(true);
     }
@@ -404,7 +483,7 @@ pub fn parse_batch<'arena>(
         ..options
     };
 
-    let mut arena_diagnostics: ArenaVec<'arena, BatchDiagnostic<'arena>> = ArenaVec::new_in(arena);
+    let mut arena_diagnostics: ArenaVec<'arena, BatchDiagnostic> = ArenaVec::new_in(arena);
 
     for (index, item) in items.iter().enumerate() {
         let root_index = index as u32;
@@ -415,24 +494,27 @@ pub fn parse_batch<'arena>(
         let root_node_index = if parsed.is_failure() {
             0
         } else {
-            context::emit_block(&mut writer, &parsed).unwrap_or(0)
+            context::emit_block(writer, &parsed).unwrap_or(0)
         };
         writer.push_root(root_node_index, source_offset_in_data, item.base_offset);
 
         for diag in parsed.diagnostics() {
-            writer.push_diagnostic(root_index, diag.message());
+            let message = diag.message();
+            writer.push_diagnostic(root_index, message);
             arena_diagnostics.push(BatchDiagnostic {
-                message: arena.alloc_str(diag.message()),
+                message,
                 span: diag.span,
                 root_index,
             });
         }
     }
 
-    let bytes_vec = writer.finish();
-    let binary_bytes: &'arena [u8] = arena.alloc_slice_copy(&bytes_vec);
+    // Build the bytes directly into the arena — see [`parse`] for the
+    // rationale behind preferring `finish_into_arena` over `finish` +
+    // `alloc_slice_copy`.
+    let binary_bytes: &'arena [u8] = writer.finish_into_arena_reusing();
     let source_file_owned = LazySourceFile::new(binary_bytes)
-        .expect("BinaryWriter::finish() always produces a header-valid buffer");
+        .expect("BinaryWriter::finish_into_arena_reusing() always produces a header-valid buffer");
     let source_file_ref: &'arena LazySourceFile<'arena> = arena.alloc(source_file_owned);
 
     let mut lazy_roots: ArenaVec<'arena, Option<LazyJsdocBlock<'arena>>> = ArenaVec::new_in(arena);
@@ -531,7 +613,8 @@ mod tests {
     #[test]
     fn diagnostic_is_copy() {
         fn assert_copy<T: Copy>() {}
-        assert_copy::<Diagnostic<'static>>();
+        assert_copy::<Diagnostic>();
+        assert_copy::<BatchDiagnostic>();
     }
 
     #[test]
@@ -910,5 +993,138 @@ mod tests {
             tag.parsed_type().expect("parsedType emitted"),
             LazyTypeNode::Conditional(_)
         ));
+    }
+
+    /// `parse_into` with a freshly-constructed writer must produce the same
+    /// bytes (and the same lazy view) as the consuming `parse` API.
+    #[test]
+    fn parse_into_matches_parse_for_simple_block() {
+        let arena1 = Allocator::default();
+        let arena2 = Allocator::default();
+        let opts = ParseOptions::default();
+        let baseline = parse(&arena1, "/** ok */", opts);
+
+        let mut writer = BinaryWriter::new(&arena2);
+        let recycled = parse_into(&arena2, "/** ok */", opts, &mut writer);
+
+        assert_eq!(baseline.binary_bytes, recycled.binary_bytes);
+        assert_eq!(
+            baseline.lazy_root.unwrap().description(),
+            recycled.lazy_root.unwrap().description()
+        );
+    }
+
+    /// Reusing the writer across multiple `parse_into` calls must produce the
+    /// same bytes as the standalone `parse` path on every iteration. This
+    /// proves `BinaryWriter::reset` correctly truncates per-section buffers
+    /// without leaking previous-call state.
+    #[test]
+    fn parse_into_recycles_writer_without_state_leak() {
+        let inputs: &[&str] = &[
+            "/** first */",
+            "/**\n * @param {string} id - The user ID\n */",
+            "/** third with lots of text describing things */",
+            "/* parse failure (not jsdoc) */",
+            "/**\n * @returns {number} four\n */",
+            "/** fifth */",
+        ];
+
+        let arena_baseline = Allocator::default();
+        let baselines: Vec<Vec<u8>> = inputs
+            .iter()
+            .map(|src| {
+                let r = parse(&arena_baseline, src, ParseOptions::default());
+                r.binary_bytes.to_vec()
+            })
+            .collect();
+
+        let arena_recycle = Allocator::default();
+        let mut writer = BinaryWriter::new(&arena_recycle);
+        for (src, expected) in inputs.iter().zip(baselines.iter()) {
+            let r = parse_into(&arena_recycle, src, ParseOptions::default(), &mut writer);
+            assert_eq!(
+                r.binary_bytes, expected,
+                "recycled writer produced different bytes for `{src}`"
+            );
+        }
+    }
+
+    /// `parse_batch_into` with a fresh writer must match `parse_batch`.
+    #[test]
+    fn parse_batch_into_matches_parse_batch() {
+        let items = [
+            BatchItem {
+                source_text: "/** alpha */",
+                base_offset: 10,
+            },
+            BatchItem {
+                source_text: "/**\n * @param {string} x - one\n */",
+                base_offset: 200,
+            },
+            BatchItem {
+                source_text: "/* parse failure */",
+                base_offset: 500,
+            },
+        ];
+
+        let arena1 = Allocator::default();
+        let baseline = parse_batch(&arena1, &items, ParseOptions::default());
+
+        let arena2 = Allocator::default();
+        let mut writer = BinaryWriter::new(&arena2);
+        let recycled = parse_batch_into(&arena2, &items, ParseOptions::default(), &mut writer);
+
+        assert_eq!(baseline.binary_bytes, recycled.binary_bytes);
+    }
+
+    /// Reusing one writer across several `parse_batch_into` calls — covers
+    /// the multi-batch case for [`BinaryWriter::reset`].
+    #[test]
+    fn parse_batch_into_recycles_writer_across_batches() {
+        let arena_baseline = Allocator::default();
+        let arena_recycle = Allocator::default();
+        let mut writer = BinaryWriter::new(&arena_recycle);
+
+        for round in 0..3 {
+            let items = [
+                BatchItem {
+                    source_text: "/** round */",
+                    base_offset: round * 100,
+                },
+                BatchItem {
+                    source_text: "/** @param {number} n */",
+                    base_offset: round * 100 + 50,
+                },
+            ];
+
+            let baseline = parse_batch(&arena_baseline, &items, ParseOptions::default());
+            let recycled =
+                parse_batch_into(&arena_recycle, &items, ParseOptions::default(), &mut writer);
+
+            assert_eq!(
+                baseline.binary_bytes, recycled.binary_bytes,
+                "round {round}: bytes diverged"
+            );
+        }
+    }
+
+    /// A writer recycled after a compat-mode parse must clear the compat bit
+    /// when the subsequent caller doesn't ask for it. Regression guard for
+    /// `BinaryWriter::reset` clearing `header.flags`.
+    #[test]
+    fn parse_into_clears_compat_mode_between_calls() {
+        let arena = Allocator::default();
+        let mut writer = BinaryWriter::new(&arena);
+
+        let mut compat_opts = ParseOptions::default();
+        compat_opts.compat_mode = true;
+        let compat = parse_into(&arena, "/** ok */", compat_opts, &mut writer);
+        assert!(compat.source_file.compat_mode);
+
+        let plain = parse_into(&arena, "/** ok */", ParseOptions::default(), &mut writer);
+        assert!(
+            !plain.source_file.compat_mode,
+            "writer.reset() must clear the compat_mode flag"
+        );
     }
 }
