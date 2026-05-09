@@ -227,13 +227,19 @@ Because of this, `eslint-ox-jsdoc-batch` should be interpreted as the deployed b
 
 Parser-only measurements are kept on a separate chart from the linter measurements. Existing scripts under `tasks/benchmark` are reused here.
 
-| Pattern | Purpose |
-| --- | --- |
-| `@es-joy/jsdoccomment parseComment loop` | Current JS parser baseline |
-| `@ox-jsdoc/jsdoccomment parseComment loop` | Cost of binary-backed single-comment parse |
-| `@ox-jsdoc/jsdoccomment parseCommentBatch` | Cost of batch parse + tuned `jsdoccomment` input normalisation |
-| `ox-jsdoc-binary parseBatch` | Lower bound without jsdoccomment shape normalisation |
-| `oxc_jsdoc JSDoc::new(...).tags()` | Rust-direct reference for the parser used by Oxlint's native JSDoc |
+| Pattern | Layer | Purpose |
+| --- | --- | --- |
+| `@es-joy/jsdoccomment parseComment loop` | JS | Current JS parser baseline |
+| `@ox-jsdoc/jsdoccomment parseComment loop` | NAPI / WASM | Cost of binary-backed single-comment parse |
+| `@ox-jsdoc/jsdoccomment parseCommentBatch` | NAPI / WASM | Cost of batch parse + tuned `jsdoccomment` input normalisation |
+| `ox-jsdoc-binary parseBatch` | NAPI / WASM | Lower bound without jsdoccomment shape normalisation |
+| `ox_jsdoc_binary::parse` (loop) / `parse_into` (loop) | Rust-direct | ox-jsdoc-binary per-comment entry points without NAPI/WASM crossing — isolates writer-reuse savings |
+| `ox_jsdoc_binary::parse_batch` / `parse_batch_into` | Rust-direct | ox-jsdoc-binary batch entry points without NAPI/WASM crossing — Rust-direct lower bound for the binary AST emit path |
+| `ox_jsdoc_binary::parse_block_into_data` (phase 1 only) | Rust-direct | Structural parse only (no binary emission) — theoretical lower bound for the structural pass |
+| `ox_jsdoc::parse_comment` (typed AST loop) | Rust-direct | Typed AST entry point — pays no binary serialization cost; the gap against `parse_into` is the binary-emit overhead |
+| `oxc_jsdoc JSDoc::new(...).tags()` | Rust-direct | Rust-direct reference for the parser used by Oxlint's native JSDoc |
+
+The Rust-direct rows are mandatory: omitting them hides the writer-reuse / batch-amortization / binary-emit costs and makes the NAPI/WASM "crossing" overhead unattributable. Always populate these rows together with the JS / NAPI / WASM rows so the per-comment numbers in the cross-comparison table are decomposable.
 
 These measurements isolate the following costs:
 
@@ -249,7 +255,9 @@ Mapping to existing scripts:
 | `tasks/benchmark/scripts/parse-batch-vs-loop.mjs` | Foundation for comment extraction from `typescript-checker.ts` and `parseBatch` vs loop |
 | `tasks/benchmark/scripts/parsers-comparison.mjs` | Reference values for raw parser comparison |
 | `tasks/benchmark/scripts/lib/measure.mjs` | Robust aggregation helper for parser-only |
-| `tasks/benchmark/benches/oxc_jsdoc.rs` | Rust criterion reference for `oxc_jsdoc` |
+| `crates/ox_jsdoc_binary/benches/parser.rs` | Rust criterion bench for ox-jsdoc-binary entry points (`parse` / `parse_into` / `parse_batch` / `parse_batch_into`) + internal phase breakdown + same-run `oxc_jsdoc` reference |
+| `tasks/benchmark/benches/parser.rs` | Rust criterion bench for the typed AST entry point `ox_jsdoc::parse_comment` |
+| `tasks/benchmark/benches/oxc_jsdoc.rs` | Standalone Rust criterion reference for `oxc_jsdoc` |
 
 The linter benchmark uses `hyperfine` (shell driver), the parser-only benchmark uses `mitata` / `measure.mjs` — the roles are split.
 
@@ -265,7 +273,7 @@ pnpm --filter @ox-jsdoc/benchmark benchmark:parse-batch
 
 | Setting | Default | Meaning |
 | --- | --: | --- |
-| `rounds` | 5 | Number of outer measurements per benchmark case |
+| `rounds` | 10 | Number of outer measurements per benchmark case |
 | `discardFirst` | `true` | Drop the first round as cold-start / JIT / inline-cache warmup |
 | `trim` | 1 | After discarding the first round, drop the fastest and slowest usable round |
 | `minSamples` | 15 | `mitata.measure()` minimum sample count per round |
@@ -273,19 +281,36 @@ pnpm --filter @ox-jsdoc/benchmark benchmark:parse-batch
 | `warmupSamples` | 5 | `mitata.measure()` warmup sample count per round |
 | `gc` | `true` | Ask mitata to call `globalThis.gc` when available |
 
-The reported `p50` is therefore not a single `mitata` run. Each round records `stats.p50`; the first round is discarded, the remaining round p50 values are sorted, the fastest and slowest are trimmed, and the mean of the remaining round p50 values is reported as `p50`. With the defaults this means 5 raw rounds → 4 usable rounds → trim best/worst → average the middle 2 round p50s.
+The reported `p50` is therefore not a single `mitata` run. Each round records `stats.p50`; the first round is discarded, the remaining round p50 values are sorted, the fastest and slowest are trimmed, and the mean of the remaining round p50 values is reported as `p50`. With the defaults this means 10 raw rounds → 9 usable rounds → trim best/worst → average the middle 7 round p50s.
 
 `p50_min`, `p50_max`, and `spread_pct` are computed from the usable rounds after the first-round discard. `spread_pct` is the best-to-worst round spread relative to the reported `p50`; it is a stability signal, not a confidence interval or hyperfine-style standard deviation.
 
 The workload setup is outside the timed closure. For `parse-batch-vs-loop.mjs`, comments are extracted once from `fixtures/perf/source/typescript-checker.ts`, the first 100 comments and the full-file comment list are prepared up front, and `parseBatch` item arrays are pre-built before measurement. One measured sample is the whole scenario (for example "parse these 100 comments" or "parse the full file"), and the per-comment value printed by the script is derived after measurement.
 
-`oxc_jsdoc` has no Node binding in this workspace, so it is not measured inside the `mitata` table. Treat it as a Rust-direct criterion reference and keep it on a separate chart from JS binding measurements. Run:
+### Rust-direct Measurement Method
+
+The Rust-direct rows above (ox-jsdoc-binary entry points, ox-jsdoc typed AST, oxc_jsdoc) are taken via `cargo bench` (criterion). They share the same fixture as the `mitata` runs (`fixtures/perf/source/typescript-checker.ts`, 226 JSDoc comments) so the per-comment numbers are directly comparable to the NAPI / WASM rows.
+
+Run all three:
 
 ```sh
+# 1. ox-jsdoc-binary entry points + internal phase breakdown + same-run oxc_jsdoc reference
+cargo bench --bench parser -p ox_jsdoc_binary
+
+# 2. ox-jsdoc typed AST (ox_jsdoc::parse_comment)
+cargo bench --bench parser -p ox_jsdoc_benchmark -- "source/typescript-checker"
+
+# 3. Standalone oxc_jsdoc reference (kept for cross-checking against bench (1))
 cargo bench --bench oxc_jsdoc -p ox_jsdoc_benchmark -- "source/typescript-checker"
 ```
 
-The `oxc_jsdoc` bench strips `/**` / `*/`, constructs `JSDoc::new(inner, span)`, and calls `.tags()` so the lazy parse is included.
+What each bench covers:
+
+- `crates/ox_jsdoc_binary/benches/parser.rs` exercises the public Rust entry points (`parse` / `parse_into` / `parse_batch` / `parse_batch_into` / `parse_to_bytes` / `parse_batch_to_bytes`) plus the internal phase breakdown (`parse_block_into_data` only, `parse + emit` no finish) and includes a same-run `oxc_jsdoc` row so machine-state drift between (1) and (3) can be spotted.
+- `tasks/benchmark/benches/parser.rs` exercises `ox_jsdoc::parse_comment` against every fixture under `fixtures/perf/`. Filter with `-- "source/typescript-checker"` to keep the per-comment numbers comparable to the `mitata` table.
+- `tasks/benchmark/benches/oxc_jsdoc.rs` is the standalone reference: it strips `/**` / `*/`, constructs `JSDoc::new(inner, span)`, and calls `.tags()` so the lazy parse is included. Keep it as an independent run so a regression in the binary AST bench harness does not silently move the reference value.
+
+When reporting Rust-direct numbers, divide criterion's reported time by the comment count (226 for `typescript-checker.ts`) to get the per-comment value, and place those rows in the same cross-comparison table as the NAPI / WASM rows so the binding overhead is decomposable: NAPI batch − Rust-direct `parse_batch_into` ≈ NAPI marshalling + decoder shape cost; `parse_into` − typed AST `parse_comment` ≈ binary emit cost; `parse` − `parse_into` ≈ writer construction cost.
 
 ## Notes on Result Interpretation
 

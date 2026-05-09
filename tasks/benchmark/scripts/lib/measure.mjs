@@ -53,7 +53,7 @@ const NS_PER_MS = 1_000_000
  */
 export async function measureRobust(fn, options = {}) {
   const {
-    rounds = 5,
+    rounds = 10,
     trim = 1,
     discardFirst = true,
     minSamples = 15,
