@@ -6,7 +6,9 @@ High-performance JSDoc parser that returns a lazy Binary AST decoder.
 
 For a plain JSON AST that's eagerly materialized in JS, use the sibling package [`ox-jsdoc`](../ox-jsdoc/) instead.
 
-> [!WARNING] This package is planned to be **discontinued** in the near future. The Binary AST decoder implementation that lives here will be merged into [`ox-jsdoc`](../ox-jsdoc/), which will be rebuilt on top of it. Once that migration lands, `ox-jsdoc-binary` will stop receiving updates and is expected to be deprecated. New code should plan to depend on `ox-jsdoc` directly; existing users should pin a version and watch the release notes for the migration path.
+<!-- prettier-ignore -->
+> [!WARNING]
+> This package is planned to be **discontinued** in the near future. The Binary AST decoder implementation that lives here will be merged into [`ox-jsdoc`](../ox-jsdoc/), which will be rebuilt on top of it. Once that migration lands, `ox-jsdoc-binary` will stop receiving updates and is expected to be deprecated. New code should plan to depend on `ox-jsdoc` directly; existing users should pin a version and watch the release notes for the migration path.
 >
 > Until then, `ox-jsdoc-binary` is kept published primarily as a **performance reference** — a way to benchmark the Binary AST / lazy decoder path side-by-side against the plain JSON AST path exposed by `ox-jsdoc`, and to validate the perf gains before they are absorbed into `ox-jsdoc` itself.
 
@@ -27,7 +29,9 @@ Pre-built binaries are published for:
 - `x86_64-unknown-linux-gnu`
 - `x86_64-pc-windows-msvc`
 
-> [!NOTE] Node.js `^20.19.0 || >=22.12.0` is required.
+<!-- prettier-ignore -->
+> [!NOTE]
+> Node.js `^20.19.0 || >=22.12.0` is required.
 
 ## Usage
 
@@ -60,7 +64,9 @@ interface ParseResult {
 }
 ```
 
-> [!IMPORTANT] Hold onto `sourceFile` for as long as you read from `ast`. The `ast` getters lazily read from `sourceFile.view`, so once `sourceFile` is garbage collected the underlying buffer goes too.
+<!-- prettier-ignore -->
+> [!IMPORTANT]
+>  Hold onto `sourceFile` for as long as you read from `ast`. The `ast` getters lazily read from `sourceFile.view`, so once `sourceFile` is garbage collected the underlying buffer goes too.
 
 ### `parseBatch(items, options?)`
 

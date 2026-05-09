@@ -6,7 +6,9 @@ High-performance JSDoc parser powered by Rust and NAPI.
 
 For lazy / zero-copy access (lower allocation, batch parsing, multi-comment amortization), see the sibling package [`ox-jsdoc-binary`](../ox-jsdoc-binary/) which exposes the same Rust core through a Binary AST decoder.
 
-> [!WARNING] In the near future, this package will be rebuilt on top of [`ox-jsdoc-binary`](../ox-jsdoc-binary/), which is a **breaking change**. Specifically:
+<!-- prettier-ignore -->
+> [!WARNING]
+> In the near future, this package will be rebuilt on top of [`ox-jsdoc-binary`](../ox-jsdoc-binary/), which is a **breaking change**. Specifically:
 >
 > - `parse` will return a `sourceFile` handle in addition to `ast` / `diagnostics`, and the `ast` will become a lazy decoder node (`RemoteJsdocBlock`) rather than a plain JSON object — field access like `ast.tags[0].tag` will become `ast.tags[0].tag.value`.
 > - Plain-JSON-only options such as `includePositions` and `spacing` may be removed or replaced.
@@ -31,7 +33,9 @@ Pre-built binaries are published for:
 - `x86_64-unknown-linux-gnu`
 - `x86_64-pc-windows-msvc`
 
-> [!NOTE] Node.js `^20.19.0 || >=22.12.0` is required.
+<!-- prettier-ignore -->
+> [!NOTE]
+> Node.js `^20.19.0 || >=22.12.0` is required.
 
 ## Usage
 
@@ -135,7 +139,9 @@ pnpm build-dev   # debug build (faster compile, slower runtime)
 pnpm test        # run vitest tests
 ```
 
-> [!NOTE] The compiled native module is dropped into `src-js/<binary>.node` and is not checked in.
+<!-- prettier-ignore -->
+> [!NOTE]
+> The compiled native module is dropped into `src-js/<binary>.node` and is not checked in.
 
 ## License
 
