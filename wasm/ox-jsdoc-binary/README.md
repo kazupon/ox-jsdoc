@@ -8,7 +8,9 @@ It exposes the same API as the native [`ox-jsdoc-binary`](../../napi/ox-jsdoc-bi
 
 For a plain JSON AST that's eagerly materialized in JS, use the sibling package [`@ox-jsdoc/wasm`](../ox-jsdoc/) instead.
 
-> [!WARNING] This package is planned to be **discontinued** in the near future. The Binary AST decoder implementation that lives here will be merged into [`ox-jsdoc`](../ox-jsdoc/), which will be rebuilt on top of it. Once that migration lands, `ox-jsdoc-binary` will stop receiving updates and is expected to be deprecated. New code should plan to depend on `ox-jsdoc` directly; existing users should pin a version and watch the release notes for the migration path.
+<!-- prettier-ignore -->
+> [!WARNING]
+> This package is planned to be **discontinued** in the near future. The Binary AST decoder implementation that lives here will be merged into [`ox-jsdoc`](../ox-jsdoc/), which will be rebuilt on top of it. Once that migration lands, `ox-jsdoc-binary` will stop receiving updates and is expected to be deprecated. New code should plan to depend on `ox-jsdoc` directly; existing users should pin a version and watch the release notes for the migration path.
 >
 > Until then, `ox-jsdoc-binary` is kept published primarily as a **performance reference** — a way to benchmark the Binary AST / lazy decoder path side-by-side against the plain JSON AST path exposed by `ox-jsdoc`, and to validate the perf gains before they are absorbed into `ox-jsdoc` itself.
 
@@ -65,8 +67,8 @@ interface ParseResult {
 }
 ```
 
-> **Important**:
->
+<!-- prettier-ignore -->
+> [!Important]
 > 1. Hold onto `sourceFile` for as long as you read from `ast`. The `ast` getters lazily read from `sourceFile.view`, so once `sourceFile` is garbage collected the underlying buffer goes too.
 > 2. Call `free()` once you no longer need the AST. WASM linear memory is not garbage collected on the JS side, so leaving buffers around will pin memory that can only be reclaimed when the whole WASM module is discarded.
 

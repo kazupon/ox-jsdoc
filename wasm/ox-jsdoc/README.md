@@ -6,7 +6,9 @@ High-performance JSDoc parser for the browser, powered by WebAssembly.
 
 For lazy / zero-copy access (lower allocation, batch parsing, multi-comment amortization), see the sibling package [`@ox-jsdoc/wasm-binary`](../ox-jsdoc-binary/) which exposes the same Rust core through a Binary AST decoder.
 
-> [!WARNING] In the near future, this package will be rebuilt on top of [`ox-jsdoc-binary`](../ox-jsdoc-binary/), which is a **breaking change**. Specifically:
+<!-- prettier-ignore -->
+> [!WARNING]
+> In the near future, this package will be rebuilt on top of [`ox-jsdoc-binary`](../ox-jsdoc-binary/), which is a **breaking change**. Specifically:
 >
 > - `parse` will return a `sourceFile` handle in addition to `ast` / `diagnostics`, and the `ast` will become a lazy decoder node (`RemoteJsdocBlock`) rather than a plain JSON object — field access like `ast.tags[0].tag` will become `ast.tags[0].tag.value`.
 > - Plain-JSON-only options such as `includePositions` and `spacing` may be removed or replaced.
