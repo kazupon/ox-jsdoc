@@ -1,11 +1,18 @@
 [package]
 name = "ox_jsdoc"
-version = "0.0.0"
+version = "0.0.13"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-publish = false
-description = "Binary AST format and lazy decoder for ox_jsdoc (parser-integrated, approach c-1)"
+authors = ["kazuya kawaguchi <kawakazu80@gmail.com>"]
+description = "High-performance JSDoc parser with Binary AST format and lazy decoder, inspired by oxc"
+documentation = "https://docs.rs/ox_jsdoc"
+repository = "https://github.com/kazupon/ox-jsdoc"
+homepage = "https://github.com/kazupon/ox-jsdoc"
+keywords = ["jsdoc", "parser", "binary-ast", "ast", "rust"]
+categories = ["parser-implementations"]
+readme = "README.md"
+exclude = ["benches/", "examples/", "tests/"]
 
 [lints.rust]
 missing_docs = "warn"
