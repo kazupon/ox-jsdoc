@@ -51,6 +51,7 @@
     "@es-joy/jsdoccomment": "^0.50.1",
     "@napi-rs/cli": "^3.6.1",
     "@types/node": "catalog:",
+    "jsdoc-type-pratt-parser": "^4.1.0",
     "vite-plus": "catalog:"
   },
   "napi": {

@@ -14,7 +14,9 @@ use napi::bindgen_prelude::{Uint8Array, Uint32Array};
 use napi_derive::napi;
 
 use ox_jsdoc_binary::parser::{
-    BatchItem, ParseOptions, parse_batch_to_bytes, parse_to_bytes, type_data::ParseMode,
+    BatchItem, ParseOptions, parse_batch_to_bytes, parse_to_bytes,
+    parse_type_check as core_parse_type_check,
+    parse_type_expression as core_parse_type_expression, type_data::ParseMode,
 };
 
 #[napi(object)]
@@ -199,6 +201,30 @@ pub fn parse_jsdoc_batch_raw(
     JsBatchParseResult {
         buffer: Uint8Array::from(result.binary_bytes),
         diagnostics,
+    }
+}
+
+/// Parse a standalone type expression (no comment parsing overhead).
+/// Returns the stringified result, or null if parsing fails.
+#[napi]
+pub fn parse_type_expression(type_text: String, mode: Option<String>) -> Option<String> {
+    let parse_mode = parse_mode_from_string(mode.as_deref());
+    core_parse_type_expression(&type_text, parse_mode)
+}
+
+/// Parse a standalone type expression and return whether it succeeded.
+/// No stringify overhead — used for benchmarks.
+#[napi]
+pub fn parse_type_check(type_text: String, mode: Option<String>) -> bool {
+    let parse_mode = parse_mode_from_string(mode.as_deref());
+    core_parse_type_check(&type_text, parse_mode)
+}
+
+fn parse_mode_from_string(mode: Option<&str>) -> ParseMode {
+    match mode {
+        Some("typescript") => ParseMode::Typescript,
+        Some("closure") => ParseMode::Closure,
+        _ => ParseMode::Jsdoc,
     }
 }
 

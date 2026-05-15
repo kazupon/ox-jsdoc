@@ -9,7 +9,9 @@ import { RemoteSourceFile } from '@ox-jsdoc/decoder'
 
 import init, {
   parse_jsdoc as parseJsdocWasm,
-  parse_jsdoc_batch_raw as parseJsdocBatchRawWasm
+  parse_jsdoc_batch_raw as parseJsdocBatchRawWasm,
+  parse_type_check as parseTypeCheckWasm,
+  parse_type_expression as parseTypeExpressionWasm
 } from '../pkg/ox_jsdoc_binary_wasm.js'
 
 export { jsdocVisitorKeys } from '@ox-jsdoc/decoder'
@@ -269,4 +271,32 @@ export function parseBatch(items, options) {
     sourceFile,
     free: () => handle.free()
   }
+}
+
+/**
+ * Parse a standalone type expression (no comment parsing overhead).
+ *
+ * @param {string} typeText
+ * @param {'jsdoc' | 'closure' | 'typescript'} [mode]
+ * @returns {string | null}
+ */
+export function parseType(typeText, mode) {
+  if (wasmMemory === null) {
+    throw new Error('Call initWasm() before parseType()')
+  }
+  return parseTypeExpressionWasm(typeText, mode ?? 'jsdoc') ?? null
+}
+
+/**
+ * Parse a type expression and return whether it succeeded (no stringify overhead).
+ *
+ * @param {string} typeText
+ * @param {'jsdoc' | 'closure' | 'typescript'} [mode]
+ * @returns {boolean}
+ */
+export function parseTypeCheck(typeText, mode) {
+  if (wasmMemory === null) {
+    throw new Error('Call initWasm() before parseTypeCheck()')
+  }
+  return parseTypeCheckWasm(typeText, mode ?? 'jsdoc')
 }

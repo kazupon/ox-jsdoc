@@ -9,7 +9,9 @@ import { RemoteSourceFile } from '@ox-jsdoc/decoder'
 
 import {
   parseJsdoc as parseJsdocBinding,
-  parseJsdocBatchRaw as parseJsdocBatchRawBinding
+  parseJsdocBatchRaw as parseJsdocBatchRawBinding,
+  parseTypeCheck as parseTypeCheckBinding,
+  parseTypeExpression as parseTypeExpressionBinding
 } from './bindings.js'
 
 export { jsdocVisitorKeys } from '@ox-jsdoc/decoder'
@@ -253,4 +255,26 @@ export function parseBatch(items, options) {
     diagnostics: result.diagnostics,
     sourceFile
   }
+}
+
+/**
+ * Parse a standalone type expression (no comment parsing overhead).
+ *
+ * @param {string} typeText
+ * @param {'jsdoc' | 'closure' | 'typescript'} [mode]
+ * @returns {string | null}
+ */
+export function parseType(typeText, mode) {
+  return parseTypeExpressionBinding(typeText, mode ?? 'jsdoc') ?? null
+}
+
+/**
+ * Parse a type expression and return whether it succeeded (no stringify overhead).
+ *
+ * @param {string} typeText
+ * @param {'jsdoc' | 'closure' | 'typescript'} [mode]
+ * @returns {boolean}
+ */
+export function parseTypeCheck(typeText, mode) {
+  return parseTypeCheckBinding(typeText, mode ?? 'jsdoc')
 }

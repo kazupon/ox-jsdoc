@@ -30,6 +30,7 @@ pub mod token;
 pub mod type_data;
 pub mod type_emit;
 pub mod type_parse;
+pub mod type_stringify;
 
 pub use checkpoint::{Checkpoint, FenceState, QuoteKind};
 pub use context::{
@@ -528,6 +529,35 @@ fn parse_batch_with_writer<'arena>(
         source_file: *source_file_ref,
         diagnostics: arena_diagnostics,
     }
+}
+
+/// Parse a standalone JSDoc type expression and return its stringified form.
+///
+/// Mirrors `ox_jsdoc::parse_type` + `stringify_type` on the typed AST side.
+/// The Pratt parser is the same one used internally by [`parse`] when
+/// [`ParseOptions::parse_types`] is `true`, but this entry point skips the
+/// surrounding comment parse and skips Binary AST emission entirely. Returns
+/// `None` when the input is not a well-formed type expression.
+#[must_use]
+pub fn parse_type_expression(
+    type_text: &str,
+    mode: type_data::ParseMode,
+) -> Option<String> {
+    let arena = Allocator::default();
+    let mut ctx = context::ParserContext::new(&arena, type_text, 0, ParseOptions::default());
+    let node = ctx.parse_type_expression(type_text, 0, mode)?;
+    Some(type_stringify::stringify_type_data(&node))
+}
+
+/// Parse a standalone JSDoc type expression and return whether it succeeded.
+///
+/// No stringify overhead — used by benchmarks and by callers that only need
+/// to know whether the input is a syntactically valid type expression.
+#[must_use]
+pub fn parse_type_check(type_text: &str, mode: type_data::ParseMode) -> bool {
+    let arena = Allocator::default();
+    let mut ctx = context::ParserContext::new(&arena, type_text, 0, ParseOptions::default());
+    ctx.parse_type_expression(type_text, 0, mode).is_some()
 }
 
 /// Bytes-only sibling of [`parse_batch`].

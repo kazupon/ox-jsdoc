@@ -107,6 +107,21 @@ export function parseBatch(
 export function parseBatch(items: BatchItem[], options?: BatchParseOptions): BatchParseResult
 
 /**
+ * Parse a standalone type expression (no comment parsing overhead).
+ * Returns the stringified type or `null` if parsing fails.
+ */
+export function parseType(
+  typeText: string,
+  mode?: 'jsdoc' | 'closure' | 'typescript'
+): string | null
+
+/**
+ * Parse a type expression and return whether it succeeded.
+ * No stringify overhead — used for benchmarks.
+ */
+export function parseTypeCheck(typeText: string, mode?: 'jsdoc' | 'closure' | 'typescript'): boolean
+
+/**
  * Visitor keys for every Remote* node kind. Re-exported from
  * `@ox-jsdoc/decoder` for ergonomics (single import for the whole binding).
  */

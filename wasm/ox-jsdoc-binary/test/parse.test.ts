@@ -8,7 +8,7 @@ import type {
 } from '@ox-jsdoc/decoder'
 import { beforeAll, describe, expect, it } from 'vite-plus/test'
 
-import { initWasm, parse } from '../src-js/index.js'
+import { initWasm, parse, parseType, parseTypeCheck } from '../src-js/index.js'
 
 beforeAll(async () => {
   await initWasm()
@@ -105,6 +105,45 @@ describe('parse (binary WASM binding)', () => {
       expect((result.ast as RemoteJsdocBlock).range).toEqual([100, 109])
     } finally {
       result.free()
+    }
+  })
+})
+
+describe('parseType / parseTypeCheck (binary WASM binding)', () => {
+  it('parseType returns the stringified type for a valid input', () => {
+    expect(parseType('string', 'jsdoc')).toBe('string')
+    expect(parseType('string | number', 'typescript')).toBe('string | number')
+    expect(parseType('Array.<string>', 'jsdoc')).toBe('Array.<string>')
+  })
+
+  it('parseType returns null for invalid input', () => {
+    expect(parseType('@', 'jsdoc')).toBeNull()
+  })
+
+  it('parseTypeCheck returns true for valid types', () => {
+    expect(parseTypeCheck('string', 'jsdoc')).toBe(true)
+    expect(parseTypeCheck('string | number', 'typescript')).toBe(true)
+    expect(parseTypeCheck('Array<T>', 'typescript')).toBe(true)
+  })
+
+  it('parseTypeCheck returns false for invalid input', () => {
+    expect(parseTypeCheck('@', 'jsdoc')).toBe(false)
+  })
+
+  it('defaults to jsdoc mode when mode is omitted', () => {
+    expect(parseTypeCheck('Array.<string>')).toBe(true)
+  })
+
+  it('roundtrip: parseType is idempotent', () => {
+    const inputs: Array<{ source: string; mode: 'jsdoc' | 'closure' | 'typescript' }> = [
+      { source: 'string | number', mode: 'typescript' },
+      { source: 'Array<string>', mode: 'typescript' },
+      { source: 'function(string): number', mode: 'jsdoc' }
+    ]
+    for (const { source, mode } of inputs) {
+      const first = parseType(source, mode)
+      expect(first, `${source} failed first parse`).not.toBeNull()
+      expect(parseType(first!, mode)).toBe(first)
     }
   })
 })

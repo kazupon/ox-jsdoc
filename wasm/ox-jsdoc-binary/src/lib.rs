@@ -15,7 +15,9 @@
 use wasm_bindgen::prelude::*;
 
 use ox_jsdoc_binary::parser::{
-    BatchItem, ParseOptions, parse_batch_to_bytes, parse_to_bytes, type_data::ParseMode,
+    BatchItem, ParseOptions, parse_batch_to_bytes, parse_to_bytes,
+    parse_type_check as core_parse_type_check,
+    parse_type_expression as core_parse_type_expression, type_data::ParseMode,
 };
 
 /// Owned binary-AST result. JS reads `buffer_ptr` + `buffer_len` and views
@@ -62,6 +64,30 @@ impl ParseResult {
                 obj.into()
             })
             .collect()
+    }
+}
+
+/// Parse a standalone type expression.
+/// Returns the stringified type or null if parsing fails.
+#[wasm_bindgen]
+pub fn parse_type_expression(type_text: &str, mode: Option<String>) -> Option<String> {
+    let parse_mode = parse_mode_from_string(mode.as_deref());
+    core_parse_type_expression(type_text, parse_mode)
+}
+
+/// Parse a type expression and return whether it succeeded.
+/// No stringify overhead — used for benchmarks.
+#[wasm_bindgen]
+pub fn parse_type_check(type_text: &str, mode: Option<String>) -> bool {
+    let parse_mode = parse_mode_from_string(mode.as_deref());
+    core_parse_type_check(type_text, parse_mode)
+}
+
+fn parse_mode_from_string(mode: Option<&str>) -> ParseMode {
+    match mode {
+        Some("typescript") => ParseMode::Typescript,
+        Some("closure") => ParseMode::Closure,
+        _ => ParseMode::Jsdoc,
     }
 }
 
