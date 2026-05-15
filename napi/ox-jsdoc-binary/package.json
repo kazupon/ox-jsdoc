@@ -1,0 +1,52 @@
+{
+  "name": "ox-jsdoc-binary",
+  "version": "0.0.13",
+  "description": "Deprecated alias for ox-jsdoc. Re-exports the canonical Binary AST package; install `ox-jsdoc` instead.",
+  "keywords": [
+    "binary-ast",
+    "jsdoc",
+    "napi",
+    "parser",
+    "rust"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "kazuya kawaguchi",
+    "email": "kawakazu80@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kazupon/ox-jsdoc",
+    "directory": "napi/ox-jsdoc-binary"
+  },
+  "funding": "https://github.com/sponsors/kazupon",
+  "files": [
+    "src-js/index.js",
+    "src-js/index.d.ts"
+  ],
+  "type": "module",
+  "main": "src-js/index.js",
+  "types": "src-js/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src-js/index.d.ts",
+      "default": "./src-js/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "test": "vp test run"
+  },
+  "dependencies": {
+    "ox-jsdoc": "workspace:*"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

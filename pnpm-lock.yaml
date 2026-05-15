@@ -68,6 +68,16 @@ importers:
         specifier: 'catalog:'
         version: 0.1.18(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)
 
+  napi/ox-jsdoc-binary:
+    dependencies:
+      ox-jsdoc:
+        specifier: workspace:*
+        version: link:../ox-jsdoc
+    devDependencies:
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4(vitest@4.1.4))(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)
+
   napi/ox-jsdoc-origin:
     devDependencies:
       '@napi-rs/cli':
@@ -391,6 +401,16 @@ importers:
       wasm-pack:
         specifier: ^0.14.0
         version: 0.14.0
+
+  wasm/ox-jsdoc-binary:
+    dependencies:
+      '@ox-jsdoc/wasm':
+        specifier: workspace:*
+        version: link:../ox-jsdoc
+    devDependencies:
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4(vitest@4.1.4))(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)
 
   wasm/ox-jsdoc-origin:
     devDependencies:

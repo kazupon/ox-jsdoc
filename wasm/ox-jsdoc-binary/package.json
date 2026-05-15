@@ -1,0 +1,48 @@
+{
+  "name": "@ox-jsdoc/wasm-binary",
+  "version": "0.0.13",
+  "description": "Deprecated alias for @ox-jsdoc/wasm. Re-exports the canonical Binary AST WASM package; install `@ox-jsdoc/wasm` instead.",
+  "keywords": [
+    "binary-ast",
+    "jsdoc",
+    "parser",
+    "wasm",
+    "webassembly"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "kazuya kawaguchi",
+    "email": "kawakazu80@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kazupon/ox-jsdoc",
+    "directory": "wasm/ox-jsdoc-binary"
+  },
+  "funding": "https://github.com/sponsors/kazupon",
+  "files": [
+    "src-js/index.js",
+    "src-js/index.d.ts"
+  ],
+  "type": "module",
+  "main": "src-js/index.js",
+  "types": "src-js/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src-js/index.d.ts",
+      "default": "./src-js/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "vp test run"
+  },
+  "dependencies": {
+    "@ox-jsdoc/wasm": "workspace:*"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  }
+}
