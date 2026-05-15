@@ -74,9 +74,12 @@ importers:
         specifier: workspace:*
         version: link:../ox-jsdoc
     devDependencies:
+      '@ox-jsdoc/decoder':
+        specifier: workspace:*
+        version: link:../../packages/decoder
       vite-plus:
         specifier: 'catalog:'
-        version: 0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4(vitest@4.1.4))(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)
+        version: 0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)
 
   napi/ox-jsdoc-origin:
     devDependencies:
@@ -88,7 +91,7 @@ importers:
         version: 4.1.0
       vite-plus:
         specifier: 'catalog:'
-        version: 0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4(vitest@4.1.4))(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)
+        version: 0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)
 
   packages/decoder:
     devDependencies:
@@ -410,13 +413,13 @@ importers:
     devDependencies:
       vite-plus:
         specifier: 'catalog:'
-        version: 0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4(vitest@4.1.4))(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)
+        version: 0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)
 
   wasm/ox-jsdoc-origin:
     devDependencies:
       vite-plus:
         specifier: 'catalog:'
-        version: 0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4(vitest@4.1.4))(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)
+        version: 0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)
       wasm-pack:
         specifier: ^0.14.0
         version: 0.14.0
@@ -9236,10 +9239,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/eslint-plugin@8.59.0(@typescript-eslint/parser@8.58.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)':
+  '@typescript-eslint/eslint-plugin@8.59.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)':
     dependencies:
       '@eslint-community/regexpp': 4.12.2
-      '@typescript-eslint/parser': 8.58.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
+      '@typescript-eslint/parser': 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
       '@typescript-eslint/scope-manager': 8.59.0
       '@typescript-eslint/type-utils': 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
       '@typescript-eslint/utils': 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
@@ -9529,7 +9532,7 @@ snapshots:
       '@typescript-eslint/utils': 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
       eslint: 9.39.4(jiti@2.6.1)
     optionalDependencies:
-      '@typescript-eslint/eslint-plugin': 8.59.0(@typescript-eslint/parser@8.58.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
+      '@typescript-eslint/eslint-plugin': 8.59.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
       typescript: 5.9.3
       vitest: 4.1.4(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(jsdom@6.5.1)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))
     transitivePeerDependencies:
@@ -9742,7 +9745,7 @@ snapshots:
       - utf-8-validate
       - yaml
 
-  '@voidzero-dev/vite-plus-test@0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4(vitest@4.1.4))(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)':
+  '@voidzero-dev/vite-plus-test@0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)':
     dependencies:
       '@standard-schema/spec': 1.1.0
       '@types/chai': 5.2.3
@@ -10583,7 +10586,7 @@ snapshots:
       '@graphql-eslint/eslint-plugin': 4.4.0(@types/node@25.6.0)(eslint@9.39.4(jiti@2.6.1))(graphql@16.13.2)(typescript@5.9.3)
       '@next/eslint-plugin-next': 15.5.15
       '@stylistic/eslint-plugin': 5.10.0(eslint@9.39.4(jiti@2.6.1))
-      '@typescript-eslint/eslint-plugin': 8.59.0(@typescript-eslint/parser@8.58.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
+      '@typescript-eslint/eslint-plugin': 8.59.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
       '@typescript-eslint/parser': 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
       '@vitest/eslint-plugin': 1.6.16(@typescript-eslint/eslint-plugin@8.59.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)(vitest@4.1.4)
       eslint: 9.39.4(jiti@2.6.1)
@@ -10805,7 +10808,7 @@ snapshots:
       '@typescript-eslint/utils': 8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
       eslint: 9.39.4(jiti@2.6.1)
     optionalDependencies:
-      '@typescript-eslint/eslint-plugin': 8.59.0(@typescript-eslint/parser@8.58.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
+      '@typescript-eslint/eslint-plugin': 8.59.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -13497,11 +13500,11 @@ snapshots:
       - vite
       - yaml
 
-  vite-plus@0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4(vitest@4.1.4))(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3):
+  vite-plus@0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3):
     dependencies:
       '@oxc-project/types': 0.129.0
       '@voidzero-dev/vite-plus-core': 0.1.21(@types/node@25.6.0)(jiti@2.6.1)(typescript@5.9.3)(yaml@2.8.3)
-      '@voidzero-dev/vite-plus-test': 0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4(vitest@4.1.4))(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)
+      '@voidzero-dev/vite-plus-test': 0.1.21(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(jiti@2.6.1)(jsdom@6.5.1)(typescript@5.9.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(yaml@2.8.3))(yaml@2.8.3)
       oxfmt: 0.48.0
       oxlint: 1.63.0(oxlint-tsgolint@0.22.1)
       oxlint-tsgolint: 0.22.1

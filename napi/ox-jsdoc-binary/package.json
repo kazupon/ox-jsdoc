@@ -44,6 +44,7 @@
     "ox-jsdoc": "workspace:*"
   },
   "devDependencies": {
+    "@ox-jsdoc/decoder": "workspace:*",
     "vite-plus": "catalog:"
   },
   "engines": {
