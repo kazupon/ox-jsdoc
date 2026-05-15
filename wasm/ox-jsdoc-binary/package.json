@@ -1,7 +1,7 @@
 {
   "name": "@ox-jsdoc/wasm-binary",
-  "version": "0.0.12",
-  "description": "High-performance JSDoc parser for the browser (WebAssembly) that returns a lazy Binary AST decoder.",
+  "version": "0.0.13",
+  "description": "Deprecated alias for @ox-jsdoc/wasm. Re-exports the canonical Binary AST WASM package; install `@ox-jsdoc/wasm` instead.",
   "keywords": [
     "binary-ast",
     "jsdoc",
@@ -22,11 +22,7 @@
   "funding": "https://github.com/sponsors/kazupon",
   "files": [
     "src-js/index.js",
-    "src-js/index.d.ts",
-    "pkg/ox_jsdoc_binary_wasm_bg.wasm",
-    "pkg/ox_jsdoc_binary_wasm_bg.wasm.d.ts",
-    "pkg/ox_jsdoc_binary_wasm.d.ts",
-    "pkg/ox_jsdoc_binary_wasm.js"
+    "src-js/index.d.ts"
   ],
   "type": "module",
   "main": "src-js/index.js",
@@ -41,15 +37,12 @@
     "access": "public"
   },
   "scripts": {
-    "build": "wasm-pack build --target web --out-dir pkg",
-    "build:release": "wasm-pack build --target web --out-dir pkg --release",
     "test": "vp test run"
   },
   "dependencies": {
-    "@ox-jsdoc/decoder": "workspace:*"
+    "@ox-jsdoc/wasm": "workspace:*"
   },
   "devDependencies": {
-    "vite-plus": "catalog:",
-    "wasm-pack": "^0.14.0"
+    "vite-plus": "catalog:"
   }
 }

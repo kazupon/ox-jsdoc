@@ -2,7 +2,7 @@
 // @license MIT
 //
 
-use ox_jsdoc::{
+use ox_jsdoc_origin::{
     ParseOptions, SerializeOptions, ValidationOptions, analyze_comment, parse_comment,
     serialize_comment_json, serialize_comment_json_with_options, validate_comment,
 };

@@ -1,5 +1,7 @@
 # ox-jsdoc AST jsdoccomment Compatibility
 
+> **Note:** Post-cutover (see [`../010-main-stream-binary/README.md`](../010-main-stream-binary/README.md)), the canonical jsdoccomment-compat path runs through the canonical `ox-jsdoc` (Binary AST) NAPI binding via `parseBatch(..., { output: 'jsdoccomment-input' })`. The typed AST origin path (`ox-jsdoc-origin` / `@ox-jsdoc/wasm-origin`) keeps `compat_mode` for reference comparison only and is not used by `@ox-jsdoc/jsdoccomment`. Where this document discusses `ox-jsdoc`'s `compat_mode` output, treat the canonical path as the production target and the origin path as the baseline against which compat parity was originally validated.
+
 ## Strategy
 
 ### Strategy B: AST compatibility only, delegate runtime to jsdoccomment

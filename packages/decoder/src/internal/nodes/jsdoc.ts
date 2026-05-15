@@ -44,7 +44,7 @@ import type {
 
 // ---------------------------------------------------------------------------
 // Per-Kind ED list-metadata slot offsets (see
-// `crates/ox_jsdoc_binary/src/writer/nodes/comment_ast.rs`).
+// `crates/ox_jsdoc/src/writer/nodes/comment_ast.rs`).
 // ---------------------------------------------------------------------------
 
 /** Size of one `(head: u32, count: u16)` list metadata slot. */
@@ -60,7 +60,7 @@ const JSDOC_BLOCK_INLINE_TAGS_SLOT = JSDOC_BLOCK_DESC_LINES_SLOT + 2 * LIST_META
 const JSDOC_BLOCK_BASIC_SIZE = JSDOC_BLOCK_DESC_LINES_SLOT + 3 * LIST_METADATA_SIZE
 
 // JsdocBlock compat tail (only present when sourceFile.compatMode is true).
-// Layout mirrors `crates/ox_jsdoc_binary/src/writer/nodes/comment_ast.rs`:
+// Layout mirrors `crates/ox_jsdoc/src/writer/nodes/comment_ast.rs`:
 //   byte 68-69 : padding
 //   byte 70-73 : end_line (u32)
 //   byte 74-77 : description_start_line (u32, 0xFFFFFFFF = None)

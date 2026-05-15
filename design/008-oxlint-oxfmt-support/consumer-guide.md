@@ -81,7 +81,7 @@ For a richer implementation (block / replace / message variants), see the upstre
 ox-jsdoc's binary AST decoder exposes `tag.tag` (a string getter) on `RemoteJsdocTag`. The shape mirrors the Rust contract:
 
 ```js
-import { parse } from 'ox-jsdoc-binary' // (or @ox-jsdoc/wasm-binary)
+import { parse } from 'ox-jsdoc' // (or @ox-jsdoc/wasm)
 
 function getPreferredTagName(canonical, settings) {
   return settings?.tagNamePreference?.[canonical] ?? canonical
@@ -164,7 +164,7 @@ let mdast = markdown_to_mdast(preserved.as_deref().unwrap_or(""));
 ### 3.3 oxfmt-style consumer (JS, Binary AST decoder)
 
 ```js
-import { parse } from 'ox-jsdoc-binary'
+import { parse } from 'ox-jsdoc'
 
 // `preserveWhitespace: true` is required for descriptionRaw /
 // descriptionText(true). It is fully orthogonal to compatMode — combine

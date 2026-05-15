@@ -547,7 +547,7 @@ The JS decoder lives in the **shared decoder package** (`@ox-jsdoc/decoder`), an
 
 ## Public Rust API
 
-The `ox_jsdoc_binary` crate exposes four entry points (Approach c-1: the typed AST is removed and the parser writes Binary AST bytes directly). Each function takes **`&str` (sourceText)** as input — there is no "encode from typed AST" path because the Binary AST byte stream is the source of truth.
+The `ox_jsdoc` crate exposes four entry points (Approach c-1: the typed AST is removed and the parser writes Binary AST bytes directly). Each function takes **`&str` (sourceText)** as input — there is no "encode from typed AST" path because the Binary AST byte stream is the source of truth.
 
 ```rust
 pub struct BatchItem<'a> {

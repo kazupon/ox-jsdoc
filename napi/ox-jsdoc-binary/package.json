@@ -1,7 +1,7 @@
 {
   "name": "ox-jsdoc-binary",
-  "version": "0.0.12",
-  "description": "High-performance JSDoc parser that returns a lazy Binary AST decoder.",
+  "version": "0.0.13",
+  "description": "Deprecated alias for ox-jsdoc. Re-exports the canonical Binary AST package; install `ox-jsdoc` instead.",
   "keywords": [
     "binary-ast",
     "jsdoc",
@@ -21,8 +21,6 @@
   },
   "funding": "https://github.com/sponsors/kazupon",
   "files": [
-    "src-js/bindings.js",
-    "src-js/bindings.d.ts",
     "src-js/index.js",
     "src-js/index.d.ts"
   ],
@@ -40,28 +38,14 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
-    "build-dev": "napi build --esm --platform --js bindings.js --dts bindings.d.ts --output-dir src-js",
-    "build": "pnpm run build-dev --release",
     "test": "vp test run"
   },
   "dependencies": {
-    "@ox-jsdoc/decoder": "workspace:*"
+    "ox-jsdoc": "workspace:*"
   },
   "devDependencies": {
-    "@es-joy/jsdoccomment": "^0.50.1",
-    "@napi-rs/cli": "^3.6.1",
-    "@types/node": "catalog:",
+    "@ox-jsdoc/decoder": "workspace:*",
     "vite-plus": "catalog:"
-  },
-  "napi": {
-    "binaryName": "ox_jsdoc_binary",
-    "packageName": "@ox-jsdoc/binary-binding",
-    "targets": [
-      "aarch64-apple-darwin",
-      "x86_64-apple-darwin",
-      "x86_64-unknown-linux-gnu",
-      "x86_64-pc-windows-msvc"
-    ]
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

@@ -554,32 +554,32 @@ Phase 2's typed-AST scope:
 
 Phase 3's binary-AST scope:
 
-- `crates/ox_jsdoc_binary/src/writer/nodes/comment_ast.rs` — extend compat tail layouts (JsdocBlock 22 → 30 + 2 padding, JsdocTag 42 → 50 + 6 padding) and emit `description_raw_span` (UTF-8 byte offsets) when `compat_mode = ON`
-- `crates/ox_jsdoc_binary/src/decoder/nodes/comment_ast.rs` — `description_raw()` getter returning `Option<&'a str>` + `description_text(preserve_whitespace)` method
+- `crates/ox_jsdoc/src/writer/nodes/comment_ast.rs` — extend compat tail layouts (JsdocBlock 22 → 30 + 2 padding, JsdocTag 42 → 50 + 6 padding) and emit `description_raw_span` (UTF-8 byte offsets) when `compat_mode = ON`
+- `crates/ox_jsdoc/src/decoder/nodes/comment_ast.rs` — `description_raw()` getter returning `Option<&'a str>` + `description_text(preserve_whitespace)` method
 - `packages/decoder/src/internal/preserve-whitespace.js` (new) — JS port of the `parsed_preserving_whitespace` algorithm (mirrors the Rust `crates/ox_jsdoc/src/parser/text.rs`)
 - `packages/decoder/test/preserve-whitespace.test.js` (new) — JS test suite, fixtures shared with Rust side
 - `packages/decoder/src/internal/nodes/jsdoc.js` — `descriptionRaw` getter + `descriptionText(preserveWhitespace?)` method on `RemoteJsdocBlock` / `RemoteJsdocTag`
 - **Binary AST type defs (decoder)**: `packages/decoder/src/index.d.ts` — add `descriptionRaw: string | null` getter + `descriptionText(preserveWhitespace?: boolean): string | null` method to `RemoteJsdocBlock` / `RemoteJsdocTag`
-- **Binary AST type defs (NAPI)**: `napi/ox-jsdoc-binary/src-js/index.d.ts` — update re-export shape (sync with decoder)
-- **Binary AST type defs (WASM)**: `wasm/ox-jsdoc-binary/src-js/index.d.ts` — same as above
+- **Binary AST type defs (NAPI)**: `napi/ox-jsdoc/src-js/index.d.ts` — update re-export shape (sync with decoder)
+- **Binary AST type defs (WASM)**: `wasm/ox-jsdoc/src-js/index.d.ts` — same as above
 - `design/007-binary-ast/format.md` — amend `JsdocBlock complete byte-level layout` / `JsdocTag complete byte-level layout` sections to include `description_raw_span` in the compat tail
 
 Phase 5's binary-AST scope (revising the Phase 3 wire layout to support basic-mode opt-in):
 
-- `crates/ox_jsdoc_binary/src/parser/mod.rs` — extend `ParseOptions` with `preserve_whitespace: bool` (default `false`); flows through every entry point (`parse` / `parse_to_bytes` / `parse_batch_to_bytes`) since they all take `ParseOptions` as the global option struct (`BatchItem` carries only per-item `source_text` + `base_offset`, not parse options)
-- `crates/ox_jsdoc_binary/src/parser/context.rs` — emit `description_raw_span` regardless of compat mode when `preserve_whitespace = true`; otherwise leave the bit clear and skip the 8-byte span entirely
-- `crates/ox_jsdoc_binary/src/writer/nodes/comment_ast.rs` — set the `has_description_raw_span` bit in Common Data; size the ED record dynamically (basic +0 / +8, compat +0 / +8); the `description_raw_span` slot moves to the **last 8 bytes** of the ED record
-- `crates/ox_jsdoc_binary/src/decoder/nodes/comment_ast.rs` — read the bit; compute span offset as "ED end − 8" instead of the fixed Phase 3 compat-tail offset
+- `crates/ox_jsdoc/src/parser/mod.rs` — extend `ParseOptions` with `preserve_whitespace: bool` (default `false`); flows through every entry point (`parse` / `parse_to_bytes` / `parse_batch_to_bytes`) since they all take `ParseOptions` as the global option struct (`BatchItem` carries only per-item `source_text` + `base_offset`, not parse options)
+- `crates/ox_jsdoc/src/parser/context.rs` — emit `description_raw_span` regardless of compat mode when `preserve_whitespace = true`; otherwise leave the bit clear and skip the 8-byte span entirely
+- `crates/ox_jsdoc/src/writer/nodes/comment_ast.rs` — set the `has_description_raw_span` bit in Common Data; size the ED record dynamically (basic +0 / +8, compat +0 / +8); the `description_raw_span` slot moves to the **last 8 bytes** of the ED record
+- `crates/ox_jsdoc/src/decoder/nodes/comment_ast.rs` — read the bit; compute span offset as "ED end − 8" instead of the fixed Phase 3 compat-tail offset
 - `packages/decoder/src/internal/constants.js` — replace the fixed `JSDOC_BLOCK_DESCRIPTION_RAW_SPAN_OFFSET` / `JSDOC_TAG_DESCRIPTION_RAW_SPAN_OFFSET` with the corresponding Common Data bit-mask constants (e.g. `JSDOC_BLOCK_HAS_DESCRIPTION_RAW_SPAN_BIT = 1 << 0`, `JSDOC_TAG_HAS_DESCRIPTION_RAW_SPAN_BIT = 1 << 1`); the dynamic offset is computed in the node class
 - `packages/decoder/src/internal/nodes/jsdoc.js` — `descriptionRaw` getter checks the bit, returns `null` if clear; otherwise reads the last 8 bytes of the ED record
-- **NAPI binding** `napi/ox-jsdoc-binary/src/lib.rs` + `src-js/index.d.ts` — add `preserveWhitespace?: boolean` to `ParseOptions` / `BatchParseOptions`
-- **WASM binding** `wasm/ox-jsdoc-binary/src/lib.rs` + `src-js/index.d.ts` — same
+- **NAPI binding** `napi/ox-jsdoc/src/lib.rs` + `src-js/index.d.ts` — add `preserveWhitespace?: boolean` to `ParseOptions` / `BatchParseOptions`
+- **WASM binding** `wasm/ox-jsdoc/src/lib.rs` + `src-js/index.d.ts` — same
 - `design/007-binary-ast/format.md` — amend `JsdocBlock complete byte-level layout` / `JsdocTag complete byte-level layout` to describe the `has_description_raw_span` bit and the dynamic ED tail
 - **Test + fixture updates** (drives §7.3 validation matrix):
   - `fixtures/cross-language/description-text.json` — extend each fixture to declare expected `descriptionRaw` / `descriptionText(true)` outputs across the 4 `compat_mode × preserve_whitespace` combinations (or document why a sub-set is sufficient)
   - `crates/ox_jsdoc/tests/cross_language_parity.rs` — extend to iterate the 4 combinations
-  - `napi/ox-jsdoc-binary/test/description-text-parity.test.ts` — same on the JS side
-  - `napi/ox-jsdoc-binary/test/description-raw.test.ts` — add basic-mode + `preserveWhitespace: true` cases
+  - `napi/ox-jsdoc/test/description-text-parity.test.ts` — same on the JS side
+  - `napi/ox-jsdoc/test/description-raw.test.ts` — add basic-mode + `preserveWhitespace: true` cases
 - **Consumer guide follow-up** `design/008-oxlint-oxfmt-support/consumer-guide.md` — drop the legacy "case A: descriptionText(true) returns null on basic-mode buffer" subtlety; refresh §1 / §4 to mention the new opt-in matrix
 
 Phase narrative recap:
@@ -614,7 +614,7 @@ Phase narrative recap:
 
 | Check | Tooling |
 | --- | --- |
-| `descriptionRaw` getter returns **string** on `preserve_whitespace = true` buffer | Vitest in `napi/ox-jsdoc-binary/test/` + `packages/decoder/test/` |
+| `descriptionRaw` getter returns **string** on `preserve_whitespace = true` buffer | Vitest in `napi/ox-jsdoc/test/` + `packages/decoder/test/` |
 | `descriptionRaw` getter returns **null** on `preserve_whitespace = false` buffer (regardless of compat mode) | Same |
 | `descriptionText(true)` returns **null** on `preserve_whitespace = false` buffer | Same |
 | `descriptionText(false)` returns the compact string in any mode | Same |

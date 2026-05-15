@@ -58,7 +58,7 @@
     "comment-parser": "1.4.6",
     "esquery": "^1.7.0",
     "jsdoc-type-pratt-parser": "~7.2.0",
-    "ox-jsdoc-binary": "workspace:*"
+    "ox-jsdoc": "workspace:*"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",

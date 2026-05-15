@@ -180,7 +180,7 @@ describe('Lazy node dispatch', () => {
 
 describe('JsdocBlock + tags list metadata', () => {
   // Per-Kind Extended Data sizes / list-metadata slot offsets. Mirrors
-  // `crates/ox_jsdoc_binary/src/writer/nodes/comment_ast.rs`.
+  // `crates/ox_jsdoc/src/writer/nodes/comment_ast.rs`.
   const JSDOC_BLOCK_BASIC_SIZE = 68
   const JSDOC_BLOCK_TAGS_SLOT = 56
   const JSDOC_TAG_BASIC_SIZE = 38

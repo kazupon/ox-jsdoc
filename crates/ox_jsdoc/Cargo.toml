@@ -1,15 +1,45 @@
 [package]
 name = "ox_jsdoc"
-version = "0.0.0"
+version = "0.0.13"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-publish = false
+authors = ["kazuya kawaguchi <kawakazu80@gmail.com>"]
+description = "High-performance JSDoc parser with Binary AST format and lazy decoder, inspired by oxc"
+documentation = "https://docs.rs/ox_jsdoc"
+repository = "https://github.com/kazupon/ox-jsdoc"
+homepage = "https://github.com/kazupon/ox-jsdoc"
+keywords = ["jsdoc", "parser", "binary-ast", "ast", "rust"]
+categories = ["parser-implementations"]
+readme = "README.md"
+exclude = ["benches/", "examples/", "tests/"]
+
+[lints.rust]
+missing_docs = "warn"
+unused_must_use = "warn"
 
 [dependencies]
+memchr = "2"
 oxc_allocator.workspace = true
-oxc_diagnostics.workspace = true
 oxc_span.workspace = true
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+rustc-hash = "2"
+smallvec = { version = "1.15.1", features = ["union"] }
 
+[dev-dependencies]
+criterion2 = { version = "3.0.2", default-features = false }
+# oxc_jsdoc is included only for the parser bench's Rust-direct comparison
+# row (`oxc_jsdoc::JSDoc::new(...).tags()` against the same fixture as the
+# ox_jsdoc parser benches). It is not pulled into the runtime crate.
+oxc_jsdoc = "=0.123.0"
+
+[[bench]]
+name = "encoder"
+harness = false
+
+[[bench]]
+name = "decoder"
+harness = false
+
+[[bench]]
+name = "parser"
+harness = false

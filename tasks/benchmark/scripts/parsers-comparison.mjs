@@ -6,9 +6,9 @@
  * - comment-parser (JS)
  * - @es-joy/jsdoccomment (JS, wraps comment-parser)
  * - ox-jsdoc (NAPI, typed AST + JSON.parse)
- * - ox-jsdoc-binary (NAPI, binary AST + lazy decoder)
+ * - ox-jsdoc (NAPI, binary AST + lazy decoder)
  * - @ox-jsdoc/wasm (typed AST via WASM)
- * - @ox-jsdoc/wasm-binary (binary AST via WASM)
+ * - @ox-jsdoc/wasm (binary AST via WASM)
  *
  * @author kazuya kawaguchi (a.k.a. kazupon)
  * @license MIT
@@ -22,10 +22,10 @@ import { bench, group, run } from 'mitata'
 import { parseSync } from 'oxc-parser'
 import { parse as commentParserParse } from 'comment-parser'
 import { parseComment as jsdoccommentParse } from '@es-joy/jsdoccomment'
-import { parse as parseTypedNapi } from 'ox-jsdoc'
-import { parse as parseBinaryNapi } from 'ox-jsdoc-binary'
-import { initWasm as initTypedWasm, parse as parseTypedWasm } from '@ox-jsdoc/wasm'
-import { initWasm as initBinaryWasm, parse as parseBinaryWasm } from '@ox-jsdoc/wasm-binary'
+import { parse as parseTypedNapi } from 'ox-jsdoc-origin'
+import { parse as parseBinaryNapi } from 'ox-jsdoc'
+import { initWasm as initTypedWasm, parse as parseTypedWasm } from '@ox-jsdoc/wasm-origin'
+import { initWasm as initBinaryWasm, parse as parseBinaryWasm } from '@ox-jsdoc/wasm'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../../..')
@@ -35,7 +35,7 @@ await initTypedWasm(
   await readFile(path.join(repoRoot, 'wasm/ox-jsdoc/pkg/ox_jsdoc_wasm_bg.wasm'))
 )
 await initBinaryWasm(
-  await readFile(path.join(repoRoot, 'wasm/ox-jsdoc-binary/pkg/ox_jsdoc_binary_wasm_bg.wasm'))
+  await readFile(path.join(repoRoot, 'wasm/ox-jsdoc/pkg/ox_jsdoc_binary_wasm_bg.wasm'))
 )
 
 const sourceText = await readFile(fixturePath, 'utf8')
@@ -74,13 +74,13 @@ group('Single comment (median ~207 bytes)', () => {
   bench('ox-jsdoc (NAPI typed)', () => {
     void parseTypedNapi(single).ast
   })
-  bench('ox-jsdoc-binary (NAPI)', () => {
+  bench('ox-jsdoc (NAPI)', () => {
     void parseBinaryNapi(single).ast
   })
   bench('ox-jsdoc (WASM typed)', () => {
     void parseTypedWasm(single).ast
   })
-  bench('ox-jsdoc-binary (WASM)', () => {
+  bench('ox-jsdoc (WASM)', () => {
     const r = parseBinaryWasm(single)
     void r.ast
     r.free()
@@ -101,13 +101,13 @@ group('Batch 100 comments', () => {
   bench('ox-jsdoc (NAPI typed) x100', () => {
     for (const c of batch100) void parseTypedNapi(c).ast
   })
-  bench('ox-jsdoc-binary (NAPI) x100', () => {
+  bench('ox-jsdoc (NAPI) x100', () => {
     for (const c of batch100) void parseBinaryNapi(c).ast
   })
   bench('ox-jsdoc (WASM typed) x100', () => {
     for (const c of batch100) void parseTypedWasm(c).ast
   })
-  bench('ox-jsdoc-binary (WASM) x100', () => {
+  bench('ox-jsdoc (WASM) x100', () => {
     for (const c of batch100) {
       const r = parseBinaryWasm(c)
       void r.ast
@@ -130,13 +130,13 @@ group(`Full file (${allComments.length} comments)`, () => {
   bench('ox-jsdoc (NAPI typed) full', () => {
     for (const c of allComments) void parseTypedNapi(c).ast
   })
-  bench('ox-jsdoc-binary (NAPI) full', () => {
+  bench('ox-jsdoc (NAPI) full', () => {
     for (const c of allComments) void parseBinaryNapi(c).ast
   })
   bench('ox-jsdoc (WASM typed) full', () => {
     for (const c of allComments) void parseTypedWasm(c).ast
   })
-  bench('ox-jsdoc-binary (WASM) full', () => {
+  bench('ox-jsdoc (WASM) full', () => {
     for (const c of allComments) {
       const r = parseBinaryWasm(c)
       void r.ast
@@ -156,9 +156,9 @@ const parsers = [
   ['comment-parser', 'comment-parser', 'comment-parser x100', 'comment-parser full'],
   ['jsdoccomment', 'jsdoccomment', 'jsdoccomment x100', 'jsdoccomment full'],
   ['ox-jsdoc (NAPI typed)', 'ox-jsdoc (NAPI typed)', 'ox-jsdoc (NAPI typed) x100', 'ox-jsdoc (NAPI typed) full'],
-  ['ox-jsdoc-binary (NAPI)', 'ox-jsdoc-binary (NAPI)', 'ox-jsdoc-binary (NAPI) x100', 'ox-jsdoc-binary (NAPI) full'],
+  ['ox-jsdoc (NAPI)', 'ox-jsdoc (NAPI)', 'ox-jsdoc (NAPI) x100', 'ox-jsdoc (NAPI) full'],
   ['ox-jsdoc (WASM typed)', 'ox-jsdoc (WASM typed)', 'ox-jsdoc (WASM typed) x100', 'ox-jsdoc (WASM typed) full'],
-  ['ox-jsdoc-binary (WASM)', 'ox-jsdoc-binary (WASM)', 'ox-jsdoc-binary (WASM) x100', 'ox-jsdoc-binary (WASM) full']
+  ['ox-jsdoc (WASM)', 'ox-jsdoc (WASM)', 'ox-jsdoc (WASM) x100', 'ox-jsdoc (WASM) full']
 ]
 
 for (const [label, single, batch, full] of parsers) {
@@ -169,12 +169,12 @@ for (const [label, single, batch, full] of parsers) {
   console.log(`| ${label} | ${fmt(s.avgNs)} | ${fmt(b.avgNs)} | ${fmt(f.avgNs)} |`)
 }
 
-// Speedup table: ox-jsdoc-binary NAPI vs each baseline
+// Speedup table: ox-jsdoc NAPI vs each baseline
 console.log('')
 console.log('| Parser | Single (vs binary NAPI) | Full file (vs binary NAPI) |')
 console.log('|---|---:|---:|')
-const binaryNapiSingle = rows.find(r => r.name === 'ox-jsdoc-binary (NAPI)')?.avgNs
-const binaryNapiFull = rows.find(r => r.name === 'ox-jsdoc-binary (NAPI) full')?.avgNs
+const binaryNapiSingle = rows.find(r => r.name === 'ox-jsdoc (NAPI)')?.avgNs
+const binaryNapiFull = rows.find(r => r.name === 'ox-jsdoc (NAPI) full')?.avgNs
 for (const [label, single, _b, full] of parsers) {
   const s = rows.find(r => r.name === single)?.avgNs
   const f = rows.find(r => r.name === full)?.avgNs

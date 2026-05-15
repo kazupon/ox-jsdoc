@@ -1,8 +1,9 @@
 {
   "name": "ox-jsdoc",
   "version": "0.0.12",
-  "description": "High-performance JSDoc parser powered by Rust and NAPI.",
+  "description": "High-performance JSDoc parser that returns a lazy Binary AST decoder.",
   "keywords": [
+    "binary-ast",
     "jsdoc",
     "napi",
     "parser",
@@ -43,8 +44,13 @@
     "build": "pnpm run build-dev --release",
     "test": "vp test run"
   },
+  "dependencies": {
+    "@ox-jsdoc/decoder": "workspace:*"
+  },
   "devDependencies": {
+    "@es-joy/jsdoccomment": "^0.50.1",
     "@napi-rs/cli": "^3.6.1",
+    "@types/node": "catalog:",
     "jsdoc-type-pratt-parser": "^4.1.0",
     "vite-plus": "catalog:"
   },

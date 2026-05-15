@@ -3,7 +3,7 @@
 //
 // Bench oxc's internal `oxc_jsdoc` crate (used by oxlint) against the same
 // fixtures as `parser.rs`. Provides a third Rust-direct comparison axis
-// alongside ox_jsdoc (typed AST) and ox_jsdoc_binary (binary AST).
+// alongside ox_jsdoc_origin (typed AST) and ox_jsdoc (canonical Binary AST).
 
 use ox_jsdoc_benchmark::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use oxc_jsdoc::JSDoc;

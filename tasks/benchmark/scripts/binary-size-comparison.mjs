@@ -17,8 +17,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { parseSync } from 'oxc-parser'
-import { parse as parseTyped } from 'ox-jsdoc'
-import { parse as parseBinary } from 'ox-jsdoc-binary'
+import { parse as parseTyped } from 'ox-jsdoc-origin'
+import { parse as parseBinary } from 'ox-jsdoc'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../../..')

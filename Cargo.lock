@@ -493,31 +493,7 @@ checksum = "d211803b9b6b570f68772237e415a029d5a50c65d382910b879fb19d3271f94d"
 
 [[package]]
 name = "ox_jsdoc"
-version = "0.0.0"
-dependencies = [
- "oxc_allocator",
- "oxc_diagnostics",
- "oxc_span",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "ox_jsdoc_benchmark"
-version = "0.0.0"
-dependencies = [
- "criterion2",
- "ox_jsdoc",
- "oxc_allocator",
- "oxc_ast",
- "oxc_jsdoc",
- "oxc_parser",
- "oxc_span",
-]
-
-[[package]]
-name = "ox_jsdoc_binary"
-version = "0.0.0"
+version = "0.0.13"
 dependencies = [
  "criterion2",
  "memchr",
@@ -529,23 +505,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "ox_jsdoc_binary_napi"
+name = "ox_jsdoc_benchmark"
 version = "0.0.0"
 dependencies = [
- "napi",
- "napi-build",
- "napi-derive",
- "ox_jsdoc_binary",
-]
-
-[[package]]
-name = "ox_jsdoc_binary_wasm"
-version = "0.0.0"
-dependencies = [
- "js-sys",
- "ox_jsdoc_binary",
- "wasm-bindgen",
- "wasm-bindgen-test",
+ "criterion2",
+ "ox_jsdoc_origin",
+ "oxc_allocator",
+ "oxc_ast",
+ "oxc_jsdoc",
+ "oxc_parser",
+ "oxc_span",
 ]
 
 [[package]]
@@ -556,7 +525,39 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "ox_jsdoc",
+]
+
+[[package]]
+name = "ox_jsdoc_origin"
+version = "0.0.0"
+dependencies = [
  "oxc_allocator",
+ "oxc_diagnostics",
+ "oxc_span",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ox_jsdoc_origin_napi"
+version = "0.0.0"
+dependencies = [
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "ox_jsdoc_origin",
+ "oxc_allocator",
+]
+
+[[package]]
+name = "ox_jsdoc_origin_wasm"
+version = "0.0.0"
+dependencies = [
+ "js-sys",
+ "ox_jsdoc_origin",
+ "oxc_allocator",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
@@ -565,7 +566,6 @@ version = "0.0.0"
 dependencies = [
  "js-sys",
  "ox_jsdoc",
- "oxc_allocator",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]

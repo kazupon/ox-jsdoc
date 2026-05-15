@@ -1,8 +1,12 @@
-# WASM Build of ox-jsdoc for Browser
+# WASM Build (typed AST origin)
+
+> **Note:** This document records the original WASM binding design for the JSON-first typed AST path. Post-cutover, that path lives at `wasm/ox-jsdoc-origin/` (npm: `@ox-jsdoc/wasm-origin`, private) and serves as the reference / benchmark implementation only. The canonical `@ox-jsdoc/wasm` package now binds the Binary AST core (`crates/ox_jsdoc`); see [`../007-binary-ast/`](../007-binary-ast/) for that path and [`../010-main-stream-binary/README.md`](../010-main-stream-binary/README.md) for the cutover migration design.
+>
+> Read every reference to `wasm/ox-jsdoc/` and the npm package `@ox-jsdoc/wasm` in this document as the present-day `wasm/ox-jsdoc-origin/` (npm: `@ox-jsdoc/wasm-origin`).
 
 ## Context
 
-ox-jsdoc's `parse_comment` should run in the browser via WebAssembly. Currently only a NAPI binding (Node.js only) exists. A standalone WASM crate using `wasm-pack` + `wasm-bindgen` provides the simplest browser-compatible path.
+`ox_jsdoc_origin::parse_comment` should run in the browser via WebAssembly. Currently only a NAPI binding (Node.js only) exists. A standalone WASM crate using `wasm-pack` + `wasm-bindgen` provides the simplest browser-compatible path.
 
 ## Approach: wasm-pack + wasm-bindgen
 

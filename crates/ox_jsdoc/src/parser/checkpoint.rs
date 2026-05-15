@@ -4,15 +4,19 @@
 
 //! Parser state snapshots.
 //!
-//! Checkpoints allow speculative parsing without cloning the AST arena. Rewind
-//! restores scalar parser state and truncates diagnostics emitted after the
+//! Verbatim port of `crates/ox_jsdoc/src/parser/checkpoint.rs`. Checkpoints
+//! allow speculative parsing without cloning the arena. Rewind restores
+//! scalar parser state and truncates diagnostics emitted after the
 //! checkpoint.
 
 /// Quote mode used while scanning nested constructs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuoteKind {
+    /// `'...'` single-quoted string.
     Single,
+    /// `"..."` double-quoted string.
     Double,
+    /// `` `...` `` template literal.
     Backtick,
 }
 

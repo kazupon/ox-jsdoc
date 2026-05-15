@@ -21,7 +21,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { parse as parseJsdoc } from 'ox-jsdoc-binary'
+import { parse as parseJsdoc } from 'ox-jsdoc'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../../..')

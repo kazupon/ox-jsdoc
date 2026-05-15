@@ -1,5 +1,5 @@
 /**
- * Binary AST format constants — JS mirror of `crates/ox_jsdoc_binary/src/format/`.
+ * Binary AST format constants — JS mirror of `crates/ox_jsdoc/src/format/`.
  *
  * Keep these in sync with the Rust constants. Phase 4 will code-generate
  * both sides from a single schema.

@@ -5,7 +5,7 @@
  */
 
 import { bench, group, run } from "mitata";
-import { parse as oxParse, parseType as oxParseType, parseTypeCheck as oxParseTypeCheck } from "ox-jsdoc";
+import { parse as oxParse, parseType as oxParseType, parseTypeCheck as oxParseTypeCheck } from "ox-jsdoc-origin";
 import { parse as jtpParse } from "jsdoc-type-pratt-parser";
 
 const TYPE_EXPRESSIONS = [

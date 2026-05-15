@@ -2,15 +2,21 @@
 // @license MIT
 //
 
-//! NAPI binding for ox-jsdoc.
+//! NAPI binding for the binary AST flavor of ox-jsdoc.
+//!
+//! Returns the encoded Binary AST as a NAPI Buffer that the JS-side
+//! `@ox-jsdoc/decoder` package wraps with `RemoteSourceFile`. Diagnostics
+//! travel as a separate plain-object array (the binary buffer also carries
+//! them in its Diagnostics section, but exposing both lets the JS layer
+//! avoid a re-decode for the common case).
 
+use napi::bindgen_prelude::{Uint8Array, Uint32Array};
 use napi_derive::napi;
-use oxc_allocator::Allocator;
 
-use ox_jsdoc::type_parser::stringify::stringify_type;
-use ox_jsdoc::{
-    ParseMode, ParseOptions, SerializeOptions, SpacingMode, parse_comment, parse_type,
-    serialize_comment_json_with_options,
+use ox_jsdoc::parser::{
+    BatchItem, ParseOptions, parse_batch_to_bytes, parse_to_bytes,
+    parse_type_check as core_parse_type_check,
+    parse_type_expression as core_parse_type_expression, type_data::ParseMode,
 };
 
 #[napi(object)]
@@ -22,57 +28,178 @@ pub struct JsParseOptions {
     pub parse_types: Option<bool>,
     /// Parse mode for type expressions: "jsdoc", "closure", or "typescript". Default: "jsdoc".
     pub type_parse_mode: Option<String>,
-    /// Output jsdoccomment-compatible fields (delimiter, postDelimiter,
-    /// initial, line indices, …) and exclude ox-jsdoc-specific fields
-    /// (optional, defaultValue, rawBody, body). Default: false.
+    /// Enable jsdoccomment-compat extension fields. Default: false.
     pub compat_mode: Option<bool>,
-    /// When true, optional string fields that would normally be `null`
-    /// (rawType, name, namepathOrURL, text) are emitted as `""` instead.
-    /// Mirrors jsdoccomment's serialization. Default: false.
-    pub empty_string_for_null: Option<bool>,
-    /// Include ESTree position fields (start, end, range). Default: true.
-    pub include_positions: Option<bool>,
-    /// Spacing mode for compat output: "compact" (default, drops empty
-    /// description lines like jsdoccomment) or "preserve" (keeps every
-    /// scanned line verbatim). Only effective when `compat_mode` is true.
-    pub spacing: Option<String>,
+    /// Emit per-node `description_raw_span` so the decoder's
+    /// `descriptionRaw` getter and `descriptionText(true)` method work.
+    /// Adds 8 bytes per `JsdocBlock` / `JsdocTag` ED record that has a
+    /// description. Fully orthogonal to `compat_mode`. Default: false.
+    /// See `design/008-oxlint-oxfmt-support/README.md` §4.2.
+    pub preserve_whitespace: Option<bool>,
+    /// Original-file absolute byte offset of `source_text`. Default: 0.
+    pub base_offset: Option<u32>,
 }
 
 #[napi(object)]
 pub struct JsDiagnostic {
+    /// Human-readable diagnostic message.
     pub message: String,
 }
 
 #[napi(object)]
 pub struct JsParseResult {
-    pub ast_json: String,
+    /// Encoded Binary AST bytes — pass to `@ox-jsdoc/decoder`'s
+    /// `RemoteSourceFile` constructor.
+    pub buffer: Uint8Array,
+    /// Parser diagnostics (also embedded in the binary buffer's
+    /// Diagnostics section, surfaced here for convenience).
     pub diagnostics: Vec<JsDiagnostic>,
 }
 
-/// Parse a complete `/** ... */` JSDoc block comment.
+/// Parse a complete `/** ... */` JSDoc block and return the Binary AST.
 #[napi]
-pub fn parse(source_text: String, options: Option<JsParseOptions>) -> JsParseResult {
-    let allocator = Allocator::default();
-    let serialize_opts = convert_serialize_options(options.as_ref());
+pub fn parse_jsdoc(source_text: String, options: Option<JsParseOptions>) -> JsParseResult {
     let opts = convert_options(options);
-    let output = parse_comment(&allocator, &source_text, 0, opts);
+    let result = parse_to_bytes(source_text.as_str(), opts);
 
-    let (ast_json, mut diagnostics) = match output.comment {
-        Some(ref comment) => {
-            let json = serialize_comment_json_with_options(comment, None, None, &serialize_opts);
-            (json, Vec::new())
-        }
-        None => ("null".to_string(), Vec::new()),
-    };
+    let diagnostics = result
+        .diagnostics
+        .iter()
+        .map(|d| JsDiagnostic {
+            message: d.message.to_string(),
+        })
+        .collect();
 
-    for d in &output.diagnostics {
-        diagnostics.push(JsDiagnostic {
-            message: d.to_string(),
-        });
-    }
-
+    // `parse_to_bytes` returns a heap-owned `Vec<u8>` (no arena copy on the
+    // Rust side). Moving it into `Uint8Array::from` transfers ownership to
+    // NAPI without an additional memcpy.
     JsParseResult {
-        ast_json,
+        buffer: Uint8Array::from(result.binary_bytes),
+        diagnostics,
+    }
+}
+
+#[napi(object)]
+pub struct JsBatchItem {
+    /// `/** ... */` source text for this comment.
+    pub source_text: String,
+    /// Original-file absolute byte offset. Default: 0.
+    pub base_offset: Option<u32>,
+}
+
+#[napi(object)]
+pub struct JsBatchDiagnostic {
+    /// Human-readable diagnostic message.
+    pub message: String,
+    /// Index of the input item this diagnostic belongs to (`0..items.len()`).
+    pub root_index: u32,
+}
+
+#[napi(object)]
+pub struct JsBatchParseResult {
+    /// Encoded Binary AST bytes — pass to `@ox-jsdoc/decoder`'s
+    /// `RemoteSourceFile` constructor; one buffer carries N roots.
+    pub buffer: Uint8Array,
+    /// Parser diagnostics for the entire batch (input order). Use
+    /// `root_index` to attribute each diagnostic back to a `BatchItem`.
+    pub diagnostics: Vec<JsBatchDiagnostic>,
+}
+
+/// Parse N JSDoc block comments into a single shared Binary AST buffer.
+///
+/// The returned buffer carries N roots side-by-side; the JS-side decoder
+/// exposes them via `RemoteSourceFile.asts`. Strings recur across comments
+/// (`*`, `*/`, common tag names) are interned once for the whole batch.
+#[napi]
+pub fn parse_jsdoc_batch(
+    items: Vec<JsBatchItem>,
+    options: Option<JsParseOptions>,
+) -> JsBatchParseResult {
+    let opts = convert_options(options);
+
+    // BatchItem borrows `source_text: &str` from the input Vec, so we need
+    // to project the JS-side Strings into a parallel Vec<BatchItem>.
+    let batch_items: Vec<BatchItem<'_>> = items
+        .iter()
+        .map(|i| BatchItem {
+            source_text: i.source_text.as_str(),
+            base_offset: i.base_offset.unwrap_or(0),
+        })
+        .collect();
+
+    let result = parse_batch_to_bytes(&batch_items, opts);
+
+    let diagnostics = result
+        .diagnostics
+        .iter()
+        .map(|d| JsBatchDiagnostic {
+            message: d.message.to_string(),
+            root_index: d.root_index,
+        })
+        .collect();
+
+    JsBatchParseResult {
+        buffer: Uint8Array::from(result.binary_bytes),
+        diagnostics,
+    }
+}
+
+/// Parse N JSDoc block comments where the JS-side has already concatenated
+/// every `source_text` into a single UTF-8 byte buffer.
+///
+/// This avoids the per-item `Vec<JsBatchItem>` auto-conversion that
+/// dominates the [`parse_jsdoc_batch`] NAPI call (~213 µs / ~30% of the
+/// full call for the 226-comment fixture). Three NAPI handles replace
+/// 226 × {object, string, number} conversions:
+///
+/// - `concat`: every `source_text` UTF-8 byte concatenated, no separators.
+/// - `offsets`: length `N + 1`. `concat[offsets[i]..offsets[i+1]]` is the
+///   bytes for input item `i`.
+/// - `base_offsets`: length `N`. Per-item `base_offset`.
+///
+/// The JS wrapper (`parseBatch` in `index.js`) builds those views via
+/// `TextEncoder`. Callers who need the original ergonomic API can keep
+/// using [`parse_jsdoc_batch`].
+#[napi]
+pub fn parse_jsdoc_batch_raw(
+    concat: Uint8Array,
+    offsets: Uint32Array,
+    base_offsets: Uint32Array,
+    options: Option<JsParseOptions>,
+) -> JsBatchParseResult {
+    let opts = convert_options(options);
+    let bytes: &[u8] = concat.as_ref();
+    let offsets_slice: &[u32] = offsets.as_ref();
+    let base_offsets_slice: &[u32] = base_offsets.as_ref();
+    let n = base_offsets_slice.len();
+
+    let batch_items: Vec<BatchItem<'_>> = (0..n)
+        .map(|i| {
+            let start = offsets_slice[i] as usize;
+            let end = offsets_slice[i + 1] as usize;
+            // SAFETY: the JS wrapper produces these bytes via `TextEncoder`,
+            // which RFC 8259 mandates emit valid UTF-8. Skipping the
+            // `from_utf8` validation cuts ~10 µs for a 30 KB input batch.
+            BatchItem {
+                source_text: unsafe { std::str::from_utf8_unchecked(&bytes[start..end]) },
+                base_offset: base_offsets_slice[i],
+            }
+        })
+        .collect();
+
+    let result = parse_batch_to_bytes(&batch_items, opts);
+
+    let diagnostics = result
+        .diagnostics
+        .iter()
+        .map(|d| JsBatchDiagnostic {
+            message: d.message.to_string(),
+            root_index: d.root_index,
+        })
+        .collect();
+
+    JsBatchParseResult {
+        buffer: Uint8Array::from(result.binary_bytes),
         diagnostics,
     }
 }
@@ -81,28 +208,45 @@ pub fn parse(source_text: String, options: Option<JsParseOptions>) -> JsParseRes
 /// Returns the stringified result, or null if parsing fails.
 #[napi]
 pub fn parse_type_expression(type_text: String, mode: Option<String>) -> Option<String> {
-    let allocator = Allocator::default();
-    let parse_mode = match mode.as_deref() {
-        Some("typescript") => ParseMode::Typescript,
-        Some("closure") => ParseMode::Closure,
-        _ => ParseMode::Jsdoc,
-    };
-    let output = parse_type(&allocator, &type_text, 0, parse_mode);
-    output.node.map(|node| stringify_type(&node))
+    let parse_mode = parse_mode_from_string(mode.as_deref());
+    core_parse_type_expression(&type_text, parse_mode)
 }
 
 /// Parse a standalone type expression and return whether it succeeded.
 /// No stringify overhead — used for benchmarks.
 #[napi]
 pub fn parse_type_check(type_text: String, mode: Option<String>) -> bool {
-    let allocator = Allocator::default();
-    let parse_mode = match mode.as_deref() {
+    let parse_mode = parse_mode_from_string(mode.as_deref());
+    core_parse_type_check(&type_text, parse_mode)
+}
+
+fn parse_mode_from_string(mode: Option<&str>) -> ParseMode {
+    match mode {
         Some("typescript") => ParseMode::Typescript,
         Some("closure") => ParseMode::Closure,
         _ => ParseMode::Jsdoc,
-    };
-    let output = parse_type(&allocator, &type_text, 0, parse_mode);
-    output.node.is_some()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostic no-op entry points (used by the NAPI overhead profiler only).
+// ---------------------------------------------------------------------------
+
+/// Diagnostic: pay only the input-side marshalling cost (Vec<JsBatchItem>
+/// auto-conversion). Returns the item count so the call cannot be DCE'd.
+#[doc(hidden)]
+#[napi]
+pub fn napi_marshalling_in_only(items: Vec<JsBatchItem>) -> u32 {
+    items.len() as u32
+}
+
+/// Diagnostic: pay only the output-side marshalling cost (Vec<u8> →
+/// `Uint8Array` ownership transfer). Allocates a zero-filled buffer of
+/// `size` bytes and hands it to NAPI.
+#[doc(hidden)]
+#[napi]
+pub fn napi_marshalling_out_only(size: u32) -> Uint8Array {
+    Uint8Array::from(vec![0u8; size as usize])
 }
 
 fn convert_options(options: Option<JsParseOptions>) -> ParseOptions {
@@ -116,27 +260,8 @@ fn convert_options(options: Option<JsParseOptions>) -> ParseOptions {
         fence_aware: options.fence_aware.unwrap_or(true),
         parse_types: options.parse_types.unwrap_or(false),
         type_parse_mode,
-        ..ParseOptions::default()
+        compat_mode: options.compat_mode.unwrap_or(false),
+        preserve_whitespace: options.preserve_whitespace.unwrap_or(false),
+        base_offset: options.base_offset.unwrap_or(0),
     }
-}
-
-fn convert_serialize_options(options: Option<&JsParseOptions>) -> SerializeOptions {
-    let mut serialize_opts = SerializeOptions::default();
-    let Some(options) = options else {
-        return serialize_opts;
-    };
-    if let Some(value) = options.compat_mode {
-        serialize_opts.compat_mode = value;
-    }
-    if let Some(value) = options.empty_string_for_null {
-        serialize_opts.empty_string_for_null = value;
-    }
-    if let Some(value) = options.include_positions {
-        serialize_opts.include_positions = value;
-    }
-    serialize_opts.spacing = match options.spacing.as_deref() {
-        Some("preserve") => SpacingMode::Preserve,
-        _ => SpacingMode::Compact,
-    };
-    serialize_opts
 }

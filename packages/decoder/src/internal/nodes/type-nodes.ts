@@ -1,7 +1,7 @@
 /**
  * Lazy classes for the 45 TypeNode kinds (`0x80 - 0xAC`).
  *
- * Mirrors `crates/ox_jsdoc_binary/src/decoder/nodes/type_node.rs`.
+ * Mirrors `crates/ox_jsdoc/src/decoder/nodes/type_node.rs`.
  *
  * Three structural patterns are at play:
  *
@@ -42,7 +42,7 @@ import type {
  * Single per-list metadata slot offset for TypeNode parents that own one
  * variable-length child list (TypeUnion, TypeIntersection, TypeTuple,
  * TypeObject, TypeGeneric, TypeTypeParameter, TypeParameterList). Mirrors
- * `crates/ox_jsdoc_binary/src/writer/nodes/type_node.rs::TYPE_LIST_PARENT_SLOT`.
+ * `crates/ox_jsdoc/src/writer/nodes/type_node.rs::TYPE_LIST_PARENT_SLOT`.
  */
 const TYPE_LIST_PARENT_SLOT = 0
 

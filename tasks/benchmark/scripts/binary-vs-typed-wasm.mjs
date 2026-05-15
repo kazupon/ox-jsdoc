@@ -13,12 +13,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { parseSync } from 'oxc-parser'
-import { initWasm as initTypedWasm, parse as parseTypedWasm } from '@ox-jsdoc/wasm'
+import { initWasm as initTypedWasm, parse as parseTypedWasm } from '@ox-jsdoc/wasm-origin'
 import {
   initWasm as initBinaryWasm,
   parse as parseBinaryWasm,
   parseBatch as parseBatchBinaryWasm
-} from '@ox-jsdoc/wasm-binary'
+} from '@ox-jsdoc/wasm'
 
 import { compareRobust, fmtDuration } from './lib/measure.mjs'
 
@@ -30,7 +30,7 @@ await initTypedWasm(
   await readFile(path.join(repoRoot, 'wasm/ox-jsdoc/pkg/ox_jsdoc_wasm_bg.wasm'))
 )
 await initBinaryWasm(
-  await readFile(path.join(repoRoot, 'wasm/ox-jsdoc-binary/pkg/ox_jsdoc_binary_wasm_bg.wasm'))
+  await readFile(path.join(repoRoot, 'wasm/ox-jsdoc/pkg/ox_jsdoc_binary_wasm_bg.wasm'))
 )
 
 const sourceText = await readFile(fixturePath, 'utf8')

@@ -1804,7 +1804,7 @@ The payload is a **packed pair `(offset, length)`** that points directly into th
   else:
       → emit TypeTag::String + StringIndex (legacy fallback)
   ```
-- Applies to the **same** Kinds as `String` (encoder picks one of the two per emit based on size); see `crates/ox_jsdoc_binary/src/format/node_record.rs::pack_string_inline` / `unpack_string_inline`
+- Applies to the **same** Kinds as `String` (encoder picks one of the two per emit based on size); see `crates/ox_jsdoc/src/format/node_record.rs::pack_string_inline` / `unpack_string_inline`
 
 Example: `TypeName "Foo"` (length 3, offset 24 in String Data) → `node_data = 0xC000_1803` (type tag 0b11 + offset 24 ≪ 8 + length 3)
 

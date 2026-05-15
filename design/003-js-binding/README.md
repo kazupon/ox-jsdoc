@@ -1,10 +1,14 @@
-# NAPI / JS Binding (`napi/ox-jsdoc`)
+# NAPI / JS Binding (typed AST origin)
+
+> **Note:** This document records the original NAPI binding design for the JSON-first typed AST path. Post-cutover, that path lives at `napi/ox-jsdoc-origin/` (npm: `ox-jsdoc-origin`, private) and serves as the reference / benchmark implementation only. The canonical `ox-jsdoc` NAPI package now binds the Binary AST core (`crates/ox_jsdoc`); see [`../007-binary-ast/`](../007-binary-ast/) for that path and [`../010-main-stream-binary/README.md`](../010-main-stream-binary/README.md) for the cutover migration design.
+>
+> Read every reference to `napi/ox-jsdoc/` and the npm package `ox-jsdoc` in this document as the present-day `napi/ox-jsdoc-origin/` (npm: `ox-jsdoc-origin`).
 
 ## Context
 
-The Rust core parser, validator, analyzer, and serializer are working. The next step is to create NAPI bindings so JS/Node.js consumers can use `ox-jsdoc`.
+The Rust core parser, validator, analyzer, and serializer are working. The next step is to create NAPI bindings so JS/Node.js consumers can use the typed AST parser.
 
-Design document `002-project-structure` specifies placing the binding crate under `napi/ox-jsdoc/` and exposing a JS API through JSON-first transfer.
+Design document `002-project-structure` specifies placing the binding crate under `napi/ox-jsdoc/` (now `napi/ox-jsdoc-origin/`) and exposing a JS API through JSON-first transfer.
 
 ## Goals
 

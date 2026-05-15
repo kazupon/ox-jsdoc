@@ -2,6 +2,7 @@
 extend-exclude = [
   "refers/",
   "design/005-jsdoccomment-compat/README.md",
+  "packages/eslint-plugin-jsdoc",
   "design/syntax.ebnf",
   "fixtures/**"
 ]
