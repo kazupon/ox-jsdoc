@@ -36,7 +36,7 @@ import {
   parseJsdocBatchRaw as napiRawCall,
   napiMarshallingInOnly,
   napiMarshallingOutOnly
-} from 'ox-jsdoc-binary/src-js/bindings.js'
+} from 'ox-jsdoc/src-js/bindings.js'
 import { parseBatch as parseBatchWrapper } from 'ox-jsdoc'
 import { RemoteSourceFile } from '../../../packages/decoder/src/index.js'
 

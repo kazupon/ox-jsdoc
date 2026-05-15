@@ -9,7 +9,7 @@
  * - end-to-end (parse(text) total)
  *
  * `parseTyped` = `ox-jsdoc` (typed AST + JSON.parse round-trip)
- * `parseBinary` = `ox-jsdoc-binary` (binary AST + lazy decoder)
+ * `parseBinary` = `ox-jsdoc` (binary AST + lazy decoder)
  *
  * Uses `lib/measure.mjs` (median-of-rounds with trimmed mean) instead of
  * mitata's `bench`/`group`/`run` so single-round noise (kernel preemption,

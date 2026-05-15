@@ -30,7 +30,7 @@ await initTypedWasm(
   await readFile(path.join(repoRoot, 'wasm/ox-jsdoc/pkg/ox_jsdoc_wasm_bg.wasm'))
 )
 await initBinaryWasm(
-  await readFile(path.join(repoRoot, 'wasm/ox-jsdoc-binary/pkg/ox_jsdoc_binary_wasm_bg.wasm'))
+  await readFile(path.join(repoRoot, 'wasm/ox-jsdoc/pkg/ox_jsdoc_binary_wasm_bg.wasm'))
 )
 
 const sourceText = await readFile(fixturePath, 'utf8')

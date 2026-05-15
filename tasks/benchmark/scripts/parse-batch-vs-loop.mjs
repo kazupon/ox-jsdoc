@@ -72,17 +72,17 @@ const groups = [
       ['@ox-jsdoc/jsdoccomment (parseCommentBatch)', () => {
         void oxJsdoccommentParseBatch(batch100).blocks
       }],
-      ['ox-jsdoc typed NAPI (loop)', () => { for (const c of batch100) void parseTypedNapi(c).ast }],
-      ['ox-jsdoc-binary NAPI (loop)', () => { for (const c of batch100) void parseBinaryNapi(c).ast }],
-      ['ox-jsdoc-binary NAPI (parseBatch)', () => { void parseBatchBinaryNapi(batch100Items).asts }],
-      ['ox-jsdoc-binary WASM (loop)', () => {
+      ['ox-jsdoc-origin NAPI (typed AST, loop)', () => { for (const c of batch100) void parseTypedNapi(c).ast }],
+      ['ox-jsdoc NAPI (loop)', () => { for (const c of batch100) void parseBinaryNapi(c).ast }],
+      ['ox-jsdoc NAPI (parseBatch)', () => { void parseBatchBinaryNapi(batch100Items).asts }],
+      ['ox-jsdoc WASM (loop)', () => {
         for (const c of batch100) {
           const r = parseBinaryWasm(c)
           void r.ast
           r.free()
         }
       }],
-      ['ox-jsdoc-binary WASM (parseBatch)', () => {
+      ['ox-jsdoc WASM (parseBatch)', () => {
         const r = parseBatchBinaryWasm(batch100Items)
         void r.asts
         r.free()
@@ -107,17 +107,17 @@ const groups = [
       ['@ox-jsdoc/jsdoccomment (parseCommentBatch)', () => {
         void oxJsdoccommentParseBatch(allComments).blocks
       }],
-      ['ox-jsdoc typed NAPI (loop)', () => { for (const c of allComments) void parseTypedNapi(c).ast }],
-      ['ox-jsdoc-binary NAPI (loop)', () => { for (const c of allComments) void parseBinaryNapi(c).ast }],
-      ['ox-jsdoc-binary NAPI (parseBatch)', () => { void parseBatchBinaryNapi(allItems).asts }],
-      ['ox-jsdoc-binary WASM (loop)', () => {
+      ['ox-jsdoc-origin NAPI (typed AST, loop)', () => { for (const c of allComments) void parseTypedNapi(c).ast }],
+      ['ox-jsdoc NAPI (loop)', () => { for (const c of allComments) void parseBinaryNapi(c).ast }],
+      ['ox-jsdoc NAPI (parseBatch)', () => { void parseBatchBinaryNapi(allItems).asts }],
+      ['ox-jsdoc WASM (loop)', () => {
         for (const c of allComments) {
           const r = parseBinaryWasm(c)
           void r.ast
           r.free()
         }
       }],
-      ['ox-jsdoc-binary WASM (parseBatch)', () => {
+      ['ox-jsdoc WASM (parseBatch)', () => {
         const r = parseBatchBinaryWasm(allItems)
         void r.asts
         r.free()
@@ -129,7 +129,7 @@ const groups = [
 for (const g of groups) {
   const benches = g.benches.map(([name, fn]) => ({ name: `${g.title} | ${name}`, fn }))
   const results = await compareRobust(benches)
-  printGroup(g.title, results, g.n, `${g.title} | ox-jsdoc-binary NAPI (parseBatch)`)
+  printGroup(g.title, results, g.n, `${g.title} | ox-jsdoc NAPI (parseBatch)`)
   console.log('')
 }
 

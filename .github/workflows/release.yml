@@ -40,6 +40,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Only the canonical NAPI package needs native builds. The
+        # `ox-jsdoc-binary` alias is a JS-only thin re-export of `ox-jsdoc`
+        # and does not bundle a separate native binding. The `ox-jsdoc-origin`
+        # package is `"private": true` and is not published.
         include:
           - package_name: ox-jsdoc
             package_path: napi/ox-jsdoc
@@ -61,30 +65,6 @@ jobs:
 
           - package_name: ox-jsdoc
             package_path: napi/ox-jsdoc
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            build: pnpm build --target x86_64-pc-windows-msvc
-
-          - package_name: ox-jsdoc-binary
-            package_path: napi/ox-jsdoc-binary
-            os: macos-latest
-            target: aarch64-apple-darwin
-            build: pnpm build --target aarch64-apple-darwin
-
-          - package_name: ox-jsdoc-binary
-            package_path: napi/ox-jsdoc-binary
-            os: macos-latest
-            target: x86_64-apple-darwin
-            build: pnpm build --target x86_64-apple-darwin
-
-          - package_name: ox-jsdoc-binary
-            package_path: napi/ox-jsdoc-binary
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            build: pnpm build --target x86_64-unknown-linux-gnu --use-napi-cross
-
-          - package_name: ox-jsdoc-binary
-            package_path: napi/ox-jsdoc-binary
             os: windows-latest
             target: x86_64-pc-windows-msvc
             build: pnpm build --target x86_64-pc-windows-msvc
@@ -163,7 +143,10 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Build wasm packages
-        run: vpr -F './wasm/*' build --release
+        # Only the canonical WASM package has a wasm-pack build. The
+        # `@ox-jsdoc/wasm-binary` alias is a JS-only thin re-export, and
+        # `@ox-jsdoc/wasm-origin` is `"private": true`.
+        run: vpr -F '@ox-jsdoc/wasm' build --release
 
       - name: Build decoder
         run: vpr -F '@ox-jsdoc/decoder' build
@@ -198,19 +181,12 @@ jobs:
           publish_flags=(--access public --no-git-checks)
           pnpm publish "${publish_flags[@]}"
 
-      - name: Publish ox-jsdoc-binary
+      - name: Publish ox-jsdoc-binary alias
+        # Post-cutover, `ox-jsdoc-binary` is a JS-only thin re-export of the
+        # canonical `ox-jsdoc` package. No native binding bundling, no
+        # `napi pre-publish`, no platform sub-package fan-out.
+        working-directory: napi/ox-jsdoc-binary
         run: |
-          package_path=napi/ox-jsdoc-binary
-          npm_dir=release-dir/ox-jsdoc-binary
-          mkdir -p "${npm_dir}"
-          pnpm -C "${package_path}" exec napi create-npm-dirs --package-json-path ../../${package_path}/package.json --npm-dir ../../${npm_dir}
-          pnpm -C "${package_path}" exec napi artifacts --package-json-path ../../${package_path}/package.json --output-dir ../../artifacts --npm-dir ../../${npm_dir}
-          pnpm -C "${package_path}" exec napi pre-publish --no-gh-release -t npm --package-json-path ../../${package_path}/package.json --npm-dir ../../${npm_dir}
-          cp artifacts/ox-jsdoc-binary-x86_64-unknown-linux-gnu/src-js/bindings.js "${package_path}/src-js/bindings.js"
-          cp artifacts/ox-jsdoc-binary-x86_64-unknown-linux-gnu/src-js/bindings.d.ts "${package_path}/src-js/bindings.d.ts"
-          cd "${package_path}"
-          node -e 'const fs = require("node:fs"); const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")); const required = ["src-js/bindings.js", "src-js/bindings.d.ts", "src-js/index.js", "src-js/index.d.ts"]; pkg.files = [...new Set([...(pkg.files || []), ...required])]; fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");'
-          npm pack --dry-run --json | node -e 'const fs = require("node:fs"); const [{ files }] = JSON.parse(fs.readFileSync(0, "utf8")); const paths = new Set(files.map(file => file.path)); for (const file of ["src-js/bindings.js", "src-js/bindings.d.ts", "src-js/index.js", "src-js/index.d.ts"]) { if (!paths.has(file)) throw new Error(file + " is missing from npm pack"); }'
           publish_flags=(--access public --no-git-checks)
           pnpm publish "${publish_flags[@]}"
 
