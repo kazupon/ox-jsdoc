@@ -1,42 +1,34 @@
-# @ox-jsdoc/wasm
+# @ox-jsdoc/wasm-origin
 
-High-performance JSDoc parser for the browser, powered by WebAssembly.
-
-`@ox-jsdoc/wasm` parses `/** ... */` comment blocks into a plain JSON AST that is ergonomic to consume from JavaScript or TypeScript. It exposes the same API as the native [`ox-jsdoc`](../../napi/ox-jsdoc/) NAPI binding, but runs in any browser environment via a small WebAssembly binary built from the same Rust core (`crates/ox_jsdoc`).
-
-For lazy / zero-copy access (lower allocation, batch parsing, multi-comment amortization), see the sibling package [`@ox-jsdoc/wasm-binary`](../ox-jsdoc-binary/) which exposes the same Rust core through a Binary AST decoder.
+The original typed AST + JSON WASM binding, kept as a benchmark / reference implementation.
 
 <!-- prettier-ignore -->
 > [!WARNING]
-> In the near future, this package will be rebuilt on top of [`ox-jsdoc-binary`](../ox-jsdoc-binary/), which is a **breaking change**. Specifically:
+> **Not for production use.** This package is `"private": true` and is not
+> published to the npm registry. It exists only inside this workspace as the
+> reference implementation against which the canonical Binary AST package
+> [`@ox-jsdoc/wasm`](../ox-jsdoc/) is benchmarked. New code should depend on
+> `@ox-jsdoc/wasm` instead.
 >
-> - `parse` will return a `sourceFile` handle in addition to `ast` / `diagnostics`, and the `ast` will become a lazy decoder node (`RemoteJsdocBlock`) rather than a plain JSON object — field access like `ast.tags[0].tag` will become `ast.tags[0].tag.value`.
-> - Plain-JSON-only options such as `includePositions` and `spacing` may be removed or replaced.
-> - `parseType` / `parseTypeCheck` are not currently exposed by `ox-jsdoc-binary` and may be removed, renamed, or relocated.
->
-> If you depend on the current shape, pin a version and watch the release notes before upgrading.
+> See [`design/010-main-stream-binary/README.md`](../../design/010-main-stream-binary/README.md)
+> for the post-cutover migration that moved this implementation aside under
+> the `origin` name.
 
-## Install
+`@ox-jsdoc/wasm-origin` parses `/** ... */` comment blocks into a plain JSON AST that is ergonomic to consume from JavaScript or TypeScript. It exposes the same API as the original typed AST [`ox-jsdoc-origin`](../../napi/ox-jsdoc-origin/) NAPI binding, but runs in any browser environment via a small WebAssembly binary built from the same Rust core (`crates/ox_jsdoc_origin`).
 
-```sh
-npm install @ox-jsdoc/wasm
-# or
-pnpm add @ox-jsdoc/wasm
-# or
-yarn add @ox-jsdoc/wasm
-```
+For the canonical lazy Binary AST WASM path used by all production callers, see [`@ox-jsdoc/wasm`](../ox-jsdoc/).
 
-## Usage
+## Usage (workspace-only)
+
+This package is not published. The examples below assume it is consumed inside this workspace.
 
 The WASM module must be initialized once before calling `parse()`.
 
 ```js
-import { initWasm, parse } from '@ox-jsdoc/wasm'
+import { initWasm, parse } from '@ox-jsdoc/wasm-origin'
 
-// Initialize the WASM module (required once before calling parse).
 await initWasm()
 
-// Parse a JSDoc block comment.
 const { ast, diagnostics } = parse('/** @param {string} id - The user ID */')
 
 console.log(ast.tags[0].tag) // 'param'
@@ -100,18 +92,18 @@ parseTypeCheck('not a type {{') // false
 | `fenceAware` | `boolean` | `true` | Suppress tag recognition inside fenced code blocks (` ``` `). |
 | `parseTypes` | `boolean` | `false` | Parse `{...}` type expressions in tags into a structured `parsedType` AST (`jsdoc-type-pratt-parser` compatible). |
 | `typeParseMode` | `'jsdoc' \| 'closure' \| 'typescript'` | `'jsdoc'` | Syntax flavor for type expressions when `parseTypes` is on. |
-| `compatMode` | `boolean` | `false` | Emit `@es-joy/jsdoccomment` compatible fields (`delimiter`, `postDelimiter`, `initial`, line indices, …) and exclude ox-jsdoc-specific fields. |
+| `compatMode` | `boolean` | `false` | Emit `@es-joy/jsdoccomment` compatible fields (`delimiter`, `postDelimiter`, `initial`, line indices, …) and exclude origin-specific fields. |
 | `emptyStringForNull` | `boolean` | `false` | Convert absent optional strings (`rawType`, `name`, `namepathOrURL`, `text`) to `""` instead of `null`. Mirrors jsdoccomment serialization. |
 | `includePositions` | `boolean` | `true` | Include ESTree position fields (`start`, `end`, `range`) on every node. |
 | `spacing` | `'compact' \| 'preserve'` | `'compact'` | Spacing mode for compat output. `compact` drops empty description lines like jsdoccomment; `preserve` keeps every scanned line verbatim. `compatMode` only. |
 
-## When to use which package
+## Related packages
 
 | Need | Use |
 | --- | --- |
-| Plain JSON AST, immediate access to all fields | **`@ox-jsdoc/wasm`** (this package) |
-| Lazy access, lowest allocation, batch parsing | [`@ox-jsdoc/wasm-binary`](../ox-jsdoc-binary/) (Binary AST + decoder) |
-| Same API but in Node.js (no `initWasm` needed) | [`ox-jsdoc`](../../napi/ox-jsdoc/) (NAPI binding) |
+| Canonical Binary AST WASM (production) | [`@ox-jsdoc/wasm`](../ox-jsdoc/) |
+| Original typed AST WASM (benchmark / reference only) | **`@ox-jsdoc/wasm-origin`** (this package) |
+| Same typed AST API on Node.js (also private) | [`ox-jsdoc-origin`](../../napi/ox-jsdoc-origin/) |
 
 ## Build from source
 

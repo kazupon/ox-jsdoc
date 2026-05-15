@@ -1,25 +1,19 @@
-# ox-jsdoc-binary
+# ox-jsdoc
 
 High-performance JSDoc parser that returns a lazy Binary AST decoder.
 
-`ox-jsdoc-binary` parses `/** ... */` comment blocks on the Rust side and returns a single binary buffer. Node access on the JavaScript side is lazy: the [`@ox-jsdoc/decoder`](../../packages/decoder/) library walks the buffer on demand and only allocates JS objects for nodes the caller actually inspects. This minimizes allocation churn for large lint passes and unlocks **batch parsing** so common strings (`*`, `*/`, tag names) are interned once across many comments.
+`ox-jsdoc` parses `/** ... */` comment blocks on the Rust side and returns a single binary buffer. Node access on the JavaScript side is lazy: the [`@ox-jsdoc/decoder`](../../packages/decoder/) library walks the buffer on demand and only allocates JS objects for nodes the caller actually inspects. This minimizes allocation churn for large lint passes and unlocks **batch parsing** so common strings (`*`, `*/`, tag names) are interned once across many comments.
 
-For a plain JSON AST that's eagerly materialized in JS, use the sibling package [`ox-jsdoc`](../ox-jsdoc/) instead.
-
-<!-- prettier-ignore -->
-> [!WARNING]
-> This package is planned to be **discontinued** in the near future. The Binary AST decoder implementation that lives here will be merged into [`ox-jsdoc`](../ox-jsdoc/), which will be rebuilt on top of it. Once that migration lands, `ox-jsdoc-binary` will stop receiving updates and is expected to be deprecated. New code should plan to depend on `ox-jsdoc` directly; existing users should pin a version and watch the release notes for the migration path.
->
-> Until then, `ox-jsdoc-binary` is kept published primarily as a **performance reference** — a way to benchmark the Binary AST / lazy decoder path side-by-side against the plain JSON AST path exposed by `ox-jsdoc`, and to validate the perf gains before they are absorbed into `ox-jsdoc` itself.
+This is the canonical Binary AST NAPI binding (post-cutover, see [`design/010-main-stream-binary/README.md`](../../design/010-main-stream-binary/README.md)). The original typed AST + JSON implementation is preserved as the private reference package [`ox-jsdoc-origin`](../ox-jsdoc-origin/).
 
 ## Install
 
 ```sh
-npm install ox-jsdoc-binary
+npm install ox-jsdoc
 # for pnpm
-pnpm add ox-jsdoc-binary
+pnpm add ox-jsdoc
 # for yarn
-yarn add ox-jsdoc-binary
+yarn add ox-jsdoc
 ```
 
 Pre-built binaries are published for:
@@ -33,6 +27,13 @@ Pre-built binaries are published for:
 > [!NOTE]
 > Node.js `^20.19.0 || >=22.12.0` is required.
 
+<!-- prettier-ignore -->
+> [!NOTE]
+> The thin alias package [`ox-jsdoc-binary`](../ox-jsdoc-binary/) re-exports
+> this package for one deprecation cycle to ease migration from the
+> previously-published `ox-jsdoc-binary` `0.0.12`. New code should depend on
+> `ox-jsdoc` directly.
+
 ## Usage
 
 ### `parse(sourceText, options?)`
@@ -40,7 +41,7 @@ Pre-built binaries are published for:
 Parse a single `/** ... */` JSDoc block comment.
 
 ```js
-import { parse } from 'ox-jsdoc-binary'
+import { parse } from 'ox-jsdoc'
 
 const { ast, diagnostics, sourceFile } = parse('/** @param {string} id - The user ID */')
 
@@ -73,7 +74,7 @@ interface ParseResult {
 Parse N JSDoc block comments at once into a single shared Binary AST buffer. This is where this package earns its keep: a single NAPI boundary crossing, shared string table, shared allocation arena.
 
 ```js
-import { parseBatch } from 'ox-jsdoc-binary'
+import { parseBatch } from 'ox-jsdoc'
 
 const { asts, diagnostics, sourceFile } = parseBatch([
   { sourceText: '/** @param {string} a */', baseOffset: 0 },
@@ -104,12 +105,37 @@ const { blocks, diagnostics } = parseBatch(items, {
 // `@ox-jsdoc/jsdoccomment` can wrap into the compat-mode AST.
 ```
 
+### `parseType(typeText, mode?)`
+
+Parse a standalone JSDoc type expression and return its stringified form, or `null` if parsing fails.
+
+```js
+import { parseType } from 'ox-jsdoc'
+
+parseType('string | number') // 'string | number'
+parseType('Array<{ id: string }>') // 'Array<{ id: string }>'
+parseType('not a type {{') // null
+```
+
+### `parseTypeCheck(typeText, mode?)`
+
+Parse a JSDoc type expression and return `true`/`false` for success without the stringification overhead.
+
+```js
+import { parseTypeCheck } from 'ox-jsdoc'
+
+parseTypeCheck('string | number') // true
+parseTypeCheck('not a type {{') // false
+```
+
+`mode` is `'jsdoc' | 'closure' | 'typescript'` (default: `'jsdoc'`).
+
 ### `jsdocVisitorKeys`
 
 Re-exported from `@ox-jsdoc/decoder` for ergonomics — drop into `eslint-visitor-keys` / `estraverse` style traversal.
 
 ```js
-import { jsdocVisitorKeys } from 'ox-jsdoc-binary'
+import { jsdocVisitorKeys } from 'ox-jsdoc'
 ```
 
 ## Options
@@ -145,13 +171,15 @@ The lazy decoder ([`@ox-jsdoc/decoder`](../../packages/decoder/)) walks the buff
 
 See `design/008-oxlint-oxfmt-support/README.md` and the design notes under `design/007-binary-ast/` for the wire format and decoder design.
 
-## When to use which package
+## Related packages
 
 | Need | Use |
 | --- | --- |
-| Plain JSON AST, immediate access to all fields | [`ox-jsdoc`](../ox-jsdoc/) (typed AST binding) |
-| Lazy access, lowest allocation, batch parsing | **`ox-jsdoc-binary`** (this package) |
+| Lazy Binary AST + batch parsing on Node.js | **`ox-jsdoc`** (this package, canonical) |
+| Same Binary AST API in the browser via WebAssembly | [`@ox-jsdoc/wasm`](../../wasm/ox-jsdoc/) |
 | `@es-joy/jsdoccomment` compatible AST shape | `@ox-jsdoc/jsdoccomment` (workspace package, builds on this binding) |
+| Original typed AST + JSON serialization (reference / benchmark only) | [`ox-jsdoc-origin`](../ox-jsdoc-origin/) (private) |
+| Migration alias from `ox-jsdoc-binary` `0.0.12` (one deprecation cycle) | [`ox-jsdoc-binary`](../ox-jsdoc-binary/) (re-exports this package) |
 
 ## Build from source
 

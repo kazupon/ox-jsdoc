@@ -1,28 +1,29 @@
-# @ox-jsdoc/wasm-binary
+# @ox-jsdoc/wasm
 
 High-performance JSDoc parser for the browser, powered by WebAssembly, that returns a lazy Binary AST decoder.
 
-`@ox-jsdoc/wasm-binary` parses `/** ... */` comment blocks on the Rust (WASM) side and returns a single binary buffer. Node access on the JavaScript side is lazy: the [`@ox-jsdoc/decoder`](../../packages/decoder/) library walks the buffer on demand and only allocates JS objects for nodes the caller actually inspects. This minimizes allocation churn for large batch passes and unlocks **batch parsing** so common strings (`*`, `*/`, tag names) are interned once across many comments.
+`@ox-jsdoc/wasm` parses `/** ... */` comment blocks on the Rust (WASM) side and returns a single binary buffer. Node access on the JavaScript side is lazy: the [`@ox-jsdoc/decoder`](../../packages/decoder/) library walks the buffer on demand and only allocates JS objects for nodes the caller actually inspects. This minimizes allocation churn for large batch passes and unlocks **batch parsing** so common strings (`*`, `*/`, tag names) are interned once across many comments.
 
-It exposes the same API as the native [`ox-jsdoc-binary`](../../napi/ox-jsdoc-binary/) NAPI binding, but runs in any browser environment via a WebAssembly binary built from the same Rust core (`crates/ox_jsdoc_binary`).
+It exposes the same API as the canonical native [`ox-jsdoc`](../../napi/ox-jsdoc/) NAPI binding, but runs in any browser environment via a WebAssembly binary built from the same Rust core (`crates/ox_jsdoc`).
 
-For a plain JSON AST that's eagerly materialized in JS, use the sibling package [`@ox-jsdoc/wasm`](../ox-jsdoc/) instead.
-
-<!-- prettier-ignore -->
-> [!WARNING]
-> This package is planned to be **discontinued** in the near future. The Binary AST decoder implementation that lives here will be merged into [`ox-jsdoc`](../ox-jsdoc/), which will be rebuilt on top of it. Once that migration lands, `ox-jsdoc-binary` will stop receiving updates and is expected to be deprecated. New code should plan to depend on `ox-jsdoc` directly; existing users should pin a version and watch the release notes for the migration path.
->
-> Until then, `ox-jsdoc-binary` is kept published primarily as a **performance reference** — a way to benchmark the Binary AST / lazy decoder path side-by-side against the plain JSON AST path exposed by `ox-jsdoc`, and to validate the perf gains before they are absorbed into `ox-jsdoc` itself.
+This is the canonical Binary AST WASM binding (post-cutover, see [`design/010-main-stream-binary/README.md`](../../design/010-main-stream-binary/README.md)). The original typed AST + JSON implementation is preserved as the private reference package [`@ox-jsdoc/wasm-origin`](../ox-jsdoc-origin/).
 
 ## Install
 
 ```sh
-npm install @ox-jsdoc/wasm-binary
+npm install @ox-jsdoc/wasm
 # or
-pnpm add @ox-jsdoc/wasm-binary
+pnpm add @ox-jsdoc/wasm
 # or
-yarn add @ox-jsdoc/wasm-binary
+yarn add @ox-jsdoc/wasm
 ```
+
+<!-- prettier-ignore -->
+> [!NOTE]
+> The thin alias package [`@ox-jsdoc/wasm-binary`](../ox-jsdoc-binary/)
+> re-exports this package for one deprecation cycle to ease migration from
+> the previously-published `@ox-jsdoc/wasm-binary` `0.0.12`. New code should
+> depend on `@ox-jsdoc/wasm` directly.
 
 ## Usage
 
@@ -33,7 +34,7 @@ The WASM module must be initialized once before calling `parse()` / `parseBatch(
 Parse a single `/** ... */` JSDoc block comment.
 
 ```js
-import { initWasm, parse } from '@ox-jsdoc/wasm-binary'
+import { initWasm, parse } from '@ox-jsdoc/wasm'
 
 await initWasm()
 
@@ -77,7 +78,7 @@ interface ParseResult {
 Parse N JSDoc block comments at once into a single shared Binary AST buffer. This is where this package earns its keep: a single WASM boundary crossing, shared string table, shared allocation arena.
 
 ```js
-import { initWasm, parseBatch } from '@ox-jsdoc/wasm-binary'
+import { initWasm, parseBatch } from '@ox-jsdoc/wasm'
 
 await initWasm()
 
@@ -109,12 +110,41 @@ const { blocks, diagnostics } = parseBatch(items, {
 // `@ox-jsdoc/jsdoccomment` can wrap into the compat-mode AST.
 ```
 
+### `parseType(typeText, mode?)`
+
+Parse a standalone JSDoc type expression and return its stringified form, or `null` if parsing fails.
+
+```js
+import { initWasm, parseType } from '@ox-jsdoc/wasm'
+
+await initWasm()
+
+parseType('string | number') // 'string | number'
+parseType('Array<{ id: string }>') // 'Array<{ id: string }>'
+parseType('not a type {{') // null
+```
+
+### `parseTypeCheck(typeText, mode?)`
+
+Parse a JSDoc type expression and return `true`/`false` for success without the stringification overhead.
+
+```js
+import { initWasm, parseTypeCheck } from '@ox-jsdoc/wasm'
+
+await initWasm()
+
+parseTypeCheck('string | number') // true
+parseTypeCheck('not a type {{') // false
+```
+
+`mode` is `'jsdoc' | 'closure' | 'typescript'` (default: `'jsdoc'`).
+
 ### `jsdocVisitorKeys`
 
 Re-exported from `@ox-jsdoc/decoder` for ergonomics — drop into `eslint-visitor-keys` / `estraverse` style traversal.
 
 ```js
-import { jsdocVisitorKeys } from '@ox-jsdoc/wasm-binary'
+import { jsdocVisitorKeys } from '@ox-jsdoc/wasm'
 ```
 
 ## Options
@@ -148,14 +178,15 @@ The lazy decoder ([`@ox-jsdoc/decoder`](../../packages/decoder/)) walks the buff
 
 See `design/008-oxlint-oxfmt-support/README.md` and the design notes under `design/007-binary-ast/` for the wire format and decoder design.
 
-## When to use which package
+## Related packages
 
 | Need | Use |
 | --- | --- |
-| Plain JSON AST, immediate access to all fields | [`@ox-jsdoc/wasm`](../ox-jsdoc/) (typed AST WASM binding) |
-| Lazy access, lowest allocation, batch parsing | **`@ox-jsdoc/wasm-binary`** (this package) |
-| Same API but in Node.js (no `initWasm` needed) | [`ox-jsdoc-binary`](../../napi/ox-jsdoc-binary/) (NAPI binding) |
-| `@es-joy/jsdoccomment` compatible AST shape | `@ox-jsdoc/jsdoccomment` (workspace package, builds on these bindings) |
+| Lazy Binary AST + batch parsing in the browser | **`@ox-jsdoc/wasm`** (this package, canonical) |
+| Same Binary AST API on Node.js (no `initWasm` needed) | [`ox-jsdoc`](../../napi/ox-jsdoc/) |
+| `@es-joy/jsdoccomment` compatible AST shape | `@ox-jsdoc/jsdoccomment` (workspace package) |
+| Original typed AST + JSON serialization (reference / benchmark only) | [`@ox-jsdoc/wasm-origin`](../ox-jsdoc-origin/) (private) |
+| Migration alias from `@ox-jsdoc/wasm-binary` `0.0.12` (one deprecation cycle) | [`@ox-jsdoc/wasm-binary`](../ox-jsdoc-binary/) (re-exports this package) |
 
 ## Build from source
 
