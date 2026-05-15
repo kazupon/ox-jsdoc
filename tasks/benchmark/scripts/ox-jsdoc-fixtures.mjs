@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 
 import { bench, run } from "mitata";
 import { parseSync } from "oxc-parser";
-import { parse } from "ox-jsdoc";
+import { parse } from "ox-jsdoc-origin";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");

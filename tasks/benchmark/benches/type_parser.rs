@@ -2,7 +2,7 @@
 // @license MIT
 //
 
-use ox_jsdoc::{ParseMode, ParseOptions, parse_comment, parse_type};
+use ox_jsdoc_origin::{ParseMode, ParseOptions, parse_comment, parse_type};
 use ox_jsdoc_benchmark::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use oxc_allocator::Allocator;
 

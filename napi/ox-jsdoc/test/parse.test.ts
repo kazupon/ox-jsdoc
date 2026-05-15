@@ -1,17 +1,29 @@
+import type {
+  RemoteJsdocBlock,
+  RemoteJsdocInlineTag,
+  RemoteJsdocTag,
+  RemoteJsdocTagName,
+  RemoteJsdocTagNameValue,
+  RemoteJsdocTypeSource
+} from '@ox-jsdoc/decoder'
 import { describe, expect, it } from 'vite-plus/test'
-import { parse } from '../src-js/index.js'
 
-describe('parse', () => {
-  it('parses a basic param tag', () => {
+import { parse, parseBatch } from '../src-js/index.js'
+
+describe('parse (binary NAPI binding)', () => {
+  it('parses a basic param tag and exposes lazy getters', () => {
     const result = parse('/** @param {string} id - The user ID */')
     expect(result.diagnostics).toEqual([])
     expect(result.ast).not.toBeNull()
-    expect(result.ast!.type).toBe('JsdocBlock')
-    expect(result.ast!.tags.length).toBe(1)
-    expect(result.ast!.tags[0].tag).toBe('param')
-    expect(result.ast!.tags[0].rawType).toBe('string')
-    expect(result.ast!.tags[0].name).toBe('id')
-    expect(result.ast!.tags[0].description).toBe('The user ID')
+    const ast = result.ast!
+    expect(ast.type).toBe('JsdocBlock')
+    expect(ast.tags.length).toBe(1)
+    const tag = ast.tags[0] as RemoteJsdocTag
+    expect(tag.type).toBe('JsdocTag')
+    expect((tag.tag as RemoteJsdocTagName).value).toBe('param')
+    expect((tag.rawType as RemoteJsdocTypeSource).raw).toBe('string')
+    expect((tag.name as RemoteJsdocTagNameValue).raw).toBe('id')
+    expect(tag.description).toBe('The user ID')
   })
 
   it('parses description with inline tags', () => {
@@ -20,16 +32,19 @@ describe('parse', () => {
     expect(result.ast).not.toBeNull()
     expect(result.ast!.description).toContain('{@link Foo}')
     expect(result.ast!.inlineTags.length).toBe(1)
-    expect(result.ast!.inlineTags[0].tag).toBe('link')
-    expect(result.ast!.inlineTags[0].namepathOrURL).toBe('Foo')
+    const inline = result.ast!.inlineTags[0] as RemoteJsdocInlineTag
+    expect(inline.format).toBe('plain')
+    expect(inline.namepathOrURL).toBe('Foo')
   })
 
   it('parses multiple tags', () => {
     const result = parse('/**\n * @param {string} id\n * @returns {User}\n */')
     expect(result.diagnostics).toEqual([])
     expect(result.ast!.tags.length).toBe(2)
-    expect(result.ast!.tags[0].tag).toBe('param')
-    expect(result.ast!.tags[1].tag).toBe('returns')
+    const first = result.ast!.tags[0] as RemoteJsdocTag
+    const second = result.ast!.tags[1] as RemoteJsdocTag
+    expect((first.tag as RemoteJsdocTagName).value).toBe('param')
+    expect((second.tag as RemoteJsdocTagName).value).toBe('returns')
   })
 
   it('returns diagnostics for malformed input', () => {
@@ -38,19 +53,23 @@ describe('parse', () => {
     expect(result.diagnostics[0].message).toContain('inline tag')
   })
 
-  it('rejects non-jsdoc input', () => {
+  it('returns null ast and a diagnostic for non-JSDoc input', () => {
     const result = parse('/* plain */')
     expect(result.ast).toBeNull()
-    expect(result.diagnostics.length).toBeGreaterThan(0)
+    expect(result.diagnostics.length).toBe(1)
+    expect(result.diagnostics[0].message).toContain('not a JSDoc block')
   })
 
-  it('supports fenceAware option', () => {
-    const source = '/**\n * @example\n * ```ts\n * @decorator()\n * ```\n * @returns {void}\n */'
-    const result = parse(source, { fenceAware: true })
+  it('exposes parsed_type when parseTypes is enabled', () => {
+    const result = parse('/**\n * @param {string | number} id\n */', {
+      parseTypes: true,
+      typeParseMode: 'typescript'
+    })
     expect(result.diagnostics).toEqual([])
-    expect(result.ast!.tags.length).toBe(2)
-    expect(result.ast!.tags[0].tag).toBe('example')
-    expect(result.ast!.tags[1].tag).toBe('returns')
+    const tag = result.ast!.tags[0] as RemoteJsdocTag
+    const parsed = tag.parsedType
+    expect(parsed).not.toBeNull()
+    expect(parsed!.type).toBe('TypeUnion')
   })
 
   it('matches oxc_jsdoc tag splitting for indented code blocks', () => {
@@ -58,88 +77,90 @@ describe('parse', () => {
       '/**\n * @deprecated\n *     @myDecorator\n *     class Foo {}\n * @type {string}\n */'
     const result = parse(source)
     expect(result.diagnostics).toEqual([])
-    expect(result.ast!.tags.map(tag => tag.tag)).toEqual(['deprecated', 'type'])
-    expect(result.ast!.tags[0].rawBody).toBe('    @myDecorator\n    class Foo {}')
+    const tags = result.ast!.tags as RemoteJsdocTag[]
+    expect(tags.map(tag => (tag.tag as RemoteJsdocTagName).value)).toEqual(['deprecated', 'type'])
+    expect(tags[0].rawBody).toBe('    @myDecorator\n    class Foo {}')
   })
 
-  it('returns ast with correct span', () => {
-    const source = '/** @param x */'
-    const result = parse(source)
-    expect(result.ast!.start).toBe(0)
-    expect(result.ast!.end).toBe(source.length)
-    expect(result.ast!.range).toEqual([0, source.length])
-  })
-
-  it('handles optional parameter syntax', () => {
-    const result = parse('/** @param {string} [name=default] - desc */')
+  it('respects baseOffset when computing absolute ranges', () => {
+    const result = parse('/** ok */', { baseOffset: 100 })
     expect(result.diagnostics).toEqual([])
-    const tag = result.ast!.tags[0]
-    expect(tag.optional).toBe(true)
-    expect(tag.defaultValue).toBe('default')
-    expect(tag.name).toBe('name')
-  })
-
-  it('handles empty comment', () => {
-    const result = parse('/** */')
-    expect(result.diagnostics).toEqual([])
-    expect(result.ast).not.toBeNull()
-    expect(result.ast!.tags.length).toBe(0)
+    expect((result.ast as RemoteJsdocBlock).range).toEqual([100, 109])
   })
 })
 
-describe('parse with serialize options', () => {
-  it('emits compat-mode delimiter / line metadata when compatMode is true', () => {
-    const source = '/**\n * @param {string} id\n */'
-    const result = parse(source, { compatMode: true })
+describe('parseBatch (binary NAPI binding)', () => {
+  it('returns empty result for an empty input', () => {
+    const result = parseBatch([])
+    expect(result.asts).toEqual([])
     expect(result.diagnostics).toEqual([])
-    const block = result.ast!
-    expect(block.delimiter).toBe('/**')
-    expect(block.terminal).toBe('*/')
-    expect(typeof block.endLine).toBe('number')
-    expect(typeof block.hasPreterminalDescription).toBe('number')
-    const tag = block.tags[0]
-    expect(tag.tag).toBe('param')
-    expect(tag).not.toHaveProperty('optional')
-    expect(tag).not.toHaveProperty('defaultValue')
-    expect(tag).not.toHaveProperty('rawBody')
-    expect(tag).not.toHaveProperty('body')
-    expect(tag.delimiter).toBe('*')
-    expect(typeof tag.postDelimiter).toBe('string')
+    expect(result.sourceFile.rootCount).toBe(0)
   })
 
-  it('omits compat-only fields by default', () => {
-    const result = parse('/**\n * @param {string} id\n */')
-    const block = result.ast!
-    expect(block).not.toHaveProperty('delimiter')
-    expect(block).not.toHaveProperty('endLine')
-    const tag = block.tags[0]
-    expect(tag).toHaveProperty('optional', false)
-    expect(tag).not.toHaveProperty('postDelimiter')
+  it('parses N comments and yields one root per item', () => {
+    const result = parseBatch([
+      { sourceText: '/** first */' },
+      { sourceText: '/**\n * @param {string} id\n */' },
+      { sourceText: '/** third */' }
+    ])
+    expect(result.diagnostics).toEqual([])
+    expect(result.asts.length).toBe(3)
+    expect(result.asts[0]!.description).toBe('first')
+    const tag = result.asts[1]!.tags[0] as RemoteJsdocTag
+    expect((tag.tag as RemoteJsdocTagName).value).toBe('param')
+    expect(result.asts[2]!.description).toBe('third')
   })
 
-  it('converts null optional strings to "" when emptyStringForNull is true', () => {
-    const result = parse('/** @author */', {
+  it('marks failed items with null and emits diagnostic with rootIndex', () => {
+    const result = parseBatch([
+      { sourceText: '/** good */' },
+      { sourceText: '/* not jsdoc */' },
+      { sourceText: '/** also good */' }
+    ])
+    expect(result.asts[0]).not.toBeNull()
+    expect(result.asts[1]).toBeNull()
+    expect(result.asts[2]).not.toBeNull()
+    const failureDiag = result.diagnostics.find(d => d.rootIndex === 1)
+    expect(failureDiag).toBeDefined()
+    expect(failureDiag!.message).toContain('not a JSDoc block')
+  })
+
+  it('respects per-item baseOffset for absolute range computation', () => {
+    const result = parseBatch([
+      { sourceText: '/** a */', baseOffset: 1000 },
+      { sourceText: '/** b */', baseOffset: 2000 }
+    ])
+    expect((result.asts[0] as RemoteJsdocBlock).range[0]).toBe(1000)
+    expect((result.asts[1] as RemoteJsdocBlock).range[0]).toBe(2000)
+  })
+
+  it('can return jsdoccomment input blocks for the batch hot path', () => {
+    const result = parseBatch([{ sourceText: '/**\n * @param {string} id Description.\n */' }], {
       compatMode: true,
-      emptyStringForNull: true
+      preserveWhitespace: true,
+      emptyStringForNull: true,
+      output: 'jsdoccomment-input'
     })
-    const tag = result.ast!.tags[0]
-    expect(tag.tag).toBe('author')
-    expect(tag.rawType).toBe('') // would be null without emptyStringForNull
-    expect(tag.name).toBe('') // ditto
+
+    expect(result.blocks).toHaveLength(1)
+    const block = result.blocks[0]!
+    expect(block.tags).toEqual([])
+    expect(block.source[1].tokens.tag).toBe('@param')
+    expect(block.source[1].tokens.type).toBe('{string}')
+    expect(block.source[1].tokens.name).toBe('id')
+    expect(block.source[1].tokens.description).toBe('Description.')
   })
 
-  it('keeps null optional strings as null when emptyStringForNull is false', () => {
-    const result = parse('/** @author */', { compatMode: true })
-    const tag = result.ast!.tags[0]
-    expect(tag.rawType).toBeNull()
-    expect(tag.name).toBeNull()
-  })
-
-  it('drops position fields when includePositions is false', () => {
-    const result = parse('/** @param x */', { includePositions: false })
-    const block = result.ast!
-    expect(block).not.toHaveProperty('start')
-    expect(block).not.toHaveProperty('end')
-    expect(block).not.toHaveProperty('range')
+  it('shares a single buffer across N roots (string dedup engaged)', () => {
+    const single = parseBatch([{ sourceText: '/**\n * @param {string} id\n */' }])
+    const singleBytes = (single.sourceFile as unknown as { view: DataView }).view.byteLength
+    const batch50 = parseBatch(
+      Array.from({ length: 50 }, () => ({ sourceText: '/**\n * @param {string} id\n */' }))
+    )
+    const batchBytes = (batch50.sourceFile as unknown as { view: DataView }).view.byteLength
+    const perItem = batchBytes / 50
+    // Per-item amortised size must be smaller than the standalone size
+    // (header + dedup table amortise away).
+    expect(perItem).toBeLessThan(singleBytes)
   })
 })

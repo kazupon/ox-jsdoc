@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseSync } from 'oxc-parser'
-import { parse as parseTyped } from 'ox-jsdoc'
-import { parse as parseBinary } from 'ox-jsdoc-binary'
+import { parse as parseTyped } from 'ox-jsdoc-origin'
+import { parse as parseBinary } from 'ox-jsdoc'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const fixturePath = path.resolve(repoRoot, 'fixtures/perf/source/typescript-checker.ts')

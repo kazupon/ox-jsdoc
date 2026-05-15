@@ -18,7 +18,7 @@ import { bench, group, run } from "mitata";
 import { parseSync } from "oxc-parser";
 import { parse as commentParserParse } from "comment-parser";
 import { parseComment as jsdoccommentParse } from "@es-joy/jsdoccomment";
-import { parse as oxParse, parseType as oxParseType, parseTypeCheck as oxParseTypeCheck } from "ox-jsdoc";
+import { parse as oxParse, parseType as oxParseType, parseTypeCheck as oxParseTypeCheck } from "ox-jsdoc-origin";
 import { parse as jtpParse } from "jsdoc-type-pratt-parser";
 
 // Load wasm version

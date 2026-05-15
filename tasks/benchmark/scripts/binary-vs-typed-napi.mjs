@@ -26,8 +26,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { parseSync } from 'oxc-parser'
-import { parse as parseTyped } from 'ox-jsdoc'
-import { parse as parseBinary, parseBatch as parseBatchBinary } from 'ox-jsdoc-binary'
+import { parse as parseTyped } from 'ox-jsdoc-origin'
+import { parse as parseBinary, parseBatch as parseBatchBinary } from 'ox-jsdoc'
 
 import { compareRobust, fmtDuration } from './lib/measure.mjs'
 

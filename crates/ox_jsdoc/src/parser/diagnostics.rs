@@ -2,27 +2,42 @@
 // @license MIT
 //
 
-use oxc_diagnostics::OxcDiagnostic;
+//! Parser-level recovery and structural diagnostics.
+//!
+//! Verbatim port of `crates/ox_jsdoc/src/parser/diagnostics.rs`. Tag-policy
+//! validation lives in `validator` (Phase 1.3+).
+//!
+//! In the typed-AST parser these diagnostics are wrapped in
+//! `oxc_diagnostics::OxcDiagnostic`. The binary parser keeps a leaner
+//! representation that points at an interned message string + the
+//! offending span; consumers can convert into `OxcDiagnostic` at the API
+//! boundary if richer formatting is needed.
 
 /// Parser-level recovery and structural errors.
-///
-/// These diagnostics describe malformed comment syntax. Tag-policy validation
-/// lives in `validator`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParserDiagnosticKind {
+    /// Input text does not start with `/**`.
     NotAJSDocBlock,
+    /// Input text does not end with `*/`.
     UnclosedBlockComment,
+    /// Source span exceeds the u32 byte offset range.
     SpanOverflow,
+    /// `{@...}` inline tag is missing its closing `}`.
     UnclosedInlineTag,
+    /// `{...}` type expression is missing its closing `}`.
     UnclosedTypeExpression,
+    /// Triple-backtick fenced code block is missing its closing fence.
     UnclosedFence,
+    /// Tag header could not be tokenised (e.g. `@` followed by non-identifier).
     InvalidTagStart,
+    /// Inline tag body could not be tokenised.
     InvalidInlineTagStart,
 }
 
-/// Build an `oxc_diagnostics` error for parser diagnostics.
-pub fn diagnostic(kind: ParserDiagnosticKind) -> OxcDiagnostic {
-    let message = match kind {
+/// Human-readable message text for a parser diagnostic.
+#[must_use]
+pub const fn parser_diagnostic_message(kind: ParserDiagnosticKind) -> &'static str {
+    match kind {
         ParserDiagnosticKind::NotAJSDocBlock => "input is not a JSDoc block comment",
         ParserDiagnosticKind::UnclosedBlockComment => "JSDoc block comment is not closed",
         ParserDiagnosticKind::SpanOverflow => "JSDoc comment span exceeds u32 byte offset range",
@@ -31,16 +46,10 @@ pub fn diagnostic(kind: ParserDiagnosticKind) -> OxcDiagnostic {
         ParserDiagnosticKind::UnclosedFence => "fenced code block is not closed",
         ParserDiagnosticKind::InvalidTagStart => "invalid block tag start",
         ParserDiagnosticKind::InvalidInlineTagStart => "invalid inline tag start",
-    };
-
-    OxcDiagnostic::error(message)
+    }
 }
 
-/// Type parser diagnostics.
-///
-/// These diagnostics describe malformed type expressions inside `{...}`.
-/// Consolidated in the same file as `ParserDiagnosticKind` so both parsers
-/// share one diagnostics module.
+/// Type parser diagnostics for malformed `{...}` expressions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TypeDiagnosticKind {
     /// No prefix parslet matched the current token.
@@ -63,9 +72,10 @@ pub enum TypeDiagnosticKind {
     EarlyEndOfParse,
 }
 
-/// Build an `oxc_diagnostics` error for type parser diagnostics.
-pub fn type_diagnostic(kind: TypeDiagnosticKind) -> OxcDiagnostic {
-    let message = match kind {
+/// Human-readable message text for a type-parser diagnostic.
+#[must_use]
+pub const fn type_diagnostic_message(kind: TypeDiagnosticKind) -> &'static str {
+    match kind {
         TypeDiagnosticKind::NoParsletFound => "unexpected token in type expression",
         TypeDiagnosticKind::ExpectedToken => "expected token in type expression",
         TypeDiagnosticKind::UnclosedGeneric => "generic type parameter list is not closed",
@@ -75,7 +85,26 @@ pub fn type_diagnostic(kind: TypeDiagnosticKind) -> OxcDiagnostic {
         TypeDiagnosticKind::UnclosedTemplateLiteral => "template literal type is not closed",
         TypeDiagnosticKind::InvalidTypeExpression => "invalid type expression",
         TypeDiagnosticKind::EarlyEndOfParse => "unexpected token after type expression",
-    };
+    }
+}
 
-    OxcDiagnostic::error(message)
+/// Either a parser-level or a type-parser-level diagnostic kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiagnosticKind {
+    /// Structural parser diagnostic.
+    Parser(ParserDiagnosticKind),
+    /// Type expression parser diagnostic.
+    Type(TypeDiagnosticKind),
+}
+
+impl DiagnosticKind {
+    /// Resolve into a static message string.
+    #[inline]
+    #[must_use]
+    pub const fn message(self) -> &'static str {
+        match self {
+            Self::Parser(k) => parser_diagnostic_message(k),
+            Self::Type(k) => type_diagnostic_message(k),
+        }
+    }
 }

@@ -17,16 +17,16 @@
   "dependencies": {
     "@es-joy/jsdoccomment": "^0.50.1",
     "@ox-jsdoc/eslint-plugin-jsdoc": "workspace:*",
+    "@ox-jsdoc/wasm-origin": "workspace:*",
     "@ox-jsdoc/wasm": "workspace:*",
-    "@ox-jsdoc/wasm-binary": "workspace:*",
     "@typescript-eslint/parser": "^8.46.0",
     "comment-parser": "^1.4.1",
     "eslint": "^9.39.4",
     "eslint-plugin-jsdoc": "^62.9.0",
     "jsdoc-type-pratt-parser": "^4.1.0",
     "mitata": "^1.0.34",
+    "ox-jsdoc-origin": "workspace:*",
     "ox-jsdoc": "workspace:*",
-    "ox-jsdoc-binary": "workspace:*",
     "oxc-parser": "^0.124.0",
     "oxlint": "^1.60.0"
   }

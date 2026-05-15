@@ -13,12 +13,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { parseSync } from 'oxc-parser'
-import { initWasm as initTypedWasm, parse as parseTypedWasm } from '@ox-jsdoc/wasm'
+import { initWasm as initTypedWasm, parse as parseTypedWasm } from '@ox-jsdoc/wasm-origin'
 import {
   initWasm as initBinaryWasm,
   parse as parseBinaryWasm,
   parseBatch as parseBatchBinaryWasm
-} from '@ox-jsdoc/wasm-binary'
+} from '@ox-jsdoc/wasm'
 
 import { compareRobust, fmtDuration } from './lib/measure.mjs'
 

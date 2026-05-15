@@ -21,16 +21,16 @@ import {
   parseComment as oxJsdoccommentParse,
   parseCommentBatch as oxJsdoccommentParseBatch
 } from '../../../packages/jsdoccomment/src/index.js'
-import { parse as parseTypedNapi } from 'ox-jsdoc'
+import { parse as parseTypedNapi } from 'ox-jsdoc-origin'
 import {
   parse as parseBinaryNapi,
   parseBatch as parseBatchBinaryNapi
-} from 'ox-jsdoc-binary'
+} from 'ox-jsdoc'
 import {
   initWasm as initBinaryWasm,
   parse as parseBinaryWasm,
   parseBatch as parseBatchBinaryWasm
-} from '@ox-jsdoc/wasm-binary'
+} from '@ox-jsdoc/wasm'
 
 import { compareRobust, fmtDuration } from './lib/measure.mjs'
 

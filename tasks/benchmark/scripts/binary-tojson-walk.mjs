@@ -22,7 +22,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { parseSync } from 'oxc-parser'
-import { parse as parseBinary } from 'ox-jsdoc-binary'
+import { parse as parseBinary } from 'ox-jsdoc'
 
 import { compareRobust, fmtDuration } from './lib/measure.mjs'
 

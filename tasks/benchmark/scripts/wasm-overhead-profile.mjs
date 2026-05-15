@@ -26,7 +26,7 @@ import {
   initWasm as initBinaryWasm,
   parse as parseBinaryWasm,
   parseBatch as parseBatchWasm
-} from '@ox-jsdoc/wasm-binary'
+} from '@ox-jsdoc/wasm'
 import {
   parse_jsdoc as parseJsdocWasmRaw,
   parse_jsdoc_batch as parseJsdocBatchWasmRaw

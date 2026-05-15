@@ -37,7 +37,7 @@ import {
   napiMarshallingInOnly,
   napiMarshallingOutOnly
 } from 'ox-jsdoc-binary/src-js/bindings.js'
-import { parseBatch as parseBatchWrapper } from 'ox-jsdoc-binary'
+import { parseBatch as parseBatchWrapper } from 'ox-jsdoc'
 import { RemoteSourceFile } from '../../../packages/decoder/src/index.js'
 
 import { compareRobust, fmtDuration } from './lib/measure.mjs'

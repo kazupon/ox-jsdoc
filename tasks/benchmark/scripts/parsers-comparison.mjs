@@ -22,10 +22,10 @@ import { bench, group, run } from 'mitata'
 import { parseSync } from 'oxc-parser'
 import { parse as commentParserParse } from 'comment-parser'
 import { parseComment as jsdoccommentParse } from '@es-joy/jsdoccomment'
-import { parse as parseTypedNapi } from 'ox-jsdoc'
-import { parse as parseBinaryNapi } from 'ox-jsdoc-binary'
-import { initWasm as initTypedWasm, parse as parseTypedWasm } from '@ox-jsdoc/wasm'
-import { initWasm as initBinaryWasm, parse as parseBinaryWasm } from '@ox-jsdoc/wasm-binary'
+import { parse as parseTypedNapi } from 'ox-jsdoc-origin'
+import { parse as parseBinaryNapi } from 'ox-jsdoc'
+import { initWasm as initTypedWasm, parse as parseTypedWasm } from '@ox-jsdoc/wasm-origin'
+import { initWasm as initBinaryWasm, parse as parseBinaryWasm } from '@ox-jsdoc/wasm'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../../..')

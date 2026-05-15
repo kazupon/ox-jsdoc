@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { parseBatch } from 'ox-jsdoc-binary'
+import { parseBatch } from 'ox-jsdoc'
 
 import { fmtDuration, measureRobust } from './lib/measure.mjs'
 

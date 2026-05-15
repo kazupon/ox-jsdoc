@@ -1,0 +1,65 @@
+{
+  "name": "ox-jsdoc-origin",
+  "version": "0.0.12",
+  "private": true,
+  "description": "High-performance JSDoc parser powered by Rust and NAPI. Reference / benchmark only — not for production use.",
+  "keywords": [
+    "jsdoc",
+    "napi",
+    "parser",
+    "rust"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "kazuya kawaguchi",
+    "email": "kawakazu80@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kazupon/ox-jsdoc",
+    "directory": "napi/ox-jsdoc-origin"
+  },
+  "funding": "https://github.com/sponsors/kazupon",
+  "files": [
+    "src-js/bindings.js",
+    "src-js/bindings.d.ts",
+    "src-js/index.js",
+    "src-js/index.d.ts"
+  ],
+  "type": "module",
+  "main": "src-js/index.js",
+  "types": "src-js/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src-js/index.d.ts",
+      "default": "./src-js/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build-dev": "napi build --esm --platform --js bindings.js --dts bindings.d.ts --output-dir src-js",
+    "build": "pnpm run build-dev --release",
+    "test": "vp test run"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.6.1",
+    "jsdoc-type-pratt-parser": "^4.1.0",
+    "vite-plus": "catalog:"
+  },
+  "napi": {
+    "binaryName": "ox_jsdoc_origin",
+    "packageName": "@ox-jsdoc/origin-binding",
+    "targets": [
+      "aarch64-apple-darwin",
+      "x86_64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "x86_64-pc-windows-msvc"
+    ]
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

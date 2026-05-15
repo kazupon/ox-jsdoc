@@ -2,7 +2,7 @@
 import {
   parse as oxJsdocBinaryParse,
   parseBatch as oxJsdocBinaryParseBatch
-} from 'ox-jsdoc-binary'
+} from 'ox-jsdoc'
 
 import { parseInlineTags } from './parseInlineTags.js'
 
