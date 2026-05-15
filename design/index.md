@@ -38,6 +38,10 @@ This directory is the table of contents for the design documents of `ox-jsdoc`. 
 
 - [JSDoc linter benchmark design](./009-jsdoc-linter-benchmark/README.md)
 
+### Internal
+
+- [Mainstream Binary AST migration](./010-main-stream-binary/README.md)
+
 ### Diagrams
 
 - [AST overview diagram](./ast-example.svg)
