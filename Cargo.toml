@@ -1,7 +1,9 @@
 [workspace]
 resolver = "3"
 members = ["crates/*", "tasks/benchmark", "tasks/xtask", "napi/*", "wasm/*"]
-exclude = ["refers/*"]
+# JS-only thin alias directories under napi/ and wasm/ have no Cargo.toml
+# and must be excluded from the workspace glob explicitly.
+exclude = ["refers/*", "napi/ox-jsdoc-binary", "wasm/ox-jsdoc-binary"]
 
 [workspace.package]
 edition = "2024"

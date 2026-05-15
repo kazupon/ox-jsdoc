@@ -5,7 +5,7 @@ const PAYLOAD_MASK = 1073741823;
 /**
 * Low-level helpers shared by every Remote* class.
 *
-* Mirrors `crates/ox_jsdoc_binary/src/decoder/helpers.rs`.
+* Mirrors `crates/ox_jsdoc/src/decoder/helpers.rs`.
 *
 * @author kazuya kawaguchi (a.k.a. kazupon)
 * @license MIT
@@ -1682,7 +1682,7 @@ var RemoteNodeListNode = class {
 /**
 * Lazy classes for the 45 TypeNode kinds (`0x80 - 0xAC`).
 *
-* Mirrors `crates/ox_jsdoc_binary/src/decoder/nodes/type_node.rs`.
+* Mirrors `crates/ox_jsdoc/src/decoder/nodes/type_node.rs`.
 *
 * Three structural patterns are at play:
 *
@@ -1702,7 +1702,7 @@ var RemoteNodeListNode = class {
 * Single per-list metadata slot offset for TypeNode parents that own one
 * variable-length child list (TypeUnion, TypeIntersection, TypeTuple,
 * TypeObject, TypeGeneric, TypeTypeParameter, TypeParameterList). Mirrors
-* `crates/ox_jsdoc_binary/src/writer/nodes/type_node.rs::TYPE_LIST_PARENT_SLOT`.
+* `crates/ox_jsdoc/src/writer/nodes/type_node.rs::TYPE_LIST_PARENT_SLOT`.
 */
 const TYPE_LIST_PARENT_SLOT = 0;
 function commonData(internal) {
