@@ -25,7 +25,7 @@ Key decisions:
 
 ## 2. Encoder tests (writer → expected byte sequence)
 
-Each `write_*` function under `crates/ox_jsdoc_binary/src/writer/` produces the expected byte sequence:
+Each `write_*` function under `crates/ox_jsdoc/src/writer/` produces the expected byte sequence:
 
 ```rust
 #[test]
@@ -72,10 +72,10 @@ fn roundtrip_preserves_semantics() {
 
 ## 5. Compatibility tests (typed AST vs binary AST, equivalence verification)
 
-Serialize the outputs of `crates/ox_jsdoc/` (typed AST) and `crates/ox_jsdoc_binary/` to JSON and compare them. During the Phase 1.0-1.2 coexistence period, this guarantees that both parsers return the same AST:
+Serialize the outputs of `crates/ox_jsdoc/` (typed AST) and `crates/ox_jsdoc/` to JSON and compare them. During the Phase 1.0-1.2 coexistence period, this guarantees that both parsers return the same AST:
 
 ```rust
-// crates/ox_jsdoc_binary/tests/compat_with_typed_ast.rs
+// crates/ox_jsdoc/tests/compat_with_typed_ast.rs
 #[test]
 fn typed_and_binary_produce_equivalent_ast() {
     for source in load_all_fixtures() {
@@ -90,10 +90,10 @@ This runs on **the same fixtures** as the performance comparison benchmark, simu
 
 ## 6. JS-side tests (vitest, both bindings)
 
-The same test cases run in `napi/ox-jsdoc-binary/test/` and `wasm/ox-jsdoc-binary/test/`:
+The same test cases run in `napi/ox-jsdoc/test/` and `wasm/ox-jsdoc/test/`:
 
 ```typescript
-import { parse, parseBatch } from 'ox-jsdoc-binary'
+import { parse, parseBatch } from 'ox-jsdoc'
 
 it('returns lazy RemoteJsdocBlock', () => {
   const result = parse('/** @param {string} id */')
@@ -120,8 +120,8 @@ it('batch handles parse failures', () => {
 For the same input, NAPI and WASM produce **the same byte sequence** and the **same decoded result**:
 
 ```typescript
-import { getBytes as getBytesNapi } from 'ox-jsdoc-binary'
-import { getBytes as getBytesWasm } from '@ox-jsdoc/wasm-binary'
+import { getBytes as getBytesNapi } from 'ox-jsdoc'
+import { getBytes as getBytesWasm } from '@ox-jsdoc/wasm'
 
 it('NAPI and WASM produce identical binary output', () => {
   for (const source of fixtures) {
@@ -130,7 +130,7 @@ it('NAPI and WASM produce identical binary output', () => {
 })
 ```
 
-This verifies the precondition that Rust's crates/ox_jsdoc_binary uses the same code in both bindings.
+This verifies the precondition that Rust's crates/ox_jsdoc uses the same code in both bindings.
 
 ## 8. Edge case tests (dedicated fixtures)
 
@@ -233,7 +233,7 @@ CI runs short (a few minutes) smoke fuzzing; longer runs are done locally.
 Snapshot the encoded result of each fixture as a hex dump:
 
 ```rust
-// crates/ox_jsdoc_binary/tests/snapshots.rs
+// crates/ox_jsdoc/tests/snapshots.rs
 #[test]
 fn snapshot_typescript_checker_first_comment() {
     let bytes = encode(typescript_checker_first_comment());
@@ -247,7 +247,7 @@ When the format spec changes, **detect unintended byte-sequence changes**. Appro
 
 (see [benchmark.md](./benchmark.md) for details)
 
-- Rust side: criterion compares `crates/ox_jsdoc` vs `crates/ox_jsdoc_binary`
+- Rust side: criterion compares `crates/ox_jsdoc` vs `crates/ox_jsdoc`
 - JS side: mitata runs a 4-way comparison (napi/wasm × typed/binary)
 - CI automates performance regression detection
 
@@ -477,11 +477,11 @@ fn typed_ast_matches_expected() {
     }
 }
 
-// crates/ox_jsdoc_binary/tests/fixture_compat.rs (newly added)
+// crates/ox_jsdoc/tests/fixture_compat.rs (newly added)
 #[test]
 fn binary_ast_matches_expected() {
     for (input, expected) in load_fixtures_with_expected() {
-        let result = ox_jsdoc_binary::parse(&allocator, &input, Default::default());
+        let result = ox_jsdoc::parse(&allocator, &input, Default::default());
         assert_eq!(serialize_binary_to_json(&result), expected);
     }
 }
@@ -515,8 +515,8 @@ it('parses a basic param tag', () => {
   expect(result.ast.tags[0].tag).toBe('param')
 })
 
-// New: napi/ox-jsdoc-binary/test/parse.test.ts
-import { parse } from 'ox-jsdoc-binary' // ← Only the import source changes
+// New: napi/ox-jsdoc/test/parse.test.ts
+import { parse } from 'ox-jsdoc' // ← Only the import source changes
 it('parses a basic param tag', () => {
   const result = parse('/** @param {string} id - The user ID */')
   expect(result.ast.tags[0].tag).toBe('param') // ← Lazy classes also work via getters
@@ -553,8 +553,8 @@ Keep (permanent):
   → Persist as living documentation of the spec
 
 Rename:
-  napi/ox-jsdoc-binary/test/ → napi/ox-jsdoc/test/ (binary version becomes the new standard)
-  wasm/ox-jsdoc-binary/test/ → wasm/ox-jsdoc/test/
+  napi/ox-jsdoc/test/ → napi/ox-jsdoc/test/ (binary version becomes the new standard)
+  wasm/ox-jsdoc/test/ → wasm/ox-jsdoc/test/
 ```
 
 ### Expected reuse efficiency

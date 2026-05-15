@@ -21,7 +21,7 @@ To distinguish the typed AST version from the binary AST version inside the benc
 | Name in benchmarks | Actual entity | Source |
 | --- | --- | --- |
 | `parseTyped` / `parseTypedNapi` | The current `parse` via `crates/ox_jsdoc` | Until before the Phase 1.3 cutover |
-| `parseBinary` / `parseBinaryNapi` | The new `parse` via `crates/ox_jsdoc_binary` | Phase 1.1 onward |
+| `parseBinary` / `parseBinaryNapi` | The new `parse` via `crates/ox_jsdoc` | Phase 1.1 onward |
 | `parseTypedWasm` / `parseBinaryWasm` | Same as above (WASM binding versions) | Same as above |
 | `parseBatchBinary` | The new `parseBatch(items)` API (binary AST only) | [js-decoder.md "JS Public API"](./js-decoder.md#js-public-api-parse--parsebatch) |
 
@@ -35,7 +35,7 @@ Directly compare the parse times of both parsers. Pure parser performance exclud
 
 ```text
 crates/ox_jsdoc/         (typed AST)         baseline
-crates/ox_jsdoc_binary/  (binary AST)        improvement target
+crates/ox_jsdoc/  (binary AST)        improvement target
 ```
 
 Tool: `criterion` (Rust's standard benchmarking framework)
@@ -70,7 +70,7 @@ Side-by-side comparison with existing baselines:
 - `@es-joy/jsdoccomment` (JS, comment-parser wrapper)
 - `jsdoc-type-pratt-parser` (JS, type-only)
 - `ox-jsdoc` (current typed AST version, NAPI/WASM)
-- `ox-jsdoc-binary` (new binary AST version, NAPI/WASM)
+- `ox-jsdoc` (new binary AST version, NAPI/WASM)
 
 ## 2. Metrics
 

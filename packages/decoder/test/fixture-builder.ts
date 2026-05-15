@@ -1,7 +1,7 @@
 /**
  * Hand-rolled Binary AST builder used only by `@ox-jsdoc/decoder` unit tests.
  *
- * Mirrors the layout produced by `crates/ox_jsdoc_binary`'s `BinaryWriter`
+ * Mirrors the layout produced by `crates/ox_jsdoc`'s `BinaryWriter`
  * but only implements what the decoder tests need (single-byte ASCII
  * strings, no compat-mode tail, no extended-data padding edge cases).
  *
@@ -263,7 +263,7 @@ export class FixtureBuilder {
   build(): Uint8Array {
     // Section boundaries are padded to 4-byte alignment so the decoder's
     // `Uint32Array` view can read u32 fields with a single MOV. Mirrors
-    // `crates/ox_jsdoc_binary/src/writer/binary_writer.rs`'s `align_up_4`
+    // `crates/ox_jsdoc/src/writer/binary_writer.rs`'s `align_up_4`
     // calls.
     const rootArraySize = this.rootEntries.length * 12
     const stringOffsetsSize = this.stringOffsets.length * 8

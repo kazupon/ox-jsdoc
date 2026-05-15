@@ -22,7 +22,7 @@ Notes:
 
 ## Comment AST (Binary AST shape)
 
-The current binary implementation emits comment nodes from `crates/ox_jsdoc_binary/src/parser/` through writer functions under `crates/ox_jsdoc_binary/src/writer/nodes/comment_ast.rs`; the decoder shape is implemented in `crates/ox_jsdoc_binary/src/decoder/nodes/comment_ast.rs` and `packages/decoder/src/internal/nodes/jsdoc.ts`.
+The current binary implementation emits comment nodes from `crates/ox_jsdoc/src/parser/` through writer functions under `crates/ox_jsdoc/src/writer/nodes/comment_ast.rs`; the decoder shape is implemented in `crates/ox_jsdoc/src/decoder/nodes/comment_ast.rs` and `packages/decoder/src/internal/nodes/jsdoc.ts`.
 
 | # | Kind | Main fields | Notes |
 | --- | --- | --- | --- |

@@ -1,113 +1,29 @@
 # Project Structure
 
-This document describes the repository layout to use before the first implementation of `ox-jsdoc`.
+**Status:** Implemented (post-cutover, see [`../010-main-stream-binary/README.md`](../010-main-stream-binary/README.md))
 
-The project needs two things at the same time:
+This document describes the post-cutover repository layout of `ox-jsdoc`. The layout supports two implementations side by side: the canonical Binary AST implementation (the product main path) and the original typed AST implementation kept under the `origin` name for benchmark / reference use only.
 
-1. a Rust implementation that can be developed and benchmarked independently
-2. a JavaScript package that can expose the parser to JS users
-
-The structure should keep these concerns separate without making the initial repository too large.
+The structure keeps these concerns separate without making the repository too large.
 
 ## Goals
 
 - Keep the parser core as a normal Rust library.
-- Keep the JavaScript package as a workspace package.
-- Keep NAPI / JS transfer code outside the core parser crate.
+- Keep the JavaScript packages as workspace packages.
+- Keep NAPI / WASM transfer code outside the core parser crate.
 - Keep performance fixtures and benchmarks at repository level.
-- Leave room for validator, analyzer, serializer, and future toolchain integration without restructuring the repository.
+- Allow the canonical Binary AST implementation and the `origin`-line typed AST reference to coexist as parallel workspace members without duplication.
+- Leave room for future toolchain integration without restructuring the repository.
 
-## Non-goals for the Initial Layout
+## Non-Goals
 
-- Do not introduce raw transfer as a core design requirement.
-- Do not split the Rust parser into many crates before the first parser exists.
-- Do not publish multiple npm packages until the binding strategy requires it.
+- Do not introduce raw transfer as a core design requirement (the canonical Binary AST already provides zero-copy bytes).
+- Do not split the Rust parser into many crates beyond the canonical / `origin` pair.
+- Do not publish more than the canonical public packages plus the documented `-binary` thin aliases.
 - Do not make `refers/` part of the workspace.
 - Do not put benchmark fixtures inside a package-specific directory.
 
-## Options Considered
-
-### Option A. Root package only
-
-Shape:
-
-```text
-Cargo.toml
-package.json
-src/
-```
-
-Pros:
-
-- smallest possible repository structure
-- low initial setup cost
-
-Cons:
-
-- Rust parser, NAPI binding, JS package, and benchmarks become entangled
-- hard to keep core parser independent from JS transfer concerns
-- does not match the future validator / analyzer / serializer split
-
-Decision:
-
-- do not use this layout
-
-### Option B. Public JavaScript package under `napi/`
-
-Shape:
-
-```text
-crates/
-  ox_jsdoc/
-napi/
-  ox-jsdoc/
-```
-
-Pros:
-
-- close to the `oxc` layout for Node-facing native packages
-- keeps Rust core under `crates/`
-- keeps NAPI / JS transfer layer outside the core parser crate
-- one public npm package can be managed from the NAPI package directory
-- avoids adding an extra JS wrapper package before it is needed
-
-Cons:
-
-- the public JavaScript package lives under `napi/` rather than `packages/`
-- if a pure JS wrapper grows substantially, it may later need a separate `packages/ox-jsdoc` package
-
-Decision:
-
-- use this layout for v1
-
-### Option C. Separate `packages/ox-jsdoc` wrapper plus `napi/` binding package
-
-Shape:
-
-```text
-packages/
-  ox-jsdoc/
-napi/
-  ox-jsdoc/
-```
-
-Pros:
-
-- clear `packages/` directory for JavaScript-facing packages
-- leaves room for a pure JS wrapper independent from native build details
-- useful if multiple binding packages or platform packages are introduced
-
-Cons:
-
-- adds an extra package boundary before it is necessary
-- requires deciding how `packages/ox-jsdoc` consumes the native binding
-- increases build and publish complexity for the initial parser
-
-Decision:
-
-- defer until the JS wrapper needs to grow beyond the NAPI package
-
-## Recommended v1 Layout
+## Layout
 
 ```text
 .
@@ -116,59 +32,59 @@ Decision:
 ├── pnpm-workspace.yaml
 ├── rust-toolchain.toml
 ├── crates/
-│   └── ox_jsdoc/
+│   ├── ox_jsdoc/                      # canonical (Binary AST) Rust core crate
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs
+│   │       ├── decoder/               # Rust-side lazy decoder
+│   │       ├── format/                # binary AST wire format
+│   │       ├── parser/                # parser-integrated binary writer
+│   │       └── writer/                # BinaryWriter implementation
+│   └── ox_jsdoc_origin/               # original typed AST Rust core (benchmark / reference only)
 │       ├── Cargo.toml
 │       └── src/
 │           ├── lib.rs
 │           ├── ast.rs
-│           ├── parser/
-│           │   ├── mod.rs
-│           │   ├── context.rs
-│           │   ├── checkpoint.rs
-│           │   ├── diagnostics.rs
-│           │   └── scanner.rs
-│           ├── validator/
-│           │   └── mod.rs
 │           ├── analyzer/
-│           │   └── mod.rs
-│           └── serializer/
-│               ├── mod.rs
-│               └── json.rs
+│           ├── parser/                # context / scanner / type_parse / etc.
+│           ├── serializer/            # JSON serializer
+│           ├── type_parser/
+│           └── validator/
 ├── napi/
-│   └── ox-jsdoc/
-│       ├── Cargo.toml
-│       ├── package.json
-│       ├── build.rs
-│       ├── src/
-│       │   └── lib.rs
+│   ├── ox-jsdoc/                      # canonical NAPI binding (npm: ox-jsdoc)
+│   │   ├── Cargo.toml                 # internal Rust crate: ox_jsdoc_napi (publish = false)
+│   │   ├── package.json               # napi.packageName: @ox-jsdoc/binding
+│   │   ├── src/lib.rs
+│   │   └── src-js/
+│   ├── ox-jsdoc-origin/               # typed AST NAPI binding (private)
+│   │   ├── Cargo.toml                 # internal crate: ox_jsdoc_origin_napi (publish = false)
+│   │   ├── package.json               # "private": true
+│   │   ├── src/lib.rs
+│   │   └── src-js/
+│   └── ox-jsdoc-binary/               # JS-only thin alias re-exporting `ox-jsdoc` (deprecated)
 │       └── src-js/
-│           ├── index.js
-│           └── index.d.ts
+├── wasm/
+│   ├── ox-jsdoc/                      # canonical WASM binding (npm: @ox-jsdoc/wasm)
+│   ├── ox-jsdoc-origin/               # typed AST WASM binding (private)
+│   └── ox-jsdoc-binary/               # JS-only thin alias re-exporting `@ox-jsdoc/wasm` (deprecated)
+├── packages/
+│   ├── decoder/                       # shared lazy decoder package (@ox-jsdoc/decoder)
+│   ├── jsdoccomment/                  # private jsdoccomment-compat integration
+│   └── eslint-plugin-jsdoc/           # private eslint plugin fork
 ├── tasks/
-│   └── benchmark/
-│       ├── Cargo.toml
-│       └── benches/
-│           ├── parser.rs
-│           ├── validator.rs
-│           └── serializer.rs
+│   ├── benchmark/                     # criterion + Node.js benchmark suite
+│   └── xtask/                         # repo automation tasks (license header check, etc.)
 ├── fixtures/
-│   └── perf/
-│       ├── common/
-│       ├── description-heavy/
-│       ├── type-heavy/
-│       ├── special-tag/
-│       ├── malformed/
-│       └── toolchain/
+│   └── perf/                          # shared benchmark fixture corpus
 ├── design/
-├── .notes/
-└── refers/
+└── refers/                            # research / reference submodules (not in workspace)
 ```
 
 ## Workspace Boundaries
 
 ### Cargo workspace
 
-Root `Cargo.toml` should define a Rust workspace:
+Root `Cargo.toml` defines the Rust workspace:
 
 ```toml
 [workspace]
@@ -176,6 +92,7 @@ resolver = "3"
 members = [
   "crates/*",
   "napi/*",
+  "wasm/*",
   "tasks/*",
 ]
 exclude = [
@@ -183,100 +100,93 @@ exclude = [
 ]
 ```
 
-The initial workspace crates should be:
+The workspace crates are:
 
 - `crates/ox_jsdoc`
-  - pure Rust core parser crate
-  - owns AST, parser, validator stub, analyzer stub, JSON serializer
-- `napi/ox-jsdoc`
-  - NAPI binding crate and JavaScript package
-  - depends on `ox_jsdoc`
-  - owns JS transfer and package entrypoint
-- `tasks/benchmark`
-  - benchmark crate using `criterion2`
-  - depends on `ox_jsdoc`
+  - canonical Binary AST core crate
+  - owns the binary format, parser-integrated writer, Rust-side lazy decoder, and the public Rust API
+- `crates/ox_jsdoc_origin`
+  - original typed AST core crate (benchmark / reference only)
+  - owns the typed AST, parser, validator, analyzer, type parser, and JSON serializer
+  - `publish = false`
+- `napi/ox-jsdoc` — canonical NAPI binding crate (`ox_jsdoc_napi`), depends on `ox_jsdoc`
+- `napi/ox-jsdoc-origin` — typed AST NAPI binding crate (`ox_jsdoc_origin_napi`), depends on `ox_jsdoc_origin`
+- `wasm/ox-jsdoc` — canonical WASM binding crate (`ox_jsdoc_wasm`)
+- `wasm/ox-jsdoc-origin` — typed AST WASM binding crate (`ox_jsdoc_origin_wasm`)
+- `tasks/benchmark` — benchmark crate using `criterion2`, depends on both `ox_jsdoc` and `ox_jsdoc_origin`
+- `tasks/xtask` — repository automation crate
+
+All NAPI / WASM internal Rust crates are `publish = false`; they exist only to produce binding artifacts (`.node` / `.wasm`).
+
+The thin alias directories `napi/ox-jsdoc-binary/` and `wasm/ox-jsdoc-binary/` are JS-only and do not contain Rust crates. They are not Cargo workspace members.
 
 ### pnpm workspace
 
-Root `package.json` should be private. Root `pnpm-workspace.yaml` should include JavaScript-facing package directories:
+Root `pnpm-workspace.yaml` includes:
 
 ```yaml
 packages:
   - 'napi/*'
   - 'packages/*'
+  - 'tasks/*'
+  - 'wasm/*'
 ```
 
-`packages/*` is included from the beginning so a future pure JS wrapper can be added without changing the workspace shape. It does not need to exist in v1.
+The published npm packages are:
 
-## Rust Core Crate
+- `ox-jsdoc` — canonical Binary AST NAPI binding
+- `@ox-jsdoc/wasm` — canonical Binary AST WASM binding
+- `@ox-jsdoc/decoder` — shared lazy decoder
+- `@ox-jsdoc/binding-*` — canonical NAPI platform binding (auto-generated)
+- `ox-jsdoc-binary` / `@ox-jsdoc/wasm-binary` — JS-only thin aliases (one deprecation cycle)
 
-`crates/ox_jsdoc` is the core implementation crate.
+The `origin`-line packages (`ox-jsdoc-origin`, `@ox-jsdoc/wasm-origin`) carry `"private": true` and are not published.
 
-It should not depend on NAPI. It should expose:
+## Rust Core Crates
 
-- `parse_comment`
-- `ParseOptions`
-- `ParseOutput`
-- AST types
-- parser diagnostics helpers
-- validator / analyzer / serializer stubs as they become available
+### `crates/ox_jsdoc` — canonical (Binary AST)
 
-Initial module responsibilities:
+- Public Rust API: `parse`, `parse_into`, `parse_batch`, `parse_batch_into`, `parse_to_bytes`, `parse_batch_to_bytes`, `parse_type_expression`, `parse_type_check`
+- Module layout: `decoder/`, `format/`, `parser/`, `writer/`
+- Exposes the Rust-side lazy decoder API (`LazyJsdocBlock`, `LazySourceFile`, etc.) for Rust walkers
+- Emits the wire-compatible Binary AST byte stream consumed by `@ox-jsdoc/decoder` and the NAPI / WASM bindings
 
-- `ast.rs`
-  - Rust AST definitions aligned with `design/ast.md`
-- `parser/context.rs`
-  - `ParserContext<'a>`
-- `parser/checkpoint.rs`
-  - rollback checkpoint type
-- `parser/diagnostics.rs`
-  - v1 parser diagnostic constructors
-- `parser/scanner.rs`
-  - internal scanner helpers, not public API
-- `parser/mod.rs`
-  - `parse_comment` entrypoint
-- `validator/mod.rs`
-  - stub for tag-specific validation
-- `analyzer/mod.rs`
-  - stub for consumer-facing facts
-- `serializer/json.rs`
-  - JSON-oriented shape, not raw transfer
+### `crates/ox_jsdoc_origin` — typed AST reference
 
-## JavaScript Package
+- Public Rust API: `parse_comment`, `parse_type`, `validate_comment`, `analyze_comment`, `serialize_comment_json_with_options`
+- Module layout: `ast.rs`, `parser/`, `analyzer/`, `serializer/`, `type_parser/`, `validator/`
+- Preserved as the original v1 implementation for benchmark / reference comparison only
+- Not depended on by canonical NAPI / WASM bindings or by `@ox-jsdoc/jsdoccomment`
 
-`napi/ox-jsdoc` should be the initial JavaScript package.
+## JavaScript Packages
 
-It should own:
+### Canonical NAPI / WASM
 
-- `package.json`
-- NAPI build configuration
-- `src-js/index.js`
-- `src-js/index.d.ts`
-- Rust NAPI bridge in `src/lib.rs`
+- `napi/ox-jsdoc` (npm: `ox-jsdoc`) — Binary AST NAPI binding using `@ox-jsdoc/binding-*` platform packages
+- `wasm/ox-jsdoc` (npm: `@ox-jsdoc/wasm`) — Binary AST WASM binding via `wasm-pack`
+- Both call into `ox_jsdoc` (canonical Rust crate) and emit Binary AST bytes that `@ox-jsdoc/decoder` lazily decodes
 
-The public npm package can be named `ox-jsdoc` initially. If a scoped package name is preferred later, that can be changed before the first publish.
+### Origin NAPI / WASM (private)
 
-The NAPI package should call into `ox_jsdoc`. It should not duplicate parser logic.
+- `napi/ox-jsdoc-origin` (npm: `ox-jsdoc-origin`, private) — typed AST NAPI binding for benchmark / reference
+- `wasm/ox-jsdoc-origin` (npm: `@ox-jsdoc/wasm-origin`, private) — typed AST WASM binding
+- Both call into `ox_jsdoc_origin` and emit JSON-serialized AST
 
-Initial JS API should be small:
+### Deprecated JS-only aliases
 
-```ts
-export function parseComment(sourceText: string, options?: ParseOptions): ParseOutput
-```
-
-The JS package should remain JSON-first. Raw transfer support should not affect the initial package layout.
+- `napi/ox-jsdoc-binary` (npm: `ox-jsdoc-binary`) — re-exports `ox-jsdoc`
+- `wasm/ox-jsdoc-binary` (npm: `@ox-jsdoc/wasm-binary`) — re-exports `@ox-jsdoc/wasm`
+- Both are pure JS re-exports without separate native artifacts; kept for one deprecation cycle to preserve a migration path for previously-published `0.0.12` consumers
 
 ## Fixtures
 
-Performance fixtures should live at repository level:
+Performance fixtures live at repository level:
 
 ```text
 fixtures/perf/
 ```
 
-They should not live under `crates/` or `napi/`. Both Rust benchmarks and future JS/toolchain benchmarks should be able to reuse the same fixture corpus.
-
-Use sidecar JSON metadata:
+Both Rust benchmarks and Node.js benchmarks reuse the same fixture corpus. Sidecar JSON metadata describes each fixture:
 
 ```text
 fixtures/perf/malformed/unclosed-inline-tag.jsdoc
@@ -287,41 +197,34 @@ The `.jsdoc` file is exact parser input. The `.json` file is metadata and expect
 
 ## Benchmarks
 
-Benchmarks should start under:
+Benchmarks live under `tasks/benchmark/` and use:
 
-```text
-tasks/benchmark/
-```
+- `criterion2` for Rust-direct measurements (per-comment parse / batch parse / writer-reuse / typed AST vs Binary AST cost split)
+- `mitata` for in-process Node.js parser-only measurements
+- `hyperfine` for end-to-end CLI linter measurements
 
-This keeps benchmarks out of the core crate while still allowing them to depend on workspace crates.
-
-Initial benchmark framework:
-
-- `criterion2`
-
-Initial benchmark targets:
-
-- `parser.rs`
-- `validator.rs`
-- `serializer.rs`
-
-CodSpeed integration should be deferred until benchmark names and fixture buckets are stable.
+Benchmark scripts depend on both canonical (`ox-jsdoc`, `@ox-jsdoc/wasm`) and origin (`ox-jsdoc-origin`, `@ox-jsdoc/wasm-origin`) packages so the typed AST vs Binary AST comparison stays measurable.
 
 ## Relationship to `refers/`
 
-`refers/` contains git submodules used for research and compatibility reference. It should not be part of either workspace.
+`refers/` contains git submodules used for research and compatibility reference. It is not part of either workspace.
 
-Reference sources may be used to derive fixtures, but the benchmark fixture corpus should live under `fixtures/perf/` so it remains stable even if submodule contents change.
+Reference sources may be used to derive fixtures, but the benchmark fixture corpus lives under `fixtures/perf/` so it remains stable even if submodule contents change.
 
 ## Decision Summary
 
-Use this v1 structure:
+Use this layout:
 
-- Rust core: `crates/ox_jsdoc`
-- JS/NAPI package: `napi/ox-jsdoc`
+- Canonical Rust core: `crates/ox_jsdoc` (Binary AST)
+- Origin Rust core: `crates/ox_jsdoc_origin` (typed AST, benchmark / reference only)
+- Canonical NAPI: `napi/ox-jsdoc` (npm `ox-jsdoc`)
+- Canonical WASM: `wasm/ox-jsdoc` (npm `@ox-jsdoc/wasm`)
+- Origin NAPI / WASM: `napi/ox-jsdoc-origin` / `wasm/ox-jsdoc-origin` (private)
+- Deprecated JS-only aliases: `napi/ox-jsdoc-binary` / `wasm/ox-jsdoc-binary` (one deprecation cycle)
+- Shared decoder: `packages/decoder` (npm `@ox-jsdoc/decoder`)
+- Internal integrations: `packages/jsdoccomment`, `packages/eslint-plugin-jsdoc` (private)
 - Benchmarks: `tasks/benchmark`
 - Fixtures: `fixtures/perf`
-- Keep `packages/*` reserved for future JS wrapper packages
-- Keep `refers/*` outside Rust and pnpm workspaces
+- `refers/*` outside Rust and pnpm workspaces
 
-This layout keeps the core parser independent, keeps the JS package manageable, and leaves enough room for the validator / analyzer / serializer pipeline without over-splitting the repository before the first implementation exists.
+This layout keeps the canonical Binary AST core independent, preserves the typed AST reference under `origin`, and provides a one-deprecation-cycle alias surface for users migrating from the previous `ox-jsdoc-binary` / `@ox-jsdoc/wasm-binary` packages.

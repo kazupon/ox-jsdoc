@@ -7,7 +7,7 @@
 //
 // The fixture file `fixtures/cross-language/description-text.json` is the
 // shared ground truth. This test asserts the Rust side. The matching JS
-// side lives in `napi/ox-jsdoc-binary/test/description-text-parity.test.ts`
+// side lives in `napi/ox-jsdoc/test/description-text-parity.test.ts`
 // and asserts against the **same JSON file**, so any divergence between
 // the two implementations surfaces as a CI failure on one (or both) sides.
 //

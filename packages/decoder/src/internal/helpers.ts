@@ -1,7 +1,7 @@
 /**
  * Low-level helpers shared by every Remote* class.
  *
- * Mirrors `crates/ox_jsdoc_binary/src/decoder/helpers.rs`.
+ * Mirrors `crates/ox_jsdoc/src/decoder/helpers.rs`.
  *
  * @author kazuya kawaguchi (a.k.a. kazupon)
  * @license MIT

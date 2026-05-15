@@ -6,7 +6,7 @@ The transition of ox-jsdoc to the Binary AST proceeds via a **coexistence + atom
 
 Key decisions:
 
-- **Coexistence (add a new crate `crates/ox_jsdoc_binary/`)**: develop the Binary AST implementation without touching the existing `crates/ox_jsdoc/`, giving zero impact to existing users during development
+- **Coexistence (add a new crate `crates/ox_jsdoc/`)**: develop the Binary AST implementation without touching the existing `crates/ox_jsdoc/`, giving zero impact to existing users during development
 - **Atomic cutover (single migration in Phase 1.3)**: no feature flag or config switch
   - Reasons: maintaining two paths long term is costly; since the API surface is identical, users need no modifications
   - Why we do not adopt the alternative (feature flag): at the pre-1.0 stage, breaking changes are acceptable, and if benchmark results are GO, switching in one shot is simpler
@@ -16,11 +16,11 @@ Key decisions:
 
 ## Phase 1: Binary AST foundation + atomic cutover
 
-The new and old parsers run side by side in `crates/ox_jsdoc/` (typed) and `crates/ox_jsdoc_binary/` (new), with PRs merged incrementally per sub-phase (Option 3: Stepping stones). Based on the Phase 1.2d benchmark results, the atomic cutover is performed in Phase 1.3. We do not create an intermediate state where the typed AST and the lazy decoder are mixed (everything migrates at once within the cutover).
+The new and old parsers run side by side in `crates/ox_jsdoc/` (typed) and `crates/ox_jsdoc/` (new), with PRs merged incrementally per sub-phase (Option 3: Stepping stones). Based on the Phase 1.2d benchmark results, the atomic cutover is performed in Phase 1.3. We do not create an intermediate state where the typed AST and the lazy decoder are mixed (everything migrates at once within the cutover).
 
 ### Phase 1.0a-d: Skeleton construction (skeleton-only PRs)
 
-Add only the skeleton (type definitions + signatures + `unimplemented!()` stubs) for each module to `crates/ox_jsdoc_binary/`. The build/test (snapshot) must pass.
+Add only the skeleton (type definitions + signatures + `unimplemented!()` stubs) for each module to `crates/ox_jsdoc/`. The build/test (snapshot) must pass.
 
 - **Phase 1.0a**: `format/` module skeleton
   - Type definitions for the Header struct, Kind enum (including Common Data), NodeRecord layout
@@ -65,17 +65,17 @@ Add only the skeleton (type definitions + signatures + `unimplemented!()` stubs)
 ### Phase 1.2a-d: Parser full implementation + binding + 4-way comparison
 
 - **Phase 1.2a**: Parser full implementation (typed AST → binary writer)
-  - Implement `crates/ox_jsdoc_binary/src/parser/`, calling the Phase 1.1a `BinaryWriter`
+  - Implement `crates/ox_jsdoc/src/parser/`, calling the Phase 1.1a `BinaryWriter`
   - All 60 emitted kinds (15 comment AST + 45 TypeNode) + all parsedType TypeNodes, single comment (N=1) case (Sentinel and reserved-only `NodeList` are not emitted)
-  - Copy existing typed AST Rust tests to the `ox_jsdoc_binary` side for regression verification (do not add new tests)
-- **Phase 1.2b**: NAPI binding `ox-jsdoc-binary`
-  - Add the `napi/ox-jsdoc-binary/` package (depends on `crates/ox_jsdoc_binary`)
+  - Copy existing typed AST Rust tests to the `ox_jsdoc` side for regression verification (do not add new tests)
+- **Phase 1.2b**: NAPI binding `ox-jsdoc`
+  - Add the `napi/ox-jsdoc/` package (depends on `crates/ox_jsdoc`)
   - Zero-copy NAPI Buffer sharing
   - Import `@ox-jsdoc/decoder` on the JS side
   - Reuse the existing `napi/ox-jsdoc/test/` by swapping imports (Roundtrip / compatibility / cross-binding)
   - Add NAPI binding benchmarks for scenario A (single parse) + B (batch)
-- **Phase 1.2c**: WASM binding `ox-jsdoc-binary`
-  - Add the `wasm/ox-jsdoc-binary/` package (sharing a view of `wasm.memory.buffer`)
+- **Phase 1.2c**: WASM binding `ox-jsdoc`
+  - Add the `wasm/ox-jsdoc/` package (sharing a view of `wasm.memory.buffer`)
   - Reuse the existing `wasm/ox-jsdoc/test/` by swapping imports
   - WASM binding benchmark + alpha release + all scenarios including competitor comparison (scenario D)
 - **Phase 1.2d**: 4-way comparison + KPI decision
@@ -88,14 +88,14 @@ Add only the skeleton (type definitions + signatures + `unimplemented!()` stubs)
 Based on the Phase 1.2d decision result, perform one of the following as an atomic PR:
 
 - **GO case** (Binary AST meets KPIs, expected case):
-  - Delete `crates/ox_jsdoc/`, rename `crates/ox_jsdoc_binary/` to `crates/ox_jsdoc/`
-  - Replace the contents of `napi/ox-jsdoc/` with the binary version, alias or delete `napi/ox-jsdoc-binary/`
+  - Delete `crates/ox_jsdoc/`, rename `crates/ox_jsdoc/` to `crates/ox_jsdoc/`
+  - Replace the contents of `napi/ox-jsdoc/` with the binary version, alias or delete `napi/ox-jsdoc/`
   - Same for `wasm/ox-jsdoc/`
   - Make `@ox-jsdoc/decoder` permanent
   - **Completely rewrite the existing validator (321 lines) / analyzer (142 lines) to the lazy decoder API** (see "validator / analyzer migration guidelines" below for details)
   - Add **Fuzzing tests** before cutover
 - **NO-GO case** (Binary AST misses KPIs, unexpected):
-  - Delete `crates/ox_jsdoc_binary/`, `napi/ox-jsdoc-binary/`, `wasm/ox-jsdoc-binary/`
+  - Delete `crates/ox_jsdoc/`, `napi/ox-jsdoc/`, `wasm/ox-jsdoc/`
   - Also delete `@ox-jsdoc/decoder`
   - Reconsider the design
 
@@ -171,7 +171,7 @@ Expected to complete with about 463 lines of mechanical rewrite.
 
 ## Phase 2: Batch support + public encoder API
 
-Current status: implemented in `crates/ox_jsdoc_binary` and exposed through the `ox-jsdoc-binary` NAPI / WASM packages. This section is retained as the historical phase definition and as the checklist for the shipped API surface.
+Current status: implemented in `crates/ox_jsdoc` and exposed through the `ox-jsdoc` NAPI / WASM packages. This section is retained as the historical phase definition and as the checklist for the shipped API surface.
 
 - **Batch support**: Root Index Array, Diagnostics section, `parseBatch()` API, `BatchItem` struct
 - **Public Rust API** (post-typed-AST API; see [rust-impl.md "Public Rust API"](./rust-impl.md#public-rust-api)):
@@ -198,9 +198,9 @@ Current status: implemented in `crates/ox_jsdoc_binary` and exposed through the 
 
 Phase 1-2 contain breaking changes, so proceed in the following order:
 
-1. **Phase 1.0a-d**: keep the existing typed AST path completely intact and add only skeletons to `crates/ox_jsdoc_binary/` (PRs are mechanically mergeable)
+1. **Phase 1.0a-d**: keep the existing typed AST path completely intact and add only skeletons to `crates/ox_jsdoc/` (PRs are mechanically mergeable)
 2. **Phase 1.1a-d**: implement the Rust + JS encoder/decoder (the parser is not yet started, so no impact on the existing typed AST path)
-3. **Phase 1.2a-c**: full parser implementation + add the NAPI/WASM bindings in coexistence as new packages (alpha-release `ox-jsdoc-binary` as a separate npm package)
+3. **Phase 1.2a-c**: full parser implementation + add the NAPI/WASM bindings in coexistence as new packages (alpha-release `ox-jsdoc` as a separate npm package)
 4. **Phase 1.2d**: KPI decision via 4-way benchmark → cutover GO/NO-GO decision
 5. **Phase 1.3**: cutover atomic PR (GO case: completely remove the typed AST path and rewrite validator/analyzer to the lazy decoder API. NO-GO case: delete the binary crate)
 6. **Phase 2-3**: batch support and public byte APIs are implemented; continue format spec documentation and other externally-public additions
@@ -213,7 +213,7 @@ The new and old parsers run side by side, with cutover at Phase 1.3 based on ben
 ox-jsdoc/
 ├── crates/
 │   ├── ox_jsdoc/                  ← Existing typed AST parser (kept through Phase 1.0-1.2)
-│   └── ox_jsdoc_binary/           ← New binary AST parser (added at Phase 1.0)
+│   └── ox_jsdoc/           ← New binary AST parser (added at Phase 1.0)
 │       └── src/
 │           ├── lib.rs
 │           ├── format/             ← Binary AST format spec (Header, Kind, NodeRecord, StringTable)
@@ -230,22 +230,22 @@ ox-jsdoc/
 │
 ├── napi/
 │   ├── ox-jsdoc/                  ← Existing (depends on crates/ox_jsdoc)
-│   └── ox-jsdoc-binary/           ← New (depends on crates/ox_jsdoc_binary, Phase 1.2b)
+│   └── ox-jsdoc/           ← New (depends on crates/ox_jsdoc, Phase 1.2b)
 │
 ├── wasm/
 │   ├── ox-jsdoc/                  ← Existing
-│   └── ox-jsdoc-binary/           ← New (Phase 1.2c)
+│   └── ox-jsdoc/           ← New (Phase 1.2c)
 │
 └── npm/
     └── @ox-jsdoc/
         └── decoder/               ← New shared JS lazy decoder (Phase 1.1d)
-                                      - Imported from napi/ox-jsdoc-binary/
-                                      - Imported from wasm/ox-jsdoc-binary/
+                                      - Imported from napi/ox-jsdoc/
+                                      - Imported from wasm/ox-jsdoc/
 ```
 
 ### Shared code policy
 
-**Code duplication is allowed** between `crates/ox_jsdoc/` and `crates/ox_jsdoc_binary/`:
+**Code duplication is allowed** between `crates/ox_jsdoc/` and `crates/ox_jsdoc/`:
 
 - It is OK if common ParseOptions struct or ValidationMode enum, etc., exist in both crates
 - Splitting out a shared crate (`ox_jsdoc_format`, etc.) is a future decision (Phase 3 onward)
@@ -257,15 +257,15 @@ In Phase 1.2d, conduct a **4-way comparison**:
 
 ```javascript
 import { parse as parseNapiTyped } from 'ox-jsdoc'
-import { parse as parseNapiBinary } from 'ox-jsdoc-binary'
+import { parse as parseNapiBinary } from 'ox-jsdoc'
 import { parse as parseWasmTyped } from '@ox-jsdoc/wasm'
-import { parse as parseWasmBinary } from '@ox-jsdoc/wasm-binary'
+import { parse as parseWasmBinary } from '@ox-jsdoc/wasm'
 ```
 
 ```rust
-// crates/ox_jsdoc_binary/benches/parser_compare.rs
+// crates/ox_jsdoc/benches/parser_compare.rs
 use ox_jsdoc as typed_ast;
-use ox_jsdoc_binary as binary_ast;
+use ox_jsdoc as binary_ast;
 
 bench("typed_ast", || typed_ast::parse(...));
 bench("binary_ast", || binary_ast::parse(...));

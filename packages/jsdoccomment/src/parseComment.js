@@ -612,7 +612,7 @@ const createCriticalProblem = (code, message, line) => {
 
 /**
  * Reproduce `comment-parser`'s name tokenizer validation for the already
- * tokenized name emitted by `ox-jsdoc-binary`.
+ * tokenized name emitted by `ox-jsdoc`.
  *
  * @param {string} nameToken
  * @param {number} line
@@ -1137,7 +1137,7 @@ const parseComment = (commentOrNode, indent = '') => {
 }
 
 /**
- * Parse multiple comments with one `ox-jsdoc-binary` batch call and return
+ * Parse multiple comments with one `ox-jsdoc` batch call and return
  * the same normalized block shape as `parseComment`.
  *
  * @param {Array<string | {value: string, range?: [number, number]}>} comments

@@ -8,7 +8,7 @@
 //! written), then recursively emit each present child with the parent's
 //! `NodeIndex`.
 //!
-//! Mirrors the layout assumed by `crates/ox_jsdoc_binary/src/decoder/nodes/type_node.rs`:
+//! Mirrors the layout assumed by `crates/ox_jsdoc/src/decoder/nodes/type_node.rs`:
 //! - Single children (`element`, `left`, `right`, etc.) are direct children
 //!   of the parent at the matching visitor-bit slot.
 //! - Variable-length `elements` lists are emitted as direct children of the
@@ -384,7 +384,7 @@ pub fn emit_type_node(
             // typed parser we still emit the parameters/return/type-params
             // sub-tree as siblings; this matches the design's "code generation
             // will fill in the rest at Phase 4" note in
-            // `crates/ox_jsdoc_binary/src/decoder/visitor.rs`.
+            // `crates/ox_jsdoc/src/decoder/visitor.rs`.
             for p in &n.parameters {
                 emit_type_node(writer, p, parent);
             }

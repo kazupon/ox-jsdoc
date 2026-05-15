@@ -3,7 +3,7 @@
  *
  * Each fixture is a complete `/** ... *​/` JSDoc block string. The Level 2
  * test feeds the same string into both `@es-joy/jsdoccomment` and
- * `ox-jsdoc-binary` (compat_mode + emptyStringForNull) and compares the
+ * `ox-jsdoc` (compat_mode + emptyStringForNull) and compares the
  * resulting ESTree-shape AST field-by-field.
  *
  * @author kazuya kawaguchi (a.k.a. kazupon)

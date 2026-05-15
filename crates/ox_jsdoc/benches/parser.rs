@@ -164,7 +164,7 @@ fn bench_parse_batch_full(c: &mut Criterion) {
 /// `JSDoc::new(inner, span)`, materialize `tags()` to trigger the lazy
 /// parse, accumulate `len()` for anti-DCE.
 ///
-/// Lives next to the ox-jsdoc-binary entry-point benches so the per-comment
+/// Lives next to the ox-jsdoc entry-point benches so the per-comment
 /// numbers are taken under the same machine state and one cargo bench run.
 fn bench_oxc_jsdoc_loop(c: &mut Criterion) {
     let blocks = load_fixture();

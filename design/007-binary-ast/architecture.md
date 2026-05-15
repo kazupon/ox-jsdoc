@@ -71,7 +71,7 @@ Reference notes:
 Design core:
 
 - **The parser builds the Binary AST directly** (Approach c-1): the parser does not go through the current typed AST and writes Binary AST format bytes directly into the arena during parsing. No encoder step is required (parsing = encoding)
-- **typed AST removed from the binary parser path**: the Binary AST in the arena is the single source of truth for `crates/ox_jsdoc_binary`. The Rust struct hierarchy (`JsdocBlock<'a>`, `TypeNode<'a>`, etc.) is replaced by records in the Binary AST for this path
+- **typed AST removed from the binary parser path**: the Binary AST in the arena is the single source of truth for `crates/ox_jsdoc`. The Rust struct hierarchy (`JsdocBlock<'a>`, `TypeNode<'a>`, etc.) is replaced by records in the Binary AST for this path
 - **Rust-side walker also goes through the lazy decoder**: when walking the AST on the Rust side, access goes through thin `Copy` value wrappers like `LazyJsdocBlock`, using the same lazy decoder pattern as the JS side. These wrappers are passed by value and do not allocate `Box` storage per node
 - **Same pattern in both languages**: both Rust and JS operate under the same model of "lazily expanding the Binary AST on access". This avoids double memory on the arena and maximizes performance
 - **No encoder step exists** (handoff to NAPI/WASM is zero-copy reference only)
@@ -131,17 +131,17 @@ The per-binding differences are confined to a **thin wrapper layer**:
 
 #### Package structure
 
-The decoder classes are split into a separate shared package. The current repository keeps the binary implementation in the `ox-jsdoc-binary` packages while the shared decoder lives at `packages/decoder`:
+The decoder classes are split into a separate shared package. The current repository keeps the binary implementation in the `ox-jsdoc` packages while the shared decoder lives at `packages/decoder`:
 
 ```text
 ox-jsdoc/
 ├── napi/
-│   └── ox-jsdoc-binary/
+│   └── ox-jsdoc/
 │       ├── src/lib.rs        (Rust NAPI binding)
 │       └── src-js/           (binding-specific wrapper only, imports @ox-jsdoc/decoder)
 │
 ├── wasm/
-│   └── ox-jsdoc-binary/
+│   └── ox-jsdoc/
 │       ├── src/lib.rs        (Rust WASM binding)
 │       └── src-js/           (binding-specific wrapper only, imports @ox-jsdoc/decoder)
 │
@@ -158,7 +158,7 @@ ox-jsdoc/
 │                   ├── jsdoc.ts
 │                   └── type-nodes.ts
 └── crates/
-    └── ox_jsdoc_binary/      ← Parser, writer, format constants, Rust decoder
+    └── ox_jsdoc/      ← Parser, writer, format constants, Rust decoder
 ```
 
 Benefits:
