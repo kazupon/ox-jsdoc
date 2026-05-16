@@ -123,6 +123,12 @@ jobs:
   publish:
     name: Publish packages
     runs-on: ubuntu-latest
+    # Only the tag-push trigger publishes the npm packages. `workflow_dispatch`
+    # runs are reserved for the `publish-crate` job (initial crates.io publish
+    # / fallback) and must skip npm publish — npm publish would otherwise fail
+    # with "cannot publish over the previously published version" because no
+    # version bump happened.
+    if: startsWith(github.ref, 'refs/tags/v')
     needs:
       - test-decoder
       - build-napi
@@ -253,7 +259,18 @@ jobs:
     name: Publish ox_jsdoc to crates.io
     runs-on: ubuntu-latest
     needs:
+      - test-decoder
+      - build-napi
       - publish
+    # Run on tag-push releases (after `publish` succeeds) and on
+    # `workflow_dispatch` runs (where `publish` is intentionally skipped for
+    # initial crate publish / fallback). `always()` lets us evaluate the
+    # condition even when `needs.publish` is `skipped`.
+    if: |
+      always()
+      && needs.test-decoder.result == 'success'
+      && needs.build-napi.result == 'success'
+      && (needs.publish.result == 'success' || needs.publish.result == 'skipped')
     permissions:
       # Required for crates.io trusted publishing (OIDC). Harmless when the
       # job runs in `token` mode and is no-op for the `cargo publish` step.
