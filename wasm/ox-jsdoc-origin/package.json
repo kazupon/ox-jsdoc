@@ -54,6 +54,6 @@
   },
   "devDependencies": {
     "vite-plus": "catalog:",
-    "wasm-pack": "^0.14.0"
+    "wasm-pack": "^0.15.0"
   }
 }

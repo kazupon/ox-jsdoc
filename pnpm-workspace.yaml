@@ -20,3 +20,4 @@ overrides:
 
 minimumReleaseAgeExclude:
   - '@kazupon/vp-config'
+  - 'wasm-pack'
