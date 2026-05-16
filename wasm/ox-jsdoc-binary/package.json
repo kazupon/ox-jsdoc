@@ -1,6 +1,6 @@
 {
   "name": "@ox-jsdoc/wasm-binary",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "Deprecated alias for @ox-jsdoc/wasm. Re-exports the canonical Binary AST WASM package; install `@ox-jsdoc/wasm` instead.",
   "keywords": [
     "binary-ast",
