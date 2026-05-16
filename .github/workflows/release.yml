@@ -6,6 +6,15 @@ on:
       - '**'
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      crate_auth_mode:
+        description: 'crates.io auth method for the publish-crate job'
+        type: choice
+        options:
+          - trusted-publishing
+          - token
+        default: trusted-publishing
 
 env:
   CI: true
@@ -239,3 +248,61 @@ jobs:
           branch: main
           file_pattern: CHANGELOG.md
           commit_message: 'chore: generate changelog'
+
+  publish-crate:
+    name: Publish ox_jsdoc to crates.io
+    runs-on: ubuntu-latest
+    needs:
+      - publish
+    permissions:
+      # Required for crates.io trusted publishing (OIDC). Harmless when the
+      # job runs in `token` mode and is no-op for the `cargo publish` step.
+      id-token: write
+    steps:
+      - name: Checkout codes
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Rust toolchain
+        # rust-toolchain.toml at the repo root pins the channel; `rustup show`
+        # honors it and installs the matching toolchain.
+        run: rustup show
+
+      - name: Verify Cargo.toml version matches the v* tag
+        # Only enforced on tag-driven releases; manual workflow_dispatch runs
+        # (initial publish, fallback) skip this guard.
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag_version="${GITHUB_REF#refs/tags/v}"
+          cargo_version=$(grep '^version = ' crates/ox_jsdoc/Cargo.toml | head -1 | cut -d'"' -f2)
+          if [ "$tag_version" != "$cargo_version" ]; then
+            echo "tag version $tag_version does not match crates/ox_jsdoc/Cargo.toml version $cargo_version" >&2
+            exit 1
+          fi
+
+      - name: Determine auth mode
+        id: auth
+        # Default is trusted-publishing; `token` is selected manually for the
+        # initial publish (before the crate has an owner on crates.io) or as
+        # fallback if trusted publishing is unavailable.
+        run: |
+          mode="${{ github.event.inputs.crate_auth_mode || 'trusted-publishing' }}"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "Using auth mode: $mode"
+
+      - name: cargo publish dry-run
+        # `--dry-run` only hits the crates.io index for sanity, no auth needed.
+        run: cargo publish --dry-run -p ox_jsdoc
+
+      - name: Authenticate crates.io via Trusted Publishing
+        if: steps.auth.outputs.mode == 'trusted-publishing'
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: cargo publish (trusted publishing)
+        if: steps.auth.outputs.mode == 'trusted-publishing'
+        run: cargo publish -p ox_jsdoc
+
+      - name: cargo publish (token)
+        if: steps.auth.outputs.mode == 'token'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p ox_jsdoc
