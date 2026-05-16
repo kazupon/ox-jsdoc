@@ -312,7 +312,14 @@ jobs:
         run: cargo publish --dry-run -p ox_jsdoc
 
       - name: Authenticate crates.io via Trusted Publishing
+        id: auth
         uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1.0.4
 
       - name: cargo publish
+        env:
+          # Short-lived token produced by the trusted-publishing step. cargo
+          # always reads the token from `CARGO_REGISTRY_TOKEN`, but the value
+          # here is the OIDC-derived ephemeral token — not a long-lived
+          # repository secret. The token is auto-revoked when the job ends.
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: cargo publish -p ox_jsdoc
