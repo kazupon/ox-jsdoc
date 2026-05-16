@@ -1,20 +1,30 @@
 name: Release
 
 on:
+  # Normal release flow: `vpr release` (= `pnpm run release`) bumps versions,
+  # commits with a `release: vX.Y.Z` message, and pushes a `vX.Y.Z` tag. The
+  # tag push trigger here runs the full pipeline: npm publish + cargo publish
+  # via crates.io trusted publishing.
   push:
     branches-ignore:
       - '**'
     tags:
       - 'v*'
+  # Manual retry path. Use this when a tag-push run failed transiently and
+  # one side (npm trusted publishing or crates.io trusted publishing) needs
+  # to be re-run against the current versions on disk. Toggle the inputs to
+  # pick which publish jobs run; the unchecked side is skipped entirely so
+  # an "already published this version" error doesn't fail the workflow.
   workflow_dispatch:
     inputs:
-      crate_auth_mode:
-        description: 'crates.io auth method for the publish-crate job'
-        type: choice
-        options:
-          - trusted-publishing
-          - token
-        default: trusted-publishing
+      publish_npm:
+        description: 'Re-run npm publish job (will fail if the version is already on the registry)'
+        type: boolean
+        default: false
+      publish_crate:
+        description: 'Re-run crates.io publish job'
+        type: boolean
+        default: true
 
 env:
   CI: true
@@ -123,12 +133,13 @@ jobs:
   publish:
     name: Publish packages
     runs-on: ubuntu-latest
-    # Only the tag-push trigger publishes the npm packages. `workflow_dispatch`
-    # runs are reserved for the `publish-crate` job (initial crates.io publish
-    # / fallback) and must skip npm publish — npm publish would otherwise fail
-    # with "cannot publish over the previously published version" because no
-    # version bump happened.
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Tag-push runs always go through this job. `workflow_dispatch` runs only
+    # touch npm if the operator explicitly opts in via `publish_npm: true` —
+    # otherwise the job is skipped because re-publishing the same version is
+    # rejected by the npm registry.
+    if: |
+      startsWith(github.ref, 'refs/tags/v')
+      || github.event.inputs.publish_npm == 'true'
     needs:
       - test-decoder
       - build-napi
@@ -262,18 +273,18 @@ jobs:
       - test-decoder
       - build-napi
       - publish
-    # Run on tag-push releases (after `publish` succeeds) and on
-    # `workflow_dispatch` runs (where `publish` is intentionally skipped for
-    # initial crate publish / fallback). `always()` lets us evaluate the
-    # condition even when `needs.publish` is `skipped`.
+    # Tag-push runs always reach this job after `publish` succeeds.
+    # `workflow_dispatch` runs only run this job when `publish_crate: true`
+    # is selected (default). `always()` lets us evaluate the condition even
+    # when `needs.publish` is `skipped`.
     if: |
       always()
       && needs.test-decoder.result == 'success'
       && needs.build-napi.result == 'success'
       && (needs.publish.result == 'success' || needs.publish.result == 'skipped')
+      && (startsWith(github.ref, 'refs/tags/v') || github.event.inputs.publish_crate == 'true')
     permissions:
-      # Required for crates.io trusted publishing (OIDC). Harmless when the
-      # job runs in `token` mode and is no-op for the `cargo publish` step.
+      # Required for crates.io trusted publishing (OIDC).
       id-token: write
     steps:
       - name: Checkout codes
@@ -286,7 +297,7 @@ jobs:
 
       - name: Verify Cargo.toml version matches the v* tag
         # Only enforced on tag-driven releases; manual workflow_dispatch runs
-        # (initial publish, fallback) skip this guard.
+        # (retry) skip this guard.
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           tag_version="${GITHUB_REF#refs/tags/v}"
@@ -296,30 +307,12 @@ jobs:
             exit 1
           fi
 
-      - name: Determine auth mode
-        id: auth
-        # Default is trusted-publishing; `token` is selected manually for the
-        # initial publish (before the crate has an owner on crates.io) or as
-        # fallback if trusted publishing is unavailable.
-        run: |
-          mode="${{ github.event.inputs.crate_auth_mode || 'trusted-publishing' }}"
-          echo "mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "Using auth mode: $mode"
-
       - name: cargo publish dry-run
         # `--dry-run` only hits the crates.io index for sanity, no auth needed.
         run: cargo publish --dry-run -p ox_jsdoc
 
       - name: Authenticate crates.io via Trusted Publishing
-        if: steps.auth.outputs.mode == 'trusted-publishing'
-        uses: rust-lang/crates-io-auth-action@v1
+        uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1.0.4
 
-      - name: cargo publish (trusted publishing)
-        if: steps.auth.outputs.mode == 'trusted-publishing'
-        run: cargo publish -p ox_jsdoc
-
-      - name: cargo publish (token)
-        if: steps.auth.outputs.mode == 'token'
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: cargo publish
         run: cargo publish -p ox_jsdoc
