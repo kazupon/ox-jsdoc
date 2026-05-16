@@ -17,3 +17,6 @@ packages/jsdoccomment/.dts/
 .notes/
 .playwright-cli
 tasks/benchmark/.tmp
+tasks/benchmark/results/*
+!tasks/benchmark/results/jsdoc-linter-hyperfine.json
+!tasks/benchmark/results/jsdoc-linter-hyperfine.json.md
