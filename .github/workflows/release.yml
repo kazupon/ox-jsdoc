@@ -4,30 +4,42 @@ on:
   # Normal release flow: `vpr release` (= `pnpm run release`) bumps versions,
   # commits with a `release: vX.Y.Z` message, and pushes a `vX.Y.Z` tag. The
   # tag push trigger here runs the full pipeline: npm publish + cargo publish
-  # via crates.io trusted publishing.
+  # via crates.io trusted publishing + GitHub Release + changelog sync.
   push:
     branches-ignore:
       - '**'
     tags:
       - 'v*'
-  # Manual retry path. Use this when a tag-push run failed transiently and
-  # one side (npm trusted publishing or crates.io trusted publishing) needs
-  # to be re-run against the current versions on disk. Toggle the inputs to
-  # pick which publish jobs run; the unchecked side is skipped entirely so
-  # an "already published this version" error doesn't fail the workflow.
+  # Manual retry path. Use this when a tag-push run partially failed and a
+  # specific job needs to be re-run against the same tag. Pick the failed
+  # job in `job` (or `all` for a full re-run) and supply the existing tag
+  # via `tag`. Each job knows how to skip cleanly when not selected, so an
+  # "already published this version" error from the unselected side does
+  # not fail the workflow.
   workflow_dispatch:
     inputs:
-      publish_npm:
-        description: 'Re-run npm publish job (will fail if the version is already on the registry)'
-        type: boolean
-        default: false
-      publish_crate:
-        description: 'Re-run crates.io publish job'
-        type: boolean
-        default: true
+      job:
+        description: 'Which job(s) to run. `all` runs the full pipeline. Pick a specific job to retry only that one.'
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - npm-publish
+          - crate-publish
+          - release-notes
+      tag:
+        description: 'Existing tag to release (e.g. v0.0.16). Required.'
+        type: string
+        required: true
 
 env:
   CI: true
+  # On tag-push, `github.ref_name` is the tag string (e.g. "v0.0.15"). On
+  # workflow_dispatch, the operator supplies the tag explicitly via
+  # `inputs.tag`. All downstream jobs reference `$TAG` instead of parsing
+  # `github.ref` themselves.
+  TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
 permissions:
   contents: read
@@ -35,11 +47,20 @@ permissions:
 jobs:
   test-decoder:
     name: Test @ox-jsdoc/decoder
+    # Regression gate for `npm-publish`. Skipped on workflow_dispatch retries
+    # that don't include `npm-publish` (the operator has already confirmed the
+    # tag's code is good when retrying `crate-publish` or `release-notes`).
+    if: >-
+      github.event_name == 'push' || (github.event_name == 'workflow_dispatch' &&
+        (inputs.job == 'all' || inputs.job == 'npm-publish'))
+
+
     runs-on: ubuntu-latest
     steps:
       - name: Checkout codes
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ env.TAG }}
           persist-credentials: false
 
       - name: Install pnpm
@@ -60,6 +81,14 @@ jobs:
 
   build-napi:
     name: Build ${{ matrix.package_name }} (${{ matrix.target }})
+    # Compile-time gate for `npm-publish`. Skipped on workflow_dispatch retries
+    # that don't include `npm-publish`. `crate-publish` doesn't need NAPI
+    # artifacts (cargo publishes a source tarball), so it's safe to skip here.
+    if: >-
+      github.event_name == 'push' || (github.event_name == 'workflow_dispatch' &&
+        (inputs.job == 'all' || inputs.job == 'npm-publish'))
+
+
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -105,6 +134,7 @@ jobs:
       - name: Checkout codes
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ env.TAG }}
           persist-credentials: false
 
       - name: Install pnpm
@@ -141,30 +171,37 @@ jobs:
             ${{ matrix.package_path }}/**/bindings.js
             ${{ matrix.package_path }}/**/bindings.d.ts
 
-  publish:
-    name: Publish packages
+  npm-publish:
+    name: Publish npm packages
     runs-on: ubuntu-latest
     # Tag-push runs always go through this job. `workflow_dispatch` runs only
-    # touch npm if the operator explicitly opts in via `publish_npm: true` —
-    # otherwise the job is skipped because re-publishing the same version is
-    # rejected by the npm registry.
-    if: |
-      startsWith(github.ref, 'refs/tags/v')
-      || github.event.inputs.publish_npm == 'true'
+    # touch npm when `inputs.job` selects `all` or `npm-publish`; otherwise
+    # the job is skipped (the npm registry rejects re-publishing the same
+    # version).
+    if: >-
+      always() && (
+        (github.event_name == 'push' &&
+          needs.test-decoder.result == 'success' &&
+          needs.build-napi.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' &&
+          (inputs.job == 'all' || inputs.job == 'npm-publish') &&
+          needs.test-decoder.result == 'success' &&
+          needs.build-napi.result == 'success')
+      )
+
+
     needs:
       - test-decoder
       - build-napi
     permissions:
-      contents: write
+      # Required for npm trusted publishing (OIDC).
       id-token: write
     steps:
-      # `git-auto-commit-action` (Commit changelog step) pushes to `main`
-      # using the credentials persisted here. Disabling persist-credentials
-      # would break that step.
-      - name: Checkout codes # zizmor: ignore[artipacked]
+      - name: Checkout codes
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-depth: 0
+          ref: ${{ env.TAG }}
+          persist-credentials: false
 
       - name: Install pnpm
         uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
@@ -255,50 +292,29 @@ jobs:
           node --input-type=module -e "import { parse } from 'ox-jsdoc'; const result = parse('/** hi */'); if (result.diagnostics.length !== 0) throw new Error('ox-jsdoc diagnostics mismatch'); console.log('ox-jsdoc smoke ok')"
           node --input-type=module -e "import { parse } from 'ox-jsdoc-binary'; const result = parse('/** hi */'); if (result.diagnostics.length !== 0) throw new Error('ox-jsdoc-binary diagnostics mismatch'); console.log('ox-jsdoc-binary smoke ok')"
 
-      - name: Extract version tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: jungwinter/split@7f51d99e7cc1f147f6f99be75acf5e641930af88 # v2.1.0
-        id: split
-        with:
-          msg: ${{ github.ref }}
-          separator: /
-
-      - name: Create GitHub Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.split.outputs._2 }}
-        run: gh release create "$TAG" --generate-notes
-
-      - name: Sync changelog from GitHub releases
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.split.outputs._2 }}
-        run: vp exec gh-changelogen --repo=kazupon/ox-jsdoc --tag="$TAG"
-
-      - name: Commit changelog
-        uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9 # v7.1.0
-        with:
-          branch: main
-          file_pattern: CHANGELOG.md
-          commit_message: 'chore: generate changelog'
-
-  publish-crate:
+  crate-publish:
     name: Publish ox_jsdoc to crates.io
     runs-on: ubuntu-latest
+    # Runs in parallel with `npm-publish` (the two registries are independent
+    # and the cargo source tarball does not require the NAPI artifacts).
+    # `test-decoder` and `build-napi` remain as regression / compile-time
+    # gates on tag-push; on workflow_dispatch retries they are skipped (the
+    # operator has already vetted the tag).
     needs:
       - test-decoder
       - build-napi
-      - publish
-    # Tag-push runs always reach this job after `publish` succeeds.
-    # `workflow_dispatch` runs only run this job when `publish_crate: true`
-    # is selected (default). `always()` lets us evaluate the condition even
-    # when `needs.publish` is `skipped`.
-    if: |
-      always()
-      && needs.test-decoder.result == 'success'
-      && needs.build-napi.result == 'success'
-      && (needs.publish.result == 'success' || needs.publish.result == 'skipped')
-      && (startsWith(github.ref, 'refs/tags/v') || github.event.inputs.publish_crate == 'true')
+    if: >-
+      always() && (
+        (github.event_name == 'push' &&
+          needs.test-decoder.result == 'success' &&
+          needs.build-napi.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' &&
+          (inputs.job == 'all' || inputs.job == 'crate-publish') &&
+          (needs.test-decoder.result == 'success' || needs.test-decoder.result == 'skipped') &&
+          (needs.build-napi.result == 'success' || needs.build-napi.result == 'skipped'))
+      )
+
+
     permissions:
       # Required for crates.io trusted publishing (OIDC).
       id-token: write
@@ -306,6 +322,7 @@ jobs:
       - name: Checkout codes
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ env.TAG }}
           persist-credentials: false
 
       - name: Install Rust toolchain
@@ -313,12 +330,11 @@ jobs:
         # honors it and installs the matching toolchain.
         run: rustup show
 
-      - name: Verify Cargo.toml version matches the v* tag
-        # Only enforced on tag-driven releases; manual workflow_dispatch runs
-        # (retry) skip this guard.
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Verify Cargo.toml version matches $TAG
+        # Always enforced: the checkout above pins to `$TAG`, so the tag
+        # string must agree with the Cargo.toml version on that commit.
         run: |
-          tag_version="${GITHUB_REF#refs/tags/v}"
+          tag_version="${TAG#v}"
           cargo_version=$(grep '^version = ' crates/ox_jsdoc/Cargo.toml | head -1 | cut -d'"' -f2)
           if [ "$tag_version" != "$cargo_version" ]; then
             echo "tag version $tag_version does not match crates/ox_jsdoc/Cargo.toml version $cargo_version" >&2
@@ -341,3 +357,75 @@ jobs:
           # repository secret. The token is auto-revoked when the job ends.
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: cargo publish -p ox_jsdoc
+
+  release-notes:
+    name: Sync changelog and create GitHub Release
+    runs-on: ubuntu-latest
+    # Waits for both publish jobs so the GitHub Release and CHANGELOG only
+    # appear once npm and crates.io are both green — a half-released state
+    # (e.g. npm OK / crates NG) doesn't produce a misleading Release.
+    needs:
+      - npm-publish
+      - crate-publish
+    if: >-
+      always() && (
+        (github.event_name == 'push' &&
+          needs.npm-publish.result == 'success' &&
+          needs.crate-publish.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' &&
+          (inputs.job == 'release-notes' ||
+            (inputs.job == 'all' &&
+              needs.npm-publish.result == 'success' &&
+              needs.crate-publish.result == 'success')))
+      )
+
+
+    permissions:
+      # Required for stefanzweifel/git-auto-commit-action to push the
+      # CHANGELOG commit back to `main`.
+      contents: write
+    steps:
+      # zizmor: ignore[artipacked] — git-auto-commit-action needs the
+      # credentials persisted here in order to push the CHANGELOG commit.
+      - name: Checkout main # zizmor: ignore[artipacked]
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+
+      - name: Setup Vite Plus
+        uses: voidzero-dev/setup-vp@8ecb39174989ce55af90f45cf55b02738599831d # v1.6.0
+        with:
+          node-version: 24
+          cache: true
+          run-install: false
+
+      - name: Install dependencies
+        run: vp install --frozen-lockfile
+
+      - name: Create GitHub Release (skip if exists)
+        # Skipping avoids upserting a Release that already exists, so the
+        # operator can retry this job for changelog sync alone.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, skipping creation"
+          else
+            gh release create "$TAG" --generate-notes
+          fi
+
+      - name: Sync changelog from GitHub releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: vp exec gh-changelogen --repo=kazupon/ox-jsdoc --tag="$TAG"
+
+      - name: Commit changelog
+        uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9 # v7.1.0
+        with:
+          branch: main
+          file_pattern: CHANGELOG.md
+          commit_message: 'chore: generate changelog'
