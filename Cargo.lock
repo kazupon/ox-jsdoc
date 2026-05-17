@@ -493,7 +493,7 @@ checksum = "d211803b9b6b570f68772237e415a029d5a50c65d382910b879fb19d3271f94d"
 
 [[package]]
 name = "ox_jsdoc"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "criterion2",
  "memchr",
