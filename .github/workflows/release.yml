@@ -29,6 +29,9 @@ on:
 env:
   CI: true
 
+permissions:
+  contents: read
+
 jobs:
   test-decoder:
     name: Test @ox-jsdoc/decoder
@@ -36,6 +39,8 @@ jobs:
     steps:
       - name: Checkout codes
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Install pnpm
         uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
@@ -99,6 +104,8 @@ jobs:
 
       - name: Checkout codes
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Install pnpm
         uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
@@ -114,11 +121,15 @@ jobs:
         run: vp install --frozen-lockfile
 
       - name: Add Rust target
-        run: rustup target add ${{ matrix.target }}
+        env:
+          TARGET: ${{ matrix.target }}
+        run: rustup target add "$TARGET"
 
       - name: Build native binding
         working-directory: ${{ matrix.package_path }}
-        run: ${{ matrix.build }}
+        env:
+          BUILD_CMD: ${{ matrix.build }}
+        run: $BUILD_CMD
 
       - name: Upload native binding
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -147,7 +158,10 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - name: Checkout codes
+      # `git-auto-commit-action` (Commit changelog step) pushes to `main`
+      # using the credentials persisted here. Disabling persist-credentials
+      # would break that step.
+      - name: Checkout codes # zizmor: ignore[artipacked]
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
@@ -250,14 +264,16 @@ jobs:
           separator: /
 
       - name: Create GitHub Release
-        run: gh release create ${{ steps.split.outputs._2 }} --generate-notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.split.outputs._2 }}
+        run: gh release create "$TAG" --generate-notes
 
       - name: Sync changelog from GitHub releases
-        run: vp exec gh-changelogen --repo=kazupon/ox-jsdoc --tag=${{ steps.split.outputs._2 }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.split.outputs._2 }}
+        run: vp exec gh-changelogen --repo=kazupon/ox-jsdoc --tag="$TAG"
 
       - name: Commit changelog
         uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9 # v7.1.0
@@ -289,6 +305,8 @@ jobs:
     steps:
       - name: Checkout codes
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Install Rust toolchain
         # rust-toolchain.toml at the repo root pins the channel; `rustup show`
