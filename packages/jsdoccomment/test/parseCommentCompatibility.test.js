@@ -113,6 +113,34 @@ describe('parseComment compatibility', function () {
     expect(parsed.problems).to.deep.equal([problem]);
   });
 
+  it('matches comment-parser 1.4.7 name default validation', function () {
+    const getNameProblemCodes = source => {
+      const parsed = parseComment(source);
+      const [tag] = parsed.tags;
+
+      return tag.problems.map(problem => problem.code);
+    };
+
+    expect(
+      getNameProblemCodes('/**\n * @param {number} foo=bar desc\n */')
+    ).to.deep.equal([]);
+    expect(
+      getNameProblemCodes('/**\n * @param {number} foo=bar=baz desc\n */')
+    ).to.deep.equal(['spec:name:invalid-default']);
+    expect(
+      getNameProblemCodes('/**\n * @param {number} foo-bar=bar=baz desc\n */')
+    ).to.deep.equal([]);
+    expect(
+      getNameProblemCodes('/**\n * @param {number} foo = bar=baz desc\n */')
+    ).to.deep.equal([]);
+    expect(
+      getNameProblemCodes('/**\n * @param {number} =bar desc\n */')
+    ).to.deep.equal(['spec:name:empty-name']);
+    expect(
+      getNameProblemCodes('/**\n * @param {number} foo= desc\n */')
+    ).to.deep.equal(['spec:name:empty-default']);
+  });
+
   it('keeps fenced example contents out of the tag stream', function () {
     const parsed = parseComment(`/**
  * Registers.

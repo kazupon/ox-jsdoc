@@ -15,9 +15,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use ox_jsdoc::parser::{
-    ParseOptions, context::parse_block_into_data, scanner::logical_lines,
-};
+use ox_jsdoc::parser::{ParseOptions, context::parse_block_into_data, scanner::logical_lines};
 use oxc_allocator::Allocator;
 
 fn fixture_path() -> PathBuf {

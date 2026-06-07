@@ -539,10 +539,7 @@ fn parse_batch_with_writer<'arena>(
 /// surrounding comment parse and skips Binary AST emission entirely. Returns
 /// `None` when the input is not a well-formed type expression.
 #[must_use]
-pub fn parse_type_expression(
-    type_text: &str,
-    mode: type_data::ParseMode,
-) -> Option<String> {
+pub fn parse_type_expression(type_text: &str, mode: type_data::ParseMode) -> Option<String> {
     let arena = Allocator::default();
     let mut ctx = context::ParserContext::new(&arena, type_text, 0, ParseOptions::default());
     let node = ctx.parse_type_expression(type_text, 0, mode)?;

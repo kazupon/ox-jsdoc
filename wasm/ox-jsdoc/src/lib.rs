@@ -16,8 +16,8 @@ use wasm_bindgen::prelude::*;
 
 use ox_jsdoc::parser::{
     BatchItem, ParseOptions, parse_batch_to_bytes, parse_to_bytes,
-    parse_type_check as core_parse_type_check,
-    parse_type_expression as core_parse_type_expression, type_data::ParseMode,
+    parse_type_check as core_parse_type_check, parse_type_expression as core_parse_type_expression,
+    type_data::ParseMode,
 };
 
 /// Owned binary-AST result. JS reads `buffer_ptr` + `buffer_len` and views

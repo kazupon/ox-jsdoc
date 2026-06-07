@@ -30,9 +30,7 @@ use ox_jsdoc::writer::BinaryWriter;
 use ox_jsdoc::writer::nodes::comment_ast::{
     write_jsdoc_block, write_jsdoc_block_compat_tail, write_jsdoc_text,
 };
-use ox_jsdoc::writer::nodes::type_node::{
-    write_type_function, write_type_name, write_type_null,
-};
+use ox_jsdoc::writer::nodes::type_node::{write_type_function, write_type_name, write_type_null};
 use oxc_allocator::Allocator;
 use oxc_span::Span;
 
