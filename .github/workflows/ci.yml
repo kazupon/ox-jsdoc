@@ -75,7 +75,7 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Install playwright
-        run: pv exec playwright install chromium
+        run: vp exec playwright install chromium
 
       - name: Building
         run: vpr build
