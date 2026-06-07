@@ -3,11 +3,10 @@
 `@ox-jsdoc/eslint-plugin-jsdoc` is a fork of `eslint-plugin-jsdoc` adapted
 for `ox-jsdoc`.
 
-This package is a private workspace package and is not a general-purpose
-package intended for npm publish. Its main purpose is to reuse the rule
-implementations from `eslint-plugin-jsdoc` while exercising
-`@ox-jsdoc/jsdoccomment` as the JSDoc parser, so we can run ESLint /
-Oxlint integration and benchmarks.
+This package reuses the rule implementations from `eslint-plugin-jsdoc` while
+exercising `@ox-jsdoc/jsdoccomment` as the JSDoc parser. It is published as part
+of the `ox-jsdoc` package family for ESLint / Oxlint integration experiments and
+benchmarks.
 
 ## Role
 
@@ -25,7 +24,7 @@ Oxlint integration and benchmarks.
 | Item                 | Upstream `eslint-plugin-jsdoc` | This package                                          |
 | -------------------- | ------------------------------ | ----------------------------------------------------- |
 | package name         | `eslint-plugin-jsdoc`          | `@ox-jsdoc/eslint-plugin-jsdoc`                       |
-| publish              | npm package                    | private workspace package                             |
+| publish              | npm package                    | npm package under the `@ox-jsdoc` scope               |
 | JSDoc parser         | `@es-joy/jsdoccomment`         | `@ox-jsdoc/jsdoccomment`                              |
 | single comment parse | `parseComment`                 | `parseComment` via `@ox-jsdoc/jsdoccomment`           |
 | batch parse          | not available                  | enabled via `settings.jsdoc.oxParseStrategy: 'batch'` |
@@ -33,8 +32,14 @@ Oxlint integration and benchmarks.
 
 The rule names, configuration, and core rule behavior aim to remain
 compatible with upstream `eslint-plugin-jsdoc`. However, since this fork
-exists primarily for benchmarking and validation, it does not guarantee
-backward compatibility as a published package.
+exists primarily for benchmarking and validation, compatibility follows the
+needs of the `ox-jsdoc` integration packages.
+
+## Installation
+
+```sh
+npm install @ox-jsdoc/eslint-plugin-jsdoc
+```
 
 ## oxParseStrategy
 

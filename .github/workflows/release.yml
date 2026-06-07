@@ -267,10 +267,22 @@ jobs:
           publish_flags=(--access public --no-git-checks)
           pnpm publish "${publish_flags[@]}"
 
+      - name: Publish jsdoccomment
+        working-directory: packages/jsdoccomment
+        run: |
+          publish_flags=(--access public --no-git-checks)
+          pnpm publish "${publish_flags[@]}"
+
+      - name: Publish eslint-plugin-jsdoc
+        working-directory: packages/eslint-plugin-jsdoc
+        run: |
+          publish_flags=(--access public --no-git-checks)
+          pnpm publish "${publish_flags[@]}"
+
       - name: Smoke test published packages
         run: |
           version=$(node -p "require('./napi/ox-jsdoc/package.json').version")
-          for package_name in @ox-jsdoc/decoder ox-jsdoc ox-jsdoc-binary; do
+          for package_name in @ox-jsdoc/decoder ox-jsdoc ox-jsdoc-binary @ox-jsdoc/jsdoccomment @ox-jsdoc/eslint-plugin-jsdoc; do
             for attempt in {1..12}; do
               if npm view "${package_name}@${version}" version >/dev/null 2>&1; then
                 echo "${package_name}@${version} is available on npm"
@@ -287,10 +299,12 @@ jobs:
           tmpdir=$(mktemp -d)
           cd "${tmpdir}"
           npm init -y
-          npm install --ignore-scripts "@ox-jsdoc/decoder@${version}" "ox-jsdoc@${version}" "ox-jsdoc-binary@${version}"
+          npm install --ignore-scripts "@ox-jsdoc/decoder@${version}" "ox-jsdoc@${version}" "ox-jsdoc-binary@${version}" "@ox-jsdoc/jsdoccomment@${version}" "@ox-jsdoc/eslint-plugin-jsdoc@${version}"
           node --input-type=module -e "import('@ox-jsdoc/decoder').then(() => console.log('@ox-jsdoc/decoder smoke ok'))"
           node --input-type=module -e "import { parse } from 'ox-jsdoc'; const result = parse('/** hi */'); if (result.diagnostics.length !== 0) throw new Error('ox-jsdoc diagnostics mismatch'); console.log('ox-jsdoc smoke ok')"
           node --input-type=module -e "import { parse } from 'ox-jsdoc-binary'; const result = parse('/** hi */'); if (result.diagnostics.length !== 0) throw new Error('ox-jsdoc-binary diagnostics mismatch'); console.log('ox-jsdoc-binary smoke ok')"
+          node --input-type=module -e "import { parseComment } from '@ox-jsdoc/jsdoccomment'; const block = parseComment('/** hi */'); if (!block.description.includes('hi')) throw new Error('@ox-jsdoc/jsdoccomment smoke mismatch'); console.log('@ox-jsdoc/jsdoccomment smoke ok')"
+          node --input-type=module -e "import jsdoc from '@ox-jsdoc/eslint-plugin-jsdoc'; if (!jsdoc?.rules) throw new Error('@ox-jsdoc/eslint-plugin-jsdoc rules missing'); console.log('@ox-jsdoc/eslint-plugin-jsdoc smoke ok')"
 
   crate-publish:
     name: Publish ox_jsdoc to crates.io

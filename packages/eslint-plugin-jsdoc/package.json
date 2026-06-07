@@ -1,14 +1,13 @@
 {
   "name": "@ox-jsdoc/eslint-plugin-jsdoc",
-  "version": "0.0.12",
-  "private": true,
+  "version": "0.0.16",
   "description": "eslint-plugin-jsdoc fork using @ox-jsdoc/jsdoccomment.",
   "keywords": [
     "eslint",
     "jsdoc",
     "plugin"
   ],
-  "homepage": "https://github.com/gajus/eslint-plugin-jsdoc#readme",
+  "homepage": "https://github.com/kazupon/ox-jsdoc/tree/main/packages/eslint-plugin-jsdoc#readme",
   "license": "BSD-3-Clause",
   "author": {
     "name": "kazuya kawaguchi",
@@ -17,8 +16,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/kazupon/ox-jsdoc",
-    "directory": "packages/decoder"
+    "directory": "packages/eslint-plugin-jsdoc"
   },
+  "funding": "https://github.com/sponsors/kazupon",
   "type": "module",
   "main": "./dist/index.cjs",
   "types": "./dist/index.d.ts",
@@ -53,6 +53,16 @@
         "default": "./dist/iterateJsdoc.cjs"
       }
     }
+  },
+  "files": [
+    "/dist",
+    "/docs",
+    "/src",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "ruleTypes": "node ./src/bin/generateRuleTypes.js",

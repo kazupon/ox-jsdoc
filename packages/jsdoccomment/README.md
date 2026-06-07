@@ -3,10 +3,10 @@
 `@ox-jsdoc/jsdoccomment` is a fork of `@es-joy/jsdoccomment` adapted for
 `ox-jsdoc`.
 
-This package is a private workspace package and is not a general-purpose
-package intended for npm publish. Its main purpose is to keep the public
-runtime surface expected by `eslint-plugin-jsdoc` while replacing the hot
-JSDoc parsing path with `ox-jsdoc-binary`.
+This package keeps the runtime surface expected by `eslint-plugin-jsdoc` while
+replacing the hot JSDoc parsing path with `ox-jsdoc-binary`. It is published as
+part of the `ox-jsdoc` package family for integration experiments, compatibility
+testing, and benchmarking.
 
 ## Role
 
@@ -27,15 +27,21 @@ JSDoc parsing path with `ox-jsdoc-binary`.
 | Item         | Upstream `@es-joy/jsdoccomment` | This package                                      |
 | ------------ | -------------------------------- | ------------------------------------------------- |
 | package name | `@es-joy/jsdoccomment`           | `@ox-jsdoc/jsdoccomment`                          |
-| publish      | npm package                      | private workspace package                         |
+| publish      | npm package                      | npm package under the `@ox-jsdoc` scope           |
 | parser path  | `comment-parser` tokenizers      | `ox-jsdoc-binary` with compatibility normalization |
 | batch parse  | not available                    | `parseCommentBatch`                               |
 | primary use  | general-purpose JSDoc utility    | ox-jsdoc integration / compatibility / benchmarking |
 
 The exported AST and helper APIs aim to remain compatible with the upstream
 package where `eslint-plugin-jsdoc` depends on them. However, this fork exists
-primarily for `ox-jsdoc` development, so it does not guarantee compatibility as
-a published package.
+primarily for `ox-jsdoc` development, so compatibility follows the needs of the
+`ox-jsdoc` integration packages.
+
+## Installation
+
+```sh
+npm install @ox-jsdoc/jsdoccomment
+```
 
 ## Parser entry points
 

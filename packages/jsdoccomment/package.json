@@ -1,12 +1,12 @@
 {
   "name": "@ox-jsdoc/jsdoccomment",
-  "version": "0.0.12",
-  "private": true,
+  "version": "0.0.16",
   "author": {
     "name": "kazuya kawaguchi",
     "email": "kawakazu80@gmail.com"
   },
   "description": "Maintained replacement for ESLint's deprecated SourceCode#getJSDocComment along with other jsdoc utilities",
+  "homepage": "https://github.com/kazupon/ox-jsdoc/tree/main/packages/jsdoccomment#readme",
   "license": "MIT",
   "keywords": [
     "ast",
@@ -36,7 +36,7 @@
   ],
   "scripts": {
     "build": "rollup -c && npm run types",
-    "prepublishOnly": "pnpm i && pnpm run build",
+    "prepublishOnly": "pnpm run build",
     "test": "vp test run",
     "tsc": "tsc",
     "types": "esm-d-ts gen ./src/index.js --output ./dist/index.d.ts --emitCTS"
@@ -46,8 +46,12 @@
     "url": "git+https://github.com/kazupon/ox-jsdoc.git",
     "directory": "packages/jsdoccomment"
   },
+  "funding": "https://github.com/sponsors/kazupon",
   "bugs": {
     "url": "https://github.com/kazupon/ox-jsdoc/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "engines": {
     "node": "^20.19.0 || ^22.13.0 || >=24"
@@ -80,6 +84,7 @@
   "files": [
     "/dist",
     "/src",
+    "README.md",
     "LICENSE-MIT.txt"
   ]
 }
