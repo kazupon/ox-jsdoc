@@ -3,6 +3,10 @@ import {
   parseCommentForSource,
 } from '../parseCommentStrategy.js';
 import {
+  getDocumentNamepathDefiningTags,
+  getJSDocCommentBlocks,
+} from '../jsdocUtils.js';
+import {
   getJSDocComment,
   parse as parseType,
   traverse,
@@ -124,13 +128,7 @@ export default iterateJsdoc(({
   }
 
   const allComments = sourceCode.getAllComments();
-  const comments = allComments
-    .filter((comment) => {
-      return (/^\*(?!\*)/v).test(comment.value);
-    })
-    .map((commentNode) => {
-      return parseCommentForSource(sourceCode, commentNode, settings, '');
-    });
+  const comments = getJSDocCommentBlocks(sourceCode, settings);
 
   const globals = allComments
     .filter((comment) => {
@@ -139,20 +137,7 @@ export default iterateJsdoc(({
       return commentNode.value.replace(/^\s*globals/v, '').trim().split(/,\s*/v);
     }).concat(Object.keys(context.languageOptions.globals ?? []));
 
-  const typedefs = comments
-    .flatMap((doc) => {
-      return doc.tags.filter(({
-        tag,
-      }) => {
-        return utils.isNameOrNamepathDefiningTag(tag) && ![
-          'arg',
-          'argument',
-          'param',
-          'prop',
-          'property',
-        ].includes(tag);
-      });
-    });
+  const typedefs = getDocumentNamepathDefiningTags(sourceCode, settings);
 
   const typedefDeclarations = typedefs
     .map((tag) => {

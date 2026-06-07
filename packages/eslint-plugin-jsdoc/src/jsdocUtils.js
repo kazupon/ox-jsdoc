@@ -6,6 +6,9 @@ import {
 } from './tagNames.js';
 import WarnSettings from './WarnSettings.js';
 import {
+  parseCommentForSource,
+} from './parseCommentStrategy.js';
+import {
   stringify,
   tryParse,
 } from '@ox-jsdoc/jsdoccomment';
@@ -1085,6 +1088,43 @@ const isNameOrNamepathDefiningTag = (tag, tagMap = tagStructure) => {
 };
 
 /**
+ * @param {import('eslint').SourceCode} sourceCode
+ * @param {import('./parseCommentStrategy.js').ParseSettings} settings
+ * @returns {import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline[]}
+ */
+const getJSDocCommentBlocks = (sourceCode, settings) => {
+  return sourceCode.getAllComments()
+    .filter((comment) => {
+      return (/^\*(?!\*)/v).test(comment.value);
+    })
+    .map((commentNode) => {
+      return parseCommentForSource(sourceCode, commentNode, settings, '');
+    });
+};
+
+/**
+ * @param {import('eslint').SourceCode} sourceCode
+ * @param {import('./parseCommentStrategy.js').ParseSettings} settings
+ * @returns {import('comment-parser').Spec[]}
+ */
+const getDocumentNamepathDefiningTags = (sourceCode, settings) => {
+  return getJSDocCommentBlocks(sourceCode, settings)
+    .flatMap((doc) => {
+      return doc.tags.filter(({
+        tag,
+      }) => {
+        return isNameOrNamepathDefiningTag(tag) && ![
+          'arg',
+          'argument',
+          'param',
+          'prop',
+          'property',
+        ].includes(tag);
+      });
+    });
+};
+
+/**
  * @param {string} tag
  * @param {import('./getDefaultTagStructureForMode.js').TagStructure} tagMap
  * @returns {boolean}
@@ -2110,9 +2150,11 @@ export {
   forEachPreferredTag,
   getAllTags,
   getContextObject,
+  getDocumentNamepathDefiningTags,
   getFunctionParameterNames,
   getIndent,
   getInlineTags,
+  getJSDocCommentBlocks,
   getJsdocTagsDeep,
   getPreferredTagName,
   getPreferredTagNameSimple,
