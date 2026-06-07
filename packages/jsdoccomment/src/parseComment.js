@@ -696,15 +696,15 @@ const getNameProblems = (nameToken, line) => {
 
   const eqIndex = name.search(invalidDefault)
   if (eqIndex !== -1) {
-    defaultValue = name.slice(eqIndex + 1).trim()
-    name = name.slice(0, eqIndex).trim()
+    const preEqual = name.slice(0, eqIndex).trim()
+    const postEqual = name.slice(eqIndex + 1).trim()
 
-    if (name === '') {
+    if (preEqual === '') {
       return [
         createCriticalProblem('spec:name:empty-name', 'empty name', line)
       ]
     }
-    if (defaultValue === '') {
+    if (postEqual === '') {
       return [
         createCriticalProblem(
           'spec:name:empty-default',
@@ -713,7 +713,11 @@ const getNameProblems = (nameToken, line) => {
         )
       ]
     }
-    if (!isQuoted(defaultValue) && invalidDefault.test(defaultValue)) {
+    if (
+      /^[\p{ID_Start}$_\.][\p{ID_Continue}$_\u200c\u200d\.]*=/u.test(name) &&
+      !isQuoted(postEqual) &&
+      invalidDefault.test(postEqual)
+    ) {
       return [
         createCriticalProblem(
           'spec:name:invalid-default',

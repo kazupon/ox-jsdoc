@@ -15,8 +15,8 @@ use napi_derive::napi;
 
 use ox_jsdoc::parser::{
     BatchItem, ParseOptions, parse_batch_to_bytes, parse_to_bytes,
-    parse_type_check as core_parse_type_check,
-    parse_type_expression as core_parse_type_expression, type_data::ParseMode,
+    parse_type_check as core_parse_type_check, parse_type_expression as core_parse_type_expression,
+    type_data::ParseMode,
 };
 
 #[napi(object)]
