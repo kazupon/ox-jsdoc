@@ -1,13 +1,18 @@
 import iterateJsdoc from '../iterateJsdoc.js';
-import eslint, {
-  ESLint,
-} from 'eslint';
+import {
+  createRequire,
+} from 'node:module';
 import semver from 'semver';
 
-const {
-  // @ts-expect-error Older ESLint
-  CLIEngine,
-} = eslint;
+const requireFromHere = createRequire(import.meta.url);
+
+const loadEslint = () => {
+  try {
+    return requireFromHere('eslint');
+  } catch {
+    return null;
+  }
+};
 
 const zeroBasedLineIndexAdjust = -1;
 const likelyNestedJSDocIndentSpace = 1;
@@ -136,6 +141,26 @@ export default iterateJsdoc(({
   report,
   utils,
 }) => {
+  const eslint = loadEslint();
+
+  if (!eslint) {
+    report(
+      'This rule requires ESLint to be installed; you should disable this rule or install ESLint.',
+      null,
+      {
+        column: 1,
+        line: 1,
+      },
+    );
+
+    return;
+  }
+
+  const {
+    CLIEngine,
+    ESLint,
+  } = eslint;
+
   if (semver.gte(ESLint.version, '8.0.0')) {
     report(
       'This rule does not work for ESLint 8+; you should disable this rule and use' +

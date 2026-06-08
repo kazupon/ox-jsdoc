@@ -7,6 +7,9 @@ import {
 import {
   getJsdocProcessorPlugin,
 } from './getJsdocProcessorPlugin.js';
+import {
+  createRequire,
+} from 'node:module';
 import checkAccess from './rules/checkAccess.js';
 import checkAlignment from './rules/checkAlignment.js';
 import checkExamples from './rules/checkExamples.js';
@@ -73,10 +76,20 @@ import tsNoUnnecessaryTemplateExpression from './rules/tsNoUnnecessaryTemplateEx
 import tsPreferFunctionType from './rules/tsPreferFunctionType.js';
 import typeFormatting from './rules/typeFormatting.js';
 import validTypes from './rules/validTypes.js';
-import {
-  ESLint,
-} from 'eslint';
 import semver from 'semver';
+
+const requireFromHere = createRequire(import.meta.url);
+
+const getOptionalEslintVersion = () => {
+  try {
+    const eslint = requireFromHere('eslint');
+    return eslint.ESLint?.version ?? eslint.Linter?.version ?? '9.0.0';
+  } catch {
+    return '9.0.0';
+  }
+};
+
+const eslintVersion = getOptionalEslintVersion();
 
 /**
  * @typedef {"recommended" | "stylistic" | "contents" | "logical" | "requirements"} ConfigGroups
@@ -641,7 +654,7 @@ index.configs.examples = /** @type {import('eslint').Linter.Config[]} */ ([
       'no-console': 0,
 
       /* c8 ignore next 11 -- Coercion should work */
-      ...(semver.gte(semver.coerce(ESLint.version) ?? '9.0.0', '9.0.0') ? {} : {
+      ...(semver.gte(semver.coerce(eslintVersion) ?? '9.0.0', '9.0.0') ? {} : {
         // "always" newline rule at end unlikely in sample code
         'eol-last': 0,
 
@@ -699,7 +712,7 @@ index.configs['default-expressions'] = /** @type {import('eslint').Linter.Config
       'no-new': 0,
       'no-unused-expressions': 0,
       /* c8 ignore next 8 -- Coercion should work */
-      ...(semver.gte(semver.coerce(ESLint.version) ?? '9.0.0', '9.0.0') ? {} : {
+      ...(semver.gte(semver.coerce(eslintVersion) ?? '9.0.0', '9.0.0') ? {} : {
         quotes: [
           'error', 'double',
         ],
