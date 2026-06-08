@@ -27,7 +27,7 @@
     "mitata": "^1.0.34",
     "ox-jsdoc-origin": "workspace:*",
     "ox-jsdoc": "workspace:*",
-    "oxc-parser": "^0.124.0",
+    "oxc-parser": "^0.134.0",
     "oxlint": "^1.60.0"
   }
 }
