@@ -15,7 +15,7 @@
     "benchmark:jsdoc-linter": "node ./scripts/jsdoc-linter-setup.mjs && bash ./scripts/jsdoc-linter-hyperfine.sh && node ./scripts/jsdoc-linter-report.mjs"
   },
   "dependencies": {
-    "@es-joy/jsdoccomment": "^0.50.1",
+    "@es-joy/jsdoccomment": "^0.87.0",
     "@ox-jsdoc/eslint-plugin-jsdoc": "workspace:*",
     "@ox-jsdoc/wasm-origin": "workspace:*",
     "@ox-jsdoc/wasm": "workspace:*",
