@@ -149,6 +149,11 @@
   "peerDependencies": {
     "eslint": "^7.0.0 || ^8.0.0 || ^9.0.0 || ^10.0.0"
   },
+  "peerDependenciesMeta": {
+    "eslint": {
+      "optional": true
+    }
+  },
   "lint-staged": {
     "*.js": "eslint --fix"
   },
