@@ -532,7 +532,7 @@ name = "ox_jsdoc_origin"
 version = "0.0.0"
 dependencies = [
  "oxc_allocator",
- "oxc_diagnostics 0.133.0",
+ "oxc_diagnostics 0.134.0",
  "oxc_span",
  "serde",
  "serde_json",
@@ -656,9 +656,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_diagnostics"
-version = "0.133.0"
+version = "0.134.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a729e6dbb517aec94346685e769f960dbdd335523cf9c844ecca7731beb15e2c"
+checksum = "67daf165d8abff1577825a4303a5d0b61ae29c7b66c9e0e0e7f97f77705667ed"
 dependencies = [
  "cow-utils",
  "oxc-miette",
