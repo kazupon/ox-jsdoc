@@ -1,6 +1,6 @@
 {
   "name": "ox-jsdoc-binary",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "description": "Deprecated alias for ox-jsdoc. Re-exports the canonical Binary AST package; install `ox-jsdoc` instead.",
   "keywords": [
     "binary-ast",
