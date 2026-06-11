@@ -315,6 +315,9 @@ function getAstValueClass(value: unknown): string {
   min-height: 28px;
   padding: 0;
   cursor: pointer;
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.55;
   white-space: nowrap;
 }
 
@@ -348,6 +351,17 @@ function getAstValueClass(value: unknown): string {
   font-weight: 800;
   line-height: 1;
   opacity: 0.85;
+}
+
+.ast-key,
+.ast-title,
+.ast-value,
+.ast-summary,
+.ast-punctuation,
+.ast-bracket,
+.ast-comma,
+.ast-bracket-row {
+  font-family: var(--mono);
 }
 
 .ast-toggle:hover {

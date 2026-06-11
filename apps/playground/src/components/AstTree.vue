@@ -44,7 +44,9 @@ const emit = defineEmits<{
   height: 100%;
   background: var(--editor-bg);
   color: var(--ink);
-  font: 16px/1.65 var(--mono);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .ast-tree {

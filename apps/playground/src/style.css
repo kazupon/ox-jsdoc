@@ -18,8 +18,8 @@
   --ast-number: #1f6f8b;
   --ast-boolean: #0891b2;
   --shadow: rgba(35, 29, 20, 0.16);
-  --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  --sans: Avenir Next, Avenir, Helvetica Neue, sans-serif;
+  --mono: Menlo, Monaco, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --sans: 'IBM Plex Sans', Montserrat, 'Helvetica Neue', sans-serif;
 
   color: var(--ink);
   background: var(--bg);

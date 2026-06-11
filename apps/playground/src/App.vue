@@ -295,7 +295,7 @@ onMounted(async () => {
   if (editorHost.value) {
     sourceEditor.value = monaco.editor.create(editorHost.value, {
       automaticLayout: true,
-      fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
+      fontFamily: 'Menlo, Monaco, "SFMono-Regular", Consolas, "Liberation Mono", monospace',
       fontSize: 14,
       language: sourceLanguage.value,
       lineNumbersMinChars: 3,
@@ -817,7 +817,7 @@ const sumArrayLength = (values: unknown[], key: string) =>
           <option value="typescript">TypeScript</option>
         </select>
       </label>
-      <button type="button" @click="resetSample">Reset sample</button>
+      <button type="button" @click="resetSample">RESET SAMPLE</button>
     </section>
 
     <section class="workspace" aria-label="JSDoc AST explorer">
@@ -892,7 +892,7 @@ const sumArrayLength = (values: unknown[], key: string) =>
 .pane-title,
 .toolbar,
 .status {
-  font: 700 12px/1 var(--mono);
+  font: 700 12px/1 var(--sans);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -912,7 +912,7 @@ const sumArrayLength = (values: unknown[], key: string) =>
   border-radius: 999px;
   background: var(--panel-strong);
   color: var(--muted);
-  font: 700 11px/1 var(--mono);
+  font: 700 11px/1 var(--sans);
   letter-spacing: 0.1em;
   text-decoration: none;
   text-transform: uppercase;
@@ -946,7 +946,7 @@ h1 {
 .tagline {
   margin: 14px 0 0;
   color: var(--muted);
-  font: 700 14px/1.2 var(--mono);
+  font: 700 14px/1.2 var(--sans);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -972,7 +972,7 @@ h1 {
   border-radius: 999px;
   background: var(--panel-strong);
   color: var(--ink);
-  font: 700 12px/1 var(--mono);
+  font: 700 12px/1 var(--sans);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -1066,6 +1066,10 @@ h1 {
 
 .toolbar button {
   padding: 9px 14px;
+  font-family: var(--sans);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 button {
