@@ -11,6 +11,7 @@
   --line: #ded3bf;
   --accent: #c24b2c;
   --accent-soft: #f4d2bd;
+  --shadow: rgba(35, 29, 20, 0.16);
   --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   --sans: Avenir Next, Avenir, Helvetica Neue, sans-serif;
 
@@ -23,6 +24,18 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+:root[data-theme='dark'] {
+  --bg: #100e0c;
+  --ink: #f4eadc;
+  --muted: #b8a991;
+  --panel: rgba(25, 22, 18, 0.9);
+  --panel-strong: #161310;
+  --line: #393025;
+  --accent: #ff8f70;
+  --accent-soft: #623829;
+  --shadow: rgba(0, 0, 0, 0.35);
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -32,6 +45,18 @@ body {
     linear-gradient(135deg, #fff7e8 0%, #efe2cd 48%, #f7f0e5 100%);
 }
 
+:root[data-theme='dark'] body {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255, 143, 112, 0.16), transparent 28rem),
+    linear-gradient(135deg, #18120e 0%, #0f0d0b 52%, #1d1712 100%);
+}
+
 #app {
   min-height: 100vh;
+}
+
+button,
+textarea,
+select {
+  font: inherit;
 }

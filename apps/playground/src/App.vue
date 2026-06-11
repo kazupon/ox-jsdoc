@@ -1,96 +1,550 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
+import { initWasm, parse } from '@ox-jsdoc/wasm'
 
-const count = ref(0)
+type TypeParseMode = 'jsdoc' | 'closure' | 'typescript'
+
+type ParseView =
+  | {
+      status: 'loading' | 'error'
+      ast: null
+      diagnostics: string[]
+      duration: null
+      tagCount: 0
+      inlineTagCount: 0
+    }
+  | {
+      status: 'ok' | 'invalid' | 'error'
+      ast: unknown
+      diagnostics: string[]
+      duration: number
+      tagCount: number
+      inlineTagCount: number
+    }
+
+const sample = `/**
+ * Parse a JSDoc block with ox-jsdoc.
+ *
+ * Supports inline links like {@link https://github.com/kazupon/ox-jsdoc}.
+ *
+ * @template T
+ * @param {Array<T>} values - Input values.
+ * @param {(value: T) => string} format - Value formatter.
+ * @returns {string[]} Formatted values.
+ */`
+
+const source = ref(sample)
+const wasmReady = ref(false)
+const wasmError = ref<string | null>(null)
+const editorHost = ref<HTMLElement | null>(null)
+const sourceEditor = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null)
+const theme = ref<'light' | 'dark'>('light')
+let resizeObserver: ResizeObserver | null = null
+
+const globalSelf = self as typeof self & {
+  MonacoEnvironment?: {
+    getWorker(): Worker
+  }
+}
+
+globalSelf.MonacoEnvironment = {
+  getWorker() {
+    return new editorWorker()
+  }
+}
+
+const setupJsdocLanguage = () => {
+  if (!monaco.languages.getLanguages().some(language => language.id === 'jsdoc')) {
+    monaco.languages.register({ id: 'jsdoc' })
+  }
+
+  monaco.languages.setMonarchTokensProvider('jsdoc', {
+    defaultToken: 'comment.jsdoc',
+    tokenizer: {
+      root: [
+        [/\/\*\*/, 'comment.block.jsdoc'],
+        [/\*\//, 'comment.block.jsdoc'],
+        [/^\s*\*\s*/, 'comment.marker.jsdoc'],
+        [/\{@[a-zA-Z][\w-]*/, 'inline.tag.jsdoc'],
+        [/\}/, 'inline.punctuation.jsdoc'],
+        [/@[a-zA-Z][\w-]*/, 'tag.jsdoc'],
+        [/\{[^}\r\n]*\}/, 'type.jsdoc'],
+        [/\[[^\]\r\n]+\]/, 'name.optional.jsdoc'],
+        [/[a-zA-Z_$][\w$.-]*(?=\s+-)/, 'name.jsdoc'],
+        [/-/, 'dash.jsdoc']
+      ]
+    }
+  })
+}
+
+const defineEditorThemes = () => {
+  monaco.editor.defineTheme('ox-jsdoc-light', {
+    base: 'vs',
+    inherit: true,
+    rules: [
+      { token: 'comment.jsdoc', foreground: '7a6653' },
+      { token: 'comment.block.jsdoc', foreground: '9a8165' },
+      { token: 'comment.marker.jsdoc', foreground: 'b9a88e' },
+      { token: 'tag.jsdoc', foreground: 'c24b2c', fontStyle: 'bold' },
+      { token: 'inline.tag.jsdoc', foreground: 'a93678', fontStyle: 'bold' },
+      { token: 'inline.punctuation.jsdoc', foreground: 'a93678' },
+      { token: 'type.jsdoc', foreground: '1f6f8b' },
+      { token: 'name.jsdoc', foreground: '28704f', fontStyle: 'bold' },
+      { token: 'name.optional.jsdoc', foreground: '28704f' },
+      { token: 'dash.jsdoc', foreground: 'b08b54' }
+    ],
+    colors: {
+      'editor.background': '#fffaf0',
+      'editor.foreground': '#1d1b16',
+      'editor.lineHighlightBackground': '#f3e5cf',
+      'editorLineNumber.foreground': '#aa9c89',
+      'editorLineNumber.activeForeground': '#c24b2c',
+      'editor.selectionBackground': '#f4d2bd',
+      'editorCursor.foreground': '#c24b2c'
+    }
+  })
+
+  monaco.editor.defineTheme('ox-jsdoc-dark', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment.jsdoc', foreground: 'b8a991' },
+      { token: 'comment.block.jsdoc', foreground: '887b68' },
+      { token: 'comment.marker.jsdoc', foreground: '6f6557' },
+      { token: 'tag.jsdoc', foreground: 'ff8f70', fontStyle: 'bold' },
+      { token: 'inline.tag.jsdoc', foreground: 'f0a7d3', fontStyle: 'bold' },
+      { token: 'inline.punctuation.jsdoc', foreground: 'f0a7d3' },
+      { token: 'type.jsdoc', foreground: '6fd1c7' },
+      { token: 'name.jsdoc', foreground: '97d988', fontStyle: 'bold' },
+      { token: 'name.optional.jsdoc', foreground: '97d988' },
+      { token: 'dash.jsdoc', foreground: 'dfb35c' }
+    ],
+    colors: {
+      'editor.background': '#161310',
+      'editor.foreground': '#f4eadc',
+      'editor.lineHighlightBackground': '#211c17',
+      'editorLineNumber.foreground': '#6f6557',
+      'editorLineNumber.activeForeground': '#ff8f70',
+      'editor.selectionBackground': '#623829',
+      'editorCursor.foreground': '#ff8f70'
+    }
+  })
+}
+
+const editorTheme = computed(() => `ox-jsdoc-${theme.value}`)
+
+const toggleTheme = () => {
+  theme.value = theme.value === 'light' ? 'dark' : 'light'
+}
+
+const options = reactive({
+  parseTypes: true,
+  typeParseMode: 'typescript' as TypeParseMode,
+  preserveWhitespace: true,
+  compatMode: false
+})
+
+onMounted(async () => {
+  setupJsdocLanguage()
+  defineEditorThemes()
+
+  if (editorHost.value) {
+    sourceEditor.value = monaco.editor.create(editorHost.value, {
+      automaticLayout: true,
+      fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
+      fontSize: 14,
+      language: 'jsdoc',
+      lineNumbersMinChars: 3,
+      minimap: { enabled: false },
+      padding: { bottom: 18, top: 18 },
+      scrollBeyondLastLine: false,
+      smoothScrolling: true,
+      tabSize: 2,
+      theme: editorTheme.value,
+      value: source.value,
+      wordWrap: 'on'
+    })
+
+    sourceEditor.value.onDidChangeModelContent(() => {
+      const value = sourceEditor.value?.getValue() ?? ''
+      if (value !== source.value) {
+        source.value = value
+      }
+    })
+
+    resizeObserver = new ResizeObserver(() => {
+      sourceEditor.value?.layout()
+    })
+    resizeObserver.observe(editorHost.value)
+  }
+
+  try {
+    await initWasm()
+    wasmReady.value = true
+  } catch (error) {
+    wasmError.value = error instanceof Error ? error.message : String(error)
+  }
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  sourceEditor.value?.dispose()
+})
+
+watch(source, value => {
+  const editor = sourceEditor.value
+
+  if (editor && editor.getValue() !== value) {
+    editor.setValue(value)
+  }
+})
+
+watch(theme, value => {
+  document.documentElement.dataset.theme = value
+  monaco.editor.setTheme(editorTheme.value)
+})
+
+const parseView = computed<ParseView>(() => {
+  if (!wasmReady.value) {
+    const failed = wasmError.value !== null
+
+    return {
+      status: failed ? 'error' : 'loading',
+      ast: null,
+      diagnostics: [wasmError.value ?? 'Initializing WASM parser...'],
+      duration: null,
+      tagCount: 0,
+      inlineTagCount: 0
+    }
+  }
+
+  const start = performance.now()
+  const result = parse(source.value, {
+    compatMode: options.compatMode,
+    parseTypes: options.parseTypes,
+    preserveWhitespace: options.preserveWhitespace,
+    typeParseMode: options.typeParseMode
+  })
+
+  try {
+    const ast = result.ast?.toJSON() ?? null
+    const diagnostics = result.diagnostics.map(diagnostic => diagnostic.message)
+
+    return {
+      status: result.ast && diagnostics.length === 0 ? 'ok' : 'invalid',
+      ast,
+      diagnostics,
+      duration: performance.now() - start,
+      tagCount: getArrayLength(ast, 'tags'),
+      inlineTagCount: getArrayLength(ast, 'inlineTags')
+    }
+  } catch (error) {
+    return {
+      status: 'error',
+      ast: null,
+      diagnostics: [error instanceof Error ? error.message : String(error)],
+      duration: performance.now() - start,
+      tagCount: 0,
+      inlineTagCount: 0
+    }
+  } finally {
+    result.free()
+  }
+})
+
+const astJson = computed(() => JSON.stringify(parseView.value.ast, null, 2))
+
+const statusLabel = computed(() => {
+  if (parseView.value.status === 'loading') {
+    return 'Loading'
+  }
+  if (parseView.value.status === 'ok') {
+    return 'Parsed'
+  }
+  if (parseView.value.status === 'invalid') {
+    return 'Diagnostics'
+  }
+  return 'Error'
+})
+
+const statusTone = computed(() => ({
+  'is-loading': parseView.value.status === 'loading',
+  'is-ok': parseView.value.status === 'ok',
+  'is-warn': parseView.value.status === 'invalid',
+  'is-error': parseView.value.status === 'error'
+}))
+
+const resetSample = () => {
+  source.value = sample
+}
+
+const getArrayLength = (value: unknown, key: string) => {
+  if (!value || typeof value !== 'object') {
+    return 0
+  }
+  const item = (value as Record<string, unknown>)[key]
+  return Array.isArray(item) ? item.length : 0
+}
 </script>
 
 <template>
-  <main class="playground">
-    <section class="intro" aria-labelledby="title">
-      <p class="eyebrow">Vue starter</p>
-      <h1 id="title">Counter</h1>
-      <p class="lede">A minimal Vue app running inside the ox-jsdoc playground.</p>
+  <main class="playground" :data-theme="theme">
+    <section class="topbar" aria-labelledby="title">
+      <div>
+        <p class="eyebrow">@ox-jsdoc/wasm playground</p>
+        <h1 id="title">JSDoc AST Explorer</h1>
+      </div>
+
+      <div class="top-actions">
+        <button
+          type="button"
+          class="theme-toggle"
+          :aria-pressed="theme === 'dark'"
+          @click="toggleTheme"
+        >
+          <span class="toggle-track">
+            <span class="toggle-thumb" />
+          </span>
+          {{ theme === 'light' ? 'Light' : 'Dark' }}
+        </button>
+
+        <div class="status" :class="statusTone">
+          <span>{{ statusLabel }}</span>
+          <strong v-if="parseView.duration !== null">{{ parseView.duration.toFixed(2) }} ms</strong>
+        </div>
+      </div>
     </section>
 
-    <section class="counter-card" aria-label="Counter controls">
-      <p class="count">{{ count }}</p>
-      <div class="actions">
-        <button type="button" @click="count--">Decrement</button>
-        <button type="button" @click="count++">Increment</button>
-      </div>
+    <section class="toolbar" aria-label="Parser options">
+      <label>
+        <input v-model="options.parseTypes" type="checkbox" />
+        Parse types
+      </label>
+      <label>
+        <input v-model="options.preserveWhitespace" type="checkbox" />
+        Preserve whitespace
+      </label>
+      <label>
+        <input v-model="options.compatMode" type="checkbox" />
+        Compat mode
+      </label>
+      <label>
+        Type mode
+        <select v-model="options.typeParseMode">
+          <option value="jsdoc">JSDoc</option>
+          <option value="closure">Closure</option>
+          <option value="typescript">TypeScript</option>
+        </select>
+      </label>
+      <button type="button" @click="resetSample">Reset sample</button>
+    </section>
+
+    <section class="workspace" aria-label="JSDoc AST explorer">
+      <section class="pane source-pane">
+        <div class="pane-title">
+          <span>Source</span>
+          <strong>{{ source.length }} chars</strong>
+        </div>
+        <div ref="editorHost" class="monaco-host" aria-label="JSDoc source" role="textbox" />
+      </section>
+
+      <section class="pane ast-pane">
+        <div class="pane-title">
+          <span>AST</span>
+          <strong>{{ parseView.tagCount }} tags / {{ parseView.inlineTagCount }} inline</strong>
+        </div>
+
+        <div v-if="parseView.diagnostics.length > 0" class="diagnostics">
+          <p v-for="diagnostic in parseView.diagnostics" :key="diagnostic">
+            {{ diagnostic }}
+          </p>
+        </div>
+
+        <pre>{{ astJson }}</pre>
+      </section>
     </section>
   </main>
 </template>
 
 <style scoped>
 .playground {
-  width: min(1180px, 100%);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 14px;
+  width: min(1440px, 100%);
+  min-height: 100vh;
   margin: 0 auto;
-  padding: 56px 24px;
+  padding: 18px;
 }
 
-.intro {
-  margin-bottom: 32px;
+.topbar,
+.toolbar,
+.pane {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 20px 60px rgba(35, 29, 20, 0.1);
 }
 
-.eyebrow {
-  margin: 0 0 12px;
-  color: var(--accent);
-  font: 700 13px/1 var(--mono);
-  letter-spacing: 0.18em;
+.topbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px;
+  border-radius: 26px;
+}
+
+.top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.eyebrow,
+.pane-title,
+.toolbar,
+.status {
+  font: 700 12px/1 var(--mono);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent);
+}
+
 h1 {
-  max-width: 760px;
   margin: 0;
-  font-size: clamp(44px, 7vw, 88px);
+  font-size: clamp(34px, 6vw, 72px);
   line-height: 0.92;
   letter-spacing: -0.06em;
 }
 
-.lede {
-  max-width: 560px;
-  margin: 20px 0 0;
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 999px;
+  background: var(--panel-strong);
   color: var(--muted);
-  font-size: 18px;
+  white-space: nowrap;
 }
 
-.counter-card {
-  display: grid;
-  place-items: center;
-  gap: 24px;
-  width: min(520px, 100%);
-  padding: 40px;
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 20px;
-  background: var(--panel);
-  box-shadow: 0 24px 70px rgba(59, 45, 24, 0.13);
-}
-
-.count {
-  margin: 0;
+  border-radius: 999px;
+  background: var(--panel-strong);
   color: var(--ink);
-  font: 800 clamp(72px, 16vw, 132px)/0.9 var(--mono);
-  letter-spacing: -0.08em;
+  font: 700 12px/1 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
-.actions {
+.toggle-track {
+  position: relative;
+  width: 38px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  transition: transform 0.2s ease;
+}
+
+.theme-toggle[aria-pressed='true'] .toggle-thumb {
+  transform: translateX(18px);
+}
+
+.status::before {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  content: '';
+}
+
+.status.is-loading::before {
+  background: #b08b54;
+}
+
+.status.is-ok::before {
+  background: #27734c;
+}
+
+.status.is-warn::before {
+  background: #c08222;
+}
+
+.status.is-error::before {
+  background: #b5312e;
+}
+
+.status strong {
+  color: var(--ink);
+}
+
+.toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  color: var(--muted);
+}
+
+.toolbar label,
+.toolbar button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-strong);
+}
+
+.toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+}
+
+.toolbar input,
+.toolbar select {
+  accent-color: var(--accent);
+}
+
+.toolbar select {
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+
+.toolbar button {
+  padding: 9px 14px;
 }
 
 button {
-  min-width: 132px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 12px 18px;
-  background: var(--panel-strong);
   color: var(--ink);
   cursor: pointer;
-  font: 700 14px/1 var(--sans);
+  font: inherit;
 }
 
 button:hover {
@@ -103,13 +557,89 @@ button:focus-visible {
   outline-offset: 3px;
 }
 
-@media (max-width: 840px) {
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 14px;
+  min-height: 0;
+}
+
+.pane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 660px;
+  overflow: hidden;
+  border-radius: 24px;
+}
+
+.pane-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.pane-title strong {
+  color: var(--ink);
+}
+
+.monaco-host,
+pre {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  background: var(--panel-strong);
+  color: var(--ink);
+  font: 14px/1.55 var(--mono);
+}
+
+.monaco-host {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ast-pane {
+  position: relative;
+}
+
+.diagnostics {
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 226, 190, 0.6);
+  color: #7e2f1e;
+  font: 13px/1.5 var(--mono);
+}
+
+.diagnostics p {
+  margin: 0;
+  padding: 10px 16px;
+}
+
+pre {
+  overflow: auto;
+  padding: 18px;
+  white-space: pre;
+}
+
+@media (max-width: 980px) {
   .playground {
-    padding: 36px 16px;
+    padding: 12px;
   }
 
-  .counter-card {
-    padding: 28px;
+  .topbar {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .pane {
+    min-height: 460px;
   }
 }
 </style>

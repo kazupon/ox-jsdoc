@@ -5,12 +5,14 @@
   "type": "module",
   "scripts": {
     "init": "void init",
-    "dev": "vp dev",
-    "build": "vp build",
+    "dev": "vp dev --configLoader runner",
+    "build": "vp build --configLoader runner",
     "preview": "vp preview",
     "deploy": "void deploy"
   },
   "dependencies": {
+    "@ox-jsdoc/wasm": "workspace:*",
+    "monaco-editor": "^0.55.1",
     "vue": "^3.5.0"
   },
   "devDependencies": {
