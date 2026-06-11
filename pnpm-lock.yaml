@@ -54,6 +54,9 @@ importers:
       monaco-editor:
         specifier: ^0.55.1
         version: 0.55.1
+      oxc-parser:
+        specifier: ^0.124.0
+        version: 0.124.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
       vue:
         specifier: ^3.5.0
         version: 3.5.35(typescript@6.0.3)

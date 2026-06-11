@@ -3,14 +3,20 @@
 }
 
 :root {
-  --bg: #f6f1e8;
-  --ink: #1d1b16;
-  --muted: #6e675d;
-  --panel: rgba(255, 252, 244, 0.88);
-  --panel-strong: #fffaf0;
-  --line: #ded3bf;
-  --accent: #c24b2c;
-  --accent-soft: #f4d2bd;
+  --bg: #edf9f8;
+  --ink: #122022;
+  --muted: #5d7072;
+  --panel: rgba(247, 253, 252, 0.9);
+  --panel-strong: #f3fffd;
+  --editor-bg: #fffaf0;
+  --line: #beddda;
+  --accent: #0891b2;
+  --accent-soft: #a5f3fc;
+  --ast-title: #0891b2;
+  --ast-key: #8b6f4e;
+  --ast-string: #8b6f4e;
+  --ast-number: #1f6f8b;
+  --ast-boolean: #0891b2;
   --shadow: rgba(35, 29, 20, 0.16);
   --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   --sans: Avenir Next, Avenir, Helvetica Neue, sans-serif;
@@ -25,14 +31,20 @@
 }
 
 :root[data-theme='dark'] {
-  --bg: #100e0c;
+  --bg: #081316;
   --ink: #f4eadc;
-  --muted: #b8a991;
-  --panel: rgba(25, 22, 18, 0.9);
-  --panel-strong: #161310;
-  --line: #393025;
-  --accent: #ff8f70;
-  --accent-soft: #623829;
+  --muted: #a8c0c2;
+  --panel: rgba(9, 20, 23, 0.9);
+  --panel-strong: #0c181b;
+  --editor-bg: #161310;
+  --line: #244046;
+  --accent: #22d3ee;
+  --accent-soft: #164e63;
+  --ast-title: #22d3ee;
+  --ast-key: #b8a991;
+  --ast-string: #b8a991;
+  --ast-number: #6fd1c7;
+  --ast-boolean: #22d3ee;
   --shadow: rgba(0, 0, 0, 0.35);
 }
 
@@ -41,14 +53,14 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background:
-    radial-gradient(circle at 18% 12%, rgba(194, 75, 44, 0.18), transparent 28rem),
-    linear-gradient(135deg, #fff7e8 0%, #efe2cd 48%, #f7f0e5 100%);
+    radial-gradient(circle at 18% 12%, rgba(8, 145, 178, 0.18), transparent 28rem),
+    linear-gradient(135deg, #f1fffd 0%, #dff5f2 48%, #f5fbfa 100%);
 }
 
 :root[data-theme='dark'] body {
   background:
-    radial-gradient(circle at 18% 12%, rgba(255, 143, 112, 0.16), transparent 28rem),
-    linear-gradient(135deg, #18120e 0%, #0f0d0b 52%, #1d1712 100%);
+    radial-gradient(circle at 18% 12%, rgba(34, 211, 238, 0.16), transparent 28rem),
+    linear-gradient(135deg, #0d1d21 0%, #071113 52%, #10262a 100%);
 }
 
 #app {

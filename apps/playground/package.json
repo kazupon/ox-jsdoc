@@ -13,6 +13,7 @@
   "dependencies": {
     "@ox-jsdoc/wasm": "workspace:*",
     "monaco-editor": "^0.55.1",
+    "oxc-parser": "^0.124.0",
     "vue": "^3.5.0"
   },
   "devDependencies": {

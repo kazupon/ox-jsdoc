@@ -24,12 +24,16 @@ const props = withDefaults(
     depth?: number
     name: string
     path: string
+    revealPath?: string
+    revealVersion?: number
     root?: boolean
     selectedPath?: string
     value: unknown
   }>(),
   {
     depth: 0,
+    revealPath: '',
+    revealVersion: 0,
     root: false,
     selectedPath: ''
   }
@@ -55,6 +59,16 @@ watch(
   open,
   value => {
     valueCreated.value ||= value
+  },
+  { immediate: true }
+)
+
+watch(
+  () => [props.revealPath, props.revealVersion] as const,
+  ([revealPath]) => {
+    if (openable.value && isPathAncestorOrSelf(props.path, revealPath)) {
+      openManual.value = true
+    }
   },
   { immediate: true }
 )
@@ -103,6 +117,10 @@ function handleKeydown(event: KeyboardEvent): void {
   if (event.key === 'ArrowLeft' && openable.value) {
     openManual.value = false
   }
+}
+
+function isPathAncestorOrSelf(path: string, targetPath: string): boolean {
+  return targetPath === path || targetPath.startsWith(`${path}.`)
 }
 
 function isAstRecord(value: unknown): value is Record<string, unknown> {
@@ -276,6 +294,8 @@ function getAstValueClass(value: unknown): string {
         :depth="depth + 1"
         :name="child.name"
         :path="child.path"
+        :reveal-path="revealPath"
+        :reveal-version="revealVersion"
         :selected-path="selectedPath"
         :value="child.value"
         @select="emit('select', $event)"
@@ -322,7 +342,7 @@ function getAstValueClass(value: unknown): string {
   padding: 0;
   border: 0;
   background: transparent;
-  color: #63c174;
+  color: var(--accent);
   cursor: pointer;
   font: inherit;
   font-weight: 800;
@@ -331,19 +351,19 @@ function getAstValueClass(value: unknown): string {
 }
 
 .ast-toggle:hover {
-  color: #86dc93;
+  color: var(--ast-title);
 }
 
 .ast-toggle.is-open {
-  color: #d86d75;
+  color: var(--ast-number);
 }
 
 .ast-toggle.is-open:hover {
-  color: #ff8f98;
+  color: var(--ast-title);
 }
 
 .ast-key {
-  color: #d1aa77;
+  color: var(--ast-key);
   font-weight: 700;
 }
 
@@ -372,7 +392,7 @@ function getAstValueClass(value: unknown): string {
 }
 
 .ast-title {
-  color: #91bc6b;
+  color: var(--ast-title);
   font-weight: 700;
 }
 
@@ -397,15 +417,15 @@ function getAstValueClass(value: unknown): string {
 }
 
 .ast-value.is-string {
-  color: #dca7a0;
+  color: var(--ast-string);
 }
 
 .ast-value.is-number {
-  color: #6fd1c7;
+  color: var(--ast-number);
 }
 
 .ast-value.is-boolean {
-  color: #ff8f70;
+  color: var(--ast-boolean);
 }
 
 .ast-value.is-null,

@@ -11,6 +11,8 @@ type AstSelection = {
 
 defineProps<{
   ast: unknown
+  revealPath: string
+  revealVersion: number
   selectedPath: string
 }>()
 
@@ -25,6 +27,8 @@ const emit = defineEmits<{
       name="root"
       path="root"
       root
+      :reveal-path="revealPath"
+      :reveal-version="revealVersion"
       :selected-path="selectedPath"
       :value="ast"
       @select="emit('select', $event)"
@@ -38,7 +42,7 @@ const emit = defineEmits<{
 .ast-empty {
   width: 100%;
   height: 100%;
-  background: var(--panel-strong);
+  background: var(--editor-bg);
   color: var(--ink);
   font: 16px/1.65 var(--mono);
 }

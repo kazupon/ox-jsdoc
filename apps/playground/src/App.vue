@@ -5,21 +5,56 @@ import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
 import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution'
 import 'monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution'
-import { initWasm, parse } from '@ox-jsdoc/wasm'
+import { initWasm, parse, parseBatch } from '@ox-jsdoc/wasm'
+import oxJsdocWasmPackage from '../../../wasm/ox-jsdoc/package.json' with { type: 'json' }
 
 type TypeParseMode = 'jsdoc' | 'closure' | 'typescript'
 
 type PlaygroundSettings = {
   compatMode: boolean
+  parseBatch: boolean
   parseTypes: boolean
   preserveWhitespace: boolean
   theme: 'light' | 'dark'
   typeParseMode: TypeParseMode
 }
 
-type ExtractedJsdocBlock = {
+type OxcComment = {
+  end?: number
+  range?: SourceRange
+  start?: number
+}
+
+type OxcParserModule = {
+  parseSync(
+    filename: string,
+    sourceText: string,
+    options?: {
+      range?: boolean
+      sourceType?: 'module' | 'script' | 'commonjs' | 'unambiguous'
+    }
+  ): {
+    comments?: OxcComment[]
+    errors?: Array<{ message?: string }>
+  }
+}
+
+const dynamicImport = new Function('specifier', 'return import(specifier)') as (
+  specifier: string
+) => Promise<unknown>
+
+type ParsedJsdocComment = {
+  ast: unknown
   baseOffset: number
+  range: SourceRange
   sourceText: string
+  type: 'JsdocComment'
+}
+
+type ParsedJsdocSourceFile = {
+  comments: ParsedJsdocComment[]
+  range: SourceRange
+  type: 'JsdocSourceFile'
 }
 
 type SourceRange = [number, number]
@@ -57,18 +92,34 @@ export function formatValues<T>(
   format: (value: T) => string,
 ): string[] {
   return values.map(format)
+}
+
+/**
+ * Return the first value when it exists.
+ *
+ * @param {T[]} values - Candidate values.
+ * @returns {T | undefined} First value.
+ */
+export function firstValue<T>(values: T[]): T | undefined {
+  return values[0]
 }`
 
+const oxJsdocWasmVersion = oxJsdocWasmPackage.version
 const source = ref(sample)
 const selectedAstPath = ref('')
+const revealAstPath = ref('')
+const revealAstVersion = ref(0)
 const wasmReady = ref(false)
 const wasmError = ref<string | null>(null)
+const oxcParser = shallowRef<OxcParserModule | null>(null)
+const oxcError = ref<string | null>(null)
 const editorHost = ref<HTMLElement | null>(null)
 const sourceEditor = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null)
 let resizeObserver: ResizeObserver | null = null
 const settingsKey = 'ox-jsdoc.playground.settings'
 const defaultSettings: PlaygroundSettings = {
   compatMode: false,
+  parseBatch: true,
   parseTypes: true,
   preserveWhitespace: true,
   theme: 'light',
@@ -96,7 +147,7 @@ const defineEditorThemes = () => {
     rules: [
       { token: 'comment', foreground: '7a6653' },
       { token: 'comment.doc', foreground: '7a6653' },
-      { token: 'keyword', foreground: 'c24b2c', fontStyle: 'bold' },
+      { token: 'keyword', foreground: '0891b2', fontStyle: 'bold' },
       { token: 'string', foreground: '28704f' },
       { token: 'number', foreground: '1f6f8b' },
       { token: 'regexp', foreground: 'a93678' },
@@ -105,7 +156,7 @@ const defineEditorThemes = () => {
       { token: 'comment.jsdoc', foreground: '7a6653' },
       { token: 'comment.block.jsdoc', foreground: '9a8165' },
       { token: 'comment.marker.jsdoc', foreground: 'b9a88e' },
-      { token: 'tag.jsdoc', foreground: 'c24b2c', fontStyle: 'bold' },
+      { token: 'tag.jsdoc', foreground: '0891b2', fontStyle: 'bold' },
       { token: 'inline.tag.jsdoc', foreground: 'a93678', fontStyle: 'bold' },
       { token: 'inline.punctuation.jsdoc', foreground: 'a93678' },
       { token: 'type.jsdoc', foreground: '1f6f8b' },
@@ -118,9 +169,9 @@ const defineEditorThemes = () => {
       'editor.foreground': '#1d1b16',
       'editor.lineHighlightBackground': '#f3e5cf',
       'editorLineNumber.foreground': '#aa9c89',
-      'editorLineNumber.activeForeground': '#c24b2c',
-      'editor.selectionBackground': '#f4d2bd',
-      'editorCursor.foreground': '#c24b2c'
+      'editorLineNumber.activeForeground': '#0891b2',
+      'editor.selectionBackground': '#a5f3fc',
+      'editorCursor.foreground': '#0891b2'
     }
   })
 
@@ -130,7 +181,7 @@ const defineEditorThemes = () => {
     rules: [
       { token: 'comment', foreground: 'b8a991' },
       { token: 'comment.doc', foreground: 'b8a991' },
-      { token: 'keyword', foreground: 'ff8f70', fontStyle: 'bold' },
+      { token: 'keyword', foreground: '22d3ee', fontStyle: 'bold' },
       { token: 'string', foreground: '97d988' },
       { token: 'number', foreground: '6fd1c7' },
       { token: 'regexp', foreground: 'f0a7d3' },
@@ -139,7 +190,7 @@ const defineEditorThemes = () => {
       { token: 'comment.jsdoc', foreground: 'b8a991' },
       { token: 'comment.block.jsdoc', foreground: '887b68' },
       { token: 'comment.marker.jsdoc', foreground: '6f6557' },
-      { token: 'tag.jsdoc', foreground: 'ff8f70', fontStyle: 'bold' },
+      { token: 'tag.jsdoc', foreground: '22d3ee', fontStyle: 'bold' },
       { token: 'inline.tag.jsdoc', foreground: 'f0a7d3', fontStyle: 'bold' },
       { token: 'inline.punctuation.jsdoc', foreground: 'f0a7d3' },
       { token: 'type.jsdoc', foreground: '6fd1c7' },
@@ -152,9 +203,9 @@ const defineEditorThemes = () => {
       'editor.foreground': '#f4eadc',
       'editor.lineHighlightBackground': '#211c17',
       'editorLineNumber.foreground': '#6f6557',
-      'editorLineNumber.activeForeground': '#ff8f70',
-      'editor.selectionBackground': '#623829',
-      'editorCursor.foreground': '#ff8f70'
+      'editorLineNumber.activeForeground': '#22d3ee',
+      'editor.selectionBackground': '#164e63',
+      'editorCursor.foreground': '#22d3ee'
     }
   })
 }
@@ -169,7 +220,8 @@ const options = reactive({
   parseTypes: settings.parseTypes,
   typeParseMode: settings.typeParseMode,
   preserveWhitespace: settings.preserveWhitespace,
-  compatMode: settings.compatMode
+  compatMode: settings.compatMode,
+  parseBatch: settings.parseBatch
 })
 
 const sourceLanguage = computed(() =>
@@ -192,6 +244,8 @@ function loadSettings(): PlaygroundSettings {
     return {
       compatMode:
         typeof parsed.compatMode === 'boolean' ? parsed.compatMode : defaultSettings.compatMode,
+      parseBatch:
+        typeof parsed.parseBatch === 'boolean' ? parsed.parseBatch : defaultSettings.parseBatch,
       parseTypes:
         typeof parsed.parseTypes === 'boolean' ? parsed.parseTypes : defaultSettings.parseTypes,
       preserveWhitespace:
@@ -222,6 +276,7 @@ function saveSettings() {
       settingsKey,
       JSON.stringify({
         compatMode: options.compatMode,
+        parseBatch: options.parseBatch,
         parseTypes: options.parseTypes,
         preserveWhitespace: options.preserveWhitespace,
         theme: theme.value,
@@ -230,32 +285,6 @@ function saveSettings() {
     )
   } catch {
     // Ignore unavailable storage; parser settings still work for the current session.
-  }
-}
-
-function extractFirstJsdocBlock(value: string): ExtractedJsdocBlock | null {
-  const start = value.indexOf('/**')
-
-  if (start === -1) {
-    return null
-  }
-
-  let index = start + 3
-
-  while (index < value.length) {
-    if (value[index] === '*' && value[index + 1] === '/') {
-      return {
-        baseOffset: start,
-        sourceText: value.slice(start, index + 2)
-      }
-    }
-
-    index += 1
-  }
-
-  return {
-    baseOffset: start,
-    sourceText: value.slice(start)
   }
 }
 
@@ -287,6 +316,17 @@ onMounted(async () => {
       }
     })
 
+    sourceEditor.value.onMouseDown(event => {
+      const model = sourceEditor.value?.getModel()
+      const position = event.target.position
+
+      if (!model || !position) {
+        return
+      }
+
+      revealAstNodeAtOffset(model.getOffsetAt(position))
+    })
+
     resizeObserver = new ResizeObserver(() => {
       sourceEditor.value?.layout()
     })
@@ -294,10 +334,18 @@ onMounted(async () => {
   }
 
   try {
-    await initWasm()
+    await initWasm('/vendor/ox-jsdoc/ox_jsdoc_wasm_bg.wasm')
     wasmReady.value = true
   } catch (error) {
     wasmError.value = error instanceof Error ? error.message : String(error)
+  }
+
+  try {
+    oxcParser.value = (await dynamicImport(
+      '/vendor/oxc-parser/browser-bundle.js'
+    )) as OxcParserModule
+  } catch (error) {
+    oxcError.value = error instanceof Error ? error.message : String(error)
   }
 })
 
@@ -331,6 +379,7 @@ watch(
   [
     theme,
     () => options.compatMode,
+    () => options.parseBatch,
     () => options.parseTypes,
     () => options.preserveWhitespace,
     () => options.typeParseMode
@@ -339,52 +388,91 @@ watch(
 )
 
 const parseView = computed<ParseView>(() => {
-  if (!wasmReady.value) {
-    const failed = wasmError.value !== null
+  if (!wasmReady.value || !oxcParser.value) {
+    const failed = wasmError.value !== null || oxcError.value !== null
 
     return {
       status: failed ? 'error' : 'loading',
       ast: null,
-      diagnostics: [wasmError.value ?? 'Initializing WASM parser...'],
+      diagnostics: [wasmError.value ?? oxcError.value ?? 'Initializing parsers...'],
       duration: null,
       tagCount: 0,
       inlineTagCount: 0
     }
   }
 
-  const jsdocBlock = extractFirstJsdocBlock(source.value)
+  const start = performance.now()
+  const parseResult = parseJavaScriptComments(source.value)
 
-  if (!jsdocBlock) {
+  if (parseResult.comments.length === 0) {
     return {
       status: 'invalid',
       ast: null,
-      diagnostics: ['No JSDoc block found. Add a /** ... */ block comment.'],
-      duration: 0,
+      diagnostics: [
+        ...parseResult.diagnostics,
+        'No JSDoc block found. Add a /** ... */ block comment.'
+      ],
+      duration: performance.now() - start,
       tagCount: 0,
       inlineTagCount: 0
     }
   }
 
-  const start = performance.now()
-  const result = parse(jsdocBlock.sourceText, {
-    baseOffset: jsdocBlock.baseOffset,
-    compatMode: options.compatMode,
-    parseTypes: options.parseTypes,
-    preserveWhitespace: options.preserveWhitespace,
-    typeParseMode: options.typeParseMode
-  })
+  return options.parseBatch
+    ? parseJsdocCommentsWithBatch(parseResult, start)
+    : parseJsdocCommentsIndividually(parseResult, start)
+})
+
+function parseJsdocCommentsWithBatch(
+  parseResult: {
+    comments: Array<{ baseOffset: number; sourceText: string }>
+    diagnostics: string[]
+  },
+  start: number
+): ParseView {
+  const result = parseBatch(parseResult.comments, getJsdocParseOptions())
 
   try {
-    const ast = result.ast?.toJSON() ?? null
-    const diagnostics = result.diagnostics.map(diagnostic => diagnostic.message)
+    const comments = result.asts
+      .map((ast, index): ParsedJsdocComment | null => {
+        const comment = parseResult.comments[index]
+
+        if (!ast || !comment) {
+          return null
+        }
+
+        return {
+          type: 'JsdocComment',
+          range: [comment.baseOffset, comment.baseOffset + comment.sourceText.length],
+          baseOffset: comment.baseOffset,
+          sourceText: comment.sourceText,
+          ast: ast.toJSON()
+        }
+      })
+      .filter((comment): comment is ParsedJsdocComment => comment !== null)
+    const ast = createJsdocSourceFileAst(comments)
+    const diagnostics = [
+      ...parseResult.diagnostics,
+      ...result.diagnostics.map(diagnostic => {
+        const comment = parseResult.comments[diagnostic.rootIndex]
+        const prefix = comment ? `Comment ${diagnostic.rootIndex + 1}: ` : ''
+        return `${prefix}${diagnostic.message}`
+      })
+    ]
 
     return {
-      status: result.ast && diagnostics.length === 0 ? 'ok' : 'invalid',
+      status: ast && diagnostics.length === 0 ? 'ok' : 'invalid',
       ast,
       diagnostics,
       duration: performance.now() - start,
-      tagCount: getArrayLength(ast, 'tags'),
-      inlineTagCount: getArrayLength(ast, 'inlineTags')
+      tagCount: sumArrayLength(
+        comments.map(comment => comment.ast),
+        'tags'
+      ),
+      inlineTagCount: sumArrayLength(
+        comments.map(comment => comment.ast),
+        'inlineTags'
+      )
     }
   } catch (error) {
     return {
@@ -398,7 +486,203 @@ const parseView = computed<ParseView>(() => {
   } finally {
     result.free()
   }
-})
+}
+
+function parseJsdocCommentsIndividually(
+  parseResult: {
+    comments: Array<{ baseOffset: number; sourceText: string }>
+    diagnostics: string[]
+  },
+  start: number
+): ParseView {
+  const comments: ParsedJsdocComment[] = []
+  const diagnostics = [...parseResult.diagnostics]
+
+  for (const [index, comment] of parseResult.comments.entries()) {
+    const result = parse(comment.sourceText, {
+      ...getJsdocParseOptions(),
+      baseOffset: comment.baseOffset
+    })
+
+    try {
+      const ast = result.ast?.toJSON() ?? null
+
+      if (ast) {
+        comments.push({
+          type: 'JsdocComment',
+          range: [comment.baseOffset, comment.baseOffset + comment.sourceText.length],
+          baseOffset: comment.baseOffset,
+          sourceText: comment.sourceText,
+          ast
+        })
+      }
+
+      diagnostics.push(
+        ...result.diagnostics.map(diagnostic => `Comment ${index + 1}: ${diagnostic.message}`)
+      )
+    } finally {
+      result.free()
+    }
+  }
+
+  const ast = createJsdocSourceFileAst(comments)
+
+  return {
+    status: ast && diagnostics.length === 0 ? 'ok' : 'invalid',
+    ast,
+    diagnostics,
+    duration: performance.now() - start,
+    tagCount: sumArrayLength(
+      comments.map(comment => comment.ast),
+      'tags'
+    ),
+    inlineTagCount: sumArrayLength(
+      comments.map(comment => comment.ast),
+      'inlineTags'
+    )
+  }
+}
+
+function getJsdocParseOptions() {
+  return {
+    compatMode: options.compatMode,
+    parseTypes: options.parseTypes,
+    preserveWhitespace: options.preserveWhitespace,
+    typeParseMode: options.typeParseMode
+  }
+}
+
+function createJsdocSourceFileAst(comments: ParsedJsdocComment[]): ParsedJsdocSourceFile | null {
+  const firstComment = comments[0]
+  const lastComment = comments.at(-1)
+
+  return firstComment && lastComment
+    ? {
+        type: 'JsdocSourceFile',
+        range: [firstComment.baseOffset, lastComment.baseOffset + lastComment.sourceText.length],
+        comments
+      }
+    : null
+}
+
+function parseJavaScriptComments(value: string): {
+  comments: Array<{ baseOffset: number; sourceText: string }>
+  diagnostics: string[]
+} {
+  try {
+    const filename = sourceLanguage.value === 'typescript' ? 'playground.ts' : 'playground.js'
+    const result = oxcParser.value?.parseSync(filename, value, {
+      range: true,
+      sourceType: 'module'
+    })
+    const comments = (result?.comments ?? [])
+      .map(comment => {
+        const range = getOxcCommentRange(comment)
+
+        return range
+          ? {
+              baseOffset: range[0],
+              sourceText: value.slice(range[0], range[1])
+            }
+          : null
+      })
+      .filter(comment => comment !== null)
+      .filter(comment => comment.sourceText.startsWith('/**'))
+    const diagnostics = (result?.errors ?? []).map(error => error.message ?? String(error))
+
+    return { comments, diagnostics }
+  } catch (error) {
+    return {
+      comments: [],
+      diagnostics: [error instanceof Error ? error.message : String(error)]
+    }
+  }
+}
+
+function getOxcCommentRange(comment: OxcComment): SourceRange | null {
+  if (typeof comment.start === 'number' && typeof comment.end === 'number') {
+    return [comment.start, comment.end]
+  }
+
+  if (
+    Array.isArray(comment.range) &&
+    comment.range.length === 2 &&
+    typeof comment.range[0] === 'number' &&
+    typeof comment.range[1] === 'number'
+  ) {
+    return comment.range
+  }
+
+  return null
+}
+
+function revealAstNodeAtOffset(offset: number): void {
+  const path = findAstPathAtOffset(parseView.value.ast, offset)
+
+  if (!path) {
+    return
+  }
+
+  selectedAstPath.value = path
+  revealAstPath.value = path
+  revealAstVersion.value += 1
+}
+
+function findAstPathAtOffset(value: unknown, offset: number): string | null {
+  let match: { depth: number; path: string; span: number } | null = null
+
+  function visit(item: unknown, path: string, depth: number): void {
+    const range = getAstObjectRange(item)
+
+    if (range && path !== 'root' && range[0] <= offset && offset <= range[1]) {
+      const span = range[1] - range[0]
+
+      if (!match || span < match.span || (span === match.span && depth > match.depth)) {
+        match = { depth, path, span }
+      }
+    }
+
+    if (Array.isArray(item)) {
+      item.forEach((child, index) => visit(child, `${path}.${index}`, depth + 1))
+      return
+    }
+
+    if (isAstRecord(item)) {
+      Object.entries(item).forEach(([key, child]) => {
+        visit(child, `${path}.${key}`, depth + 1)
+      })
+    }
+  }
+
+  visit(value, 'root', 0)
+
+  return match?.path ?? null
+}
+
+function getAstObjectRange(value: unknown): SourceRange | null {
+  if (!isAstRecord(value)) {
+    return null
+  }
+
+  const sourceRange = value.range
+
+  if (
+    Array.isArray(sourceRange) &&
+    sourceRange.length === 2 &&
+    typeof sourceRange[0] === 'number' &&
+    typeof sourceRange[1] === 'number'
+  ) {
+    return sourceRange
+  }
+
+  return typeof value.start === 'number' && typeof value.end === 'number'
+    ? [value.start, value.end]
+    : null
+}
+
+function isAstRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
 
 const selectSourceRange = (range: SourceRange) => {
   const editor = sourceEditor.value
@@ -459,17 +743,36 @@ const getArrayLength = (value: unknown, key: string) => {
   const item = (value as Record<string, unknown>)[key]
   return Array.isArray(item) ? item.length : 0
 }
+
+const sumArrayLength = (values: unknown[], key: string) =>
+  values.reduce((total, value) => total + getArrayLength(value, key), 0)
 </script>
 
 <template>
   <main class="playground" :data-theme="theme">
     <section class="topbar" aria-labelledby="title">
       <div>
-        <p class="eyebrow">@ox-jsdoc/wasm playground</p>
-        <h1 id="title">JSDoc AST Explorer</h1>
+        <p class="eyebrow">ox-jsdoc playground (wasm) v{{ oxJsdocWasmVersion }}</p>
+        <h1 id="title" class="product-logo-text">JSDoc AST Explorer</h1>
+        <p class="tagline">High performance jsdoc parser</p>
       </div>
 
       <div class="top-actions">
+        <a
+          class="github-link"
+          href="https://github.com/kazupon/ox-jsdoc"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Open ox-jsdoc on GitHub"
+        >
+          <svg aria-hidden="true" viewBox="0 0 16 16">
+            <path
+              fill="currentColor"
+              d="M8 0C3.58 0 0 3.67 0 8.2c0 3.63 2.29 6.7 5.47 7.79.4.08.55-.18.55-.4 0-.2-.01-.86-.01-1.56-2.01.38-2.53-.5-2.69-.97-.09-.24-.48-.97-.82-1.17-.28-.16-.68-.55-.01-.56.63-.01 1.08.59 1.23.84.72 1.24 1.87.89 2.33.68.07-.53.28-.89.51-1.09-1.78-.21-3.64-.91-3.64-4.04 0-.89.31-1.62.82-2.19-.08-.21-.36-1.04.08-2.16 0 0 .67-.22 2.2.84A7.42 7.42 0 0 1 8 3.94c.68 0 1.36.09 2 .28 1.53-1.06 2.2-.84 2.2-.84.44 1.12.16 1.95.08 2.16.51.57.82 1.3.82 2.19 0 3.14-1.87 3.83-3.65 4.04.29.26.54.75.54 1.52 0 1.09-.01 1.97-.01 2.24 0 .22.15.48.55.4A8.09 8.09 0 0 0 16 8.2C16 3.67 12.42 0 8 0Z"
+            />
+          </svg>
+          GitHub
+        </a>
         <button
           type="button"
           class="theme-toggle"
@@ -501,6 +804,10 @@ const getArrayLength = (value: unknown, key: string) => {
       <label>
         <input v-model="options.compatMode" type="checkbox" />
         Compat mode
+      </label>
+      <label>
+        <input v-model="options.parseBatch" type="checkbox" />
+        Batch parse
       </label>
       <label>
         Type mode
@@ -536,6 +843,8 @@ const getArrayLength = (value: unknown, key: string) => {
 
         <AstTree
           :ast="parseView.ast"
+          :reveal-path="revealAstPath"
+          :reveal-version="revealAstVersion"
           :selected-path="selectedAstPath"
           @select="handleAstNodeSelect"
         />
@@ -593,11 +902,53 @@ const getArrayLength = (value: unknown, key: string) => {
   color: var(--accent);
 }
 
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-strong);
+  color: var(--muted);
+  font: 700 11px/1 var(--mono);
+  letter-spacing: 0.1em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.github-link:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.github-link svg {
+  width: 15px;
+  height: 15px;
+}
+
 h1 {
   margin: 0;
-  font-size: clamp(34px, 6vw, 72px);
-  line-height: 0.92;
-  letter-spacing: -0.06em;
+  font-size: clamp(32px, 5vw, 58px);
+  line-height: 0.96;
+  letter-spacing: -0.055em;
+  white-space: nowrap;
+}
+
+.product-logo-text {
+  font-family: 'Montserrat', 'Arial Black', 'Helvetica Neue', sans-serif;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+}
+
+.tagline {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font: 700 14px/1.2 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .status {
@@ -760,6 +1111,15 @@ button:focus-visible {
 
 .pane-title strong {
   color: var(--ink);
+}
+
+.ast-title {
+  color: var(--ast-title);
+}
+
+.ast-title strong,
+.ast-title span {
+  color: var(--ast-title);
 }
 
 .monaco-host {
