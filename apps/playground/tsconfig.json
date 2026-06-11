@@ -1,13 +1,16 @@
 {
-  "extends": ["../../tsconfig.json", "./.void/tsconfig.json"],
   "compilerOptions": {
-    "lib": ["ESNext", "DOM"],
-    "types": ["vite/client", "void/env"],
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "jsx": "preserve",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
     "noEmit": true,
-    "paths": {
-      "void/routes": ["./.void/routes.d.ts"]
-    }
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"]
   },
-  "include": ["src"],
-  "files": ["./.void/routes.d.ts"]
+  "include": ["vite.config.ts", "src/**/*.ts", "src/**/*.vue"]
 }
