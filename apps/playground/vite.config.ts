@@ -1,21 +1,24 @@
 import vue from '@vitejs/plugin-vue'
-import { createReadStream, readFileSync, realpathSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { basename, dirname, join } from 'node:path'
+import { createReadStream, readFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import { voidPlugin } from 'void'
 
-const require = createRequire(import.meta.url)
 const oxcParserBrowserAssetNames = [
   'browser-bundle.js',
   'parser.wasm32-wasi.wasm',
   'wasi-worker-browser.mjs'
 ]
 const oxJsdocWasmAssetNames = ['ox_jsdoc_wasm_bg.wasm']
+const oxcParserBrowserAssetDir = join(
+  process.cwd(),
+  'node_modules',
+  '@oxc-parser',
+  'binding-wasm32-wasi'
+)
 
-function getOxcParserBrowserAssetDir(): string {
-  const oxcParserPackagePath = realpathSync(require.resolve('oxc-parser/package.json'))
-  return join(dirname(oxcParserPackagePath), '..', '@oxc-parser', 'binding-wasm32-wasi')
+function resolveOxcParserBrowserAsset(filename: string): string {
+  return join(oxcParserBrowserAssetDir, filename)
 }
 
 function getContentType(filename: string): string {
@@ -27,8 +30,6 @@ function getContentType(filename: string): string {
 }
 
 function oxcParserBrowserAssets(): Plugin {
-  const assetDir = getOxcParserBrowserAssetDir()
-
   return {
     name: 'oxc-parser-browser-assets',
     configureServer(server) {
@@ -42,7 +43,7 @@ function oxcParserBrowserAssets(): Plugin {
         }
 
         response.setHeader('Content-Type', getContentType(filename))
-        createReadStream(join(assetDir, filename)).pipe(response)
+        createReadStream(resolveOxcParserBrowserAsset(filename)).pipe(response)
       })
     },
     async generateBundle() {
@@ -50,7 +51,7 @@ function oxcParserBrowserAssets(): Plugin {
         this.emitFile({
           type: 'asset',
           fileName: `vendor/oxc-parser/${filename}`,
-          source: readFileSync(join(assetDir, filename))
+          source: readFileSync(resolveOxcParserBrowserAsset(filename))
         })
       }
     }

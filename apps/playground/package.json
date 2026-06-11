@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@ox-jsdoc/wasm": "workspace:*",
+    "@oxc-parser/binding-wasm32-wasi": "0.124.0",
     "monaco-editor": "^0.55.1",
     "oxc-parser": "^0.124.0",
     "vue": "^3.5.0"
