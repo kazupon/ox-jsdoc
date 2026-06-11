@@ -1,10 +1,28 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
+import AstTree from './components/AstTree.vue'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
+import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution'
+import 'monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution'
 import { initWasm, parse } from '@ox-jsdoc/wasm'
 
 type TypeParseMode = 'jsdoc' | 'closure' | 'typescript'
+
+type PlaygroundSettings = {
+  compatMode: boolean
+  parseTypes: boolean
+  preserveWhitespace: boolean
+  theme: 'light' | 'dark'
+  typeParseMode: TypeParseMode
+}
+
+type ExtractedJsdocBlock = {
+  baseOffset: number
+  sourceText: string
+}
+
+type SourceRange = [number, number]
 
 type ParseView =
   | {
@@ -33,15 +51,31 @@ const sample = `/**
  * @param {Array<T>} values - Input values.
  * @param {(value: T) => string} format - Value formatter.
  * @returns {string[]} Formatted values.
- */`
+ */
+export function formatValues<T>(
+  values: Array<T>,
+  format: (value: T) => string,
+): string[] {
+  return values.map(format)
+}`
 
 const source = ref(sample)
+const selectedAstPath = ref('')
 const wasmReady = ref(false)
 const wasmError = ref<string | null>(null)
 const editorHost = ref<HTMLElement | null>(null)
 const sourceEditor = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null)
-const theme = ref<'light' | 'dark'>('light')
 let resizeObserver: ResizeObserver | null = null
+const settingsKey = 'ox-jsdoc.playground.settings'
+const defaultSettings: PlaygroundSettings = {
+  compatMode: false,
+  parseTypes: true,
+  preserveWhitespace: true,
+  theme: 'light',
+  typeParseMode: 'typescript'
+}
+const settings = loadSettings()
+const theme = ref<'light' | 'dark'>(settings.theme)
 
 const globalSelf = self as typeof self & {
   MonacoEnvironment?: {
@@ -55,35 +89,19 @@ globalSelf.MonacoEnvironment = {
   }
 }
 
-const setupJsdocLanguage = () => {
-  if (!monaco.languages.getLanguages().some(language => language.id === 'jsdoc')) {
-    monaco.languages.register({ id: 'jsdoc' })
-  }
-
-  monaco.languages.setMonarchTokensProvider('jsdoc', {
-    defaultToken: 'comment.jsdoc',
-    tokenizer: {
-      root: [
-        [/\/\*\*/, 'comment.block.jsdoc'],
-        [/\*\//, 'comment.block.jsdoc'],
-        [/^\s*\*\s*/, 'comment.marker.jsdoc'],
-        [/\{@[a-zA-Z][\w-]*/, 'inline.tag.jsdoc'],
-        [/\}/, 'inline.punctuation.jsdoc'],
-        [/@[a-zA-Z][\w-]*/, 'tag.jsdoc'],
-        [/\{[^}\r\n]*\}/, 'type.jsdoc'],
-        [/\[[^\]\r\n]+\]/, 'name.optional.jsdoc'],
-        [/[a-zA-Z_$][\w$.-]*(?=\s+-)/, 'name.jsdoc'],
-        [/-/, 'dash.jsdoc']
-      ]
-    }
-  })
-}
-
 const defineEditorThemes = () => {
   monaco.editor.defineTheme('ox-jsdoc-light', {
     base: 'vs',
     inherit: true,
     rules: [
+      { token: 'comment', foreground: '7a6653' },
+      { token: 'comment.doc', foreground: '7a6653' },
+      { token: 'keyword', foreground: 'c24b2c', fontStyle: 'bold' },
+      { token: 'string', foreground: '28704f' },
+      { token: 'number', foreground: '1f6f8b' },
+      { token: 'regexp', foreground: 'a93678' },
+      { token: 'type', foreground: '1f6f8b' },
+      { token: 'delimiter', foreground: '8b6f4e' },
       { token: 'comment.jsdoc', foreground: '7a6653' },
       { token: 'comment.block.jsdoc', foreground: '9a8165' },
       { token: 'comment.marker.jsdoc', foreground: 'b9a88e' },
@@ -110,6 +128,14 @@ const defineEditorThemes = () => {
     base: 'vs-dark',
     inherit: true,
     rules: [
+      { token: 'comment', foreground: 'b8a991' },
+      { token: 'comment.doc', foreground: 'b8a991' },
+      { token: 'keyword', foreground: 'ff8f70', fontStyle: 'bold' },
+      { token: 'string', foreground: '97d988' },
+      { token: 'number', foreground: '6fd1c7' },
+      { token: 'regexp', foreground: 'f0a7d3' },
+      { token: 'type', foreground: '6fd1c7' },
+      { token: 'delimiter', foreground: 'b8a991' },
       { token: 'comment.jsdoc', foreground: 'b8a991' },
       { token: 'comment.block.jsdoc', foreground: '887b68' },
       { token: 'comment.marker.jsdoc', foreground: '6f6557' },
@@ -140,22 +166,109 @@ const toggleTheme = () => {
 }
 
 const options = reactive({
-  parseTypes: true,
-  typeParseMode: 'typescript' as TypeParseMode,
-  preserveWhitespace: true,
-  compatMode: false
+  parseTypes: settings.parseTypes,
+  typeParseMode: settings.typeParseMode,
+  preserveWhitespace: settings.preserveWhitespace,
+  compatMode: settings.compatMode
 })
 
+const sourceLanguage = computed(() =>
+  options.typeParseMode === 'typescript' ? 'typescript' : 'javascript'
+)
+
+function loadSettings(): PlaygroundSettings {
+  if (typeof localStorage === 'undefined') {
+    return { ...defaultSettings }
+  }
+
+  try {
+    const raw = localStorage.getItem(settingsKey)
+    if (!raw) {
+      return { ...defaultSettings }
+    }
+
+    const parsed = JSON.parse(raw) as Partial<PlaygroundSettings>
+
+    return {
+      compatMode:
+        typeof parsed.compatMode === 'boolean' ? parsed.compatMode : defaultSettings.compatMode,
+      parseTypes:
+        typeof parsed.parseTypes === 'boolean' ? parsed.parseTypes : defaultSettings.parseTypes,
+      preserveWhitespace:
+        typeof parsed.preserveWhitespace === 'boolean'
+          ? parsed.preserveWhitespace
+          : defaultSettings.preserveWhitespace,
+      theme:
+        parsed.theme === 'dark' || parsed.theme === 'light' ? parsed.theme : defaultSettings.theme,
+      typeParseMode:
+        parsed.typeParseMode === 'jsdoc' ||
+        parsed.typeParseMode === 'closure' ||
+        parsed.typeParseMode === 'typescript'
+          ? parsed.typeParseMode
+          : defaultSettings.typeParseMode
+    }
+  } catch {
+    return { ...defaultSettings }
+  }
+}
+
+function saveSettings() {
+  if (typeof localStorage === 'undefined') {
+    return
+  }
+
+  try {
+    localStorage.setItem(
+      settingsKey,
+      JSON.stringify({
+        compatMode: options.compatMode,
+        parseTypes: options.parseTypes,
+        preserveWhitespace: options.preserveWhitespace,
+        theme: theme.value,
+        typeParseMode: options.typeParseMode
+      } satisfies PlaygroundSettings)
+    )
+  } catch {
+    // Ignore unavailable storage; parser settings still work for the current session.
+  }
+}
+
+function extractFirstJsdocBlock(value: string): ExtractedJsdocBlock | null {
+  const start = value.indexOf('/**')
+
+  if (start === -1) {
+    return null
+  }
+
+  let index = start + 3
+
+  while (index < value.length) {
+    if (value[index] === '*' && value[index + 1] === '/') {
+      return {
+        baseOffset: start,
+        sourceText: value.slice(start, index + 2)
+      }
+    }
+
+    index += 1
+  }
+
+  return {
+    baseOffset: start,
+    sourceText: value.slice(start)
+  }
+}
+
 onMounted(async () => {
-  setupJsdocLanguage()
   defineEditorThemes()
+  document.documentElement.dataset.theme = theme.value
 
   if (editorHost.value) {
     sourceEditor.value = monaco.editor.create(editorHost.value, {
       automaticLayout: true,
       fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
       fontSize: 14,
-      language: 'jsdoc',
+      language: sourceLanguage.value,
       lineNumbersMinChars: 3,
       minimap: { enabled: false },
       padding: { bottom: 18, top: 18 },
@@ -206,6 +319,25 @@ watch(theme, value => {
   monaco.editor.setTheme(editorTheme.value)
 })
 
+watch(sourceLanguage, value => {
+  const model = sourceEditor.value?.getModel()
+
+  if (model) {
+    monaco.editor.setModelLanguage(model, value)
+  }
+})
+
+watch(
+  [
+    theme,
+    () => options.compatMode,
+    () => options.parseTypes,
+    () => options.preserveWhitespace,
+    () => options.typeParseMode
+  ],
+  saveSettings
+)
+
 const parseView = computed<ParseView>(() => {
   if (!wasmReady.value) {
     const failed = wasmError.value !== null
@@ -220,8 +352,22 @@ const parseView = computed<ParseView>(() => {
     }
   }
 
+  const jsdocBlock = extractFirstJsdocBlock(source.value)
+
+  if (!jsdocBlock) {
+    return {
+      status: 'invalid',
+      ast: null,
+      diagnostics: ['No JSDoc block found. Add a /** ... */ block comment.'],
+      duration: 0,
+      tagCount: 0,
+      inlineTagCount: 0
+    }
+  }
+
   const start = performance.now()
-  const result = parse(source.value, {
+  const result = parse(jsdocBlock.sourceText, {
+    baseOffset: jsdocBlock.baseOffset,
     compatMode: options.compatMode,
     parseTypes: options.parseTypes,
     preserveWhitespace: options.preserveWhitespace,
@@ -254,7 +400,33 @@ const parseView = computed<ParseView>(() => {
   }
 })
 
-const astJson = computed(() => JSON.stringify(parseView.value.ast, null, 2))
+const selectSourceRange = (range: SourceRange) => {
+  const editor = sourceEditor.value
+  const model = editor?.getModel()
+
+  if (!editor || !model) {
+    return
+  }
+
+  const sourceLength = source.value.length
+  const startOffset = Math.max(0, Math.min(range[0], sourceLength))
+  const endOffset = Math.max(startOffset, Math.min(range[1], sourceLength))
+  const start = model.getPositionAt(startOffset)
+  const end = model.getPositionAt(endOffset)
+  const selection = new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column)
+
+  editor.setSelection(selection)
+  editor.revealRangeInCenter(selection, monaco.editor.ScrollType.Smooth)
+  editor.focus()
+}
+
+const handleAstNodeSelect = (selection: { path: string; range: SourceRange | null }) => {
+  selectedAstPath.value = selection.path
+
+  if (selection.range) {
+    selectSourceRange(selection.range)
+  }
+}
 
 const statusLabel = computed(() => {
   if (parseView.value.status === 'loading') {
@@ -362,7 +534,11 @@ const getArrayLength = (value: unknown, key: string) => {
           </p>
         </div>
 
-        <pre>{{ astJson }}</pre>
+        <AstTree
+          :ast="parseView.ast"
+          :selected-path="selectedAstPath"
+          @select="handleAstNodeSelect"
+        />
       </section>
     </section>
   </main>
@@ -586,8 +762,7 @@ button:focus-visible {
   color: var(--ink);
 }
 
-.monaco-host,
-pre {
+.monaco-host {
   width: 100%;
   height: 100%;
   margin: 0;
@@ -616,12 +791,6 @@ pre {
 .diagnostics p {
   margin: 0;
   padding: 10px 16px;
-}
-
-pre {
-  overflow: auto;
-  padding: 18px;
-  white-space: pre;
 }
 
 @media (max-width: 980px) {
