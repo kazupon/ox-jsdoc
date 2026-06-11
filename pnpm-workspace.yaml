@@ -3,6 +3,7 @@ packages:
   - 'packages/*'
   - 'tasks/*'
   - 'wasm/*'
+  - apps/*
 
 allowBuilds:
   unrs-resolver: true
