@@ -4,9 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "init": "void init",
     "dev": "vp dev",
-    "build": "tsc && vp build",
-    "preview": "vp preview"
+    "build": "vp build",
+    "preview": "vp preview",
+    "deploy": "void deploy"
   },
   "dependencies": {
     "vue": "^3.5.0"
@@ -14,6 +16,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.0",
     "vite": "catalog:",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "void": "^0.9.3"
   }
 }

@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/void/schema.json",
+  "target": "cloudflare",
+  "inference": {
+    "appType": "static",
+    "build": "vp build --configLoader runner",
+    "outputDir": "dist/client"
+  },
+  "worker": {
+    "compatibility_date": "2025-12-01"
+  }
+}

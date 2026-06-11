@@ -18,6 +18,11 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Void project related files
+.void
+.wrangler
+*.tsbuildinfo
+
 target/
 node_modules/
 dist/

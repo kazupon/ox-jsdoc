@@ -1,9 +1,13 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": ["../../tsconfig.json", "./.void/tsconfig.json"],
   "compilerOptions": {
     "lib": ["ESNext", "DOM"],
-    "types": ["vite/client"],
-    "noEmit": true
+    "types": ["vite/client", "void/env"],
+    "noEmit": true,
+    "paths": {
+      "void/routes": ["./.void/routes.d.ts"]
+    }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "files": ["./.void/routes.d.ts"]
 }
