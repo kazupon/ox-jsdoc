@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout codes
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ env.TAG }}
           persist-credentials: false
@@ -132,7 +132,7 @@ jobs:
         run: git config --system core.longpaths true
 
       - name: Checkout codes
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ env.TAG }}
           persist-credentials: false
@@ -198,7 +198,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout codes
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ env.TAG }}
           persist-credentials: false
@@ -337,7 +337,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout codes
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ env.TAG }}
           persist-credentials: false
@@ -405,7 +405,7 @@ jobs:
       # zizmor: ignore[artipacked] — git-auto-commit-action needs the
       # credentials persisted here in order to push the CHANGELOG commit.
       - name: Checkout main # zizmor: ignore[artipacked]
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: main
           fetch-depth: 0
