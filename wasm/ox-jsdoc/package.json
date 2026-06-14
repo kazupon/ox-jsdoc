@@ -41,8 +41,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "wasm-pack build --target web --out-dir pkg",
-    "build:release": "wasm-pack build --target web --out-dir pkg --release",
+    "build": "wasm-pack build --target web --out-dir pkg --mode no-install",
+    "build:release": "wasm-pack build --target web --out-dir pkg --release --mode no-install",
     "test": "vp test run"
   },
   "dependencies": {
