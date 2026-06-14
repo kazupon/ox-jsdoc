@@ -792,7 +792,11 @@ const sumArrayLength = (values: unknown[], key: string) =>
       </div>
     </section>
 
-    <section class="toolbar" aria-label="Parser options">
+    <section class="toolbar" aria-labelledby="parser-options-title">
+      <div id="parser-options-title" class="toolbar-label">
+        <span>ox-jsdoc parser options</span>
+        <small>parse / parseBatch settings</small>
+      </div>
       <label>
         <input v-model="options.parseTypes" type="checkbox" />
         Parse types
@@ -817,14 +821,16 @@ const sumArrayLength = (values: unknown[], key: string) =>
           <option value="typescript">TypeScript</option>
         </select>
       </label>
-      <button type="button" @click="resetSample">RESET SAMPLE</button>
     </section>
 
     <section class="workspace" aria-label="JSDoc AST explorer">
       <section class="pane source-pane">
         <div class="pane-title">
           <span>Source</span>
-          <strong>{{ source.length }} chars</strong>
+          <div class="pane-title-actions">
+            <strong>{{ source.length }} chars</strong>
+            <button type="button" class="pane-action" @click="resetSample">Reset sample</button>
+          </div>
         </div>
         <div ref="editorHost" class="monaco-host" aria-label="JSDoc source" role="textbox" />
       </section>
@@ -1037,6 +1043,29 @@ h1 {
   color: var(--muted);
 }
 
+.toolbar-label {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 38px;
+  justify-content: center;
+  padding: 0 8px 0 4px;
+  color: var(--accent);
+}
+
+.toolbar-label span {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.toolbar-label small {
+  color: var(--muted);
+  font: 600 10px/1 var(--sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .toolbar label,
 .toolbar button {
   min-height: 38px;
@@ -1106,6 +1135,7 @@ button:focus-visible {
 
 .pane-title {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 14px 16px;
@@ -1115,6 +1145,24 @@ button:focus-visible {
 
 .pane-title strong {
   color: var(--ink);
+}
+
+.pane-title-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pane-action {
+  min-height: 28px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-strong);
+  color: var(--muted);
+  font: 700 10px/1 var(--sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .ast-title {

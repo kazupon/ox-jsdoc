@@ -1,54 +1,10 @@
 import vue from '@vitejs/plugin-vue'
-import { createReadStream, existsSync, readFileSync, readdirSync } from 'node:fs'
+import { createReadStream, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import { voidPlugin } from 'void'
 
-const oxcParserBrowserAssetNames = [
-  'browser-bundle.js',
-  'parser.wasm32-wasi.wasm',
-  'wasi-worker-browser.mjs'
-]
 const oxJsdocWasmAssetNames = ['ox_jsdoc_wasm_bg.wasm']
-
-function getOxcParserBrowserAssetDir(): string {
-  const directAssetDir = join(process.cwd(), 'node_modules', '@oxc-parser', 'binding-wasm32-wasi')
-
-  if (existsSync(join(directAssetDir, 'browser-bundle.js'))) {
-    return directAssetDir
-  }
-
-  const workspacePnpmStoreDir = join(process.cwd(), '..', '..', 'node_modules', '.pnpm')
-
-  if (existsSync(workspacePnpmStoreDir)) {
-    const packageEntry = readdirSync(workspacePnpmStoreDir)
-      .filter(entry => entry.startsWith('@oxc-parser+binding-wasm32-wasi@'))
-      .sort()
-      .at(-1)
-
-    if (packageEntry) {
-      const storeAssetDir = join(
-        workspacePnpmStoreDir,
-        packageEntry,
-        'node_modules',
-        '@oxc-parser',
-        'binding-wasm32-wasi'
-      )
-
-      if (existsSync(join(storeAssetDir, 'browser-bundle.js'))) {
-        return storeAssetDir
-      }
-    }
-  }
-
-  throw new Error('Unable to resolve @oxc-parser/binding-wasm32-wasi browser assets')
-}
-
-const oxcParserBrowserAssetDir = getOxcParserBrowserAssetDir()
-
-function resolveOxcParserBrowserAsset(filename: string): string {
-  return join(oxcParserBrowserAssetDir, filename)
-}
 
 function getContentType(filename: string): string {
   if (filename.endsWith('.wasm')) {
@@ -56,35 +12,6 @@ function getContentType(filename: string): string {
   }
 
   return 'text/javascript; charset=utf-8'
-}
-
-function oxcParserBrowserAssets(): Plugin {
-  return {
-    name: 'oxc-parser-browser-assets',
-    configureServer(server) {
-      server.middlewares.use('/vendor/oxc-parser', (request, response, next) => {
-        const pathname = decodeURIComponent((request.url ?? '').split('?')[0] ?? '')
-        const filename = basename(pathname)
-
-        if (!oxcParserBrowserAssetNames.includes(filename)) {
-          next()
-          return
-        }
-
-        response.setHeader('Content-Type', getContentType(filename))
-        createReadStream(resolveOxcParserBrowserAsset(filename)).pipe(response)
-      })
-    },
-    async generateBundle() {
-      for (const filename of oxcParserBrowserAssetNames) {
-        this.emitFile({
-          type: 'asset',
-          fileName: `vendor/oxc-parser/${filename}`,
-          source: readFileSync(resolveOxcParserBrowserAsset(filename))
-        })
-      }
-    }
-  }
 }
 
 function oxJsdocWasmAssets(): Plugin {
@@ -122,5 +49,5 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 4000
   },
-  plugins: [oxcParserBrowserAssets(), oxJsdocWasmAssets(), voidPlugin(), vue()]
+  plugins: [oxJsdocWasmAssets(), voidPlugin(), vue()]
 })

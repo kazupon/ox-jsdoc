@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">ox-jsdoc logo mark</title>
+  <desc id="desc">A cyan and teal rounded square logo mark with a white documentation asterisk.</desc>
+  <defs>
+    <linearGradient id="tile" x1="80" x2="430" y1="56" y2="456" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22d3ee"/>
+      <stop offset="0.5" stop-color="#14b8a6"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="150" x2="390" y1="120" y2="390" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ecfeff" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#67e8f9" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="32" y="32" width="448" height="448" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#042f2e" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <rect width="392" height="392" x="60" y="60" fill="url(#tile)" filter="url(#shadow)" rx="78"/>
+  <rect width="392" height="392" x="60" y="60" fill="url(#glow)" rx="78"/>
+  <path fill="#ffffff" d="M254 122c16 0 29 13 29 29v68l58-34c14-8 32-3 40 11s3 32-11 40l-58 34 58 34c14 8 19 26 11 40s-26 19-40 11l-58-34v68c0 16-13 29-29 29s-29-13-29-29v-68l-58 34c-14 8-32 3-40-11s-3-32 11-40l58-34-58-34c-14-8-19-26-11-40s26-19 40-11l58 34v-68c0-16 13-29 29-29Z"/>
+  <circle cx="254" cy="270" r="38" fill="url(#tile)"/>
+  <path fill="#ffffff" d="M238 258h32v24h-32z"/>
+</svg>
