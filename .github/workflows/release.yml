@@ -219,6 +219,9 @@ jobs:
       - name: Add wasm target
         run: rustup target add wasm32-unknown-unknown
 
+      - name: Install wasm-bindgen CLI
+        run: cargo install wasm-bindgen-cli --version 0.2.118 --locked --force
+
       - name: Build wasm packages
         # Only the canonical WASM package has a wasm-pack build. The
         # `@ox-jsdoc/wasm-binary` alias is a JS-only thin re-export, and

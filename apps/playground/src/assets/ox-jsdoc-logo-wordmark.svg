@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="260" viewBox="0 0 960 260" role="img" aria-labelledby="title desc">
+  <title id="title">ox-jsdoc logo wordmark</title>
+  <desc id="desc">A cyan and teal ox-jsdoc wordmark with a rounded documentation asterisk icon.</desc>
+  <defs>
+    <linearGradient id="mark" x1="24" x2="210" y1="24" y2="220" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22d3ee"/>
+      <stop offset="0.55" stop-color="#14b8a6"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+  </defs>
+  <rect width="196" height="196" x="32" y="32" fill="url(#mark)" rx="42"/>
+  <path fill="#ffffff" d="M130 66c10 0 18 8 18 18v44l38-22c9-5 20-2 25 7s2 20-7 25l-38 22 38 22c9 5 12 16 7 25s-16 12-25 7l-38-22v44c0 10-8 18-18 18s-18-8-18-18v-44l-38 22c-9 5-20 2-25-7s-2-20 7-25l38-22-38-22c-9-5-12-16-7-25s16-12 25-7l38 22V84c0-10 8-18 18-18Z"/>
+  <circle cx="130" cy="160" r="25" fill="url(#mark)"/>
+  <text x="268" y="128" fill="#082f35" font-family="Montserrat, Arial Black, Helvetica Neue, sans-serif" font-size="76" font-weight="900" letter-spacing="-3">ox-jsdoc</text>
+  <text x="272" y="178" fill="#0e7490" font-family="IBM Plex Sans, Helvetica Neue, sans-serif" font-size="28" font-weight="700" letter-spacing="5">HIGH PERFORMANCE JSDOC PARSER</text>
+  <path fill="#22d3ee" d="M274 202h408c8 0 14 6 14 14s-6 14-14 14H274c-8 0-14-6-14-14s6-14 14-14Z"/>
+</svg>
