@@ -68,7 +68,7 @@
     "@babel/core": "^7.29.0",
     "@babel/preset-env": "^7.29.2",
     "@rollup/plugin-babel": "^7.0.0",
-    "@vitest/coverage-v8": "4.1.4",
+    "@vitest/coverage-v8": "4.1.8",
     "@types/esquery": "^1.5.4",
     "@types/estraverse": "^5.1.7",
     "@typescript-eslint/visitor-keys": "^8.59.4",
