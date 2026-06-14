@@ -3,10 +3,13 @@ packages:
   - 'packages/*'
   - 'tasks/*'
   - 'wasm/*'
+  - apps/*
 
 allowBuilds:
-  unrs-resolver: true
-  wasm-pack: true
+  better-sqlite3: true
+  esbuild: true
+  sharp: true
+  workerd: true
 
 catalog:
   '@types/node': ^25.9.2

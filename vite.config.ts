@@ -14,6 +14,7 @@ const ignorePatterns = [
   'wasm/*/pkg/**',
   'packages/jsdoccomment/**',
   'packages/eslint-plugin-jsdoc/**',
+  'apps/playground/public/vendor/**',
   'tasks/**',
   'scripts/**',
   'refers/**',
