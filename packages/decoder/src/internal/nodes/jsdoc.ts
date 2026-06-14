@@ -31,8 +31,9 @@ import {
   stringPayloadOf
 } from '../helpers.ts'
 import { inspectPayload, inspectSymbol } from '../inspect.ts'
-import { nodeListAtSlotExtended, RemoteNodeList } from '../node-list.ts'
+import { nodeListAtSlotExtended } from '../node-list.ts'
 import { parsedPreservingWhitespace } from '../preserve-whitespace.ts'
+import type { RemoteNodeList } from '../node-list.ts'
 import type {
   LazyNode,
   LazyNodeConstructor,

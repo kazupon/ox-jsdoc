@@ -14,13 +14,13 @@ allowBuilds:
 catalog:
   '@types/node': ^25.9.2
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite-plus: ^0.1.24
   vitest: npm:@voidzero-dev/vite-plus-test@latest
-
-overrides:
-  vite: 'catalog:'
-  vitest: 'catalog:'
 
 minimumReleaseAgeExclude:
   - '@kazupon/vp-config'
   - 'wasm-pack'
+
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'

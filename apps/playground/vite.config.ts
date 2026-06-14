@@ -1,8 +1,9 @@
 import vue from '@vitejs/plugin-vue'
 import { copyFileSync, createReadStream, mkdirSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig } from 'vite'
 import { voidPlugin } from 'void'
+import type { Plugin } from 'vite'
 
 const oxJsdocWasmAssetNames = ['ox_jsdoc_wasm.js', 'ox_jsdoc_wasm_bg.wasm']
 

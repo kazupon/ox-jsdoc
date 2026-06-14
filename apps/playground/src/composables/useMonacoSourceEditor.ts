@@ -5,21 +5,13 @@
  * @license MIT
  */
 
-import {
-  computed,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  shallowRef,
-  watch,
-  type ComputedRef,
-  type Ref
-} from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 // oxlint-disable-next-line eslint-plugin-import/default -- NOTE(monaco): This import is for side effects (registering the worker), so the default export is not used.
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
 import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution'
 import 'monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution'
+import type { ComputedRef, Ref } from 'vue'
 import type { PlaygroundTheme, SourceRange } from '../types/playground'
 
 const globalSelf = globalThis as typeof globalThis & {

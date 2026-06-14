@@ -6,7 +6,8 @@
  */
 
 import { RemoteSourceFile } from '@ox-jsdoc/decoder'
-import { computed, onMounted, shallowRef, ref, type ComputedRef, type Ref } from 'vue'
+import { computed, onMounted, shallowRef, ref } from 'vue'
+import type { ComputedRef, Ref } from 'vue'
 import type {
   OxcComment,
   OxcParserModule,

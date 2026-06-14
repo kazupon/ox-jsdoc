@@ -17,7 +17,8 @@ import { describe, expect, it } from 'vite-plus/test'
 import { parse } from '../../src-js/index.js'
 
 import { FIXTURES } from './fixtures.js'
-import { assertCompatible, type Mismatch } from './helpers.js'
+import { assertCompatible } from './helpers.js'
+import type { Mismatch } from './helpers.js'
 
 /** Strip the surrounding `/** ... *​/` markers — jsdoccomment expects the
  * inner body only via `parseComment({ value })`. */

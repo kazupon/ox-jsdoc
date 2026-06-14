@@ -1,14 +1,10 @@
 {
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "useDefineForClassFields": true,
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "strict": true,
     "jsx": "preserve",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
     "noEmit": true,
+    "declaration": false,
+    "emitDeclarationOnly": false,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node"]
   },
