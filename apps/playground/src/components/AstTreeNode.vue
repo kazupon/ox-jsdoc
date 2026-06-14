@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { AstSelection, SourceRange } from '../types/playground'
 
 defineOptions({
@@ -41,6 +41,7 @@ const openable = computed(() => children.value.length > 0)
 const openManual = ref<boolean>()
 const open = computed(() => openable.value && (openManual.value ?? props.root))
 const valueCreated = ref(false)
+const rowElement = ref<HTMLElement | null>(null)
 const range = computed(() => getAstRange(props.value))
 const title = computed(() => getAstTitle(props.value))
 const preview = computed(() => getAstPreview(props.value))
@@ -61,6 +62,16 @@ watch(
   ([revealPath]) => {
     if (openable.value && isPathAncestorOrSelf(props.path, revealPath)) {
       openManual.value = true
+    }
+
+    if (props.path === revealPath) {
+      nextTick(() => {
+        rowElement.value?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+          inline: 'nearest'
+        })
+      })
     }
   },
   { immediate: true }
@@ -232,6 +243,7 @@ function getAstValueClass(value: unknown): string {
 <template>
   <div class="ast-node">
     <div
+      ref="rowElement"
       class="ast-node-row"
       :aria-expanded="openable ? String(open) : undefined"
       :class="{

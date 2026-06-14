@@ -29,7 +29,7 @@ function getTypeParseMode(event: Event): TypeParseMode {
 <template>
   <section class="toolbar" aria-labelledby="parser-options-title">
     <div id="parser-options-title" class="toolbar-label">
-      <span>oxjsdoc parser options</span>
+      <span>parser options</span>
       <small>parse / parseBatch settings</small>
     </div>
     <label>
