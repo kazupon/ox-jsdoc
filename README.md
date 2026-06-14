@@ -1,4 +1,12 @@
-# ox-jsdoc
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/oxjsdoc-light.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./assets/oxjsdoc-dark.svg">
+    <img alt="Ox JSDOC logo" src="./assets/oxjsdoc-dark.svg" height="60">
+  </picture>
+</p>
+
+## ox-jsdoc
 
 High-performance JSDoc parser inspired by the `oxc` project.
 

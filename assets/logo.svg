@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">ox-jsdoc logo</title>
+  <desc id="desc">Transparent SVG logo for ox-jsdoc with a blue document shape and white code comment symbols using Geist Black styling.</desc>
+
+  <style>
+    .geist-black {
+      font-family: "Geist", "Geist Black", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-weight: 900;
+      fill: #ffffff;
+      letter-spacing: 0;
+    }
+  </style>
+
+  <!-- Transparent background -->
+  <path d="M196 88H640L864 312V828C864 888.751 814.751 938 754 938H196C135.249 938 86 888.751 86 828V198C86 137.249 135.249 88 196 88Z" fill="#0891b2"/>
+
+  <!-- Top-left /** -->
+  <text x="178" y="285" class="geist-black" font-size="126">/**</text>
+
+  <!-- Center @ -->
+  <text x="250" y="720" class="geist-black" font-size="470">@</text>
+
+  <!-- Bottom-right */ -->
+  <text x="694" y="850" class="geist-black" font-size="126">*/</text>
+</svg>
