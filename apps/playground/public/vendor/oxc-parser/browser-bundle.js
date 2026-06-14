@@ -12089,7 +12089,7 @@ var WASI$1 = class _WASI$1 {
           return 28
       }
     })
-    this.clock_time_get = syscallWrap(this, 'clock_time_get', function (id, _percision, time) {
+    this.clock_time_get = syscallWrap(this, 'clock_time_get', function (id, _precision, time) {
       time = Number(time)
       if (time === 0) {
         return 28
