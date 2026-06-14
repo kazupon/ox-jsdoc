@@ -1,13 +1,6 @@
 <script setup lang="ts">
 import AstTreeNode from './AstTreeNode.vue'
-
-type SourceRange = [number, number]
-
-type AstSelection = {
-  path: string
-  range: SourceRange | null
-  value: unknown
-}
+import type { AstSelection } from '../types/playground'
 
 defineProps<{
   ast: unknown
