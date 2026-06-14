@@ -5,8 +5,8 @@
  * @license MIT
  */
 
+import { RemoteSourceFile } from '@ox-jsdoc/decoder'
 import { computed, onMounted, shallowRef, ref, type ComputedRef, type Ref } from 'vue'
-import { initWasm, parse, parseBatch } from '@ox-jsdoc/wasm'
 import type {
   OxcComment,
   OxcParserModule,
@@ -17,8 +17,83 @@ import type {
   SourceRange
 } from '../types/playground'
 
+const oxJsdocWasmModuleUrl = '/vendor/ox-jsdoc/ox_jsdoc_wasm.js'
+const oxJsdocWasmBinaryUrl = '/vendor/ox-jsdoc/ox_jsdoc_wasm_bg.wasm'
+const oxcParserModuleUrl = '/vendor/oxc-parser/browser-bundle.js'
+const utf8Encoder = new TextEncoder()
+
+type RemoteAst = {
+  toJSON(): unknown
+}
+
+type WasmDiagnostic = {
+  message: string
+}
+
+type WasmBatchDiagnostic = WasmDiagnostic & {
+  rootIndex: number
+}
+
+type WasmParseHandle = {
+  bufferLen(): number
+  bufferPtr(): number
+  diagnostics(): unknown
+  free(): void
+}
+
+type OxJsdocWasmModule = {
+  default(moduleOrPath?: unknown): Promise<{ memory: WebAssembly.Memory }>
+  parse_jsdoc(
+    sourceText: string,
+    fenceAware: boolean | null,
+    parseTypes: boolean | null,
+    typeParseMode: ParserOptions['typeParseMode'] | null,
+    compatMode: boolean | null,
+    preserveWhitespace: boolean | null,
+    baseOffset: number | null
+  ): WasmParseHandle
+  parse_jsdoc_batch_raw(
+    sourceText: Uint8Array,
+    offsets: Uint32Array,
+    baseOffsets: Uint32Array,
+    fenceAware: boolean | null,
+    parseTypes: boolean | null,
+    typeParseMode: ParserOptions['typeParseMode'] | null,
+    compatMode: boolean | null,
+    preserveWhitespace: boolean | null
+  ): WasmParseHandle
+}
+
+async function importOxJsdocWasmModule(specifier: string): Promise<OxJsdocWasmModule> {
+  return import(/* @vite-ignore */ specifier) as Promise<OxJsdocWasmModule>
+}
+
 async function importBrowserModule(specifier: string): Promise<unknown> {
-  return import(/* -ignore */ specifier)
+  const response = await fetch(specifier)
+
+  if (!response.ok) {
+    throw new Error(`Failed to load ${specifier}: ${response.status} ${response.statusText}`)
+  }
+
+  const assetBaseUrl = new URL('.', new URL(specifier, globalThis.location.href)).href
+  const wasmUrl = new URL('parser.wasm32-wasi.wasm', assetBaseUrl).href
+  const workerUrl = new URL('wasi-worker-browser.mjs', assetBaseUrl).href
+  const source = (await response.text())
+    .replaceAll(
+      "new URL('./parser.wasm32-wasi.wasm', import.meta.url)",
+      `new URL(${JSON.stringify(wasmUrl)})`
+    )
+    .replaceAll(
+      "new URL('./wasi-worker-browser.mjs', import.meta.url)",
+      `new URL(${JSON.stringify(workerUrl)})`
+    )
+  const moduleUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }))
+
+  try {
+    return await import(/* @vite-ignore */ moduleUrl)
+  } finally {
+    URL.revokeObjectURL(moduleUrl)
+  }
 }
 
 type UseJsdocParserOptions = {
@@ -30,28 +105,32 @@ type UseJsdocParserOptions = {
 export function useJsdocParser({ options, source, sourceLanguage }: UseJsdocParserOptions) {
   const wasmReady = ref(false)
   const wasmError = ref<string | null>(null)
+  const oxJsdocWasm = shallowRef<OxJsdocWasmModule | null>(null)
+  const wasmMemory = shallowRef<WebAssembly.Memory | null>(null)
   const oxcParser = shallowRef<OxcParserModule | null>(null)
   const oxcError = ref<string | null>(null)
 
   onMounted(async () => {
     try {
-      await initWasm('/vendor/ox-jsdoc/ox_jsdoc_wasm_bg.wasm')
+      const wasmModule = await importOxJsdocWasmModule(oxJsdocWasmModuleUrl)
+      const wasmExports = await wasmModule.default(oxJsdocWasmBinaryUrl)
+
+      oxJsdocWasm.value = wasmModule
+      wasmMemory.value = wasmExports.memory
       wasmReady.value = true
     } catch (error) {
       wasmError.value = error instanceof Error ? error.message : String(error)
     }
 
     try {
-      oxcParser.value = (await importBrowserModule(
-        '/__oxc-parser/browser-bundle.js'
-      )) as OxcParserModule
+      oxcParser.value = (await importBrowserModule(oxcParserModuleUrl)) as OxcParserModule
     } catch (error) {
       oxcError.value = error instanceof Error ? error.message : String(error)
     }
   })
 
   const parseView = computed<ParseView>(() => {
-    if (!wasmReady.value || !oxcParser.value) {
+    if (!wasmReady.value || !oxJsdocWasm.value || !wasmMemory.value || !oxcParser.value) {
       const failed = wasmError.value !== null || oxcError.value !== null
 
       return {
@@ -93,7 +172,7 @@ export function useJsdocParser({ options, source, sourceLanguage }: UseJsdocPars
     },
     start: number
   ): ParseView {
-    const result = parseBatch(parseResult.comments, getJsdocParseOptions())
+    const result = parseJsdocBatch(parseResult.comments, getJsdocParseOptions())
 
     try {
       const comments = result.asts
@@ -162,7 +241,7 @@ export function useJsdocParser({ options, source, sourceLanguage }: UseJsdocPars
     const diagnostics = [...parseResult.diagnostics]
 
     for (const [index, comment] of parseResult.comments.entries()) {
-      const result = parse(comment.sourceText, {
+      const result = parseJsdoc(comment.sourceText, {
         ...getJsdocParseOptions(),
         baseOffset: comment.baseOffset
       })
@@ -213,6 +292,101 @@ export function useJsdocParser({ options, source, sourceLanguage }: UseJsdocPars
       preserveWhitespace: options.preserveWhitespace,
       typeParseMode: options.typeParseMode
     }
+  }
+
+  function parseJsdoc(
+    sourceText: string,
+    parseOptions: ReturnType<typeof getJsdocParseOptions> & { baseOffset?: number }
+  ): {
+    ast: RemoteAst | null
+    diagnostics: WasmDiagnostic[]
+    free: () => void
+  } {
+    const { memory, wasm } = getWasmParser()
+    const handle = wasm.parse_jsdoc(
+      sourceText,
+      null,
+      parseOptions.parseTypes,
+      parseOptions.typeParseMode,
+      parseOptions.compatMode,
+      parseOptions.preserveWhitespace,
+      parseOptions.baseOffset ?? null
+    )
+    const sourceFile = decodeSourceFile(handle, memory)
+
+    return {
+      ast: (sourceFile.asts[0] ?? null) as RemoteAst | null,
+      diagnostics: handle.diagnostics() as WasmDiagnostic[],
+      free: () => handle.free()
+    }
+  }
+
+  function parseJsdocBatch(
+    comments: Array<{ baseOffset: number; sourceText: string }>,
+    parseOptions: ReturnType<typeof getJsdocParseOptions>
+  ): {
+    asts: Array<RemoteAst | null>
+    diagnostics: WasmBatchDiagnostic[]
+    free: () => void
+  } {
+    const { memory, wasm } = getWasmParser()
+    const commentCount = comments.length
+    let totalChars = 0
+
+    for (const comment of comments) {
+      totalChars += comment.sourceText.length
+    }
+
+    const concat = new Uint8Array(totalChars * 3)
+    const offsets = new Uint32Array(commentCount + 1)
+    const baseOffsets = new Uint32Array(commentCount)
+    let position = 0
+
+    for (const [index, comment] of comments.entries()) {
+      const { written } = utf8Encoder.encodeInto(comment.sourceText, concat.subarray(position))
+
+      position += written
+      offsets[index + 1] = position
+      baseOffsets[index] = comment.baseOffset
+    }
+
+    const handle = wasm.parse_jsdoc_batch_raw(
+      concat.subarray(0, position),
+      offsets,
+      baseOffsets,
+      null,
+      parseOptions.parseTypes,
+      parseOptions.typeParseMode,
+      parseOptions.compatMode,
+      parseOptions.preserveWhitespace
+    )
+    const sourceFile = decodeSourceFile(handle, memory)
+
+    return {
+      asts: sourceFile.asts as Array<RemoteAst | null>,
+      diagnostics: handle.diagnostics() as WasmBatchDiagnostic[],
+      free: () => handle.free()
+    }
+  }
+
+  function getWasmParser(): {
+    memory: WebAssembly.Memory
+    wasm: OxJsdocWasmModule
+  } {
+    if (!oxJsdocWasm.value || !wasmMemory.value) {
+      throw new Error('WASM parser is not initialized')
+    }
+
+    return {
+      memory: wasmMemory.value,
+      wasm: oxJsdocWasm.value
+    }
+  }
+
+  function decodeSourceFile(handle: WasmParseHandle, memory: WebAssembly.Memory): RemoteSourceFile {
+    const view = new Uint8Array(memory.buffer, handle.bufferPtr(), handle.bufferLen())
+
+    return new RemoteSourceFile(view)
   }
 
   function createJsdocSourceFileAst(comments: ParsedJsdocComment[]): ParsedJsdocSourceFile | null {

@@ -48,6 +48,9 @@ importers:
 
   apps/playground:
     dependencies:
+      '@ox-jsdoc/decoder':
+        specifier: workspace:*
+        version: link:../../packages/decoder
       '@ox-jsdoc/wasm':
         specifier: workspace:*
         version: link:../../wasm/ox-jsdoc
