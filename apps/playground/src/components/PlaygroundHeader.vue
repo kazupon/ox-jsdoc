@@ -20,7 +20,7 @@ const emit = defineEmits<{
     <div class="brand">
       <img class="brand-logo" :src="logoUrl" alt="" width="1024" height="1024" aria-hidden="true" />
       <div class="brand-copy">
-        <p class="eyebrow">ox-jsdoc playground (wasm) v{{ version }}</p>
+        <p class="eyebrow">oxjsdoc playground (wasm) v{{ version }}</p>
         <h1 id="title" class="product-logo-text">JSDoc AST Explorer</h1>
         <p class="tagline">High performance jsdoc parser</p>
       </div>
@@ -32,7 +32,7 @@ const emit = defineEmits<{
         href="https://github.com/kazupon/ox-jsdoc"
         target="_blank"
         rel="noreferrer"
-        aria-label="Open ox-jsdoc on GitHub"
+        aria-label="Open oxjsdoc on GitHub"
       >
         <svg aria-hidden="true" viewBox="0 0 16 16">
           <path
