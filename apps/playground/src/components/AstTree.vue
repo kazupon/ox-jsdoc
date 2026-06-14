@@ -42,6 +42,7 @@ const emit = defineEmits<{
 .ast-empty {
   width: 100%;
   height: 100%;
+  min-height: 0;
   background: var(--editor-bg);
   color: var(--ink);
   font-family: var(--mono);
@@ -50,14 +51,12 @@ const emit = defineEmits<{
 }
 
 .ast-tree {
-  min-height: 420px;
   overflow: auto;
   padding: 26px 28px 34px;
 }
 
 .ast-empty {
   display: grid;
-  min-height: 420px;
   place-items: center;
   color: var(--muted);
 }

@@ -115,6 +115,9 @@ const oxcParser = shallowRef<OxcParserModule | null>(null)
 const oxcError = ref<string | null>(null)
 const editorHost = ref<HTMLElement | null>(null)
 const sourceEditor = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null)
+const sourceHighlightDecorations = shallowRef<monaco.editor.IEditorDecorationsCollection | null>(
+  null
+)
 let resizeObserver: ResizeObserver | null = null
 const settingsKey = 'ox-jsdoc.playground.settings'
 const defaultSettings: PlaygroundSettings = {
@@ -351,6 +354,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
+  sourceHighlightDecorations.value?.clear()
   sourceEditor.value?.dispose()
 })
 
@@ -697,11 +701,17 @@ const selectSourceRange = (range: SourceRange) => {
   const endOffset = Math.max(startOffset, Math.min(range[1], sourceLength))
   const start = model.getPositionAt(startOffset)
   const end = model.getPositionAt(endOffset)
-  const selection = new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column)
 
-  editor.setSelection(selection)
-  editor.revealRangeInCenter(selection, monaco.editor.ScrollType.Smooth)
-  editor.focus()
+  sourceHighlightDecorations.value?.clear()
+  sourceHighlightDecorations.value = editor.createDecorationsCollection([
+    {
+      range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+      options: {
+        inlineClassName: 'source-range-highlight',
+        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+      }
+    }
+  ])
 }
 
 const handleAstNodeSelect = (selection: { path: string; range: SourceRange | null }) => {
@@ -865,8 +875,10 @@ const sumArrayLength = (values: unknown[], key: string) =>
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 14px;
   width: min(1440px, 100%);
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   margin: 0 auto;
+  overflow: hidden;
   padding: 18px;
 }
 
@@ -1122,13 +1134,14 @@ button:focus-visible {
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
   gap: 14px;
   min-height: 0;
+  overflow: hidden;
 }
 
 .pane {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
-  min-height: 660px;
+  min-height: 0;
   overflow: hidden;
   border-radius: 24px;
 }
@@ -1138,7 +1151,8 @@ button:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 16px;
+  min-height: 58px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--line);
   color: var(--muted);
 }
@@ -1220,7 +1234,7 @@ button:focus-visible {
   }
 
   .pane {
-    min-height: 460px;
+    min-height: 0;
   }
 }
 </style>

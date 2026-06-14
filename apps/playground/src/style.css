@@ -12,6 +12,8 @@
   --line: #beddda;
   --accent: #0891b2;
   --accent-soft: #a5f3fc;
+  --source-highlight: rgba(8, 145, 178, 0.18);
+  --source-highlight-edge: rgba(8, 145, 178, 0.45);
   --ast-title: #0891b2;
   --ast-key: #8b6f4e;
   --ast-string: #8b6f4e;
@@ -40,6 +42,8 @@
   --line: #244046;
   --accent: #22d3ee;
   --accent-soft: #164e63;
+  --source-highlight: rgba(34, 211, 238, 0.2);
+  --source-highlight-edge: rgba(34, 211, 238, 0.5);
   --ast-title: #22d3ee;
   --ast-key: #b8a991;
   --ast-string: #b8a991;
@@ -51,7 +55,9 @@
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   background:
     radial-gradient(circle at 18% 12%, rgba(8, 145, 178, 0.18), transparent 28rem),
     linear-gradient(135deg, #f1fffd 0%, #dff5f2 48%, #f5fbfa 100%);
@@ -64,11 +70,18 @@ body {
 }
 
 #app {
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
 }
 
 button,
 textarea,
 select {
   font: inherit;
+}
+
+.source-range-highlight {
+  border-radius: 3px;
+  background-color: var(--source-highlight);
+  box-shadow: inset 0 -1px var(--source-highlight-edge);
 }
