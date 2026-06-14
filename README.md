@@ -10,6 +10,8 @@
 
 High-performance JSDoc parser inspired by the `oxc` project.
 
+Try the [ox-jsdoc playground](https://ox-jsdoc-playground.void.app/) to inspect parsed JSDoc output in the browser.
+
 ## Motivation
 
 - Parse JSDoc at native Rust speed when generating JSDoc documentation in `ox-content`, a potential alternative to TypeDoc.
