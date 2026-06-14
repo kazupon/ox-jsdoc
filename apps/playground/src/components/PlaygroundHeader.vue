@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import logoUrl from '../assets/logo.svg'
 import type { PlaygroundTheme } from '../types/playground'
 
 defineProps<{
@@ -16,10 +17,13 @@ const emit = defineEmits<{
 
 <template>
   <section class="topbar" aria-labelledby="title">
-    <div>
-      <p class="eyebrow">ox-jsdoc playground (wasm) v{{ version }}</p>
-      <h1 id="title" class="product-logo-text">JSDoc AST Explorer</h1>
-      <p class="tagline">High performance jsdoc parser</p>
+    <div class="brand">
+      <img class="brand-logo" :src="logoUrl" alt="" width="1024" height="1024" aria-hidden="true" />
+      <div class="brand-copy">
+        <p class="eyebrow">ox-jsdoc playground (wasm) v{{ version }}</p>
+        <h1 id="title" class="product-logo-text">JSDoc AST Explorer</h1>
+        <p class="tagline">High performance jsdoc parser</p>
+      </div>
     </div>
 
     <div class="top-actions">
@@ -76,6 +80,24 @@ const emit = defineEmits<{
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 18px;
+}
+
+.brand-logo {
+  flex: 0 0 auto;
+  width: clamp(64px, 8vw, 108px);
+  height: clamp(64px, 8vw, 108px);
+  filter: drop-shadow(0 16px 28px rgba(8, 145, 178, 0.18));
+}
+
+.brand-copy {
+  min-width: 0;
 }
 
 .eyebrow,
@@ -219,6 +241,22 @@ h1 {
   .topbar {
     align-items: start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 620px) {
+  .brand {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .brand-logo {
+    width: 54px;
+    height: 54px;
+  }
+
+  h1 {
+    white-space: normal;
   }
 }
 </style>
