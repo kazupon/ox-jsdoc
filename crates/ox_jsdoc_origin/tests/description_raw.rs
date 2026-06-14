@@ -248,7 +248,7 @@ fn json_serializer_emits_description_raw_in_compat_mode() {
 }
 
 #[test]
-fn json_serializer_descriptionRaw_on_jsdoctag_in_compat_mode() {
+fn json_serializer_description_raw_on_jsdoctag_in_compat_mode() {
     let arena = Allocator::default();
     let src = "/**\n * @param {T} x first\n *   continuation\n */";
     let block = parse(&arena, src);

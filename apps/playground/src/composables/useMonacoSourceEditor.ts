@@ -15,7 +15,7 @@ import {
   type ComputedRef,
   type Ref
 } from 'vue'
-// oxlint-disable-next-line eslint-plugin-import/default -- NOTE: This import is for side effects (registering the worker), so the default export is not used.
+// oxlint-disable-next-line eslint-plugin-import/default -- NOTE(monaco): This import is for side effects (registering the worker), so the default export is not used.
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
 import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution'
