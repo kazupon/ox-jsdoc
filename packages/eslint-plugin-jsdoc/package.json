@@ -86,7 +86,7 @@
   "dependencies": {
     "@es-joy/resolve.exports": "1.2.0",
     "@ox-jsdoc/jsdoccomment": "workspace:*",
-    "are-docs-informative": "^0.0.2",
+    "are-docs-informative": "^0.1.0",
     "comment-parser": "1.4.7",
     "debug": "^4.4.3",
     "escape-string-regexp": "^4.0.0",
