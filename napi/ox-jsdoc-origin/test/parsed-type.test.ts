@@ -214,8 +214,12 @@ function compareType(typeExpr: string, mode: Mode) {
   const ox = oxParse(typeExpr, mode)
   const ref = refParse(typeExpr, mode)
 
+  expect(
+    ref,
+    `jsdoc-type-pratt-parser failed to parse "${typeExpr}" in ${mode} mode`
+  ).not.toBeNull()
+
   if (ref === null) {
-    // Skip cases where jsdoc-type-pratt-parser cannot parse this syntax.
     return
   }
 
