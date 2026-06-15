@@ -9,6 +9,8 @@ allowBuilds:
   better-sqlite3: true
   esbuild: true
   sharp: true
+  unrs-resolver: true
+  wasm-pack: true
   workerd: true
 
 catalog:
@@ -20,6 +22,8 @@ catalog:
 minimumReleaseAgeExclude:
   - '@kazupon/vp-config'
   - 'wasm-pack'
+  - vize
+  - '@vizejs/**'
 
 overrides:
   vite: 'catalog:'
