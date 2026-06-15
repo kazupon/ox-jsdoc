@@ -236,8 +236,8 @@ importers:
         specifier: ^7.7.1
         version: 7.7.1
       '@types/spdx-expression-parse':
-        specifier: ^3.0.5
-        version: 3.0.5
+        specifier: ^4.0.0
+        version: 4.0.0
       '@typescript-eslint/types':
         specifier: 8.60.1
         version: 8.60.1
@@ -4039,8 +4039,8 @@ packages:
   '@types/semver@7.7.1':
     resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
 
-  '@types/spdx-expression-parse@3.0.5':
-    resolution: {integrity: sha512-XrojSCTzVxPAfWeAiw8Hg27OW/4jalE7yiohCHRPprqfPyt2oG+Osy1HstUPMF26cEdno3IeEhv31Pzl0wwsQw==}
+  '@types/spdx-expression-parse@4.0.0':
+    resolution: {integrity: sha512-odQzy87phelGS4inXOzjmusx4hoCVD0IbxUANxHzVkmTzMRTNnUPoq1urIl7S1qf09KcDWKLFIftPmLtgbsAHA==}
 
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
@@ -11720,7 +11720,7 @@ snapshots:
 
   '@types/semver@7.7.1': {}
 
-  '@types/spdx-expression-parse@3.0.5': {}
+  '@types/spdx-expression-parse@4.0.0': {}
 
   '@types/trusted-types@2.0.7':
     optional: true
