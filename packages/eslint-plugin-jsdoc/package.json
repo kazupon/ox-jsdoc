@@ -118,7 +118,7 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "^25.5.0",
     "@types/semver": "^7.7.1",
-    "@types/spdx-expression-parse": "^3.0.5",
+    "@types/spdx-expression-parse": "^4.0.0",
     "@typescript-eslint/types": "8.60.1",
     "babel-plugin-add-module-exports": "^1.0.4",
     "babel-plugin-istanbul": "^7.0.1",
