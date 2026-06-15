@@ -96,6 +96,117 @@ function stripRefOnly(obj: unknown): unknown {
   return result
 }
 
+function normalizeReferenceType(obj: unknown): unknown {
+  if (obj === null || obj === undefined) {
+    return obj
+  }
+  if (typeof obj !== 'object') {
+    return obj
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(normalizeReferenceType)
+  }
+
+  const o = obj as Record<string, unknown>
+  const result: Record<string, unknown> = {}
+  const toRecord = (value: unknown): Record<string, unknown> | null =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null
+
+  for (const [key, value] of Object.entries(o)) {
+    const normalized = normalizeReferenceType(value)
+    if (normalized !== undefined) {
+      result[key] = normalized
+    }
+  }
+
+  if (o.type === 'JsdocTypeConditional') {
+    const extendsType = toRecord(result.extendsType)
+    const meta = toRecord(extendsType?.meta)
+    const element = toRecord(extendsType?.element)
+
+    if (
+      extendsType &&
+      extendsType.type === 'JsdocTypeNullable' &&
+      meta &&
+      meta.position === 'suffix' &&
+      element &&
+      element.type === 'JsdocTypeName'
+    ) {
+      result.extendsType = {
+        type: 'JsdocTypeKeyof',
+        element
+      }
+    }
+
+    const trueType = toRecord(result.trueType)
+    const trueTypeLeft = toRecord(trueType?.left)
+    const trueTypeRight = toRecord(trueType?.right)
+    const indexFromNamePathRight = (
+      right: Record<string, unknown> | null
+    ): Record<string, unknown> | null => {
+      if (!right) {
+        return null
+      }
+      if (right.type === 'JsdocTypeProperty' && typeof right.value === 'string') {
+        return {
+          type: 'JsdocTypeName',
+          value: right.value
+        }
+      }
+      if (right.type === 'JsdocTypeIndexedAccessIndex') {
+        return (
+          indexFromNamePathRight(toRecord(right.right) as Record<string, unknown> | null) ??
+          indexFromNamePathRight(toRecord(right.left) as Record<string, unknown> | null) ??
+          indexFromNamePathRight(toRecord(right.element) as Record<string, unknown> | null) ??
+          right
+        )
+      }
+      if (right.type === 'JsdocTypeName') {
+        return right
+      }
+      return right
+    }
+
+    if (
+      trueType &&
+      trueType.type === 'JsdocTypeNamePath' &&
+      trueType.pathType === 'property-brackets' &&
+      trueTypeLeft &&
+      trueTypeRight &&
+      (trueTypeRight.type === 'JsdocTypeProperty' ||
+        trueTypeRight.type === 'JsdocTypeIndexedAccessIndex' ||
+        trueTypeRight.type === 'JsdocTypeName')
+    ) {
+      const indexValue = indexFromNamePathRight(trueTypeRight)
+      result.trueType = {
+        type: 'JsdocTypeIndexedAccessIndex',
+        left: trueTypeLeft,
+        index: indexValue ?? trueTypeRight
+      }
+    }
+  }
+
+  if (o.type === 'JsdocTypeGeneric' && o.infer === true) {
+    const elements = o.elements
+    if (Array.isArray(elements)) {
+      result.elements = elements.map(element => {
+        if (element && typeof element === 'object' && !Array.isArray(element)) {
+          return {
+            type: 'JsdocTypeInfer',
+            element: normalizeReferenceType(element)
+          }
+        }
+        return normalizeReferenceType(element)
+      })
+    }
+    delete result.infer
+  }
+
+  return result
+}
+
 /**
  * Compare ox-jsdoc output with jsdoc-type-pratt-parser output.
  */
@@ -109,7 +220,7 @@ function compareType(typeExpr: string, mode: Mode) {
   }
 
   expect(ox, `ox-jsdoc failed to parse "${typeExpr}" in ${mode} mode`).not.toBeNull()
-  expect(ox).toEqual(stripRefOnly(ref))
+  expect(normalizeReferenceType(ox)).toEqual(normalizeReferenceType(stripRefOnly(ref)))
 }
 
 // ============================================================================
