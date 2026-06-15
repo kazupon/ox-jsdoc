@@ -10,7 +10,7 @@
     "build": "vp build --configLoader runner",
     "preview": "vp preview",
     "deploy": "void deploy",
-    "vize:check": "vp run vize:lint && vp run vize:_check",
+    "vize:check": "node ./scripts/vize-check.mjs",
     "vize:_check": "vp exec vize check --tsconfig tsconfig.json src",
     "vize:lint": "vp run vize:lint:opinionated && vp run vize:lint:strict-reactivity",
     "vize:lint:opinionated": "vp exec vize lint --preset opinionated --help-level short src",
