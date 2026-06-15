@@ -121,7 +121,7 @@
     "@types/spdx-expression-parse": "^4.0.0",
     "@typescript-eslint/types": "8.60.1",
     "babel-plugin-add-module-exports": "^1.0.4",
-    "babel-plugin-istanbul": "^7.0.1",
+    "babel-plugin-istanbul": "^8.0.0",
     "babel-plugin-transform-import-meta": "^2.3.3",
     "c8": "^11.0.0",
     "camelcase": "^9.0.0",
