@@ -28,7 +28,7 @@
     "@vitejs/plugin-vue": "^6.0.0",
     "vite": "catalog:",
     "vite-plus": "catalog:",
-    "vize": "^0.217.0",
+    "vize": "^0.225.0",
     "void": "^0.9.3"
   }
 }
