@@ -10,6 +10,7 @@ import { parse } from '../src-js/index.js'
 import { parse as jtpParse } from 'jsdoc-type-pratt-parser'
 
 type Mode = 'jsdoc' | 'closure' | 'typescript'
+type TypeCase = { input: string; mode: Mode }
 const PARSER_MODES: Mode[] = ['jsdoc', 'closure', 'typescript']
 
 /**
@@ -33,6 +34,28 @@ function refParse(typeExpr: string, mode: Mode): unknown {
   } catch {
     return null
   }
+}
+
+function casesFor(inputs: readonly string[], modes: readonly Mode[]): TypeCase[] {
+  return inputs.flatMap(input => modes.map(mode => ({ input, mode })))
+}
+
+function splitByReferenceSupport(cases: readonly TypeCase[]): {
+  comparable: TypeCase[]
+  oxOnly: TypeCase[]
+} {
+  const comparable: TypeCase[] = []
+  const oxOnly: TypeCase[] = []
+
+  for (const typeCase of cases) {
+    if (refParse(typeCase.input, typeCase.mode) === null) {
+      oxOnly.push(typeCase)
+    } else {
+      comparable.push(typeCase)
+    }
+  }
+
+  return { comparable, oxOnly }
 }
 
 /**
@@ -220,12 +243,17 @@ function compareType(typeExpr: string, mode: Mode): boolean {
     `jsdoc-type-pratt-parser failed to parse "${typeExpr}" in ${mode} mode`
   ).not.toBeNull()
 
-  if (ref === null) {
-    return false
-  }
-
   expect(ox, `ox-jsdoc failed to parse "${typeExpr}" in ${mode} mode`).not.toBeNull()
   expect(normalizeReferenceType(ox)).toEqual(normalizeReferenceType(stripRefOnly(ref)))
+
+  return true
+}
+
+function parseTypeWithOx(typeExpr: string, mode: Mode): boolean {
+  expect(
+    oxParse(typeExpr, mode),
+    `ox-jsdoc failed to parse "${typeExpr}" in ${mode} mode`
+  ).not.toBeNull()
 
   return true
 }
@@ -299,9 +327,8 @@ const MODIFIER_TYPES: string[] = [
   'Object!='
 ]
 
-const MODIFIER_COMPARABLE_CASES: Array<{ input: string; mode: Mode }> = MODIFIER_TYPES.flatMap(
-  input =>
-    PARSER_MODES.filter(mode => refParse(input, mode) !== null).map(mode => ({ input, mode }))
+const { comparable: MODIFIER_COMPARABLE_CASES } = splitByReferenceSupport(
+  casesFor(MODIFIER_TYPES, PARSER_MODES)
 )
 
 // Function types (jsdoc/closure style)
@@ -329,9 +356,8 @@ const OBJECT_TYPES: string[] = ['{}', '{a: string}', '{a: string, b: number}']
 // `{a?: string}` has different semantics per mode:
 // jsdoc: `?` is nullable on key → JsdocTypeJsdocObjectField with nullable
 // typescript/closure: `?` is optional → JsdocTypeObjectField with optional=true
-const OBJECT_OPTIONAL_TYPES: Array<{ input: string; modes: Mode[] }> = [
-  { input: '{a?: string}', modes: ['typescript', 'closure'] }
-]
+const { comparable: OBJECT_OPTIONAL_COMPARABLE_CASES, oxOnly: OBJECT_OPTIONAL_OX_ONLY_CASES } =
+  splitByReferenceSupport(casesFor(['{a?: string}'], ['typescript', 'closure']))
 
 // TypeScript-specific types
 const TS_TYPES: string[] = [
@@ -347,6 +373,10 @@ const TS_TYPES: string[] = [
   'readonly string[]',
   'T extends U ? X : Y'
 ]
+
+const { comparable: TS_COMPARABLE_CASES, oxOnly: TS_OX_ONLY_CASES } = splitByReferenceSupport(
+  casesFor(TS_TYPES, ['typescript'])
+)
 
 // Tuple types
 const TUPLE_TYPES: string[] = ['[]', '[string]', '[string, number]', '[a: string, b: number]']
@@ -364,6 +394,36 @@ const PAREN_TYPES: string[] = ['(string)', '(string | number)']
 
 // Number/String literals
 const LITERAL_TYPES: string[] = ['42', '3.14', '-1', '"hello"', "'world'"]
+
+const { comparable: LITERAL_COMPARABLE_CASES, oxOnly: LITERAL_OX_ONLY_CASES } =
+  splitByReferenceSupport(casesFor(LITERAL_TYPES, PARSER_MODES))
+
+const COMPLEX_TYPES: TypeCase[] = [
+  ...casesFor(['(number | boolean)'], PARSER_MODES),
+  ...casesFor(['...(number | boolean)'], PARSER_MODES),
+  ...casesFor(['?(number | boolean)'], PARSER_MODES),
+  ...casesFor(['!(number | boolean)'], PARSER_MODES),
+  ...casesFor(['(number | boolean)='], PARSER_MODES),
+  ...casesFor(['Array<string> | Map<string, number>'], ['typescript']),
+  ...casesFor(['...Array.<string>'], PARSER_MODES),
+  ...casesFor(['...{myNum: number}'], PARSER_MODES),
+  ...casesFor(['?{myNum: number}'], PARSER_MODES),
+  ...casesFor(['!{myNum: number}'], PARSER_MODES),
+  ...casesFor(['{myNum: number}='], PARSER_MODES),
+  ...casesFor(['function(string)='], PARSER_MODES),
+  ...casesFor(['...function(string, boolean)'], PARSER_MODES),
+  ...casesFor(['function(string, boolean): boolean'], PARSER_MODES),
+  ...casesFor(['function(): (number | string)'], PARSER_MODES),
+  ...casesFor(['Object='], PARSER_MODES),
+  ...casesFor(['K extends keyof T ? T[K] : never'], ['typescript']),
+  ...casesFor(['T extends Array<infer U> ? U : never'], ['typescript']),
+  ...casesFor(['readonly [string, number]'], ['typescript']),
+  ...casesFor(['{myNum: number; myObject: string}'], PARSER_MODES),
+  ...casesFor(['{myArray: Array.<string>}'], PARSER_MODES)
+]
+
+const { comparable: COMPLEX_COMPARABLE_CASES, oxOnly: COMPLEX_OX_ONLY_CASES } =
+  splitByReferenceSupport(COMPLEX_TYPES)
 
 // ============================================================================
 // Test suites
@@ -454,19 +514,33 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
         })
       }
     }
-    for (const { input, modes } of OBJECT_OPTIONAL_TYPES) {
-      for (const mode of modes) {
-        it(`${input} (${mode})`, () => {
-          expect(compareType(input, mode)).toBe(true)
-        })
-      }
+    for (const { input, mode } of OBJECT_OPTIONAL_COMPARABLE_CASES) {
+      it(`${input} (${mode})`, () => {
+        expect(compareType(input, mode)).toBe(true)
+      })
+    }
+  })
+
+  describe('object types — ox-jsdoc only', () => {
+    for (const { input, mode } of OBJECT_OPTIONAL_OX_ONLY_CASES) {
+      it(`${input} (${mode})`, () => {
+        expect(parseTypeWithOx(input, mode)).toBe(true)
+      })
     }
   })
 
   describe('typescript-specific types', () => {
-    for (const type of TS_TYPES) {
-      it(`${type}`, () => {
-        expect(compareType(type, 'typescript')).toBe(true)
+    for (const { input, mode } of TS_COMPARABLE_CASES) {
+      it(`${input}`, () => {
+        expect(compareType(input, mode)).toBe(true)
+      })
+    }
+  })
+
+  describe('typescript-specific types — ox-jsdoc only', () => {
+    for (const { input, mode } of TS_OX_ONLY_CASES) {
+      it(`${input}`, () => {
+        expect(parseTypeWithOx(input, mode)).toBe(true)
       })
     }
   })
@@ -520,47 +594,35 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
   })
 
   describe('literal types', () => {
-    for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
-      for (const type of LITERAL_TYPES) {
-        it(`${type} (${mode})`, () => {
-          expect(compareType(type, mode)).toBe(true)
-        })
-      }
+    for (const { input, mode } of LITERAL_COMPARABLE_CASES) {
+      it(`${input} (${mode})`, () => {
+        expect(compareType(input, mode)).toBe(true)
+      })
+    }
+  })
+
+  describe('literal types — ox-jsdoc only', () => {
+    for (const { input, mode } of LITERAL_OX_ONLY_CASES) {
+      it(`${input} (${mode})`, () => {
+        expect(parseTypeWithOx(input, mode)).toBe(true)
+      })
     }
   })
 
   // Combination / complex types
   describe('complex combinations', () => {
-    const complexTypes: Array<{ input: string; modes: Mode[] }> = [
-      { input: '(number | boolean)', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: '...(number | boolean)', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: '?(number | boolean)', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: '!(number | boolean)', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: '(number | boolean)=', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: 'Array<string> | Map<string, number>', modes: ['typescript'] },
-      { input: '...Array.<string>', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: '...{myNum: number}', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: '?{myNum: number}', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: '!{myNum: number}', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: '{myNum: number}=', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: 'function(string)=', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: '...function(string, boolean)', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: 'function(string, boolean): boolean', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: 'function(): (number | string)', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: 'Object=', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: 'K extends keyof T ? T[K] : never', modes: ['typescript'] },
-      { input: 'T extends Array<infer U> ? U : never', modes: ['typescript'] },
-      { input: 'readonly [string, number]', modes: ['typescript'] },
-      { input: '{myNum: number; myObject: string}', modes: ['jsdoc', 'closure', 'typescript'] },
-      { input: '{myArray: Array.<string>}', modes: ['jsdoc', 'closure', 'typescript'] }
-    ]
+    for (const { input, mode } of COMPLEX_COMPARABLE_CASES) {
+      it(`${input} (${mode})`, () => {
+        expect(compareType(input, mode)).toBe(true)
+      })
+    }
+  })
 
-    for (const { input, modes } of complexTypes) {
-      for (const mode of modes) {
-        it(`${input} (${mode})`, () => {
-          expect(compareType(input, mode)).toBe(true)
-        })
-      }
+  describe('complex combinations — ox-jsdoc only', () => {
+    for (const { input, mode } of COMPLEX_OX_ONLY_CASES) {
+      it(`${input} (${mode})`, () => {
+        expect(parseTypeWithOx(input, mode)).toBe(true)
+      })
     }
   })
 
