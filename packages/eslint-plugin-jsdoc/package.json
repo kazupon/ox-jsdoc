@@ -87,7 +87,7 @@
     "@es-joy/resolve.exports": "1.2.0",
     "@ox-jsdoc/jsdoccomment": "workspace:*",
     "are-docs-informative": "^0.0.2",
-    "comment-parser": "1.4.6",
+    "comment-parser": "1.4.7",
     "debug": "^4.4.3",
     "escape-string-regexp": "^4.0.0",
     "espree": "^11.2.0",
