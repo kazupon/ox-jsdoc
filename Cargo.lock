@@ -532,7 +532,7 @@ name = "ox_jsdoc_origin"
 version = "0.0.0"
 dependencies = [
  "oxc_allocator",
- "oxc_diagnostics",
+ "oxc_diagnostics 0.135.0",
  "oxc_span",
  "serde",
  "serde_json",
@@ -618,7 +618,7 @@ dependencies = [
  "oxc_allocator",
  "oxc_ast_macros",
  "oxc_data_structures",
- "oxc_diagnostics",
+ "oxc_diagnostics 0.134.0",
  "oxc_estree",
  "oxc_regular_expression",
  "oxc_span",
@@ -649,6 +649,17 @@ name = "oxc_diagnostics"
 version = "0.134.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67daf165d8abff1577825a4303a5d0b61ae29c7b66c9e0e0e7f97f77705667ed"
+dependencies = [
+ "cow-utils",
+ "oxc-miette",
+ "percent-encoding",
+]
+
+[[package]]
+name = "oxc_diagnostics"
+version = "0.135.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b0ebb338486583af9e603f4d20be123ad3ae52a5415265454995020386d8afe"
 dependencies = [
  "cow-utils",
  "oxc-miette",
@@ -712,7 +723,7 @@ dependencies = [
  "oxc_allocator",
  "oxc_ast",
  "oxc_data_structures",
- "oxc_diagnostics",
+ "oxc_diagnostics 0.134.0",
  "oxc_ecmascript",
  "oxc_regular_expression",
  "oxc_span",
@@ -731,7 +742,7 @@ dependencies = [
  "bitflags",
  "oxc_allocator",
  "oxc_ast_macros",
- "oxc_diagnostics",
+ "oxc_diagnostics 0.134.0",
  "oxc_span",
  "oxc_str",
  "phf",

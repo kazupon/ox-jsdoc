@@ -13,6 +13,6 @@ license = "MIT"
 [workspace.dependencies]
 oxc_allocator = "=0.134.0"
 oxc_ast = "=0.134.0"
-oxc_diagnostics = "=0.134.0"
+oxc_diagnostics = "=0.135.0"
 oxc_parser = "=0.134.0"
 oxc_span = "=0.134.0"
