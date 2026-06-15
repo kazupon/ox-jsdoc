@@ -126,7 +126,7 @@
     "c8": "^11.0.0",
     "camelcase": "^9.0.0",
     "chai": "^6.2.2",
-    "cross-env": "^7.0.3",
+    "cross-env": "^10.0.0",
     "decamelize": "^6.0.1",
     "eslint": "9.39.4",
     "eslint-config-canonical": "^47.4.2",
