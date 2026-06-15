@@ -30,6 +30,26 @@ function getChecked(event: Event): boolean {
 function getTypeParseMode(event: Event): TypeParseMode {
   return (event.target as HTMLSelectElement).value as TypeParseMode
 }
+
+function handleParseTypesChange(event: Event): void {
+  emit('update:parseTypes', getChecked(event))
+}
+
+function handlePreserveWhitespaceChange(event: Event): void {
+  emit('update:preserveWhitespace', getChecked(event))
+}
+
+function handleCompatModeChange(event: Event): void {
+  emit('update:compatMode', getChecked(event))
+}
+
+function handleParseBatchChange(event: Event): void {
+  emit('update:parseBatch', getChecked(event))
+}
+
+function handleTypeParseModeChange(event: Event): void {
+  emit('update:typeParseMode', getTypeParseMode(event))
+}
 </script>
 
 <template>
@@ -39,43 +59,27 @@ function getTypeParseMode(event: Event): TypeParseMode {
       <small>parse / parseBatch settings</small>
     </div>
     <label>
-      <input
-        :checked="parseTypes"
-        type="checkbox"
-        @change="emit('update:parseTypes', getChecked($event))"
-      />
+      <input :checked="parseTypes" type="checkbox" @change="handleParseTypesChange" />
       Parse types
     </label>
     <label>
       <input
         :checked="preserveWhitespace"
         type="checkbox"
-        @change="emit('update:preserveWhitespace', getChecked($event))"
+        @change="handlePreserveWhitespaceChange"
       />
       Preserve whitespace
     </label>
     <label>
-      <input
-        :checked="compatMode"
-        type="checkbox"
-        @change="emit('update:compatMode', getChecked($event))"
-      />
+      <input :checked="compatMode" type="checkbox" @change="handleCompatModeChange" />
       Compat mode
     </label>
     <label>
-      <input
-        :checked="parseBatch"
-        type="checkbox"
-        @change="emit('update:parseBatch', getChecked($event))"
-      />
+      <input :checked="parseBatch" type="checkbox" @change="handleParseBatchChange" />
       Batch parse
     </label>
     <label :for="typeModeId">Type mode</label>
-    <select
-      :id="typeModeId"
-      :value="typeParseMode"
-      @change="emit('update:typeParseMode', getTypeParseMode($event))"
-    >
+    <select :id="typeModeId" :value="typeParseMode" @change="handleTypeParseModeChange">
       <option value="jsdoc">JSDoc</option>
       <option value="closure">Closure</option>
       <option value="typescript">TypeScript</option>

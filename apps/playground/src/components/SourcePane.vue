@@ -7,6 +7,10 @@ const { setEditorHost } = defineProps<{
 const emit = defineEmits<{
   reset: []
 }>()
+
+function handleReset(): void {
+  emit('reset')
+}
 </script>
 
 <template>
@@ -15,7 +19,7 @@ const emit = defineEmits<{
       <span>Source</span>
       <div class="pane-title-actions">
         <strong>{{ sourceLength }} chars</strong>
-        <button type="button" class="pane-action" @click="emit('reset')">Reset sample</button>
+        <button type="button" class="pane-action" @click="handleReset">Reset sample</button>
       </div>
     </div>
     <div :ref="setEditorHost" class="monaco-host" aria-label="JSDoc source" role="textbox" />

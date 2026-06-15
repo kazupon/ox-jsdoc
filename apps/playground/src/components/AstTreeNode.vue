@@ -83,8 +83,8 @@ function selectNode(): void {
   })
 }
 
-function handleChildSelect(selection: AstSelection): void {
-  emit('select', selection)
+function handleChildSelect(selection: unknown): void {
+  emit('select', selection as AstSelection)
 }
 
 function toggleOpen(): void {
@@ -305,7 +305,7 @@ function getAstValueClass(value: unknown): string {
         :reveal-version="revealVersion"
         :selected-path="selectedPath"
         :value="child.value"
-        @select="selection => handleChildSelect(selection as AstSelection)"
+        @select="handleChildSelect"
       />
       <div class="ast-bracket-row" :style="rowStyle">{{ brackets[1] }}</div>
     </div>

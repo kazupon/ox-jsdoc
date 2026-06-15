@@ -13,6 +13,10 @@ defineProps<{
 const emit = defineEmits<{
   toggleTheme: []
 }>()
+
+function handleToggleTheme(): void {
+  emit('toggleTheme')
+}
 </script>
 
 <template>
@@ -46,7 +50,7 @@ const emit = defineEmits<{
         type="button"
         class="theme-toggle"
         :aria-pressed="theme === 'dark'"
-        @click="emit('toggleTheme')"
+        @click="handleToggleTheme"
       >
         <span class="toggle-track">
           <span class="toggle-thumb" />
