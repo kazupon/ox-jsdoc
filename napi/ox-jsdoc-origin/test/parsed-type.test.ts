@@ -10,6 +10,7 @@ import { parse } from '../src-js/index.js'
 import { parse as jtpParse } from 'jsdoc-type-pratt-parser'
 
 type Mode = 'jsdoc' | 'closure' | 'typescript'
+const PARSER_MODES: Mode[] = ['jsdoc', 'closure', 'typescript']
 
 /**
  * Parse a type expression with ox-jsdoc and return the parsedType AST.
@@ -210,7 +211,7 @@ function normalizeReferenceType(obj: unknown): unknown {
 /**
  * Compare ox-jsdoc output with jsdoc-type-pratt-parser output.
  */
-function compareType(typeExpr: string, mode: Mode) {
+function compareType(typeExpr: string, mode: Mode): boolean {
   const ox = oxParse(typeExpr, mode)
   const ref = refParse(typeExpr, mode)
 
@@ -220,11 +221,13 @@ function compareType(typeExpr: string, mode: Mode) {
   ).not.toBeNull()
 
   if (ref === null) {
-    return
+    return false
   }
 
   expect(ox, `ox-jsdoc failed to parse "${typeExpr}" in ${mode} mode`).not.toBeNull()
   expect(normalizeReferenceType(ox)).toEqual(normalizeReferenceType(stripRefOnly(ref)))
+
+  return true
 }
 
 // ============================================================================
@@ -296,6 +299,11 @@ const MODIFIER_TYPES: string[] = [
   'Object!='
 ]
 
+const MODIFIER_COMPARABLE_CASES: Array<{ input: string; mode: Mode }> = MODIFIER_TYPES.flatMap(
+  input =>
+    PARSER_MODES.filter(mode => refParse(input, mode) !== null).map(mode => ({ input, mode }))
+)
+
 // Function types (jsdoc/closure style)
 const FUNCTION_TYPES_JSDOC: string[] = [
   'function()',
@@ -366,8 +374,7 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of BASIC_ALL_MODES) {
         it(`${type} (${mode})`, () => {
-          expect.hasAssertions()
-          compareType(type, mode)
+          expect(compareType(type, mode)).toBe(true)
         })
       }
     }
@@ -377,8 +384,7 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
     for (const mode of ['jsdoc', 'closure'] as Mode[]) {
       for (const type of BASIC_JSDOC_CLOSURE) {
         it(`${type} (${mode})`, () => {
-          expect.hasAssertions()
-          compareType(type, mode)
+          expect(compareType(type, mode)).toBe(true)
         })
       }
     }
@@ -388,8 +394,7 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of UNION_TYPES) {
         it(`${type} (${mode})`, () => {
-          expect.hasAssertions()
-          compareType(type, mode)
+          expect(compareType(type, mode)).toBe(true)
         })
       }
     }
@@ -399,8 +404,7 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of GENERIC_TYPES) {
         it(`${type} (${mode})`, () => {
-          expect.hasAssertions()
-          compareType(type, mode)
+          expect(compareType(type, mode)).toBe(true)
         })
       }
     }
@@ -410,26 +414,17 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of GENERIC_DOT_TYPES) {
         it(`${type} (${mode})`, () => {
-          expect.hasAssertions()
-          compareType(type, mode)
+          expect(compareType(type, mode)).toBe(true)
         })
       }
     }
   })
 
   describe('modifier types (nullable, optional, variadic)', () => {
-    for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
-      for (const type of MODIFIER_TYPES) {
-        it(`${type} (${mode})`, () => {
-          expect.hasAssertions()
-          // Some modifiers only work in certain modes — skip if ref fails
-          const ref = refParse(type, mode)
-          if (ref === null) {
-            return
-          }
-          compareType(type, mode)
-        })
-      }
+    for (const { input, mode } of MODIFIER_COMPARABLE_CASES) {
+      it(`${input} (${mode})`, () => {
+        expect(compareType(input, mode)).toBe(true)
+      })
     }
   })
 
@@ -437,8 +432,7 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
     for (const mode of ['jsdoc', 'closure'] as Mode[]) {
       for (const type of FUNCTION_TYPES_JSDOC) {
         it(`${type} (${mode})`, () => {
-          expect.hasAssertions()
-          compareType(type, mode)
+          expect(compareType(type, mode)).toBe(true)
         })
       }
     }
@@ -447,8 +441,7 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
   describe('arrow function types — typescript', () => {
     for (const type of ARROW_FUNCTION_TYPES) {
       it(`${type}`, () => {
-        expect.hasAssertions()
-        compareType(type, 'typescript')
+        expect(compareType(type, 'typescript')).toBe(true)
       })
     }
   })
@@ -457,16 +450,14 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of OBJECT_TYPES) {
         it(`${type} (${mode})`, () => {
-          expect.hasAssertions()
-          compareType(type, mode)
+          expect(compareType(type, mode)).toBe(true)
         })
       }
     }
     for (const { input, modes } of OBJECT_OPTIONAL_TYPES) {
       for (const mode of modes) {
         it(`${input} (${mode})`, () => {
-          expect.hasAssertions()
-          compareType(input, mode)
+          expect(compareType(input, mode)).toBe(true)
         })
       }
     }
@@ -475,8 +466,7 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
   describe('typescript-specific types', () => {
     for (const type of TS_TYPES) {
       it(`${type}`, () => {
-        expect.hasAssertions()
-        compareType(type, 'typescript')
+        expect(compareType(type, 'typescript')).toBe(true)
       })
     }
   })
@@ -484,8 +474,7 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
   describe('tuple types', () => {
     for (const type of TUPLE_TYPES) {
       it(`${type}`, () => {
-        expect.hasAssertions()
-        compareType(type, 'typescript')
+        expect(compareType(type, 'typescript')).toBe(true)
       })
     }
   })
@@ -494,8 +483,7 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of NAME_PATH_TYPES) {
         it(`${type} (${mode})`, () => {
-          expect.hasAssertions()
-          compareType(type, mode)
+          expect(compareType(type, mode)).toBe(true)
         })
       }
     }
@@ -505,8 +493,7 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
     for (const mode of ['jsdoc', 'closure'] as Mode[]) {
       for (const type of NAME_PATH_JSDOC) {
         it(`${type} (${mode})`, () => {
-          expect.hasAssertions()
-          compareType(type, mode)
+          expect(compareType(type, mode)).toBe(true)
         })
       }
     }
@@ -516,8 +503,7 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
     for (const mode of ['jsdoc', 'typescript'] as Mode[]) {
       for (const type of ARRAY_BRACKET_TYPES) {
         it(`${type} (${mode})`, () => {
-          expect.hasAssertions()
-          compareType(type, mode)
+          expect(compareType(type, mode)).toBe(true)
         })
       }
     }
@@ -527,8 +513,7 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of PAREN_TYPES) {
         it(`${type} (${mode})`, () => {
-          expect.hasAssertions()
-          compareType(type, mode)
+          expect(compareType(type, mode)).toBe(true)
         })
       }
     }
@@ -538,8 +523,7 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of LITERAL_TYPES) {
         it(`${type} (${mode})`, () => {
-          expect.hasAssertions()
-          compareType(type, mode)
+          expect(compareType(type, mode)).toBe(true)
         })
       }
     }
@@ -574,8 +558,7 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
     for (const { input, modes } of complexTypes) {
       for (const mode of modes) {
         it(`${input} (${mode})`, () => {
-          expect.hasAssertions()
-          compareType(input, mode)
+          expect(compareType(input, mode)).toBe(true)
         })
       }
     }
@@ -587,8 +570,7 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
     for (const mode of ['jsdoc', 'closure'] as Mode[]) {
       for (const type of symbolTypes) {
         it(`${type} (${mode})`, () => {
-          expect.hasAssertions()
-          compareType(type, mode)
+          expect(compareType(type, mode)).toBe(true)
         })
       }
     }
@@ -597,36 +579,29 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
   // Special name paths
   describe('special name paths', () => {
     it("module:'path' (jsdoc)", () => {
-      expect.hasAssertions()
-      compareType("module:'some-path'", 'jsdoc')
+      expect(compareType("module:'some-path'", 'jsdoc')).toBe(true)
     })
     it('module:"path" (jsdoc)', () => {
-      expect.hasAssertions()
-      compareType('module:"some-path"', 'jsdoc')
+      expect(compareType('module:"some-path"', 'jsdoc')).toBe(true)
     })
     it('event:click (jsdoc)', () => {
-      expect.hasAssertions()
-      compareType('event:click', 'jsdoc')
+      expect(compareType('event:click', 'jsdoc')).toBe(true)
     })
     it('external:jQuery (jsdoc)', () => {
-      expect.hasAssertions()
-      compareType('external:jQuery', 'jsdoc')
+      expect(compareType('external:jQuery', 'jsdoc')).toBe(true)
     })
   })
 
   // Import types
   describe('import types', () => {
     it('import("x")', () => {
-      expect.hasAssertions()
-      compareType('import("x")', 'typescript')
+      expect(compareType('import("x")', 'typescript')).toBe(true)
     })
     it('import("./x")', () => {
-      expect.hasAssertions()
-      compareType('import("./x")', 'typescript')
+      expect(compareType('import("./x")', 'typescript')).toBe(true)
     })
     it('import("x").T', () => {
-      expect.hasAssertions()
-      compareType('import("x").T', 'typescript')
+      expect(compareType('import("x").T', 'typescript')).toBe(true)
     })
   })
 })
