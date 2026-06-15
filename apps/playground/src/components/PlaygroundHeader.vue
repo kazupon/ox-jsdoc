@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import logoUrl from '../assets/logo.svg'
 import type { PlaygroundTheme } from '../types/playground'
 
 defineProps<{
@@ -13,12 +12,23 @@ defineProps<{
 const emit = defineEmits<{
   toggleTheme: []
 }>()
+
+function handleToggleTheme(): void {
+  emit('toggleTheme')
+}
 </script>
 
 <template>
   <section class="topbar" aria-labelledby="title">
     <div class="brand">
-      <img class="brand-logo" :src="logoUrl" alt="" width="1024" height="1024" aria-hidden="true" />
+      <img
+        class="brand-logo"
+        src="../assets/logo.svg"
+        alt=""
+        width="1024"
+        height="1024"
+        aria-hidden="true"
+      />
       <div class="brand-copy">
         <p class="eyebrow">oxjsdoc playground (wasm) v{{ version }}</p>
         <h1 id="title" class="product-logo-text">JSDoc AST Explorer</h1>
@@ -46,7 +56,7 @@ const emit = defineEmits<{
         type="button"
         class="theme-toggle"
         :aria-pressed="theme === 'dark'"
-        @click="emit('toggleTheme')"
+        @click="handleToggleTheme"
       >
         <span class="toggle-track">
           <span class="toggle-thumb" />

@@ -12,6 +12,10 @@ defineProps<{
 const emit = defineEmits<{
   select: [selection: AstSelection]
 }>()
+
+function handleSelect(selection: AstSelection): void {
+  emit('select', selection)
+}
 </script>
 
 <template>
@@ -32,7 +36,7 @@ const emit = defineEmits<{
       :reveal-path="revealPath"
       :reveal-version="revealVersion"
       :selected-path="selectedPath"
-      @select="emit('select', $event)"
+      @select="handleSelect"
     />
   </section>
 </template>

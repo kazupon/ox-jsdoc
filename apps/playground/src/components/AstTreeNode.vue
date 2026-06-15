@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { AstSelection, SourceRange } from '../types/playground'
 
 defineOptions({
@@ -65,16 +65,14 @@ watch(
     }
 
     if (props.path === revealPath) {
-      nextTick(() => {
-        rowElement.value?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'nearest',
-          inline: 'nearest'
-        })
+      rowElement.value?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'nearest'
       })
     }
   },
-  { immediate: true }
+  { immediate: true, flush: 'post' }
 )
 
 function selectNode(): void {
@@ -83,6 +81,10 @@ function selectNode(): void {
     range: range.value,
     value: props.value
   })
+}
+
+function handleChildSelect(selection: unknown): void {
+  emit('select', selection as AstSelection)
 }
 
 function toggleOpen(): void {
@@ -267,14 +269,15 @@ function getAstValueClass(value: unknown): string {
         {{ open ? '-' : '+' }}
       </button>
 
-      <span
+      <button
         v-if="!root"
+        type="button"
         class="ast-key"
         :class="{ 'is-openable': openable }"
-        @click="handleKeyClick"
+        @click.stop="handleKeyClick"
       >
         {{ name }}
-      </span>
+      </button>
       <span v-if="!root" class="ast-punctuation">:</span>
 
       <template v-if="openable">
@@ -303,7 +306,7 @@ function getAstValueClass(value: unknown): string {
         :reveal-version="revealVersion"
         :selected-path="selectedPath"
         :value="child.value"
-        @select="emit('select', $event)"
+        @select="handleChildSelect"
       />
       <div class="ast-bracket-row" :style="rowStyle">{{ brackets[1] }}</div>
     </div>
@@ -367,6 +370,16 @@ function getAstValueClass(value: unknown): string {
 .ast-comma,
 .ast-bracket-row {
   font-family: var(--mono);
+}
+
+.ast-key {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
 }
 
 .ast-toggle:hover {

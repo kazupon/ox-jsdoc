@@ -2,6 +2,7 @@ import vue from '@vitejs/plugin-vue'
 import { copyFileSync, createReadStream, mkdirSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { defineConfig } from 'vite'
+import oxJsdocWasmPackage from '../../wasm/ox-jsdoc/package.json' with { type: 'json' }
 import { voidPlugin } from 'void'
 import type { Plugin } from 'vite'
 
@@ -48,6 +49,9 @@ function oxJsdocWasmAssets(): Plugin {
 }
 
 export default defineConfig({
+  define: {
+    __OX_JS_DOC_WASM_VERSION__: JSON.stringify(oxJsdocWasmPackage.version)
+  },
   build: {
     chunkSizeWarningLimit: 4000
   },

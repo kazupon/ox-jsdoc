@@ -12,6 +12,10 @@ defineProps<{
 const emit = defineEmits<{
   select: [selection: AstSelection]
 }>()
+
+function handleSelect(selection: AstSelection): void {
+  emit('select', selection)
+}
 </script>
 
 <template>
@@ -24,7 +28,7 @@ const emit = defineEmits<{
       :reveal-version="revealVersion"
       :selected-path="selectedPath"
       :value="ast"
-      @select="emit('select', $event)"
+      @select="handleSelect"
     />
   </div>
   <div v-else class="ast-empty">No AST available.</div>

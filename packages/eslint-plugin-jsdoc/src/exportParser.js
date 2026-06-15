@@ -260,20 +260,47 @@ const getSymbol = function (node, globals, scope, opt) {
       const val = createNode();
       val.type = 'object';
       for (const prop of node.properties) {
-        if ([
         // @babel/eslint-parser
-          'ExperimentalSpreadProperty',
+        /** @type {string} */
+        const propType = prop.type;
+        if (
+          propType === 'ExperimentalSpreadProperty' ||
 
           // typescript-eslint, espree, acorn, etc.
-          'SpreadElement',
-        ].includes(prop.type)) {
+          prop.type === 'SpreadElement'
+        ) {
+          continue;
+        }
+
+        if (prop.type !== 'Property') {
+          continue;
+        }
+
+        /** @type {import('estree').Property} */
+        const propNode = prop;
+        /** @type {import('estree').Property['key']} */
+        const propKey = propNode.key;
+        let propName = null;
+
+        if (
+          propKey.type === 'Identifier'
+        ) {
+          propName = propKey.name;
+        } else if (propKey.type === 'Literal') {
+          if (typeof propKey.value === 'string') {
+            propName = propKey.value;
+          } else if (typeof propKey.value === 'number') {
+            propName = String(propKey.value);
+          }
+        }
+
+        if (propName === null) {
           continue;
         }
 
         const propVal = getSymbol(
         /** @type {import('eslint').Rule.Node} */ (
-          /** @type {import('estree').Property} */
-            (prop).value
+          propNode.value
           ),
           globals,
           scope,
@@ -281,12 +308,7 @@ const getSymbol = function (node, globals, scope, opt) {
         );
         /* c8 ignore next 8 */
         if (propVal) {
-          val.props[
-          /** @type {import('estree').PrivateIdentifier} */
-            (
-            /** @type {import('estree').Property} */ (prop).key
-            ).name
-          ] = propVal;
+          val.props[propName] = propVal;
         }
       }
 

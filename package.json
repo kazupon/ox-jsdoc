@@ -6,7 +6,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "cargo test && pnpm -r test",
-    "check": "cargo run -p xtask -- headers:check && cargo check && vp check",
+    "check": "cargo run -p xtask -- headers:check && cargo check && vp check && vp run @ox-jsdoc/playground#vize:check",
     "fmt": "cargo fmt && vp fmt",
     "release": "bumpp \"package.json\" \"napi/ox-jsdoc/package.json\" \"napi/ox-jsdoc-binary/package.json\" \"wasm/ox-jsdoc/package.json\" \"wasm/ox-jsdoc-binary/package.json\" \"packages/decoder/package.json\" \"packages/jsdoccomment/package.json\" \"packages/eslint-plugin-jsdoc/package.json\" --commit \"release: v%s\" --all --push --tag --execute \"node scripts/bump-cargo-version.mjs\"",
     "changelog": "gh-changelogen --repo=kazupon/ox-jsdoc",
@@ -25,7 +25,8 @@
     "gh-changelogen": "^0.2.8",
     "playwright": "^1.60.0",
     "vite": "catalog:",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vize": "0.217.0"
   },
   "packageManager": "pnpm@10.34.1"
 }

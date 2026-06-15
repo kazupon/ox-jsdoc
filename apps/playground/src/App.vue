@@ -7,8 +7,8 @@ import SourcePane from './components/SourcePane.vue'
 import { useJsdocParser } from './composables/useJsdocParser'
 import { useMonacoSourceEditor } from './composables/useMonacoSourceEditor'
 import { usePlaygroundSettings } from './composables/usePlaygroundSettings'
+
 import type { AstSelection, SourceRange } from './types/playground'
-import oxJsdocWasmPackage from '../../../wasm/ox-jsdoc/package.json' with { type: 'json' }
 
 const sample = `/**
  * Parse a JSDoc block with ox-jsdoc.
@@ -37,7 +37,7 @@ export function firstValue<T>(values: T[]): T | undefined {
   return values[0]
 }`
 
-const oxJsdocWasmVersion = oxJsdocWasmPackage.version
+const oxJsdocWasmVersion = __OX_JS_DOC_WASM_VERSION__
 const source = ref(sample)
 const selectedAstPath = ref('')
 const revealAstPath = ref('')
@@ -67,7 +67,9 @@ function revealAstNodeAtOffset(offset: number): void {
 }
 
 function findAstPathAtOffset(value: unknown, offset: number): string | null {
-  let match: { depth: number; path: string; span: number } | null = null
+  let matchPath: string | null = null
+  let matchDepth = -1
+  let matchSpan = Number.POSITIVE_INFINITY
 
   function visit(item: unknown, path: string, depth: number): void {
     const range = getAstObjectRange(item)
@@ -75,8 +77,10 @@ function findAstPathAtOffset(value: unknown, offset: number): string | null {
     if (range && path !== 'root' && range[0] <= offset && offset <= range[1]) {
       const span = range[1] - range[0]
 
-      if (!match || span < match.span || (span === match.span && depth > match.depth)) {
-        match = { depth, path, span }
+      if (matchPath === null || span < matchSpan || (span === matchSpan && depth > matchDepth)) {
+        matchPath = path
+        matchDepth = depth
+        matchSpan = span
       }
     }
 
@@ -94,7 +98,7 @@ function findAstPathAtOffset(value: unknown, offset: number): string | null {
 
   visit(value, 'root', 0)
 
-  return match?.path ?? null
+  return matchPath
 }
 
 function getAstObjectRange(value: unknown): SourceRange | null {
@@ -110,7 +114,7 @@ function getAstObjectRange(value: unknown): SourceRange | null {
     typeof sourceRange[0] === 'number' &&
     typeof sourceRange[1] === 'number'
   ) {
-    return sourceRange
+    return [sourceRange[0], sourceRange[1]]
   }
 
   return typeof value.start === 'number' && typeof value.end === 'number'
