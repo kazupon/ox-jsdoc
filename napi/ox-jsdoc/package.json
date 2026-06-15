@@ -48,7 +48,7 @@
     "@ox-jsdoc/decoder": "workspace:*"
   },
   "devDependencies": {
-    "@es-joy/jsdoccomment": "^0.50.1",
+    "@es-joy/jsdoccomment": "^0.87.0",
     "@napi-rs/cli": "^3.6.1",
     "@types/node": "catalog:",
     "jsdoc-type-pratt-parser": "^4.1.0",
