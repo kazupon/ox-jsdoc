@@ -1,5 +1,11 @@
 <script setup lang="ts">
+import { useId } from 'vue'
+
 import type { TypeParseMode } from '../types/playground'
+
+const id = useId()
+const titleId = `${id}-parser-options-title`
+const typeModeId = `${id}-parser-type-mode`
 
 defineProps<{
   compatMode: boolean
@@ -27,8 +33,8 @@ function getTypeParseMode(event: Event): TypeParseMode {
 </script>
 
 <template>
-  <section class="toolbar" aria-labelledby="parser-options-title">
-    <div id="parser-options-title" class="toolbar-label">
+  <section class="toolbar" :aria-labelledby="titleId">
+    <div :id="titleId" class="toolbar-label">
       <span>parser options</span>
       <small>parse / parseBatch settings</small>
     </div>
@@ -64,17 +70,16 @@ function getTypeParseMode(event: Event): TypeParseMode {
       />
       Batch parse
     </label>
-    <label>
-      Type mode
-      <select
-        :value="typeParseMode"
-        @change="emit('update:typeParseMode', getTypeParseMode($event))"
-      >
-        <option value="jsdoc">JSDoc</option>
-        <option value="closure">Closure</option>
-        <option value="typescript">TypeScript</option>
-      </select>
-    </label>
+    <label :for="typeModeId">Type mode</label>
+    <select
+      :id="typeModeId"
+      :value="typeParseMode"
+      @change="emit('update:typeParseMode', getTypeParseMode($event))"
+    >
+      <option value="jsdoc">JSDoc</option>
+      <option value="closure">Closure</option>
+      <option value="typescript">TypeScript</option>
+    </select>
   </section>
 </template>
 

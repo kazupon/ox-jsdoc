@@ -25,7 +25,8 @@
     "gh-changelogen": "^0.2.8",
     "playwright": "^1.60.0",
     "vite": "catalog:",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vize": "0.217.0"
   },
   "packageManager": "pnpm@10.34.1"
 }

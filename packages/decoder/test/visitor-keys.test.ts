@@ -27,8 +27,8 @@ describe('jsdocVisitorKeys', () => {
       'JsdocText'
     ]
     for (const kind of expected) {
-      expect(visitorKeys, kind).toHaveProperty(kind)
-      expect(Array.isArray(visitorKeys[kind]), `${kind} is array`).toBe(true)
+      expect(visitorKeys).toHaveProperty(kind)
+      expect(Array.isArray(visitorKeys[kind])).toBe(true)
     }
   })
 
@@ -82,8 +82,8 @@ describe('jsdocVisitorKeys', () => {
     ]
     expect(expected).toHaveLength(45)
     for (const kind of expected) {
-      expect(visitorKeys, kind).toHaveProperty(kind)
-      expect(Array.isArray(visitorKeys[kind]), `${kind} is array`).toBe(true)
+      expect(visitorKeys).toHaveProperty(kind)
+      expect(Array.isArray(visitorKeys[kind])).toBe(true)
     }
   })
 

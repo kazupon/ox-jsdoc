@@ -5,10 +5,16 @@
   "type": "module",
   "scripts": {
     "init": "void init",
+    "lint": "vp exec vize lint --preset happy-path src",
     "dev": "vp dev --configLoader runner",
     "build": "vp build --configLoader runner",
     "preview": "vp preview",
-    "deploy": "void deploy"
+    "deploy": "void deploy",
+    "vize:check": "vp exec vize check src",
+    "vize:lint": "vp run vize:lint:opinionated && vp run vize:lint:strict-reactivity",
+    "vize:lint:opinionated": "vp exec vize lint --preset opinionated --help-level short src",
+    "vize:lint:strict-reactivity": "vize lint --strict-reactivity src",
+    "vize:lint:ci": "vp exec vize lint --preset essential --max-warnings 0 src"
   },
   "dependencies": {
     "@ox-jsdoc/decoder": "workspace:*",
@@ -21,6 +27,7 @@
     "@vitejs/plugin-vue": "^6.0.0",
     "vite": "catalog:",
     "vite-plus": "catalog:",
+    "vize": "^0.217.0",
     "void": "^0.9.3"
   }
 }

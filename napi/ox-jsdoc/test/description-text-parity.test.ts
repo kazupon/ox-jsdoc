@@ -53,17 +53,16 @@ describe('JS descriptionText matches shared cross-language fixtures', () => {
       // we test the basic-mode path here for the leanest opt-in.
       const result = parse(fx.source, { preserveWhitespace: true })
       const block = result.ast as RemoteJsdocBlock
-      expect(block, `parse failed for source: ${JSON.stringify(fx.source)}`).not.toBeNull()
+      expect(block).not.toBeNull()
 
-      expect(block.descriptionText(false), `block.descriptionText(false)`).toBe(fx.block.compact)
-      expect(block.descriptionText(true), `block.descriptionText(true)`).toBe(fx.block.preserve)
+      expect(block.descriptionText(false)).toBe(fx.block.compact)
+      expect(block.descriptionText(true)).toBe(fx.block.preserve)
 
-      if (fx.tag !== null) {
-        expect(block.tags.length, `expected at least one tag for ${fx.name}`).toBeGreaterThan(0)
-        const tag = block.tags[0] as RemoteJsdocTag
-        expect(tag.descriptionText(false), `tag.descriptionText(false)`).toBe(fx.tag.compact)
-        expect(tag.descriptionText(true), `tag.descriptionText(true)`).toBe(fx.tag.preserve)
-      }
+      expect(block.tags.length > 0).toBe(fx.tag !== null)
+
+      const firstTag = block.tags[0] as RemoteJsdocTag | undefined
+      expect(firstTag?.descriptionText(false) ?? null).toBe(fx.tag?.compact ?? null)
+      expect(firstTag?.descriptionText(true) ?? null).toBe(fx.tag?.preserve ?? null)
     })
   }
 })

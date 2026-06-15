@@ -104,7 +104,7 @@ function compareType(typeExpr: string, mode: Mode) {
   const ref = refParse(typeExpr, mode)
 
   if (ref === null) {
-    // ref parser failed — ox-jsdoc should also fail (or we skip)
+    // Skip cases where jsdoc-type-pratt-parser cannot parse this syntax.
     return
   }
 
@@ -250,7 +250,9 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
   describe('basic types — all modes', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of BASIC_ALL_MODES) {
-        it(`${type} (${mode})`, () => compareType(type, mode))
+        it(`${type} (${mode})`, () => {
+          compareType(type, mode)
+        })
       }
     }
   })
@@ -258,7 +260,9 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
   describe('basic types — jsdoc/closure only', () => {
     for (const mode of ['jsdoc', 'closure'] as Mode[]) {
       for (const type of BASIC_JSDOC_CLOSURE) {
-        it(`${type} (${mode})`, () => compareType(type, mode))
+        it(`${type} (${mode})`, () => {
+          compareType(type, mode)
+        })
       }
     }
   })
@@ -266,7 +270,9 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
   describe('union types', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of UNION_TYPES) {
-        it(`${type} (${mode})`, () => compareType(type, mode))
+        it(`${type} (${mode})`, () => {
+          compareType(type, mode)
+        })
       }
     }
   })
@@ -274,7 +280,9 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
   describe('generic types — angle brackets', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of GENERIC_TYPES) {
-        it(`${type} (${mode})`, () => compareType(type, mode))
+        it(`${type} (${mode})`, () => {
+          compareType(type, mode)
+        })
       }
     }
   })
@@ -282,7 +290,9 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
   describe('generic types — dot notation', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of GENERIC_DOT_TYPES) {
-        it(`${type} (${mode})`, () => compareType(type, mode))
+        it(`${type} (${mode})`, () => {
+          compareType(type, mode)
+        })
       }
     }
   })
@@ -305,46 +315,60 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
   describe('function types — jsdoc/closure', () => {
     for (const mode of ['jsdoc', 'closure'] as Mode[]) {
       for (const type of FUNCTION_TYPES_JSDOC) {
-        it(`${type} (${mode})`, () => compareType(type, mode))
+        it(`${type} (${mode})`, () => {
+          compareType(type, mode)
+        })
       }
     }
   })
 
   describe('arrow function types — typescript', () => {
     for (const type of ARROW_FUNCTION_TYPES) {
-      it(`${type}`, () => compareType(type, 'typescript'))
+      it(`${type}`, () => {
+        compareType(type, 'typescript')
+      })
     }
   })
 
   describe('object types', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of OBJECT_TYPES) {
-        it(`${type} (${mode})`, () => compareType(type, mode))
+        it(`${type} (${mode})`, () => {
+          compareType(type, mode)
+        })
       }
     }
     for (const { input, modes } of OBJECT_OPTIONAL_TYPES) {
       for (const mode of modes) {
-        it(`${input} (${mode})`, () => compareType(input, mode))
+        it(`${input} (${mode})`, () => {
+          compareType(input, mode)
+        })
       }
     }
   })
 
   describe('typescript-specific types', () => {
     for (const type of TS_TYPES) {
-      it(`${type}`, () => compareType(type, 'typescript'))
+      it(`${type}`, () => {
+        compareType(type, 'typescript')
+      })
     }
   })
 
   describe('tuple types', () => {
     for (const type of TUPLE_TYPES) {
-      it(`${type}`, () => compareType(type, 'typescript'))
+      it(`${type}`, () => {
+        compareType(type, 'typescript')
+      })
     }
   })
 
   describe('name paths — all modes', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of NAME_PATH_TYPES) {
-        it(`${type} (${mode})`, () => compareType(type, mode))
+        it(`${type} (${mode})`, () => {
+          compareType(type, mode)
+        })
       }
     }
   })
@@ -352,7 +376,9 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
   describe('name paths — jsdoc/closure', () => {
     for (const mode of ['jsdoc', 'closure'] as Mode[]) {
       for (const type of NAME_PATH_JSDOC) {
-        it(`${type} (${mode})`, () => compareType(type, mode))
+        it(`${type} (${mode})`, () => {
+          compareType(type, mode)
+        })
       }
     }
   })
@@ -360,7 +386,9 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
   describe('array bracket shorthand', () => {
     for (const mode of ['jsdoc', 'typescript'] as Mode[]) {
       for (const type of ARRAY_BRACKET_TYPES) {
-        it(`${type} (${mode})`, () => compareType(type, mode))
+        it(`${type} (${mode})`, () => {
+          compareType(type, mode)
+        })
       }
     }
   })
@@ -368,7 +396,9 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
   describe('parenthesized types', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of PAREN_TYPES) {
-        it(`${type} (${mode})`, () => compareType(type, mode))
+        it(`${type} (${mode})`, () => {
+          compareType(type, mode)
+        })
       }
     }
   })
@@ -376,7 +406,9 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
   describe('literal types', () => {
     for (const mode of ['jsdoc', 'closure', 'typescript'] as Mode[]) {
       for (const type of LITERAL_TYPES) {
-        it(`${type} (${mode})`, () => compareType(type, mode))
+        it(`${type} (${mode})`, () => {
+          compareType(type, mode)
+        })
       }
     }
   })
@@ -409,7 +441,9 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
 
     for (const { input, modes } of complexTypes) {
       for (const mode of modes) {
-        it(`${input} (${mode})`, () => compareType(input, mode))
+        it(`${input} (${mode})`, () => {
+          compareType(input, mode)
+        })
       }
     }
   })
@@ -419,23 +453,39 @@ describe('L5: parsedType comparison with jsdoc-type-pratt-parser', () => {
     const symbolTypes = ['MyClass()', 'MyClass(2)', 'MyClass(abc)']
     for (const mode of ['jsdoc', 'closure'] as Mode[]) {
       for (const type of symbolTypes) {
-        it(`${type} (${mode})`, () => compareType(type, mode))
+        it(`${type} (${mode})`, () => {
+          compareType(type, mode)
+        })
       }
     }
   })
 
   // Special name paths
   describe('special name paths', () => {
-    it("module:'path' (jsdoc)", () => compareType("module:'some-path'", 'jsdoc'))
-    it('module:"path" (jsdoc)', () => compareType('module:"some-path"', 'jsdoc'))
-    it('event:click (jsdoc)', () => compareType('event:click', 'jsdoc'))
-    it('external:jQuery (jsdoc)', () => compareType('external:jQuery', 'jsdoc'))
+    it("module:'path' (jsdoc)", () => {
+      compareType("module:'some-path'", 'jsdoc')
+    })
+    it('module:"path" (jsdoc)', () => {
+      compareType('module:"some-path"', 'jsdoc')
+    })
+    it('event:click (jsdoc)', () => {
+      compareType('event:click', 'jsdoc')
+    })
+    it('external:jQuery (jsdoc)', () => {
+      compareType('external:jQuery', 'jsdoc')
+    })
   })
 
   // Import types
   describe('import types', () => {
-    it('import("x")', () => compareType('import("x")', 'typescript'))
-    it('import("./x")', () => compareType('import("./x")', 'typescript'))
-    it('import("x").T', () => compareType('import("x").T', 'typescript'))
+    it('import("x")', () => {
+      compareType('import("x")', 'typescript')
+    })
+    it('import("./x")', () => {
+      compareType('import("./x")', 'typescript')
+    })
+    it('import("x").T', () => {
+      compareType('import("x").T', 'typescript')
+    })
   })
 })

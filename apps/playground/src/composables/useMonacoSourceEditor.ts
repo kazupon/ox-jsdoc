@@ -6,11 +6,10 @@
  */
 
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-// oxlint-disable-next-line eslint-plugin-import/default -- NOTE(monaco): This import is for side effects (registering the worker), so the default export is not used.
-import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
-import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution'
-import 'monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution'
+import * as editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
+import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution.js'
+import 'monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution.js'
 import type { ComputedRef, Ref } from 'vue'
 import type { PlaygroundTheme, SourceRange } from '../types/playground'
 
@@ -22,7 +21,7 @@ const globalSelf = globalThis as typeof globalThis & {
 
 globalSelf.MonacoEnvironment = {
   getWorker() {
-    return new editorWorker()
+    return new editorWorker.default()
   }
 }
 
@@ -106,7 +105,6 @@ function defineEditorThemes(): void {
 
 type UseMonacoSourceEditorOptions = {
   onSourceOffsetClick: (offset: number) => void
-  handleSourceOffsetClick(offset: number): void
   source: Ref<string>
   sourceLanguage: ComputedRef<'javascript' | 'typescript'>
   theme: Ref<PlaygroundTheme>
@@ -116,7 +114,7 @@ export function useMonacoSourceEditor({
   source,
   sourceLanguage,
   theme,
-  onSourceOffsetClick: handleSourceOffsetClick
+  onSourceOffsetClick
 }: UseMonacoSourceEditorOptions) {
   const editorHost = ref<HTMLElement | null>(null)
   const sourceEditor = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null)
@@ -186,7 +184,7 @@ export function useMonacoSourceEditor({
         }
       })
 
-      sourceEditor.value.onMouseDown(event => {
+      sourceEditor.value.onMouseDown((event: monaco.editor.IEditorMouseEvent) => {
         const model = sourceEditor.value?.getModel()
         const position = event.target.position
 
@@ -194,7 +192,7 @@ export function useMonacoSourceEditor({
           return
         }
 
-        handleSourceOffsetClick(model.getOffsetAt(position))
+        onSourceOffsetClick(model.getOffsetAt(position))
       })
 
       resizeObserver = new ResizeObserver(() => {

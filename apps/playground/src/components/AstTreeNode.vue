@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { AstSelection, SourceRange } from '../types/playground'
 
 defineOptions({
@@ -65,16 +65,14 @@ watch(
     }
 
     if (props.path === revealPath) {
-      nextTick(() => {
-        rowElement.value?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'nearest',
-          inline: 'nearest'
-        })
+      rowElement.value?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'nearest'
       })
     }
   },
-  { immediate: true }
+  { immediate: true, flush: 'post' }
 )
 
 function selectNode(): void {
@@ -83,6 +81,10 @@ function selectNode(): void {
     range: range.value,
     value: props.value
   })
+}
+
+function handleChildSelect(selection: AstSelection): void {
+  emit('select', selection)
 }
 
 function toggleOpen(): void {
@@ -303,7 +305,7 @@ function getAstValueClass(value: unknown): string {
         :reveal-version="revealVersion"
         :selected-path="selectedPath"
         :value="child.value"
-        @select="emit('select', $event)"
+        @select="selection => handleChildSelect(selection as AstSelection)"
       />
       <div class="ast-bracket-row" :style="rowStyle">{{ brackets[1] }}</div>
     </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{
+const { setEditorHost } = defineProps<{
   setEditorHost(element: Element | null): void
   sourceLength: number
 }>()
