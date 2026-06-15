@@ -22,7 +22,13 @@ function handleReset(): void {
         <button type="button" class="pane-action" @click="handleReset">Reset sample</button>
       </div>
     </div>
-    <div :ref="setEditorHost" class="monaco-host" aria-label="JSDoc source" role="textbox" />
+    <div
+      :ref="setEditorHost"
+      class="monaco-host"
+      aria-label="JSDoc source"
+      role="textbox"
+      tabindex="0"
+    />
   </section>
 </template>
 

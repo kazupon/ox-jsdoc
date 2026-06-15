@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import logoUrl from '../assets/logo.svg'
 import type { PlaygroundTheme } from '../types/playground'
 
 defineProps<{
@@ -22,7 +21,14 @@ function handleToggleTheme(): void {
 <template>
   <section class="topbar" aria-labelledby="title">
     <div class="brand">
-      <img class="brand-logo" :src="logoUrl" alt="" width="1024" height="1024" aria-hidden="true" />
+      <img
+        class="brand-logo"
+        src="../assets/logo.svg"
+        alt=""
+        width="1024"
+        height="1024"
+        aria-hidden="true"
+      />
       <div class="brand-copy">
         <p class="eyebrow">oxjsdoc playground (wasm) v{{ version }}</p>
         <h1 id="title" class="product-logo-text">JSDoc AST Explorer</h1>
