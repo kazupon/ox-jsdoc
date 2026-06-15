@@ -880,7 +880,7 @@ impl<'arena> BinaryWriter<'arena> {
         let mut out: ArenaVec<'arena, u8> = ArenaVec::with_capacity_in(layout.total_size, arena);
         out.resize(layout.total_size, 0);
         write_finish_layout(self, &layout, &mut out);
-        out.into_bump_slice()
+        out.into_arena_slice()
     }
 
     /// Sort diagnostics + compute layout. Mutating helper shared by
