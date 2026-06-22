@@ -35,7 +35,7 @@ harness = false
 criterion2 = { version = "3.0.2", default-features = false }
 oxc_allocator.workspace = true
 oxc_ast.workspace = true
-oxc_jsdoc = "=0.135.0"
+oxc_jsdoc = "=0.136.0"
 oxc_parser.workspace = true
 oxc_span.workspace = true
 ox_jsdoc_origin = { path = "../../crates/ox_jsdoc_origin" }
