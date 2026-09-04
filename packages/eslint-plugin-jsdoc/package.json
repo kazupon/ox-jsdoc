@@ -107,7 +107,7 @@
     "@babel/plugin-transform-flow-strip-types": "^7.27.1",
     "@babel/preset-env": "^7.29.2",
     "@es-joy/escodegen": "^4.2.0",
-    "@es-joy/jsdoc-eslint-parser": "^0.27.0",
+    "@es-joy/jsdoc-eslint-parser": "^0.29.0",
     "@eslint/core": "^1.1.1",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@types/chai": "^5.2.3",
