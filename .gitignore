@@ -42,6 +42,7 @@ packages/eslint-plugin-jsdoc/coverage
 packages/jsdoccomment/coverage/
 packages/jsdoccomment/.dts/
 .notes/
+.plans/
 .playwright-cli
 tasks/benchmark/.tmp
 tasks/benchmark/results/*
