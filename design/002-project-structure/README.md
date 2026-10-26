@@ -89,15 +89,8 @@ Root `Cargo.toml` defines the Rust workspace:
 ```toml
 [workspace]
 resolver = "3"
-members = [
-  "crates/*",
-  "napi/*",
-  "wasm/*",
-  "tasks/*",
-]
-exclude = [
-  "refers/*",
-]
+members = ["crates/*", "napi/*", "wasm/*", "tasks/*"]
+exclude = ["refers/*"]
 ```
 
 The workspace crates are:

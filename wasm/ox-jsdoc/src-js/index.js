@@ -131,8 +131,9 @@ export function parse(sourceText, options) {
 
   const view = new Uint8Array(wasmMemory.buffer, handle.bufferPtr(), handle.bufferLen())
   const sourceFile = new RemoteSourceFile(view)
-  const diagnostics =
-    /** @type {Array<{ message: string }>} */ (/** @type {unknown} */ (handle.diagnostics()))
+  const diagnostics = /** @type {Array<{ message: string }>} */ (
+    /** @type {unknown} */ (handle.diagnostics())
+  )
   const root = sourceFile.asts[0] ?? null
   return {
     ast: /** @type {import('@ox-jsdoc/decoder').RemoteJsdocBlock | null} */ (root),
@@ -245,10 +246,9 @@ export function parseBatch(items, options) {
 
   const view = new Uint8Array(wasmMemory.buffer, handle.bufferPtr(), handle.bufferLen())
   const sourceFile = new RemoteSourceFile(view)
-  const diagnostics =
-    /** @type {Array<{ message: string, rootIndex: number }>} */ (
-      /** @type {unknown} */ (handle.diagnostics())
-    )
+  const diagnostics = /** @type {Array<{ message: string, rootIndex: number }>} */ (
+    /** @type {unknown} */ (handle.diagnostics())
+  )
   const asts = /** @type {Array<import('@ox-jsdoc/decoder').RemoteJsdocBlock | null>} */ (
     sourceFile.asts
   )

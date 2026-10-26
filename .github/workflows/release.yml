@@ -54,7 +54,6 @@ jobs:
       github.event_name == 'push' || (github.event_name == 'workflow_dispatch' &&
         (inputs.job == 'all' || inputs.job == 'npm-publish'))
 
-
     runs-on: ubuntu-latest
     steps:
       - name: Checkout codes
@@ -87,7 +86,6 @@ jobs:
     if: >-
       github.event_name == 'push' || (github.event_name == 'workflow_dispatch' &&
         (inputs.job == 'all' || inputs.job == 'npm-publish'))
-
 
     runs-on: ${{ matrix.os }}
     strategy:
@@ -188,7 +186,6 @@ jobs:
           needs.test-decoder.result == 'success' &&
           needs.build-napi.result == 'success')
       )
-
 
     needs:
       - test-decoder
@@ -331,7 +328,6 @@ jobs:
           (needs.build-napi.result == 'success' || needs.build-napi.result == 'skipped'))
       )
 
-
     permissions:
       # Required for crates.io trusted publishing (OIDC).
       id-token: write
@@ -395,7 +391,6 @@ jobs:
               needs.npm-publish.result == 'success' &&
               needs.crate-publish.result == 'success')))
       )
-
 
     permissions:
       # Required for stefanzweifel/git-auto-commit-action to push the
