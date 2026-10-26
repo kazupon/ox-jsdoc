@@ -2,7 +2,8 @@ import { defineConfig } from 'vite-plus'
 import {
   defineFmtConfig,
   defineLintConfig,
-  defaultIgnoreFilesOfEnforceHeaderCommentRule
+  defaultIgnoreFilesOfEnforceHeaderCommentRule,
+  defaultVitestTargetFiles
 } from '@kazupon/vp-config'
 
 const ignorePatterns = [
@@ -30,6 +31,21 @@ export default defineConfig({
   }),
   lint: defineLintConfig({
     ignorePatterns,
+    rules: {
+      // JSDoc comments write the closing delimiter as `*`, U+200B (zero-width space), `/`
+      // so that it does not end the comment. Check strings and code only.
+      'no-irregular-whitespace': ['warn', { skipComments: true }]
+    },
+    overrides: [
+      {
+        files: defaultVitestTargetFiles,
+        plugins: ['vitest'],
+        rules: {
+          // `expectAccepts()` in napi/ox-jsdoc/test/parsed-type.test.ts wraps `expect`
+          'vitest/expect-expect': ['warn', { assertFunctionNames: ['expect', 'expectAccepts'] }]
+        }
+      }
+    ],
     comments: {
       enForceHeaderComment: {
         ignoreFiles: [...defaultIgnoreFilesOfEnforceHeaderCommentRule]

@@ -68,7 +68,7 @@
     "@babel/core": "^7.29.0",
     "@babel/preset-env": "^7.29.2",
     "@rollup/plugin-babel": "^7.0.0",
-    "@vitest/coverage-v8": "4.1.11",
+    "@vitest/coverage-v8": "catalog:",
     "@types/esquery": "^1.5.4",
     "@types/estraverse": "^5.1.7",
     "@typescript-eslint/visitor-keys": "^8.59.4",
@@ -79,7 +79,8 @@
     "rollup": "^4.60.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.59.4",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   },
   "files": [
     "/dist",

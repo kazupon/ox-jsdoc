@@ -1,4 +1,3 @@
-//#region src/internal/types.d.ts
 /**
  * Internal type definitions shared by every Remote* lazy class and the
  * helper functions that operate on their `_internal` state object.
@@ -78,8 +77,6 @@ interface RemoteInternal {
  * type-check `new Class(...)` calls.
  */
 type LazyNodeConstructor = new (view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike) => LazyNode;
-//#endregion
-//#region src/internal/source-file.d.ts
 /**
  * Construction options for {@link RemoteSourceFile}.
  */
@@ -104,7 +101,7 @@ interface RemoteSourceFileOptions {
  * - `getNode(nodeIndex, parent, rootIndex)` — lazy class instance (cached)
  * - `asts` getter — array of root Remote* instances (or `null` for failures)
  */
-declare class RemoteSourceFile implements RemoteSourceFileLike {
+export declare class RemoteSourceFile implements RemoteSourceFileLike {
   #private;
   /**
    * Construct from a binary buffer (any `BufferSource`-compatible value).
@@ -209,21 +206,17 @@ declare class RemoteSourceFile implements RemoteSourceFileLike {
    */
   get asts(): ReadonlyArray<LazyNode | null>;
 }
-//#endregion
-//#region src/internal/node-list.d.ts
 /**
  * `Array` subclass returned by every "node list" getter. Inheriting from
  * `Array` gives us `length` / `map` / `filter` / `forEach` etc. for free;
  * indexed access (`list[i]`) returns lazy class instances built up front.
  */
-declare class RemoteNodeList extends Array<LazyNode> {}
+export declare class RemoteNodeList extends Array<LazyNode> {}
 /**
  * Empty singleton — every "no children" getter returns this so callers can
  * branch on `length === 0` without allocating.
  */
-declare const EMPTY_NODE_LIST: RemoteNodeList;
-//#endregion
-//#region src/internal/inspect.d.ts
+export declare const EMPTY_NODE_LIST: RemoteNodeList;
 /**
  * Shared `Symbol.for('nodejs.util.inspect.custom')` helper.
  *
@@ -238,8 +231,6 @@ declare const EMPTY_NODE_LIST: RemoteNodeList;
  * @license MIT
  */
 declare const inspectSymbol: unique symbol;
-//#endregion
-//#region src/internal/nodes/jsdoc.d.ts
 interface LineTokens {
   start: string;
   delimiter: string;
@@ -284,7 +275,7 @@ type InlineTagFormat = (typeof INLINE_TAG_FORMATS)[number];
 /**
  * `JsdocBlock` (Kind 0x01) — root of every parsed `/** ... *​/` comment.
  */
-declare class RemoteJsdocBlock implements LazyNode, SourceLikeNode {
+export declare class RemoteJsdocBlock implements LazyNode, SourceLikeNode {
   #private;
   readonly type = "JsdocBlock";
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -368,7 +359,7 @@ declare class RemoteJsdocBlock implements LazyNode, SourceLikeNode {
  * `JsdocDescriptionLine` (Kind 0x02). Both basic and compat modes store
  * `description` as the leading StringField of the Extended Data record.
  */
-declare class RemoteJsdocDescriptionLine implements LazyNode, SourceLikeNode {
+export declare class RemoteJsdocDescriptionLine implements LazyNode, SourceLikeNode {
   #private;
   readonly type = "JsdocDescriptionLine";
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -391,7 +382,7 @@ declare class RemoteJsdocDescriptionLine implements LazyNode, SourceLikeNode {
 /**
  * `JsdocTag` (Kind 0x03) — one block tag (e.g. `@param`).
  */
-declare class RemoteJsdocTag implements LazyNode, SourceLikeNode {
+export declare class RemoteJsdocTag implements LazyNode, SourceLikeNode {
   #private;
   readonly type = "JsdocTag";
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -459,50 +450,50 @@ declare class RemoteJsdocTag implements LazyNode, SourceLikeNode {
 }
 declare const RemoteJsdocTagName_base: LazyNodeConstructor;
 /** `JsdocTagName` (Kind 0x04) — the `@name` token text. */
-declare class RemoteJsdocTagName extends RemoteJsdocTagName_base {}
-interface RemoteJsdocTagName {
+export declare class RemoteJsdocTagName extends RemoteJsdocTagName_base {}
+export interface RemoteJsdocTagName {
   readonly value: string;
 }
 declare const RemoteJsdocTagNameValue_base: LazyNodeConstructor;
 /** `JsdocTagNameValue` (Kind 0x05) — value after the type in `@param`. */
-declare class RemoteJsdocTagNameValue extends RemoteJsdocTagNameValue_base {}
-interface RemoteJsdocTagNameValue {
+export declare class RemoteJsdocTagNameValue extends RemoteJsdocTagNameValue_base {}
+export interface RemoteJsdocTagNameValue {
   readonly raw: string;
 }
 declare const RemoteJsdocTypeSource_base: LazyNodeConstructor;
 /** `JsdocTypeSource` (Kind 0x06) — raw `{...}` text inside a tag. */
-declare class RemoteJsdocTypeSource extends RemoteJsdocTypeSource_base {}
-interface RemoteJsdocTypeSource {
+export declare class RemoteJsdocTypeSource extends RemoteJsdocTypeSource_base {}
+export interface RemoteJsdocTypeSource {
   readonly raw: string;
 }
 declare const RemoteJsdocRawTagBody_base: LazyNodeConstructor;
 /** `JsdocRawTagBody` (Kind 0x0B) — raw text body fallback. */
-declare class RemoteJsdocRawTagBody extends RemoteJsdocRawTagBody_base {}
-interface RemoteJsdocRawTagBody {
+export declare class RemoteJsdocRawTagBody extends RemoteJsdocRawTagBody_base {}
+export interface RemoteJsdocRawTagBody {
   readonly raw: string;
 }
 declare const RemoteJsdocNamepathSource_base: LazyNodeConstructor;
 /** `JsdocNamepathSource` (Kind 0x0D) — namepath token. */
-declare class RemoteJsdocNamepathSource extends RemoteJsdocNamepathSource_base {}
-interface RemoteJsdocNamepathSource {
+export declare class RemoteJsdocNamepathSource extends RemoteJsdocNamepathSource_base {}
+export interface RemoteJsdocNamepathSource {
   readonly raw: string;
 }
 declare const RemoteJsdocIdentifier_base: LazyNodeConstructor;
 /** `JsdocIdentifier` (Kind 0x0E) — bare identifier. */
-declare class RemoteJsdocIdentifier extends RemoteJsdocIdentifier_base {}
-interface RemoteJsdocIdentifier {
+export declare class RemoteJsdocIdentifier extends RemoteJsdocIdentifier_base {}
+export interface RemoteJsdocIdentifier {
   readonly name: string;
 }
 declare const RemoteJsdocText_base: LazyNodeConstructor;
 /** `JsdocText` (Kind 0x0F) — raw text. */
-declare class RemoteJsdocText extends RemoteJsdocText_base {}
-interface RemoteJsdocText {
+export declare class RemoteJsdocText extends RemoteJsdocText_base {}
+export interface RemoteJsdocText {
   readonly value: string;
 }
 /**
  * `JsdocTypeLine` (Kind 0x07).
  */
-declare class RemoteJsdocTypeLine implements LazyNode {
+export declare class RemoteJsdocTypeLine implements LazyNode {
   #private;
   readonly type = "JsdocTypeLine";
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -523,7 +514,7 @@ declare class RemoteJsdocTypeLine implements LazyNode {
 /**
  * `JsdocInlineTag` (Kind 0x08) — e.g. `{@link Foo}`.
  */
-declare class RemoteJsdocInlineTag implements LazyNode {
+export declare class RemoteJsdocInlineTag implements LazyNode {
   #private;
   readonly type = "JsdocInlineTag";
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -544,7 +535,7 @@ declare class RemoteJsdocInlineTag implements LazyNode {
 /**
  * `JsdocGenericTagBody` (Kind 0x09).
  */
-declare class RemoteJsdocGenericTagBody implements LazyNode {
+export declare class RemoteJsdocGenericTagBody implements LazyNode {
   #private;
   readonly type = "JsdocGenericTagBody";
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -563,7 +554,7 @@ declare class RemoteJsdocGenericTagBody implements LazyNode {
  * emitting them; for now the class exposes the standard range/parent/toJSON
  * surface.
  */
-declare class RemoteJsdocBorrowsTagBody implements LazyNode {
+export declare class RemoteJsdocBorrowsTagBody implements LazyNode {
   #private;
   readonly type = "JsdocBorrowsTagBody";
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -575,7 +566,7 @@ declare class RemoteJsdocBorrowsTagBody implements LazyNode {
 /**
  * `JsdocParameterName` (Kind 0x0C) — `JsdocTagValue::Parameter` variant.
  */
-declare class RemoteJsdocParameterName implements LazyNode {
+export declare class RemoteJsdocParameterName implements LazyNode {
   #private;
   readonly type = "JsdocParameterName";
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -590,23 +581,21 @@ declare class RemoteJsdocParameterName implements LazyNode {
   toJSON(): RemoteJsonObject;
   [inspectSymbol](): object;
 }
-//#endregion
-//#region src/internal/nodes/type-nodes.d.ts
 declare const RemoteTypeName_base: LazyNodeConstructor;
-declare class RemoteTypeName extends RemoteTypeName_base {}
+export declare class RemoteTypeName extends RemoteTypeName_base {}
 declare const RemoteTypeNumber_base: LazyNodeConstructor;
-declare class RemoteTypeNumber extends RemoteTypeNumber_base {}
+export declare class RemoteTypeNumber extends RemoteTypeNumber_base {}
 declare const RemoteTypeStringValue_base: LazyNodeConstructor;
-declare class RemoteTypeStringValue extends RemoteTypeStringValue_base {}
+export declare class RemoteTypeStringValue extends RemoteTypeStringValue_base {}
 declare const RemoteTypeProperty_base: LazyNodeConstructor;
-declare class RemoteTypeProperty extends RemoteTypeProperty_base {}
+export declare class RemoteTypeProperty extends RemoteTypeProperty_base {}
 declare const RemoteTypeSpecialNamePath_base: LazyNodeConstructor;
-declare class RemoteTypeSpecialNamePath extends RemoteTypeSpecialNamePath_base {}
+export declare class RemoteTypeSpecialNamePath extends RemoteTypeSpecialNamePath_base {}
 declare const RemoteTypeUnion_base: LazyNodeConstructor;
-declare class RemoteTypeUnion extends RemoteTypeUnion_base {}
+export declare class RemoteTypeUnion extends RemoteTypeUnion_base {}
 declare const RemoteTypeIntersection_base: LazyNodeConstructor;
-declare class RemoteTypeIntersection extends RemoteTypeIntersection_base {}
-declare class RemoteTypeObject implements LazyNode {
+export declare class RemoteTypeIntersection extends RemoteTypeIntersection_base {}
+export declare class RemoteTypeObject implements LazyNode {
   readonly type = "TypeObject";
   readonly _internal: RemoteInternal;
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -619,46 +608,46 @@ declare class RemoteTypeObject implements LazyNode {
   [inspectSymbol](): object;
 }
 declare const RemoteTypeTuple_base: LazyNodeConstructor;
-declare class RemoteTypeTuple extends RemoteTypeTuple_base {}
+export declare class RemoteTypeTuple extends RemoteTypeTuple_base {}
 declare const RemoteTypeTypeParameter_base: LazyNodeConstructor;
-declare class RemoteTypeTypeParameter extends RemoteTypeTypeParameter_base {}
+export declare class RemoteTypeTypeParameter extends RemoteTypeTypeParameter_base {}
 declare const RemoteTypeParameterList_base: LazyNodeConstructor;
-declare class RemoteTypeParameterList extends RemoteTypeParameterList_base {}
+export declare class RemoteTypeParameterList extends RemoteTypeParameterList_base {}
 declare const RemoteTypeParenthesis_base: LazyNodeConstructor;
-declare class RemoteTypeParenthesis extends RemoteTypeParenthesis_base {}
+export declare class RemoteTypeParenthesis extends RemoteTypeParenthesis_base {}
 declare const RemoteTypeInfer_base: LazyNodeConstructor;
-declare class RemoteTypeInfer extends RemoteTypeInfer_base {}
+export declare class RemoteTypeInfer extends RemoteTypeInfer_base {}
 declare const RemoteTypeKeyOf_base: LazyNodeConstructor;
-declare class RemoteTypeKeyOf extends RemoteTypeKeyOf_base {}
+export declare class RemoteTypeKeyOf extends RemoteTypeKeyOf_base {}
 declare const RemoteTypeTypeOf_base: LazyNodeConstructor;
-declare class RemoteTypeTypeOf extends RemoteTypeTypeOf_base {}
+export declare class RemoteTypeTypeOf extends RemoteTypeTypeOf_base {}
 declare const RemoteTypeImport_base: LazyNodeConstructor;
-declare class RemoteTypeImport extends RemoteTypeImport_base {}
+export declare class RemoteTypeImport extends RemoteTypeImport_base {}
 declare const RemoteTypeAssertsPlain_base: LazyNodeConstructor;
-declare class RemoteTypeAssertsPlain extends RemoteTypeAssertsPlain_base {}
+export declare class RemoteTypeAssertsPlain extends RemoteTypeAssertsPlain_base {}
 declare const RemoteTypeReadonlyArray_base: LazyNodeConstructor;
-declare class RemoteTypeReadonlyArray extends RemoteTypeReadonlyArray_base {}
+export declare class RemoteTypeReadonlyArray extends RemoteTypeReadonlyArray_base {}
 declare const RemoteTypeIndexedAccessIndex_base: LazyNodeConstructor;
-declare class RemoteTypeIndexedAccessIndex extends RemoteTypeIndexedAccessIndex_base {}
+export declare class RemoteTypeIndexedAccessIndex extends RemoteTypeIndexedAccessIndex_base {}
 declare const RemoteTypeReadonlyProperty_base: LazyNodeConstructor;
-declare class RemoteTypeReadonlyProperty extends RemoteTypeReadonlyProperty_base {}
+export declare class RemoteTypeReadonlyProperty extends RemoteTypeReadonlyProperty_base {}
 declare const RemoteTypeNullable_base: LazyNodeConstructor;
-declare class RemoteTypeNullable extends RemoteTypeNullable_base {}
+export declare class RemoteTypeNullable extends RemoteTypeNullable_base {}
 declare const RemoteTypeNotNullable_base: LazyNodeConstructor;
-declare class RemoteTypeNotNullable extends RemoteTypeNotNullable_base {}
+export declare class RemoteTypeNotNullable extends RemoteTypeNotNullable_base {}
 declare const RemoteTypeOptional_base: LazyNodeConstructor;
-declare class RemoteTypeOptional extends RemoteTypeOptional_base {}
+export declare class RemoteTypeOptional extends RemoteTypeOptional_base {}
 declare const RemoteTypeVariadic_base: LazyNodeConstructor;
 /** `TypeVariadic` — modifier + extra `square_brackets` flag. */
-declare class RemoteTypeVariadic extends RemoteTypeVariadic_base {}
+export declare class RemoteTypeVariadic extends RemoteTypeVariadic_base {}
 declare const RemoteTypePredicate_base: LazyNodeConstructor;
-declare class RemoteTypePredicate extends RemoteTypePredicate_base {}
+export declare class RemoteTypePredicate extends RemoteTypePredicate_base {}
 declare const RemoteTypeAsserts_base: LazyNodeConstructor;
-declare class RemoteTypeAsserts extends RemoteTypeAsserts_base {}
+export declare class RemoteTypeAsserts extends RemoteTypeAsserts_base {}
 declare const RemoteTypeNamePath_base: LazyNodeConstructor;
-declare class RemoteTypeNamePath extends RemoteTypeNamePath_base {}
+export declare class RemoteTypeNamePath extends RemoteTypeNamePath_base {}
 /** `TypeGeneric` — `left` + `elements` NodeList + brackets/dot flags. */
-declare class RemoteTypeGeneric implements LazyNode {
+export declare class RemoteTypeGeneric implements LazyNode {
   readonly type = "TypeGeneric";
   readonly _internal: RemoteInternal;
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -672,7 +661,7 @@ declare class RemoteTypeGeneric implements LazyNode {
   [inspectSymbol](): object;
 }
 /** `TypeFunction` — parameters + return + type_parameters. */
-declare class RemoteTypeFunction implements LazyNode {
+export declare class RemoteTypeFunction implements LazyNode {
   readonly type = "TypeFunction";
   readonly _internal: RemoteInternal;
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -688,7 +677,7 @@ declare class RemoteTypeFunction implements LazyNode {
   [inspectSymbol](): object;
 }
 /** `TypeConditional` — check / extends / true / false branches. */
-declare class RemoteTypeConditional implements LazyNode {
+export declare class RemoteTypeConditional implements LazyNode {
   readonly type = "TypeConditional";
   readonly _internal: RemoteInternal;
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -702,7 +691,7 @@ declare class RemoteTypeConditional implements LazyNode {
   [inspectSymbol](): object;
 }
 /** `TypeObjectField` — key + right + flags. */
-declare class RemoteTypeObjectField implements LazyNode {
+export declare class RemoteTypeObjectField implements LazyNode {
   readonly type = "TypeObjectField";
   readonly _internal: RemoteInternal;
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -717,7 +706,7 @@ declare class RemoteTypeObjectField implements LazyNode {
   [inspectSymbol](): object;
 }
 /** `TypeJsdocObjectField` — key + right (no flags). */
-declare class RemoteTypeJsdocObjectField implements LazyNode {
+export declare class RemoteTypeJsdocObjectField implements LazyNode {
   readonly type = "TypeJsdocObjectField";
   readonly _internal: RemoteInternal;
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -729,11 +718,11 @@ declare class RemoteTypeJsdocObjectField implements LazyNode {
   [inspectSymbol](): object;
 }
 declare const RemoteTypeCallSignature_base: LazyNodeConstructor;
-declare class RemoteTypeCallSignature extends RemoteTypeCallSignature_base {}
+export declare class RemoteTypeCallSignature extends RemoteTypeCallSignature_base {}
 declare const RemoteTypeConstructorSignature_base: LazyNodeConstructor;
-declare class RemoteTypeConstructorSignature extends RemoteTypeConstructorSignature_base {}
+export declare class RemoteTypeConstructorSignature extends RemoteTypeConstructorSignature_base {}
 /** `TypeKeyValue` — key string in Extended Data + first child as `right`. */
-declare class RemoteTypeKeyValue implements LazyNode {
+export declare class RemoteTypeKeyValue implements LazyNode {
   readonly type = "TypeKeyValue";
   readonly _internal: RemoteInternal;
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -747,11 +736,11 @@ declare class RemoteTypeKeyValue implements LazyNode {
   [inspectSymbol](): object;
 }
 declare const RemoteTypeIndexSignature_base: LazyNodeConstructor;
-declare class RemoteTypeIndexSignature extends RemoteTypeIndexSignature_base {}
+export declare class RemoteTypeIndexSignature extends RemoteTypeIndexSignature_base {}
 declare const RemoteTypeMappedType_base: LazyNodeConstructor;
-declare class RemoteTypeMappedType extends RemoteTypeMappedType_base {}
+export declare class RemoteTypeMappedType extends RemoteTypeMappedType_base {}
 /** `TypeMethodSignature` — name string in Extended Data + Common Data flags. */
-declare class RemoteTypeMethodSignature implements LazyNode {
+export declare class RemoteTypeMethodSignature implements LazyNode {
   readonly type = "TypeMethodSignature";
   readonly _internal: RemoteInternal;
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -765,7 +754,7 @@ declare class RemoteTypeMethodSignature implements LazyNode {
   [inspectSymbol](): object;
 }
 /** `TypeTemplateLiteral` — literal-segment array in Extended Data. */
-declare class RemoteTypeTemplateLiteral implements LazyNode {
+export declare class RemoteTypeTemplateLiteral implements LazyNode {
   readonly type = "TypeTemplateLiteral";
   readonly _internal: RemoteInternal;
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -781,7 +770,7 @@ declare class RemoteTypeTemplateLiteral implements LazyNode {
   [inspectSymbol](): object;
 }
 /** `TypeSymbol` — `Symbol(...)` callee value + optional element. */
-declare class RemoteTypeSymbol implements LazyNode {
+export declare class RemoteTypeSymbol implements LazyNode {
   readonly type = "TypeSymbol";
   readonly _internal: RemoteInternal;
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -794,18 +783,16 @@ declare class RemoteTypeSymbol implements LazyNode {
   [inspectSymbol](): object;
 }
 declare const RemoteTypeNull_base: LazyNodeConstructor;
-declare class RemoteTypeNull extends RemoteTypeNull_base {}
+export declare class RemoteTypeNull extends RemoteTypeNull_base {}
 declare const RemoteTypeUndefined_base: LazyNodeConstructor;
-declare class RemoteTypeUndefined extends RemoteTypeUndefined_base {}
+export declare class RemoteTypeUndefined extends RemoteTypeUndefined_base {}
 declare const RemoteTypeAny_base: LazyNodeConstructor;
-declare class RemoteTypeAny extends RemoteTypeAny_base {}
+export declare class RemoteTypeAny extends RemoteTypeAny_base {}
 declare const RemoteTypeUnknown_base: LazyNodeConstructor;
-declare class RemoteTypeUnknown extends RemoteTypeUnknown_base {}
+export declare class RemoteTypeUnknown extends RemoteTypeUnknown_base {}
 declare const RemoteTypeUniqueSymbol_base: LazyNodeConstructor;
-declare class RemoteTypeUniqueSymbol extends RemoteTypeUniqueSymbol_base {}
-//#endregion
-//#region src/internal/nodes/node-list-node.d.ts
-declare class RemoteNodeListNode implements LazyNode {
+export declare class RemoteTypeUniqueSymbol extends RemoteTypeUniqueSymbol_base {}
+export declare class RemoteNodeListNode implements LazyNode {
   readonly type = "NodeList";
   private readonly _internal;
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
@@ -818,8 +805,6 @@ declare class RemoteNodeListNode implements LazyNode {
   toJSON(): RemoteJsonObject;
   [inspectSymbol](): object;
 }
-//#endregion
-//#region src/index.d.ts
 /**
  * Visitor keys for every Remote* node kind (60 = 15 Comment AST + 45 TypeNode).
  *
@@ -840,7 +825,7 @@ declare class RemoteNodeListNode implements LazyNode {
  * for future use; the parser does not currently emit them
  * (see `design/007-binary-ast/ast-nodes.md` "Reserved Kinds").
  */
-declare const jsdocVisitorKeys: Readonly<{
+export declare const jsdocVisitorKeys: Readonly<{
   JsdocBlock: string[];
   JsdocDescriptionLine: never[];
   JsdocTag: string[];
@@ -907,6 +892,5 @@ declare const jsdocVisitorKeys: Readonly<{
  * Handy for browser DevTools (where `Symbol.for('nodejs.util.inspect.custom')`
  * has no effect) and for general logging.
  */
-declare function toPlainObject(node: unknown): unknown;
-//#endregion
-export { EMPTY_NODE_LIST, type JsdocCommentInput, RemoteJsdocBlock, RemoteJsdocBorrowsTagBody, RemoteJsdocDescriptionLine, RemoteJsdocGenericTagBody, RemoteJsdocIdentifier, RemoteJsdocInlineTag, RemoteJsdocNamepathSource, RemoteJsdocParameterName, RemoteJsdocRawTagBody, RemoteJsdocTag, RemoteJsdocTagName, RemoteJsdocTagNameValue, RemoteJsdocText, RemoteJsdocTypeLine, RemoteJsdocTypeSource, RemoteNodeList, RemoteNodeListNode, RemoteSourceFile, RemoteTypeAny, RemoteTypeAsserts, RemoteTypeAssertsPlain, RemoteTypeCallSignature, RemoteTypeConditional, RemoteTypeConstructorSignature, RemoteTypeFunction, RemoteTypeGeneric, RemoteTypeImport, RemoteTypeIndexSignature, RemoteTypeIndexedAccessIndex, RemoteTypeInfer, RemoteTypeIntersection, RemoteTypeJsdocObjectField, RemoteTypeKeyOf, RemoteTypeKeyValue, RemoteTypeMappedType, RemoteTypeMethodSignature, RemoteTypeName, RemoteTypeNamePath, RemoteTypeNotNullable, RemoteTypeNull, RemoteTypeNullable, RemoteTypeNumber, RemoteTypeObject, RemoteTypeObjectField, RemoteTypeOptional, RemoteTypeParameterList, RemoteTypeParenthesis, RemoteTypePredicate, RemoteTypeProperty, RemoteTypeReadonlyArray, RemoteTypeReadonlyProperty, RemoteTypeSpecialNamePath, RemoteTypeStringValue, RemoteTypeSymbol, RemoteTypeTemplateLiteral, RemoteTypeTuple, RemoteTypeTypeOf, RemoteTypeTypeParameter, RemoteTypeUndefined, RemoteTypeUnion, RemoteTypeUniqueSymbol, RemoteTypeUnknown, RemoteTypeVariadic, jsdocVisitorKeys, toPlainObject };
+export declare function toPlainObject(node: unknown): unknown;
+export type { JsdocCommentInput };

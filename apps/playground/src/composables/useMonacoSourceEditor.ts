@@ -21,6 +21,7 @@ const globalSelf = globalThis as typeof globalThis & {
 
 globalSelf.MonacoEnvironment = {
   getWorker() {
+    // eslint-disable-next-line import/namespace -- Vite's `?worker` import provides the default Worker constructor, which the import resolver cannot see
     return new editorWorker.default()
   }
 }

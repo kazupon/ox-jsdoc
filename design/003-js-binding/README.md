@@ -131,12 +131,7 @@ napi-build = "2"
 ### Workspace root (Cargo.toml)
 
 ```toml
-members = [
-  "crates/*",
-  "tasks/benchmark",
-  "tasks/xtask",
-  "napi/*",
-]
+members = ["crates/*", "tasks/benchmark", "tasks/xtask", "napi/*"]
 ```
 
 ### npm (napi/ox-jsdoc/package.json)

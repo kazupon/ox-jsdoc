@@ -7,7 +7,6 @@ export default defineConfig({
     browser: {
       enabled: true,
       headless: true,
-      // @ts-ignore -- types are outdated
       provider: playwright(),
       instances: [{ browser: 'chromium' }]
     }

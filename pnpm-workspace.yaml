@@ -15,9 +15,11 @@ allowBuilds:
 
 catalog:
   '@types/node': ^25.9.2
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: ^0.1.24
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite: npm:@voidzero-dev/vite-plus-core@1.4.0
+  vite-plus: 1.4.0
+  vitest: 5.0.5
+  '@vitest/browser-playwright': 5.0.5
+  '@vitest/coverage-v8': 5.0.5
 
 minimumReleaseAgeExclude:
   - '@kazupon/vp-config'
@@ -26,5 +28,12 @@ minimumReleaseAgeExclude:
   - '@vizejs/**'
 
 overrides:
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  vite@*: 'catalog:'
+  vitest@*: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'
