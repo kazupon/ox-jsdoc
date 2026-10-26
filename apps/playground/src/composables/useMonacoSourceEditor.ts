@@ -10,7 +10,7 @@ import * as editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution.js'
 import 'monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution.js'
-import type { ComputedRef, Ref } from 'vue'
+import type { ComponentPublicInstance, ComputedRef, Ref } from 'vue'
 import type { PlaygroundTheme, SourceRange } from '../types/playground'
 
 const globalSelf = globalThis as typeof globalThis & {
@@ -126,7 +126,7 @@ export function useMonacoSourceEditor({
 
   const editorTheme = computed(() => `ox-jsdoc-${theme.value}`)
 
-  const setEditorHost = (element: Element | null): void => {
+  const setEditorHost = (element: Element | ComponentPublicInstance | null): void => {
     editorHost.value = element instanceof HTMLElement ? element : null
   }
 

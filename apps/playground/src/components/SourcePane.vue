@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import type { ComponentPublicInstance } from 'vue'
+
 const { setEditorHost } = defineProps<{
-  setEditorHost(element: Element | null): void
+  setEditorHost(element: Element | ComponentPublicInstance | null): void
   sourceLength: number
 }>()
 
