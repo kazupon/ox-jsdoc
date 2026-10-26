@@ -5,5 +5,18 @@
   "major": {
     "automerge": false
   },
-  "minimumReleaseAge": "7 days"
+  "minimumReleaseAge": "7 days",
+  "packageRules": [
+    {
+      "description": "Upgrade the Vite+ toolchain with `vp upgrade` and `vp migrate`, because these versions must move together",
+      "matchPackageNames": [
+        "vite-plus",
+        "vite",
+        "@voidzero-dev/vite-plus-core",
+        "vitest",
+        "@vitest/*"
+      ],
+      "enabled": false
+    }
+  ]
 }
