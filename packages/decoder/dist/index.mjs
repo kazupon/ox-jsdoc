@@ -1,7 +1,15 @@
-//#region src/internal/constants.ts
+// src/internal/constants.ts
+/**
+* Binary AST format constants — JS mirror of `crates/ox_jsdoc/src/format/`.
+*
+* Keep these in sync with the Rust constants. Phase 4 will code-generate
+* both sides from a single schema.
+*
+* @author kazuya kawaguchi (a.k.a. kazupon)
+* @license MIT
+*/
 const PAYLOAD_MASK = 1073741823;
-//#endregion
-//#region src/internal/helpers.ts
+// src/internal/helpers.ts
 /**
 * Low-level helpers shared by every Remote* class.
 *
@@ -198,8 +206,7 @@ function popcount(byte) {
 	n = (n & 51) + (n >> 2 & 51);
 	return n + (n >> 4) & 15;
 }
-//#endregion
-//#region src/internal/inspect.ts
+// src/internal/inspect.ts
 /**
 * Shared `Symbol.for('nodejs.util.inspect.custom')` helper.
 *
@@ -238,8 +245,7 @@ function debugClass(typeName) {
 function inspectPayload(jsonObj, typeName) {
 	return Object.setPrototypeOf(jsonObj, debugClass(typeName).prototype);
 }
-//#endregion
-//#region src/internal/node-list.ts
+// src/internal/node-list.ts
 /**
 * `RemoteNodeList` — Array-compatible view over a parent's per-list metadata
 * slot.
@@ -297,8 +303,7 @@ function collectNodeListChildren(parentInternal, headIndex, count) {
 	}
 	return list;
 }
-//#endregion
-//#region src/internal/preserve-whitespace.ts
+// src/internal/preserve-whitespace.ts
 /**
 * Description-text post-processing helpers.
 *
@@ -345,8 +350,6 @@ function parsedPreservingWhitespace(raw) {
 	}
 	return result;
 }
-//#endregion
-//#region src/internal/nodes/jsdoc.ts
 /**
 * Lazy classes for the 15 comment AST kinds (`0x01 - 0x0F`).
 *
@@ -358,20 +361,18 @@ function parsedPreservingWhitespace(raw) {
 * @author kazuya kawaguchi (a.k.a. kazupon)
 * @license MIT
 */
-/** Size of one `(head: u32, count: u16)` list metadata slot. */
-const LIST_METADATA_SIZE = 6;
 /** `JsdocBlock.descriptionLines` slot offset (right after 8 StringFields). */
 const JSDOC_BLOCK_DESC_LINES_SLOT = 50;
 /** `JsdocBlock.tags` slot offset. */
-const JSDOC_BLOCK_TAGS_SLOT = JSDOC_BLOCK_DESC_LINES_SLOT + LIST_METADATA_SIZE;
+const JSDOC_BLOCK_TAGS_SLOT = 56;
 /** `JsdocBlock.inlineTags` slot offset. */
-const JSDOC_BLOCK_INLINE_TAGS_SLOT = JSDOC_BLOCK_DESC_LINES_SLOT + 2 * LIST_METADATA_SIZE;
-const JSDOC_BLOCK_END_LINE_OFFSET = JSDOC_BLOCK_DESC_LINES_SLOT + 3 * LIST_METADATA_SIZE + 2;
-const JSDOC_BLOCK_DESC_START_LINE_OFFSET = JSDOC_BLOCK_END_LINE_OFFSET + 4;
-const JSDOC_BLOCK_DESC_END_LINE_OFFSET = JSDOC_BLOCK_DESC_START_LINE_OFFSET + 4;
-const JSDOC_BLOCK_LAST_DESC_LINE_OFFSET = JSDOC_BLOCK_DESC_END_LINE_OFFSET + 4;
-const JSDOC_BLOCK_HAS_PRETERMINAL_DESC_OFFSET = JSDOC_BLOCK_LAST_DESC_LINE_OFFSET + 4;
-const JSDOC_BLOCK_HAS_PRETERMINAL_TAG_DESC_OFFSET = JSDOC_BLOCK_HAS_PRETERMINAL_DESC_OFFSET + 1;
+const JSDOC_BLOCK_INLINE_TAGS_SLOT = 62;
+const JSDOC_BLOCK_END_LINE_OFFSET = 70;
+const JSDOC_BLOCK_DESC_START_LINE_OFFSET = 74;
+const JSDOC_BLOCK_DESC_END_LINE_OFFSET = 78;
+const JSDOC_BLOCK_LAST_DESC_LINE_OFFSET = 82;
+const JSDOC_BLOCK_HAS_PRETERMINAL_DESC_OFFSET = 86;
+const JSDOC_BLOCK_HAS_PRETERMINAL_TAG_DESC_OFFSET = 87;
 /** `0xFFFFFFFF` sentinel for `Option<u32>` line indices in compat mode. */
 const COMPAT_LINE_NONE = 4294967295;
 /** `0xFF` sentinel for `Option<u8>` flags in compat mode. */
@@ -379,16 +380,16 @@ const COMPAT_U8_NONE = 255;
 /** `JsdocTag.typeLines` slot offset (right after 3 StringFields). */
 const JSDOC_TAG_TYPE_LINES_SLOT = 20;
 /** `JsdocTag.descriptionLines` slot offset. */
-const JSDOC_TAG_DESC_LINES_SLOT = JSDOC_TAG_TYPE_LINES_SLOT + LIST_METADATA_SIZE;
+const JSDOC_TAG_DESC_LINES_SLOT = 26;
 /** `JsdocTag.inlineTags` slot offset. */
-const JSDOC_TAG_INLINE_TAGS_SLOT = JSDOC_TAG_TYPE_LINES_SLOT + 2 * LIST_METADATA_SIZE;
-const JSDOC_TAG_COMPAT_DELIMITER = JSDOC_TAG_TYPE_LINES_SLOT + 3 * LIST_METADATA_SIZE;
-const JSDOC_TAG_COMPAT_POST_DELIMITER = JSDOC_TAG_COMPAT_DELIMITER + 6;
-const JSDOC_TAG_COMPAT_POST_TAG = JSDOC_TAG_COMPAT_POST_DELIMITER + 6;
-const JSDOC_TAG_COMPAT_POST_TYPE = JSDOC_TAG_COMPAT_POST_TAG + 6;
-const JSDOC_TAG_COMPAT_POST_NAME = JSDOC_TAG_COMPAT_POST_TYPE + 6;
-const JSDOC_TAG_COMPAT_INITIAL = JSDOC_TAG_COMPAT_POST_NAME + 6;
-const JSDOC_TAG_COMPAT_LINE_END = JSDOC_TAG_COMPAT_INITIAL + 6;
+const JSDOC_TAG_INLINE_TAGS_SLOT = 32;
+const JSDOC_TAG_COMPAT_DELIMITER = 38;
+const JSDOC_TAG_COMPAT_POST_DELIMITER = 44;
+const JSDOC_TAG_COMPAT_POST_TAG = 50;
+const JSDOC_TAG_COMPAT_POST_TYPE = 56;
+const JSDOC_TAG_COMPAT_POST_NAME = 62;
+const JSDOC_TAG_COMPAT_INITIAL = 68;
+const JSDOC_TAG_COMPAT_LINE_END = 74;
 const COMPAT_LINE_DELIMITER = 6;
 const COMPAT_LINE_POST_DELIMITER = 12;
 const COMPAT_LINE_INITIAL = 18;
@@ -417,7 +418,7 @@ function emptyTokens() {
 function tokensToSource(t) {
 	return t.start + t.delimiter + t.postDelimiter + t.tag + t.postTag + t.type + t.postType + t.name + t.postName + t.description + t.end + t.lineEnd;
 }
-const DEFAULT_NO_TYPES = new Set([
+const DEFAULT_NO_TYPES = /* @__PURE__ */ new Set([
 	"default",
 	"defaultvalue",
 	"description",
@@ -429,7 +430,7 @@ const DEFAULT_NO_TYPES = new Set([
 	"see",
 	"summary"
 ]);
-const DEFAULT_NO_NAMES = new Set([
+const DEFAULT_NO_NAMES = /* @__PURE__ */ new Set([
 	"access",
 	"author",
 	"default",
@@ -1616,8 +1617,7 @@ var RemoteJsdocParameterName = class {
 		return inspectPayload(this.toJSON(), "JsdocParameterName");
 	}
 };
-//#endregion
-//#region src/internal/nodes/node-list-node.ts
+// src/internal/nodes/node-list-node.ts
 /**
 * `RemoteNodeListNode` — wraps the Kind 0x7F NodeList record.
 *
@@ -1677,8 +1677,7 @@ var RemoteNodeListNode = class {
 		return inspectPayload(this.toJSON(), "NodeList");
 	}
 };
-//#endregion
-//#region src/internal/nodes/type-nodes.ts
+// src/internal/nodes/type-nodes.ts
 /**
 * Lazy classes for the 45 TypeNode kinds (`0x80 - 0xAC`).
 *
@@ -2507,8 +2506,7 @@ var RemoteTypeUndefined = class extends definePureLeaf("TypeUndefined") {};
 var RemoteTypeAny = class extends definePureLeaf("TypeAny") {};
 var RemoteTypeUnknown = class extends definePureLeaf("TypeUnknown") {};
 var RemoteTypeUniqueSymbol = class extends definePureLeaf("TypeUniqueSymbol") {};
-//#endregion
-//#region src/internal/kind-dispatch.ts
+// src/internal/kind-dispatch.ts
 /**
 * Kind → class dispatch table.
 *
@@ -2593,8 +2591,7 @@ function decodeKindToClass(kind) {
 	if (Class === void 0) throw new Error(`unknown Kind: 0x${kind.toString(16).padStart(2, "0")}`);
 	return Class;
 }
-//#endregion
-//#region src/internal/source-file.ts
+// src/internal/source-file.ts
 /**
 * `RemoteSourceFile` — root of the JS lazy decoder.
 *
@@ -2843,8 +2840,16 @@ var RemoteSourceFile = class {
 		return result;
 	}
 };
-//#endregion
-//#region src/index.ts
+// src/index.ts
+/**
+* `@ox-jsdoc/decoder` — shared JS lazy decoder for the ox-jsdoc Binary AST.
+*
+* Phase 1.1d: hand-written first version. Phase 4 will code-generate every
+* Remote* class and the Kind dispatch table from a single schema.
+*
+* @author kazuya kawaguchi (a.k.a. kazupon)
+* @license MIT
+*/
 /**
 * Visitor keys for every Remote* node kind (60 = 15 Comment AST + 45 TypeNode).
 *
@@ -2974,5 +2979,4 @@ function toPlainObject(node) {
 	if (typeof candidate.toJSON === "function") return candidate.toJSON();
 	return node;
 }
-//#endregion
 export { EMPTY_NODE_LIST, RemoteJsdocBlock, RemoteJsdocBorrowsTagBody, RemoteJsdocDescriptionLine, RemoteJsdocGenericTagBody, RemoteJsdocIdentifier, RemoteJsdocInlineTag, RemoteJsdocNamepathSource, RemoteJsdocParameterName, RemoteJsdocRawTagBody, RemoteJsdocTag, RemoteJsdocTagName, RemoteJsdocTagNameValue, RemoteJsdocText, RemoteJsdocTypeLine, RemoteJsdocTypeSource, RemoteNodeList, RemoteNodeListNode, RemoteSourceFile, RemoteTypeAny, RemoteTypeAsserts, RemoteTypeAssertsPlain, RemoteTypeCallSignature, RemoteTypeConditional, RemoteTypeConstructorSignature, RemoteTypeFunction, RemoteTypeGeneric, RemoteTypeImport, RemoteTypeIndexSignature, RemoteTypeIndexedAccessIndex, RemoteTypeInfer, RemoteTypeIntersection, RemoteTypeJsdocObjectField, RemoteTypeKeyOf, RemoteTypeKeyValue, RemoteTypeMappedType, RemoteTypeMethodSignature, RemoteTypeName, RemoteTypeNamePath, RemoteTypeNotNullable, RemoteTypeNull, RemoteTypeNullable, RemoteTypeNumber, RemoteTypeObject, RemoteTypeObjectField, RemoteTypeOptional, RemoteTypeParameterList, RemoteTypeParenthesis, RemoteTypePredicate, RemoteTypeProperty, RemoteTypeReadonlyArray, RemoteTypeReadonlyProperty, RemoteTypeSpecialNamePath, RemoteTypeStringValue, RemoteTypeSymbol, RemoteTypeTemplateLiteral, RemoteTypeTuple, RemoteTypeTypeOf, RemoteTypeTypeParameter, RemoteTypeUndefined, RemoteTypeUnion, RemoteTypeUniqueSymbol, RemoteTypeUnknown, RemoteTypeVariadic, jsdocVisitorKeys, toPlainObject };

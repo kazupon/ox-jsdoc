@@ -49,7 +49,10 @@
     "@ox-jsdoc/decoder": "workspace:*"
   },
   "devDependencies": {
+    "@vitest/browser-playwright": "catalog:",
+    "playwright": "*",
     "vite-plus": "catalog:",
+    "vitest": "catalog:",
     "wasm-pack": "^0.15.0"
   }
 }
