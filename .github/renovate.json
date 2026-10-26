@@ -17,6 +17,11 @@
         "@vitest/*"
       ],
       "enabled": false
+    },
+    {
+      "description": "vize releases several times a day; update it once a week",
+      "matchPackageNames": ["vize"],
+      "schedule": ["* 0-3 * * 1"]
     }
   ]
 }

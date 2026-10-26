@@ -247,7 +247,7 @@ function getAstValueClass(value: unknown): string {
     <div
       ref="rowElement"
       class="ast-node-row"
-      :aria-expanded="openable ? String(open) : undefined"
+      :aria-expanded="openable ? open : undefined"
       :class="{
         'has-range': range !== null,
         'is-selected': selectedPath === path

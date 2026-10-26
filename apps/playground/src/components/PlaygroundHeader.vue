@@ -41,7 +41,7 @@ function handleToggleTheme(): void {
         class="github-link"
         href="https://github.com/kazupon/ox-jsdoc"
         target="_blank"
-        rel="noreferrer"
+        rel="noopener noreferrer"
         aria-label="Open oxjsdoc on GitHub"
       >
         <svg aria-hidden="true" viewBox="0 0 16 16">
