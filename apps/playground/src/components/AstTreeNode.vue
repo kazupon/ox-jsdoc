@@ -8,25 +8,24 @@ type AstChild = {
   value: unknown
 }
 
-const props = withDefaults(
-  defineProps<{
-    depth?: number
-    name: string
-    path: string
-    revealPath?: string
-    revealVersion?: number
-    root?: boolean
-    selectedPath?: string
-    value: unknown
-  }>(),
-  {
-    depth: 0,
-    revealPath: '',
-    revealVersion: 0,
-    root: false,
-    selectedPath: ''
-  }
-)
+const {
+  depth = 0,
+  path,
+  revealPath = '',
+  revealVersion = 0,
+  root = false,
+  selectedPath = '',
+  value
+} = defineProps<{
+  depth?: number
+  name: string
+  path: string
+  revealPath?: string
+  revealVersion?: number
+  root?: boolean
+  selectedPath?: string
+  value: unknown
+}>()
 
 const emit = defineEmits<{
   select: [selection: AstSelection]
@@ -36,35 +35,35 @@ defineOptions({
   name: 'AstTreeNode'
 })
 
-const children = computed(() => getAstChildren(props.value, props.path))
+const children = computed(() => getAstChildren(value, path))
 const openable = computed(() => children.value.length > 0)
 const openManual = ref<boolean>()
-const open = computed(() => openable.value && (openManual.value ?? props.root))
+const open = computed(() => openable.value && (openManual.value ?? root))
 const valueCreated = ref(false)
 const rowElement = ref<HTMLElement | null>(null)
-const range = computed(() => getAstRange(props.value))
-const title = computed(() => getAstTitle(props.value))
-const preview = computed(() => getAstPreview(props.value))
-const valueClass = computed(() => getAstValueClass(props.value))
-const brackets = computed(() => getAstBrackets(props.value))
-const rowStyle = computed(() => ({ marginLeft: `${props.depth * 28 + 22}px` }))
+const range = computed(() => getAstRange(value))
+const title = computed(() => getAstTitle(value))
+const preview = computed(() => getAstPreview(value))
+const valueClass = computed(() => getAstValueClass(value))
+const brackets = computed(() => getAstBrackets(value))
+const rowStyle = computed(() => ({ marginLeft: `${depth * 28 + 22}px` }))
 
 watch(
   open,
-  value => {
-    valueCreated.value ||= value
+  isOpen => {
+    valueCreated.value ||= isOpen
   },
   { immediate: true }
 )
 
 watch(
-  () => [props.revealPath, props.revealVersion] as const,
-  ([revealPath]) => {
-    if (openable.value && isPathAncestorOrSelf(props.path, revealPath)) {
+  () => [revealPath, revealVersion] as const,
+  () => {
+    if (openable.value && isPathAncestorOrSelf(path, revealPath)) {
       openManual.value = true
     }
 
-    if (props.path === revealPath) {
+    if (path === revealPath) {
       rowElement.value?.scrollIntoView({
         behavior: 'smooth',
         block: 'nearest',
@@ -77,9 +76,9 @@ watch(
 
 function selectNode(): void {
   emit('select', {
-    path: props.path,
+    path,
     range: range.value,
-    value: props.value
+    value
   })
 }
 
