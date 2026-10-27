@@ -3,10 +3,6 @@ import { useId } from 'vue'
 
 import type { TypeParseMode } from '../types/playground'
 
-const id = useId()
-const titleId = `${id}-parser-options-title`
-const typeModeId = `${id}-parser-type-mode`
-
 defineProps<{
   compatMode: boolean
   parseBatch: boolean
@@ -22,6 +18,10 @@ const emit = defineEmits<{
   'update:preserveWhitespace': [value: boolean]
   'update:typeParseMode': [value: TypeParseMode]
 }>()
+
+const id = useId()
+const titleId = `${id}-parser-options-title`
+const typeModeId = `${id}-parser-type-mode`
 
 function getChecked(event: Event): boolean {
   return (event.target as HTMLInputElement).checked

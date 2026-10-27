@@ -2,10 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import type { AstSelection, SourceRange } from '../types/playground'
 
-defineOptions({
-  name: 'AstTreeNode'
-})
-
 type AstChild = {
   name: string
   path: string
@@ -35,6 +31,10 @@ const props = withDefaults(
 const emit = defineEmits<{
   select: [selection: AstSelection]
 }>()
+
+defineOptions({
+  name: 'AstTreeNode'
+})
 
 const children = computed(() => getAstChildren(props.value, props.path))
 const openable = computed(() => children.value.length > 0)
