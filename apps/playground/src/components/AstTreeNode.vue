@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useTemplateRef, watch } from 'vue'
 import type { AstSelection, SourceRange } from '../types/playground'
 
 type AstChild = {
@@ -40,7 +40,7 @@ const openable = computed(() => children.value.length > 0)
 const openManual = ref<boolean>()
 const open = computed(() => openable.value && (openManual.value ?? root))
 const valueCreated = ref(false)
-const rowElement = ref<HTMLElement | null>(null)
+const rowElement = useTemplateRef<HTMLElement>('rowElement')
 const range = computed(() => getAstRange(value))
 const title = computed(() => getAstTitle(value))
 const preview = computed(() => getAstPreview(value))
