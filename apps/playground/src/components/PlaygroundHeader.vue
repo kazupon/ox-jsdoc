@@ -216,7 +216,7 @@ h1 {
 .toggle-thumb {
   position: absolute;
   top: 3px;
-  left: 3px;
+  inset-inline-start: 3px;
   width: 14px;
   height: 14px;
   border-radius: 50%;

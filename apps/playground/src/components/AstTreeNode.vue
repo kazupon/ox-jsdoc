@@ -346,7 +346,7 @@ function getAstValueClass(value: unknown): string {
 .ast-toggle {
   position: absolute;
   top: 0;
-  left: -22px;
+  inset-inline-start: -22px;
   display: inline-grid;
   width: 16px;
   height: 28px;
@@ -421,7 +421,7 @@ function getAstValueClass(value: unknown): string {
 .ast-bracket,
 .ast-title,
 .ast-summary {
-  margin-right: 0.35em;
+  margin-inline-end: 0.35em;
 }
 
 .ast-title {
