@@ -175,8 +175,8 @@ importers:
         specifier: ^2.6.0
         version: 2.6.0
       jsdoc-type-pratt-parser:
-        specifier: ~7.2.0
-        version: 7.2.0
+        specifier: ~7.3.0
+        version: 7.3.0
       object-deep-merge:
         specifier: ^2.0.0
         version: 2.0.0
@@ -341,8 +341,8 @@ importers:
         specifier: ^1.7.0
         version: 1.7.0
       jsdoc-type-pratt-parser:
-        specifier: ~7.2.0
-        version: 7.2.0
+        specifier: ~7.3.0
+        version: 7.3.0
       ox-jsdoc:
         specifier: workspace:*
         version: link:../../napi/ox-jsdoc
@@ -7002,6 +7002,10 @@ packages:
 
   jsdoc-type-pratt-parser@7.2.0:
     resolution: {integrity: sha512-dh140MMgjyg3JhJZY/+iEzW+NO5xR2gpbDFKHqotCmexElVntw7GjWjt511+C/Ef02RU5TKYrJo/Xlzk+OLaTw==}
+    engines: {node: '>=20.0.0'}
+
+  jsdoc-type-pratt-parser@7.3.0:
+    resolution: {integrity: sha512-DoyJXo7x/n48M3NsGOs9QnEws0ft0tV3YsSgvWMNxz2hZtz+Q6fpqUD96lVYX4a+jcEkzHeFNDJOn68TzXfbdA==}
     engines: {node: '>=20.0.0'}
 
   jsdoc-type-pratt-parser@9.1.2:
@@ -14327,7 +14331,7 @@ snapshots:
       '@eslint-community/regexpp': 4.12.2
       comment-parser: 1.4.9
       eslint: 10.10.0(jiti@2.6.1)
-      jsdoc-type-pratt-parser: 7.2.0
+      jsdoc-type-pratt-parser: 7.3.0
       refa: 0.12.1
       regexp-ast-analysis: 0.7.1
       scslre: 0.3.0
@@ -14338,7 +14342,7 @@ snapshots:
       '@eslint-community/regexpp': 4.12.2
       comment-parser: 1.4.9
       eslint: 9.39.4(jiti@2.6.1)
-      jsdoc-type-pratt-parser: 7.2.0
+      jsdoc-type-pratt-parser: 7.3.0
       refa: 0.12.1
       regexp-ast-analysis: 0.7.1
       scslre: 0.3.0
@@ -15295,6 +15299,8 @@ snapshots:
   jsdoc-type-pratt-parser@7.0.0: {}
 
   jsdoc-type-pratt-parser@7.2.0: {}
+
+  jsdoc-type-pratt-parser@7.3.0: {}
 
   jsdoc-type-pratt-parser@9.1.2:
     dependencies:
