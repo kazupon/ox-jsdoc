@@ -302,9 +302,9 @@ function getAstValueClass(value: unknown): string {
         :depth="depth + 1"
         :name="child.name"
         :path="child.path"
-        :reveal-path="revealPath"
-        :reveal-version="revealVersion"
-        :selected-path="selectedPath"
+        :reveal-path
+        :reveal-version
+        :selected-path
         :value="child.value"
         @select="handleChildSelect"
       />

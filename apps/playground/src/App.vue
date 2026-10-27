@@ -163,9 +163,9 @@ const resetSample = () => {
   <main class="playground" :data-theme="theme">
     <PlaygroundHeader
       :duration="parseView.duration"
-      :status-label="statusLabel"
-      :status-tone="statusTone"
-      :theme="theme"
+      :status-label
+      :status-tone
+      :theme
       :version="oxJsdocWasmVersion"
       @toggle-theme="toggleTheme"
     />
@@ -179,14 +179,10 @@ const resetSample = () => {
     />
 
     <section class="workspace" aria-label="JSDoc AST explorer">
-      <SourcePane
-        :set-editor-host="setEditorHost"
-        :source-length="source.length"
-        @reset="resetSample"
-      />
+      <SourcePane :set-editor-host :source-length="source.length" @reset="resetSample" />
 
       <AstPane
-        :parse-view="parseView"
+        :parse-view
         :reveal-path="revealAstPath"
         :reveal-version="revealAstVersion"
         :selected-path="selectedAstPath"

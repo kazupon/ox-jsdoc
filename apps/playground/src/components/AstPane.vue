@@ -33,9 +33,9 @@ function handleSelect(selection: AstSelection): void {
 
     <AstTree
       :ast="parseView.ast"
-      :reveal-path="revealPath"
-      :reveal-version="revealVersion"
-      :selected-path="selectedPath"
+      :reveal-path
+      :reveal-version
+      :selected-path
       @select="handleSelect"
     />
   </section>

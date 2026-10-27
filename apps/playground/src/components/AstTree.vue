@@ -24,9 +24,9 @@ function handleSelect(selection: AstSelection): void {
       name="root"
       path="root"
       root
-      :reveal-path="revealPath"
-      :reveal-version="revealVersion"
-      :selected-path="selectedPath"
+      :reveal-path
+      :reveal-version
+      :selected-path
       :value="ast"
       @select="handleSelect"
     />
