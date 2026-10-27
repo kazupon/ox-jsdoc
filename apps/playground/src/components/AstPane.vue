@@ -33,9 +33,9 @@ function handleSelect(selection: AstSelection): void {
 
     <AstTree
       :ast="parseView.ast"
-      :reveal-path="revealPath"
-      :reveal-version="revealVersion"
-      :selected-path="selectedPath"
+      :reveal-path
+      :reveal-version
+      :selected-path
       @select="handleSelect"
     />
   </section>
@@ -49,12 +49,12 @@ function handleSelect(selection: AstSelection): void {
 .diagnostics {
   border-bottom: 1px solid var(--line);
   background: rgba(255, 226, 190, 0.6);
-  color: #7e2f1e;
+  color: var(--diagnostic-ink);
   font: 13px/1.5 var(--mono);
-}
 
-.diagnostics p {
-  margin: 0;
-  padding: 10px 16px;
+  & p {
+    margin: 0;
+    padding: 10px 16px;
+  }
 }
 </style>

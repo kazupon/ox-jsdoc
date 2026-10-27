@@ -19,6 +19,8 @@
   --ast-string: #8b6f4e;
   --ast-number: #1f6f8b;
   --ast-boolean: #0891b2;
+  --ast-font-size: 14px;
+  --diagnostic-ink: #7e2f1e;
   --shadow: rgba(35, 29, 20, 0.16);
   --mono: Menlo, Monaco, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   --sans: 'IBM Plex Sans', Montserrat, 'Helvetica Neue', sans-serif;

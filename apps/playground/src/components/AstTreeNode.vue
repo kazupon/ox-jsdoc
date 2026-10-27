@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useTemplateRef, watch } from 'vue'
 import type { AstSelection, SourceRange } from '../types/playground'
-
-defineOptions({
-  name: 'AstTreeNode'
-})
 
 type AstChild = {
   name: string
@@ -12,59 +8,62 @@ type AstChild = {
   value: unknown
 }
 
-const props = withDefaults(
-  defineProps<{
-    depth?: number
-    name: string
-    path: string
-    revealPath?: string
-    revealVersion?: number
-    root?: boolean
-    selectedPath?: string
-    value: unknown
-  }>(),
-  {
-    depth: 0,
-    revealPath: '',
-    revealVersion: 0,
-    root: false,
-    selectedPath: ''
-  }
-)
+const {
+  depth = 0,
+  path,
+  revealPath = '',
+  revealVersion = 0,
+  root = false,
+  selectedPath = '',
+  value
+} = defineProps<{
+  depth?: number
+  name: string
+  path: string
+  revealPath?: string
+  revealVersion?: number
+  root?: boolean
+  selectedPath?: string
+  value: unknown
+}>()
 
 const emit = defineEmits<{
   select: [selection: AstSelection]
 }>()
 
-const children = computed(() => getAstChildren(props.value, props.path))
+defineOptions({
+  name: 'AstTreeNode'
+})
+
+const children = computed(() => getAstChildren(value, path))
 const openable = computed(() => children.value.length > 0)
 const openManual = ref<boolean>()
-const open = computed(() => openable.value && (openManual.value ?? props.root))
+const open = computed(() => openable.value && (openManual.value ?? root))
 const valueCreated = ref(false)
-const rowElement = ref<HTMLElement | null>(null)
-const range = computed(() => getAstRange(props.value))
-const title = computed(() => getAstTitle(props.value))
-const preview = computed(() => getAstPreview(props.value))
-const valueClass = computed(() => getAstValueClass(props.value))
-const brackets = computed(() => getAstBrackets(props.value))
-const rowStyle = computed(() => ({ marginLeft: `${props.depth * 28 + 22}px` }))
+const rowElement = useTemplateRef<HTMLElement>('rowElement')
+const range = computed(() => getAstRange(value))
+const title = computed(() => getAstTitle(value))
+const preview = computed(() => getAstPreview(value))
+const valueClass = computed(() => getAstValueClass(value))
+const brackets = computed(() => getAstBrackets(value))
+const rowStyle = computed(() => ({ marginLeft: `${depth * 28 + 22}px` }))
 
 watch(
   open,
-  value => {
-    valueCreated.value ||= value
+  isOpen => {
+    valueCreated.value ||= isOpen
   },
   { immediate: true }
 )
 
 watch(
-  () => [props.revealPath, props.revealVersion] as const,
-  ([revealPath]) => {
-    if (openable.value && isPathAncestorOrSelf(props.path, revealPath)) {
+  () => [revealPath, revealVersion] as const,
+  () => {
+    if (openable.value && isPathAncestorOrSelf(path, revealPath)) {
       openManual.value = true
     }
 
-    if (props.path === revealPath) {
+    if (path === revealPath) {
       rowElement.value?.scrollIntoView({
         behavior: 'smooth',
         block: 'nearest',
@@ -77,9 +76,9 @@ watch(
 
 function selectNode(): void {
   emit('select', {
-    path: props.path,
+    path,
     range: range.value,
-    value: props.value
+    value
   })
 }
 
@@ -302,9 +301,9 @@ function getAstValueClass(value: unknown): string {
         :depth="depth + 1"
         :name="child.name"
         :path="child.path"
-        :reveal-path="revealPath"
-        :reveal-version="revealVersion"
-        :selected-path="selectedPath"
+        :reveal-path
+        :reveal-version
+        :selected-path
         :value="child.value"
         @select="handleChildSelect"
       />
@@ -324,7 +323,7 @@ function getAstValueClass(value: unknown): string {
   padding: 0;
   cursor: pointer;
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: var(--ast-font-size);
   line-height: 1.55;
   white-space: nowrap;
 }
@@ -334,18 +333,20 @@ function getAstValueClass(value: unknown): string {
   outline: none;
 }
 
-.ast-node-row.is-selected .ast-key,
-.ast-node-row.is-selected .ast-title,
-.ast-node-row.is-selected .ast-value,
-.ast-node-row.is-selected .ast-summary {
-  border-radius: 4px;
-  background: rgba(111, 209, 199, 0.18);
+.ast-node-row.is-selected {
+  & .ast-key,
+  & .ast-title,
+  & .ast-value,
+  & .ast-summary {
+    border-radius: 4px;
+    background: rgba(111, 209, 199, 0.18);
+  }
 }
 
 .ast-toggle {
   position: absolute;
   top: 0;
-  left: -22px;
+  inset-inline-start: -22px;
   display: inline-grid;
   width: 16px;
   height: 28px;
@@ -420,7 +421,7 @@ function getAstValueClass(value: unknown): string {
 .ast-bracket,
 .ast-title,
 .ast-summary {
-  margin-right: 0.35em;
+  margin-inline-end: 0.35em;
 }
 
 .ast-title {

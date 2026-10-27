@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useId } from 'vue'
+
 import type { PlaygroundTheme } from '../types/playground'
 
 defineProps<{
@@ -13,13 +15,15 @@ const emit = defineEmits<{
   toggleTheme: []
 }>()
 
+const titleId = useId()
+
 function handleToggleTheme(): void {
   emit('toggleTheme')
 }
 </script>
 
 <template>
-  <section class="topbar" aria-labelledby="title">
+  <section class="topbar" :aria-labelledby="titleId">
     <div class="brand">
       <img
         class="brand-logo"
@@ -31,7 +35,7 @@ function handleToggleTheme(): void {
       />
       <div class="brand-copy">
         <p class="eyebrow">oxjsdoc playground (wasm) v{{ version }}</p>
-        <h1 id="title" class="product-logo-text">JSDoc AST Explorer</h1>
+        <h1 :id="titleId" class="product-logo-text">JSDoc AST Explorer</h1>
         <p class="tagline">High performance jsdoc parser</p>
       </div>
     </div>
@@ -136,16 +140,16 @@ function handleToggleTheme(): void {
   letter-spacing: 0.1em;
   text-decoration: none;
   text-transform: uppercase;
+
+  & svg {
+    width: 15px;
+    height: 15px;
+  }
 }
 
 .github-link:hover {
   border-color: var(--accent);
   color: var(--accent);
-}
-
-.github-link svg {
-  width: 15px;
-  height: 15px;
 }
 
 h1 {
@@ -180,6 +184,10 @@ h1 {
   background: var(--panel-strong);
   color: var(--muted);
   white-space: nowrap;
+
+  & strong {
+    color: var(--ink);
+  }
 }
 
 .theme-toggle {
@@ -208,7 +216,7 @@ h1 {
 .toggle-thumb {
   position: absolute;
   top: 3px;
-  left: 3px;
+  inset-inline-start: 3px;
   width: 14px;
   height: 14px;
   border-radius: 50%;
@@ -216,8 +224,10 @@ h1 {
   transition: transform 0.2s ease;
 }
 
-.theme-toggle[aria-pressed='true'] .toggle-thumb {
-  transform: translateX(18px);
+.theme-toggle[aria-pressed='true'] {
+  & .toggle-thumb {
+    transform: translateX(18px);
+  }
 }
 
 .status::before {
@@ -241,10 +251,6 @@ h1 {
 
 .status.is-error::before {
   background: #b5312e;
-}
-
-.status strong {
-  color: var(--ink);
 }
 
 @media (max-width: 980px) {
