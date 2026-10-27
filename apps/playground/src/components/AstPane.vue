@@ -49,7 +49,7 @@ function handleSelect(selection: AstSelection): void {
 .diagnostics {
   border-bottom: 1px solid var(--line);
   background: rgba(255, 226, 190, 0.6);
-  color: #7e2f1e;
+  color: var(--diagnostic-ink);
   font: 13px/1.5 var(--mono);
 
   & p {

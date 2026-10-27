@@ -323,7 +323,7 @@ function getAstValueClass(value: unknown): string {
   padding: 0;
   cursor: pointer;
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: var(--ast-font-size);
   line-height: 1.55;
   white-space: nowrap;
 }

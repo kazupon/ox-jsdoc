@@ -43,7 +43,7 @@ function handleSelect(selection: AstSelection): void {
   background: var(--editor-bg);
   color: var(--ink);
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: var(--ast-font-size);
   line-height: 1.55;
 }
 
