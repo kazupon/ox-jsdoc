@@ -51,10 +51,10 @@ function handleSelect(selection: AstSelection): void {
   background: rgba(255, 226, 190, 0.6);
   color: #7e2f1e;
   font: 13px/1.5 var(--mono);
-}
 
-.diagnostics p {
-  margin: 0;
-  padding: 10px 16px;
+  & p {
+    margin: 0;
+    padding: 10px 16px;
+  }
 }
 </style>

@@ -333,12 +333,14 @@ function getAstValueClass(value: unknown): string {
   outline: none;
 }
 
-.ast-node-row.is-selected .ast-key,
-.ast-node-row.is-selected .ast-title,
-.ast-node-row.is-selected .ast-value,
-.ast-node-row.is-selected .ast-summary {
-  border-radius: 4px;
-  background: rgba(111, 209, 199, 0.18);
+.ast-node-row.is-selected {
+  & .ast-key,
+  & .ast-title,
+  & .ast-value,
+  & .ast-summary {
+    border-radius: 4px;
+    background: rgba(111, 209, 199, 0.18);
+  }
 }
 
 .ast-toggle {

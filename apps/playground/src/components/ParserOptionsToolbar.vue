@@ -102,6 +102,29 @@ function handleTypeParseModeChange(event: Event): void {
   font: 700 12px/1 var(--sans);
   letter-spacing: 0.12em;
   text-transform: uppercase;
+
+  & label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel-strong);
+  }
+
+  & input,
+  & select {
+    accent-color: var(--accent);
+  }
+
+  & select {
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+  }
 }
 
 .toolbar-label {
@@ -112,41 +135,18 @@ function handleTypeParseModeChange(event: Event): void {
   justify-content: center;
   padding: 0 8px 0 4px;
   color: var(--accent);
-}
 
-.toolbar-label span {
-  color: var(--accent);
-  white-space: nowrap;
-}
+  & span {
+    color: var(--accent);
+    white-space: nowrap;
+  }
 
-.toolbar-label small {
-  color: var(--muted);
-  font: 600 10px/1 var(--sans);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.toolbar label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 38px;
-  padding: 9px 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--panel-strong);
-}
-
-.toolbar input,
-.toolbar select {
-  accent-color: var(--accent);
-}
-
-.toolbar select {
-  border: none;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
+  & small {
+    color: var(--muted);
+    font: 600 10px/1 var(--sans);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
 }
 </style>
