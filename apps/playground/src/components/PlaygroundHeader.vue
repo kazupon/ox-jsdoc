@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useId } from 'vue'
+
 import type { PlaygroundTheme } from '../types/playground'
 
 defineProps<{
@@ -13,13 +15,15 @@ const emit = defineEmits<{
   toggleTheme: []
 }>()
 
+const titleId = useId()
+
 function handleToggleTheme(): void {
   emit('toggleTheme')
 }
 </script>
 
 <template>
-  <section class="topbar" aria-labelledby="title">
+  <section class="topbar" :aria-labelledby="titleId">
     <div class="brand">
       <img
         class="brand-logo"
@@ -31,7 +35,7 @@ function handleToggleTheme(): void {
       />
       <div class="brand-copy">
         <p class="eyebrow">oxjsdoc playground (wasm) v{{ version }}</p>
-        <h1 id="title" class="product-logo-text">JSDoc AST Explorer</h1>
+        <h1 :id="titleId" class="product-logo-text">JSDoc AST Explorer</h1>
         <p class="tagline">High performance jsdoc parser</p>
       </div>
     </div>
