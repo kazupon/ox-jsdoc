@@ -22,6 +22,12 @@
       "description": "vize releases several times a day; update it once a week",
       "matchPackageNames": ["vize"],
       "schedule": ["* 0-3 * * 1"]
+    },
+    {
+      "description": "The vize update can only start in its weekly window, so do not let the limits on open PRs hold it back",
+      "matchPackageNames": ["vize"],
+      "prConcurrentLimit": 0,
+      "prHourlyLimit": 0
     }
   ]
 }
