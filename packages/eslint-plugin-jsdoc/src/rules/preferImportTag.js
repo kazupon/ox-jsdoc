@@ -12,7 +12,7 @@ import {
   stringify,
   traverse,
   tryParse as tryParseType,
-} from '@es-joy/jsdoccomment';
+} from '@ox-jsdoc/jsdoccomment';
 import {
   Linter,
 } from 'eslint';
@@ -152,7 +152,7 @@ export default iterateJsdoc(({
   };
 
   /**
-   * @param {import('@es-joy/jsdoccomment').JsdocTagWithInline} tag
+   * @param {import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline} tag
    */
   const iterateInlineImports = (tag) => {
     const potentialType = tag.type;

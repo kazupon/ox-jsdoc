@@ -10,7 +10,7 @@ import {
   stringify,
   traverse,
   tryParse as tryParseType,
-} from '@es-joy/jsdoccomment';
+} from '@ox-jsdoc/jsdoccomment';
 import {
   parse as espree,
 } from 'espree';
@@ -64,7 +64,7 @@ export default iterateJsdoc(({
   } = settings;
 
   /**
-   * @param {import('@es-joy/jsdoccomment').JsdocTagWithInline} tag
+   * @param {import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline} tag
    */
   const checkTypeFormats = (tag) => {
     const potentialType = tag.type;

@@ -1,7 +1,7 @@
 import iterateJsdoc from '../iterateJsdoc.js';
 
 /**
- * @param {import('@es-joy/jsdoccomment').JsdocBlockWithInline} jsdoc
+ * @param {import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline} jsdoc
  * @param {import('../iterateJsdoc.js').Utils} utils
  * @param {number} requireSingleLineUnderCount
  */
@@ -83,7 +83,7 @@ const checkForShortTags = (jsdoc, utils, requireSingleLineUnderCount) => {
 };
 
 /**
- * @param {import('@es-joy/jsdoccomment').JsdocBlockWithInline} jsdoc
+ * @param {import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline} jsdoc
  * @param {import('../iterateJsdoc.js').Utils} utils
  * @param {number} requireSingleLineUnderCount
  */

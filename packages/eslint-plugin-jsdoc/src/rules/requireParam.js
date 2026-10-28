@@ -162,7 +162,7 @@ export default iterateJsdoc(({
 
   /**
    *
-   * @param {(import('@es-joy/jsdoccomment').JsdocTagWithInline & {
+   * @param {(import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline & {
    *   newAdd?: boolean
    * })[]} jsdocTags
    * @param {import('../iterateJsdoc.js').Integer} indexAtFunctionParams
@@ -455,7 +455,7 @@ export default iterateJsdoc(({
       };
 
       /**
-       * @type {(import('@es-joy/jsdoccomment').JsdocTagWithInline & {
+       * @type {(import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline & {
        *   newAdd?: true
        * })[]}
        */ (jsdoc.tags).splice(tagIndex, spliceCount, {

@@ -3,7 +3,7 @@ import {
   commentHandler,
   getJSDocComment,
   parseComment,
-} from '@es-joy/jsdoccomment';
+} from '@ox-jsdoc/jsdoccomment';
 import {
   stringify as commentStringify,
   util,
@@ -15,7 +15,7 @@ import esquery from 'esquery';
  */
 
 /**
- * @typedef {import('@es-joy/jsdoccomment').JsdocBlockWithInline} JsdocBlockWithInline
+ * @typedef {import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline} JsdocBlockWithInline
  */
 
 /**
@@ -43,7 +43,7 @@ import esquery from 'esquery';
  *   selector?: string,
  *   comment?: string
  * }} info
- * @param {null|((jsdoc: import('@es-joy/jsdoccomment').JsdocBlockWithInline) => boolean|undefined)} handler
+ * @param {null|((jsdoc: import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline) => boolean|undefined)} handler
  * @param {import('eslint').Rule.Node} node
  * @returns {void}
  */
@@ -52,7 +52,7 @@ import esquery from 'esquery';
  * @callback ForEachPreferredTag
  * @param {string} tagName
  * @param {(
- *   matchingJsdocTag: import('@es-joy/jsdoccomment').JsdocTagWithInline,
+ *   matchingJsdocTag: import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline,
  *   targetTagName: string
  * ) => void} arrayHandler
  * @param {boolean} [skipReportingBlockedTag]
@@ -431,27 +431,27 @@ import esquery from 'esquery';
 /**
  * @callback GetPresentTags
  * @param {string[]} tagList
- * @returns {import('@es-joy/jsdoccomment').JsdocTagWithInline[]}
+ * @returns {import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline[]}
  */
 
 /**
  * @callback FilterTags
- * @param {(tag: import('@es-joy/jsdoccomment').JsdocTagWithInline) => boolean} filter
- * @returns {import('@es-joy/jsdoccomment').JsdocTagWithInline[]}
+ * @param {(tag: import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline) => boolean} filter
+ * @returns {import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline[]}
  */
 
 /**
  * @callback FilterAllTags
  * @param {(tag: (import('comment-parser').Spec|
- *   import('@es-joy/jsdoccomment').JsdocInlineTagNoType)) => boolean} filter
+ *   import('@ox-jsdoc/jsdoccomment').JsdocInlineTagNoType)) => boolean} filter
  * @returns {(import('comment-parser').Spec|
- *   import('@es-joy/jsdoccomment').JsdocInlineTagNoType)[]}
+ *   import('@ox-jsdoc/jsdoccomment').JsdocInlineTagNoType)[]}
  */
 
 /**
  * @callback getInlineTags
  * @returns {(import('comment-parser').Spec|
- *   import('@es-joy/jsdoccomment').JsdocInlineTagNoType & {
+ *   import('@ox-jsdoc/jsdoccomment').JsdocInlineTagNoType & {
  *     line?: number | undefined; column?: number | undefined;
  *   })[]}
  */
@@ -2177,7 +2177,7 @@ const makeReport = (context, commentNode) => {
  * @param {JsdocBlockWithInline} jsdoc
  * @param {RuleConfig} ruleConfig
  * @param {import('eslint').Rule.RuleContext} context
- * @param {import('@es-joy/jsdoccomment').Token} jsdocNode
+ * @param {import('@ox-jsdoc/jsdoccomment').Token} jsdocNode
  * @param {Node|null} node
  * @param {Settings} settings
  * @param {import('eslint').SourceCode} sourceCode
@@ -2329,7 +2329,7 @@ const getIndentAndJSDoc = function (lines, jsdocNode) {
  * @returns {import('eslint').Rule.RuleModule}
  */
 const iterateAllJsdocs = (iterator, ruleConfig, contexts, additiveCommentContexts) => {
-  /** @type {import('@es-joy/jsdoccomment').CommentHandler} */
+  /** @type {import('@ox-jsdoc/jsdoccomment').CommentHandler} */
   let handler;
 
   /** @type {Settings|false} */
@@ -2776,4 +2776,4 @@ export default function iterateJsdoc (iterator, ruleConfig) {
 
 export {
   parseComment,
-} from '@es-joy/jsdoccomment';
+} from '@ox-jsdoc/jsdoccomment';

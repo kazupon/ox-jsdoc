@@ -15,7 +15,7 @@ import {
   getDecorator,
   getJSDocComment,
   getReducedASTNode,
-} from '@es-joy/jsdoccomment';
+} from '@ox-jsdoc/jsdoccomment';
 
 /**
  * @typedef {{

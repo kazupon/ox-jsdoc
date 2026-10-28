@@ -12,7 +12,7 @@ import {
   parseComment,
   stringify,
   tryParse,
-} from '@es-joy/jsdoccomment';
+} from '@ox-jsdoc/jsdoccomment';
 import {
   parse as espree,
 } from 'espree';
@@ -732,8 +732,8 @@ const hasTag = (jsdoc, targetTagName) => {
 
 /**
  * @param {import('./iterateJsdoc.js').JsdocBlockWithInline} jsdoc
- * @param {(tag: import('@es-joy/jsdoccomment').JsdocTagWithInline) => boolean} filter
- * @returns {import('@es-joy/jsdoccomment').JsdocTagWithInline[]}
+ * @param {(tag: import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline) => boolean} filter
+ * @returns {import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline[]}
  */
 const filterTags = (jsdoc, filter) => {
   return jsdoc.tags.filter((tag) => {
@@ -805,7 +805,7 @@ const getPreferredTagName = (jsdoc, {
  * @param {import('./iterateJsdoc.js').JsdocBlockWithInline} jsdoc
  * @param {string} tagName
  * @param {(
- *   matchingJsdocTag: import('@es-joy/jsdoccomment').JsdocTagWithInline,
+ *   matchingJsdocTag: import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline,
  *   targetTagName: string
  * ) => void} arrayHandler
  * @param {object} cfg
@@ -851,7 +851,7 @@ const forEachPreferredTag = (
   for (const matchingJsdocTag of matchingJsdocTags) {
     arrayHandler(
       /**
-       * @type {import('@es-joy/jsdoccomment').JsdocTagWithInline}
+       * @type {import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline}
        */ (
         matchingJsdocTag
       ), targetTagName,
@@ -863,7 +863,7 @@ const forEachPreferredTag = (
  * Get all inline tags and inline tags in tags
  * @param {import('./iterateJsdoc.js').JsdocBlockWithInline} jsdoc
  * @returns {(import('comment-parser').Spec|
- *   import('@es-joy/jsdoccomment').JsdocInlineTagNoType & {
+ *   import('@ox-jsdoc/jsdoccomment').JsdocInlineTagNoType & {
  *     line?: number | undefined; column?: number | undefined;
  *   })[]}
  */
@@ -909,7 +909,7 @@ const getInlineTags = (jsdoc) => {
       return (
         /**
          * @type {import('comment-parser').Spec & {
-         *   inlineTags: import('@es-joy/jsdoccomment').JsdocInlineTagNoType[]
+         *   inlineTags: import('@ox-jsdoc/jsdoccomment').JsdocInlineTagNoType[]
          * }}
          */ (
           tag
@@ -923,7 +923,7 @@ const getInlineTags = (jsdoc) => {
  * Get all tags, inline tags and inline tags in tags
  * @param {import('./iterateJsdoc.js').JsdocBlockWithInline} jsdoc
  * @returns {(import('comment-parser').Spec|
- *   import('@es-joy/jsdoccomment').JsdocInlineTagNoType & {
+ *   import('@ox-jsdoc/jsdoccomment').JsdocInlineTagNoType & {
  *     line?: number | undefined; column?: number | undefined;
  *   })[]}
  */
@@ -1098,13 +1098,13 @@ const isNameOrNamepathDefiningTag = (tag, tagMap = tagStructure) => {
  * `require-returns-check` ask for all blocks of the file once per JSDoc
  * block they check, so without this, every comment of the file was parsed
  * again for each block (quadratic time on larger files).
- * @type {WeakMap<import('eslint').SourceCode, import('@es-joy/jsdoccomment').JsdocBlockWithInline[]>}
+ * @type {WeakMap<import('eslint').SourceCode, import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline[]>}
  */
 const jsdocCommentBlocksCache = new WeakMap();
 
 /**
  * @param {import('eslint').SourceCode} sourceCode
- * @returns {import('@es-joy/jsdoccomment').JsdocBlockWithInline[]}
+ * @returns {import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline[]}
  */
 const getJSDocCommentBlocks = (sourceCode) => {
   let blocks = jsdocCommentBlocksCache.get(sourceCode);
@@ -1693,7 +1693,7 @@ const enforcedContexts = (context, defaultContexts, settings) => {
 /**
  * @param {import('./iterateJsdoc.js').Context[]} contexts
  * @param {import('./iterateJsdoc.js').CheckJsdoc} checkJsdoc
- * @param {import('@es-joy/jsdoccomment').CommentHandler} [handler]
+ * @param {import('@ox-jsdoc/jsdoccomment').CommentHandler} [handler]
  * @param {boolean} [convertAny]
  * @returns {import('eslint').Rule.RuleListener}
  */
@@ -1733,9 +1733,9 @@ const getContextObject = (contexts, checkJsdoc, handler, convertAny) => {
             comment: prop.comment,
           },
           /**
-           * @type {(jsdoc: import('@es-joy/jsdoccomment').JsdocBlockWithInline) => boolean}
+           * @type {(jsdoc: import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline) => boolean}
            */
-          (/** @type {import('@es-joy/jsdoccomment').CommentHandler} */ (
+          (/** @type {import('@ox-jsdoc/jsdoccomment').CommentHandler} */ (
             handler
           ).bind(null, prop.comment)),
         );
@@ -2044,8 +2044,8 @@ const strictNativeTypes = [
 ];
 
 /**
- * @param {import('@es-joy/jsdoccomment').JsdocBlockWithInline} jsdoc
- * @param {import('@es-joy/jsdoccomment').JsdocTagWithInline} tag
+ * @param {import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline} jsdoc
+ * @param {import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline} tag
  * @param {import('jsdoc-type-pratt-parser').RootResult} parsedType
  * @param {string} indent
  * @param {string} typeBracketSpacing

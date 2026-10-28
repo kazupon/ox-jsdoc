@@ -7,7 +7,7 @@ import {
 } from './jsdocUtils.js';
 import {
   parseComment,
-} from '@es-joy/jsdoccomment';
+} from '@ox-jsdoc/jsdoccomment';
 import * as espree from 'espree';
 import {
   decode,

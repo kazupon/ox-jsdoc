@@ -70,7 +70,7 @@ The following patterns are not considered problems:
  */
 
 /**
- * @type {null|import('@es-joy/jsdoccomment').InlineTag}
+ * @type {null|import('@ox-jsdoc/jsdoccomment').InlineTag}
  */
 
 /**
@@ -82,8 +82,8 @@ The following patterns are not considered problems:
  */
 
 /**
- * @type {null|import('@es-joy/jsdoccomment').InlineTag|
- *   import('@es-joy/jsdoccomment').JsdocBlock}
+ * @type {null|import('@ox-jsdoc/jsdoccomment').InlineTag|
+ *   import('@ox-jsdoc/jsdoccomment').JsdocBlock}
  */
 
 /**

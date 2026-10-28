@@ -3,7 +3,7 @@ import {
   parse,
   traverse,
   tryParse,
-} from '@es-joy/jsdoccomment';
+} from '@ox-jsdoc/jsdoccomment';
 import * as resolve from '@es-joy/resolve.exports';
 import {
   parse as espree,

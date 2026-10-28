@@ -10,7 +10,7 @@ import {
   parse as parseType,
   traverse,
   tryParse as tryParseType,
-} from '@es-joy/jsdoccomment';
+} from '@ox-jsdoc/jsdoccomment';
 import {
   parse as espree,
 } from 'espree';
@@ -783,7 +783,7 @@ export default iterateJsdoc(({
   /**
    * @typedef {{
    *   parsedType: import('jsdoc-type-pratt-parser').RootResult;
-   *   tag: import('comment-parser').Spec|import('@es-joy/jsdoccomment').JsdocInlineTagNoType & {
+   *   tag: import('comment-parser').Spec|import('@ox-jsdoc/jsdoccomment').JsdocInlineTagNoType & {
    *     line?: import('../iterateJsdoc.js').Integer
    *   }
    * }} TypeAndTagInfo
@@ -791,7 +791,7 @@ export default iterateJsdoc(({
 
   /**
    * @param {string} propertyName
-   * @returns {(tag: (import('@es-joy/jsdoccomment').JsdocInlineTagNoType & {
+   * @returns {(tag: (import('@ox-jsdoc/jsdoccomment').JsdocInlineTagNoType & {
    *     name?: string,
    *     type?: string,
    *     line?: import('../iterateJsdoc.js').Integer

@@ -1,6 +1,6 @@
 import {
   findJSDocComment,
-} from '@es-joy/jsdoccomment';
+} from '@ox-jsdoc/jsdoccomment';
 import debugModule from 'debug';
 
 const debug = debugModule('requireExportJsdoc');

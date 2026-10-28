@@ -11,7 +11,7 @@ import {
   getFollowingComment,
   getNonJsdocComment,
   getReducedASTNode,
-} from '@es-joy/jsdoccomment';
+} from '@ox-jsdoc/jsdoccomment';
 
 const defaultAllowedPrefixes = [
   '@ts-', '@license', '@license-end',

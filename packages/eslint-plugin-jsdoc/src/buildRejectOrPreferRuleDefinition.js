@@ -7,7 +7,7 @@ import {
   stringify,
   traverse,
   tryParse,
-} from '@es-joy/jsdoccomment';
+} from '@ox-jsdoc/jsdoccomment';
 import {
   parse as espree,
 } from 'espree';

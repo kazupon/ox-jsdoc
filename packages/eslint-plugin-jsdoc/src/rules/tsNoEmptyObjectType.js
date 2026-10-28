@@ -2,7 +2,7 @@ import iterateJsdoc from '../iterateJsdoc.js';
 import {
   parse as parseType,
   traverse,
-} from '@es-joy/jsdoccomment';
+} from '@ox-jsdoc/jsdoccomment';
 import {
   parse as espree,
 } from 'espree';
@@ -16,7 +16,7 @@ export default iterateJsdoc(({
   }
 
   /**
-   * @param {import('@es-joy/jsdoccomment').JsdocTagWithInline} tag
+   * @param {import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline} tag
    */
   const checkType = (tag) => {
     const potentialType = tag.type;
