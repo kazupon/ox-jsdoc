@@ -43,7 +43,8 @@ type WasmParseHandle = {
 }
 
 type OxJsdocWasmModule = {
-  default(moduleOrPath?: unknown): Promise<{ memory: WebAssembly.Memory }>
+  // wasm-bindgen 0.2.93+ warns when the input is not passed as `{ module_or_path }`.
+  default(options?: { module_or_path: string | URL }): Promise<{ memory: WebAssembly.Memory }>
   parse_jsdoc(
     sourceText: string,
     fenceAware: boolean | null,
@@ -114,7 +115,7 @@ export function useJsdocParser({ options, source, sourceLanguage }: UseJsdocPars
   onMounted(async () => {
     try {
       const wasmModule = await importOxJsdocWasmModule(oxJsdocWasmModuleUrl)
-      const wasmExports = await wasmModule.default(oxJsdocWasmBinaryUrl)
+      const wasmExports = await wasmModule.default({ module_or_path: oxJsdocWasmBinaryUrl })
 
       oxJsdocWasm.value = wasmModule
       wasmMemory.value = wasmExports.memory
