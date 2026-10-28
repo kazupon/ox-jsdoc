@@ -64,9 +64,10 @@
     "test-index": "pnpm run test-no-cov test/rules/index.js"
   },
   "dependencies": {
+    "@es-joy/escodegen": "^4.2.0",
     "@es-joy/resolve.exports": "1.2.0",
     "@ox-jsdoc/jsdoccomment": "workspace:*",
-    "are-docs-informative": "^0.1.0",
+    "are-docs-informative": "^0.1.1",
     "comment-parser": "1.4.9",
     "debug": "^4.4.3",
     "escape-string-regexp": "^5.0.0",
@@ -74,10 +75,10 @@
     "esquery": "^1.7.0",
     "html-entities": "^2.6.0",
     "jsdoc-type-pratt-parser": "~9.4.0",
-    "object-deep-merge": "^2.0.0",
+    "object-deep-merge": "^2.0.1",
     "parse-imports-exports": "^0.2.4",
-    "semver": "^7.7.4",
-    "spdx-expression-parse": "^4.0.0",
+    "semver": "^7.8.5",
+    "spdx-expression-parse": "^5.0.0",
     "to-valid-identifier": "^1.0.0"
   },
   "devDependencies": {
@@ -85,7 +86,6 @@
     "@babel/eslint-parser": "^7.28.6",
     "@babel/plugin-transform-flow-strip-types": "^7.27.1",
     "@babel/preset-env": "^7.29.2",
-    "@es-joy/escodegen": "^4.2.0",
     "@es-joy/jsdoc-eslint-parser": "^0.29.0",
     "@eslint/core": "^1.1.1",
     "@types/chai": "^5.2.3",
@@ -98,6 +98,7 @@
     "@types/semver": "^7.7.1",
     "@types/spdx-expression-parse": "^4.0.0",
     "@typescript-eslint/types": "8.61.0",
+    "@typescript-eslint/utils": "8.61.0",
     "babel-plugin-add-module-exports": "^1.0.4",
     "babel-plugin-transform-import-meta": "^2.3.3",
     "c8": "^11.0.0",
@@ -123,10 +124,14 @@
     "typescript-eslint": "8.61.0"
   },
   "peerDependencies": {
-    "eslint": "^7.0.0 || ^8.0.0 || ^9.0.0 || ^10.0.0"
+    "eslint": "^7.0.0 || ^8.0.0 || ^9.0.0 || ^10.0.0",
+    "typescript": "*"
   },
   "peerDependenciesMeta": {
     "eslint": {
+      "optional": true
+    },
+    "typescript": {
       "optional": true
     }
   },
