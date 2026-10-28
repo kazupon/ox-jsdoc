@@ -1,10 +1,11 @@
-import iterateJsdoc, {
-  parseComment,
-} from '../iterateJsdoc.js';
+import iterateJsdoc from '../iterateJsdoc.js';
 import {
   getDocumentNamepathDefiningTags,
   getJSDocCommentBlocks,
 } from '../jsdocUtils.js';
+import {
+  parseCommentForSource,
+} from '../parseCommentStrategy.js';
 import {
   getJSDocComment,
   parse as parseType,
@@ -304,7 +305,7 @@ export default iterateJsdoc(({
   }
 
   const allComments = sourceCode.getAllComments();
-  const comments = getJSDocCommentBlocks(sourceCode);
+  const comments = getJSDocCommentBlocks(sourceCode, settings);
 
   const globals = allComments
     .filter((comment) => {
@@ -313,7 +314,7 @@ export default iterateJsdoc(({
       return commentNode.value.replace(/^\s*globals/v, '').trim().split(/,\s*/v);
     }).concat(Object.keys(context.languageOptions.globals ?? []));
 
-  const typedefs = getDocumentNamepathDefiningTags(sourceCode);
+  const typedefs = getDocumentNamepathDefiningTags(sourceCode, settings);
 
   const typedefDeclarations = typedefs
     .map((tag) => {
@@ -384,7 +385,7 @@ export default iterateJsdoc(({
       return [];
     }
 
-    const jsdc = parseComment(commentNode, '');
+    const jsdc = parseCommentForSource(sourceCode, commentNode, settings, '');
 
     return jsdc.tags.filter((tag) => {
       return tag.tag === 'template';
@@ -973,6 +974,7 @@ export default iterateJsdoc(({
   //   too many times.
   exit ({
     context,
+    settings,
     state,
     utils,
   }) {
@@ -991,7 +993,7 @@ export default iterateJsdoc(({
       })
       .map((commentNode) => {
         return {
-          doc: parseComment(commentNode, ''),
+          doc: parseCommentForSource(context.sourceCode, commentNode, settings, ''),
           loc: commentNode.loc,
         };
       });

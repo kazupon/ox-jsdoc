@@ -1,6 +1,7 @@
-import iterateJsdoc, {
-  parseComment,
-} from '../iterateJsdoc.js';
+import iterateJsdoc from '../iterateJsdoc.js';
+import {
+  parseCommentForSource,
+} from '../parseCommentStrategy.js';
 import {
   getClosureTemplateTagDefaults,
   getTags,
@@ -144,7 +145,7 @@ export default iterateJsdoc(({
           continue;
         }
 
-        const innerJsdoc = parseComment(commentNode, '');
+        const innerJsdoc = parseCommentForSource(sourceCode, commentNode, settings, '');
         checkParamsAndReturnsTags(innerJsdoc);
 
         const typeName = /** @type {string} */ (utils.getPreferredTagName({

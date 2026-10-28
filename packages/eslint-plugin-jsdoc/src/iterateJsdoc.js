@@ -1,8 +1,10 @@
 import * as jsdocUtils from './jsdocUtils.js';
 import {
+  parseCommentForSource,
+} from './parseCommentStrategy.js';
+import {
   commentHandler,
   getJSDocComment,
-  parseComment,
 } from '@ox-jsdoc/jsdoccomment';
 import {
   stringify as commentStringify,
@@ -750,7 +752,7 @@ const getUtils = (
 
   /* c8 ignore next -- Fallback to deprecated method */
   const {
-    // @ts-expect-error ESLint < 10
+    // @ts-ignore ESLint < 10
     sourceCode = context.getSourceCode(),
   } = context;
 
@@ -1861,7 +1863,7 @@ const getUtils = (
     });
 
     if (classJsdocNode) {
-      return parseComment(classJsdocNode, '');
+      return parseCommentForSource(sourceCode, classJsdocNode, settings, '');
     }
 
     return null;
@@ -1959,7 +1961,8 @@ const getUtils = (
  *   ignoreInternal?: boolean,
  *   ignorePrivate?: boolean,
  *   exemptDestructuredRootsFromChecks?: boolean,
- *   skipInvokedExpressionsForCommentFinding?: boolean
+ *   skipInvokedExpressionsForCommentFinding?: boolean,
+ *   oxParseStrategy?: import('./parseCommentStrategy.js').OxParseStrategy
  * }} Settings
  */
 
@@ -1982,6 +1985,7 @@ const getUtils = (
  *       skipInvokedExpressionsForCommentFinding: boolean,
  *       mode: import('./jsdocUtils.js').ParserMode,
  *       contexts: Context[],
+ *       oxParseStrategy: import('./parseCommentStrategy.js').OxParseStrategy,
  *     }
  *   }
  * }} JSDocSettings
@@ -2026,6 +2030,11 @@ const getSettings = (context) => {
 
     // Many rules
     contexts: context.settings.jsdoc?.contexts,
+
+    // @ox-jsdoc benchmark fork
+    oxParseStrategy: /** @type {import('./parseCommentStrategy.js').OxParseStrategy} */ (
+      context.settings.jsdoc?.oxParseStrategy === 'batch' ? 'batch' : 'single'
+    ),
   };
   /* eslint-enable perfectionist/sort-objects */
 
@@ -2261,10 +2270,12 @@ const iterate = (
 
 /**
  * @param {string[]} lines
+ * @param {import('eslint').SourceCode} sourceCode
  * @param {import('estree').Comment} jsdocNode
+ * @param {Settings} settings
  * @returns {[indent: string, jsdoc: JsdocBlockWithInline]}
  */
-const getIndentAndJSDoc = function (lines, jsdocNode) {
+const getIndentAndJSDoc = function (lines, sourceCode, jsdocNode, settings) {
   const sourceLine = lines[
     /** @type {import('estree').SourceLocation} */
     (jsdocNode.loc).start.line - 1
@@ -2280,7 +2291,7 @@ const getIndentAndJSDoc = function (lines, jsdocNode) {
     (jsdocNode.loc).start.column,
   );
 
-  const jsdc = parseComment(jsdocNode, '');
+  const jsdc = parseCommentForSource(sourceCode, jsdocNode, settings, '');
 
   return [
     indnt, jsdc,
@@ -2346,7 +2357,7 @@ const iterateAllJsdocs = (iterator, ruleConfig, contexts, additiveCommentContext
   const callIterator = (context, node, jsdocNodes, state, lastCall) => {
     /* c8 ignore next -- Fallback to deprecated method */
     const {
-      // @ts-expect-error ESLint < 10
+      // @ts-ignore ESLint < 10
       sourceCode = context.getSourceCode(),
     } = context;
     const {
@@ -2367,7 +2378,10 @@ const iterateAllJsdocs = (iterator, ruleConfig, contexts, additiveCommentContext
         indent,
         jsdoc,
       ] = getIndentAndJSDoc(
-        lines, jsdocNode,
+        lines,
+        sourceCode,
+        jsdocNode,
+        /** @type {Settings} */ (settings),
       );
 
       if (additiveCommentContexts) {
@@ -2460,7 +2474,7 @@ const iterateAllJsdocs = (iterator, ruleConfig, contexts, additiveCommentContext
     create (context) {
       /* c8 ignore next -- Fallback to deprecated method */
       const {
-        // @ts-expect-error ESLint < 10
+        // @ts-ignore ESLint < 10
         sourceCode = context.getSourceCode(),
       } = context;
 
@@ -2551,7 +2565,7 @@ const checkFile = (iterator, ruleConfig) => {
     create (context) {
       /* c8 ignore next -- Fallback to deprecated method */
       const {
-        // @ts-expect-error ESLint < 10
+        // @ts-ignore ESLint < 10
         sourceCode = context.getSourceCode(),
       } = context;
       const settings = getSettings(context);
@@ -2677,7 +2691,7 @@ export default function iterateJsdoc (iterator, ruleConfig) {
 
       /* c8 ignore next -- Fallback to deprecated method */
       const {
-        // @ts-expect-error ESLint < 10
+        // @ts-ignore ESLint < 10
         sourceCode = context.getSourceCode(),
       } = context;
       const {
@@ -2699,8 +2713,10 @@ export default function iterateJsdoc (iterator, ruleConfig) {
           jsdoc,
         ] = getIndentAndJSDoc(
           lines,
+          sourceCode,
           /** @type {import('estree').Comment} */
           (jsdocNode),
+          settings,
         );
 
         if (
@@ -2759,7 +2775,7 @@ export default function iterateJsdoc (iterator, ruleConfig) {
         contextObject['Program:exit'] = () => {
           const ste = /** @type {StateObject} */ (state);
 
-          // @ts-expect-error `utils` not needed at this point
+          // @ts-ignore `utils` not needed at this point
           /** @type {Required<RuleConfig>} */ (ruleConfig).exit({
             context,
             settings,

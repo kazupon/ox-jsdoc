@@ -6,10 +6,12 @@ import {
 } from './tagNames.js';
 import WarnSettings from './WarnSettings.js';
 import {
+  parseCommentForSource,
+} from './parseCommentStrategy.js';
+import {
   generate,
 } from '@es-joy/escodegen';
 import {
-  parseComment,
   stringify,
   tryParse,
 } from '@ox-jsdoc/jsdoccomment';
@@ -1104,9 +1106,10 @@ const jsdocCommentBlocksCache = new WeakMap();
 
 /**
  * @param {import('eslint').SourceCode} sourceCode
+ * @param {import('./parseCommentStrategy.js').ParseSettings} [settings]
  * @returns {import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline[]}
  */
-const getJSDocCommentBlocks = (sourceCode) => {
+const getJSDocCommentBlocks = (sourceCode, settings = {}) => {
   let blocks = jsdocCommentBlocksCache.get(sourceCode);
   if (!blocks) {
     blocks = sourceCode.getAllComments()
@@ -1114,7 +1117,7 @@ const getJSDocCommentBlocks = (sourceCode) => {
         return (/^\*(?!\*)/v).test(comment.value);
       })
       .map((commentNode) => {
-        return parseComment(commentNode, '');
+        return parseCommentForSource(sourceCode, commentNode, settings, '');
       });
     jsdocCommentBlocksCache.set(sourceCode, blocks);
   }
@@ -1124,10 +1127,11 @@ const getJSDocCommentBlocks = (sourceCode) => {
 
 /**
  * @param {import('eslint').SourceCode} sourceCode
+ * @param {import('./parseCommentStrategy.js').ParseSettings} [settings]
  * @returns {import('comment-parser').Spec[]}
  */
-const getDocumentNamepathDefiningTags = (sourceCode) => {
-  return getJSDocCommentBlocks(sourceCode)
+const getDocumentNamepathDefiningTags = (sourceCode, settings = {}) => {
+  return getJSDocCommentBlocks(sourceCode, settings)
     .flatMap((doc) => {
       return doc.tags.filter(({
         tag,

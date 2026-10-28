@@ -141,7 +141,7 @@ export default iterateJsdoc(({
   }
 
   const returnNever = type === 'never';
-  const typedefs = getDocumentNamepathDefiningTags(sourceCode);
+  const typedefs = getDocumentNamepathDefiningTags(sourceCode, settings);
 
   /**
    * @param {import('comment-parser').Spec} returnTag

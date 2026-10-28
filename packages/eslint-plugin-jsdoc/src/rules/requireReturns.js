@@ -106,7 +106,7 @@ export default iterateJsdoc(({
       };
       /* c8 ignore next -- Fallback to deprecated method */
       const {
-        // @ts-expect-error ESLint < 10
+        // @ts-ignore ESLint < 10
         sourceCode = context.getSourceCode(),
       } = context;
       const exported = exportParser.isUncommentedExport(

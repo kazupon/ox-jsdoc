@@ -1,6 +1,7 @@
-import iterateJsdoc, {
-  parseComment,
-} from '../iterateJsdoc.js';
+import iterateJsdoc from '../iterateJsdoc.js';
+import {
+  parseCommentForSource,
+} from '../parseCommentStrategy.js';
 import {
   generate,
 } from '@es-joy/escodegen';
@@ -14,8 +15,8 @@ import {
   tryParse as tryParseType,
 } from '@ox-jsdoc/jsdoccomment';
 import {
-  Linter,
-} from 'eslint';
+  createRequire,
+} from 'node:module';
 import {
   parse as espree,
 } from 'espree';
@@ -24,6 +25,16 @@ import {
 } from 'parse-imports-exports';
 import semver from 'semver';
 import toValidIdentifier from 'to-valid-identifier';
+
+const requireFromHere = createRequire(import.meta.url);
+
+const getOptionalLinterVersion = () => {
+  try {
+    return requireFromHere('eslint').Linter?.version ?? '10.0.0';
+  } catch {
+    return '10.0.0';
+  }
+};
 
 export default iterateJsdoc(({
   context,
@@ -50,7 +61,7 @@ export default iterateJsdoc(({
     })
     .map((commentNode) => {
       return commentParserToESTree(
-        parseComment(commentNode, ''),
+        parseCommentForSource(sourceCode, commentNode, settings, ''),
         mode === 'permissive' ? 'typescript' : mode,
         {
           jsdocTypePrattParserArgs: {
@@ -117,7 +128,7 @@ export default iterateJsdoc(({
       }
 
       // For ESLint < 10, use the simple approach of inserting before programNode
-      if (semver.lt(Linter.version, '10.0.0')) {
+      if (semver.lt(getOptionalLinterVersion(), '10.0.0')) {
         return fixer.insertTextBefore(
           programNode,
           importText,
