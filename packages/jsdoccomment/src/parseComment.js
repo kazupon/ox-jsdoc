@@ -942,7 +942,10 @@ const normalizeTag = tag => {
       return line.tokens.name !== ''
     })
 
-    if (!nameLine) {
+    // Like comment-parser, look for the name on the following lines only
+    // when the tag has a type (`@param {string}` with the name on the next
+    // line). Without a type, the following lines are the description.
+    if (!nameLine && type !== '') {
       const continuationNameLine = source.find((line, index) => {
         return index > 0 &&
           line.tokens.tag === '' &&
