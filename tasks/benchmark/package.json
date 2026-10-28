@@ -12,7 +12,8 @@
     "benchmark:wasm-binary-vs-typed": "node --expose-gc ./scripts/binary-vs-typed-wasm.mjs",
     "benchmark:binary-size": "node --expose-gc ./scripts/binary-size-comparison.mjs",
     "benchmark:parse-batch": "node --expose-gc ./scripts/parse-batch-vs-loop.mjs",
-    "benchmark:jsdoc-linter": "node ./scripts/jsdoc-linter-setup.mjs && bash ./scripts/jsdoc-linter-hyperfine.sh && node ./scripts/jsdoc-linter-report.mjs"
+    "benchmark:jsdoc-linter": "node ./scripts/jsdoc-linter-setup.mjs && bash ./scripts/jsdoc-linter-hyperfine.sh && node ./scripts/jsdoc-linter-report.mjs",
+    "jsdoc-linter:parity": "node ./scripts/jsdoc-linter-parity.mjs"
   },
   "dependencies": {
     "@es-joy/jsdoccomment": "^0.100.0",

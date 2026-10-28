@@ -88,3 +88,6 @@ jobs:
 
       - name: Testing
         run: vpr test
+
+      - name: Comparing ESLint and Oxlint diagnostics of the jsdoc plugin
+        run: vp run @ox-jsdoc/benchmark#jsdoc-linter:parity
