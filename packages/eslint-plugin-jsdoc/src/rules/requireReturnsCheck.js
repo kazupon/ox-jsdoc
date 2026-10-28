@@ -6,7 +6,10 @@ import {
 import {
   traverse,
   tryParse as tryParseType,
-} from '@ox-jsdoc/jsdoccomment';
+} from '@es-joy/jsdoccomment';
+import {
+  parse as espree,
+} from 'espree';
 
 /**
  * @type {Partial<Record<import('../jsdocUtils.js').ParserMode, import('jsdoc-type-pratt-parser').ParseMode[]>>}
@@ -138,7 +141,7 @@ export default iterateJsdoc(({
   }
 
   const returnNever = type === 'never';
-  const typedefs = getDocumentNamepathDefiningTags(sourceCode, settings);
+  const typedefs = getDocumentNamepathDefiningTags(sourceCode);
 
   /**
    * @param {import('comment-parser').Spec} returnTag
@@ -152,7 +155,9 @@ export default iterateJsdoc(({
     const returnType = returnTag.type.trim();
     let parsedType;
     try {
-      parsedType = tryParseType(returnType, parseTypeModes[parseMode]);
+      parsedType = tryParseType(returnType, parseTypeModes[parseMode], {
+        computedPropertyParser: espree,
+      });
     } catch {
       return false;
     }

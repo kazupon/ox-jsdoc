@@ -7,6 +7,7 @@ import {
 // import {
 //   recommended as canonicalJsdoc,
 // } from 'eslint-config-canonical/jsdoc';
+import eslintPlugin from 'eslint-plugin-eslint-plugin';
 import globals from 'globals';
 
 const common = {
@@ -21,9 +22,17 @@ export default [
     ignores: [
       'coverage',
       'dist',
+      '.ignore/**',
+      '**/*.d.ts',
     ],
+    name: 'ignores',
   },
-  ...canonical,
+  ...canonical.map((cfg) => {
+    return {
+      name: 'canonical',
+      ...cfg,
+    };
+  }),
   // ...canonicalJsdoc,
   jsdoc({
     config: 'flat/recommended',
@@ -32,18 +41,13 @@ export default [
     config: 'examples-and-default-expressions',
   }),
   {
-    // Must be by itself
-    ignores: [
-      'dist/**', '.ignore/**', '**/*.d.ts',
-    ],
-  },
-  {
     ...common,
     languageOptions: {
       ecmaVersion: 'latest',
       globals: globals.node,
       sourceType: 'module',
     },
+    name: 'overrides',
     rules: {
       '@stylistic/array-element-newline': 0,
       '@stylistic/no-extra-parens': 0,
@@ -58,6 +62,7 @@ export default [
 
       'filenames/match-regex': 0,
       'import/extensions': 0,
+      'import/no-cycle': 0,
       'import/no-useless-path-segments': 0,
       'jsdoc/require-param-description': 0,
       'jsdoc/require-returns': 0,
@@ -79,26 +84,10 @@ export default [
     },
   },
   {
-    ...common,
     files: [
-      '.ncurc.cjs',
+      'src/rules/**/*.js',
     ],
-    languageOptions: {
-      parserOptions: {
-        ecmaFeatures: {
-          impliedStrict: false,
-        },
-      },
-      sourceType: 'script',
-    },
-    rules: {
-      'canonical/filename-match-regex': 0,
-      'import/no-commonjs': 0,
-      strict: [
-        'error',
-        'global',
-      ],
-    },
+    ...eslintPlugin.configs.recommended,
   },
   {
     ...common,
@@ -110,6 +99,7 @@ export default [
       globals: globals.mocha,
       sourceType: 'module',
     },
+    name: 'jsdoc/testing',
     rules: {
       'no-restricted-syntax': 0,
       'unicorn/prevent-abbreviations': 0,

@@ -746,6 +746,83 @@ export default /** @type {import('../index.js').TestCases} */ ({
         },
       ],
     },
+    {
+      code: `
+        export namespace Api {
+          export enum Status { Ok, Fail }
+          export const { destructured } = { destructured: 1 };
+          export import Alias = Elsewhere.Thing;
+        }
+        /**
+         * @param {Api.Status} s The status.
+         * @param {Api.Missing} m Not declared in the namespace.
+         */
+        export function f(s: Api.Status, m: unknown): void {}
+      `,
+      errors: [
+        {
+          line: 9,
+          message: 'The type \'Api.Missing\' is undefined.',
+        },
+      ],
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+    },
+    {
+      code: `
+        /** xyz {@link property} */
+        export default function () {}
+      `,
+      errors: [
+        {
+          line: 2,
+          message: 'The type \'property\' is undefined.',
+        },
+      ],
+      languageOptions: {
+        ecmaVersion: 2_022,
+      },
+    },
+    {
+      code: `
+        /** @type {ReadonlyArray<string>} */
+        export const d = [];
+      `,
+      errors: [
+        {
+          line: 2,
+          message: 'The type \'ReadonlyArray\' is undefined.',
+        },
+      ],
+      languageOptions: {
+        sourceType: 'module',
+      },
+      settings: {
+        jsdoc: {
+          mode: 'jsdoc',
+        },
+      },
+    },
+    {
+      code: `
+        /**
+         * @param {{a: <T>(x: T) => T, b: T}} obj
+         * @param {{m<U>(): U, n(): U}} obj2
+         */
+        function quux (obj, obj2) {}
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'The type \'T\' is undefined.',
+        },
+        {
+          line: 4,
+          message: 'The type \'U\' is undefined.',
+        },
+      ],
+    },
   ],
   valid: [
     {
@@ -1739,6 +1816,74 @@ export default /** @type {import('../index.js').TestCases} */ ({
     },
     {
       code: `
+        class MyClass {
+          property = true;
+
+          /** xyz {@link property} */
+          otherProperty = false;
+        }
+      `,
+      languageOptions: {
+        ecmaVersion: 2_022,
+      },
+    },
+    {
+      code: `
+        class MyClass {
+          property: boolean;
+
+          /** xyz {@link property} and {@link MyClass.property} */
+          otherProperty: boolean;
+        }
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+      settings: {
+        jsdoc: {
+          mode: 'typescript',
+        },
+      },
+    },
+    {
+      code: `
+        /** xyz {@link property} */
+        class MyClass {
+          property = true;
+        }
+      `,
+      languageOptions: {
+        ecmaVersion: 2_022,
+      },
+    },
+    {
+      code: `
+        /** xyz {@link property} and {@link MyClass.property} */
+        class MyClass {
+          public property: boolean;
+        }
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+      settings: {
+        jsdoc: {
+          mode: 'typescript',
+        },
+      },
+    },
+    {
+      code: `
+        const MyClass = /** xyz {@link property} */ class {
+          property = true;
+        };
+      `,
+      languageOptions: {
+        ecmaVersion: 2_022,
+      },
+    },
+    {
+      code: `
         /* globals SomeGlobal, AnotherGlobal */
         import * as Ably from "ably"
         import Testing, { another as Another, stillMore as StillMore } from "testing"
@@ -2118,6 +2263,102 @@ export default /** @type {import('../index.js').TestCases} */ ({
     },
     {
       code: `
+        export namespace Api {
+          export enum Status { Ok, Fail }
+        }
+        /**
+         * @param {Api.Status} s The status.
+         */
+        export function f(s: Api.Status): void {}
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+    },
+    {
+      code: `
+        export namespace Api {
+          export enum Status { Ok, Fail, 'Not-Ident' = 2 }
+        }
+        /** See {@link Api.Status.Ok}. */
+        export function f(): void {}
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+    },
+    {
+      code: `
+        declare namespace Shapes {
+          enum Kind { Circle, Square }
+        }
+        /**
+         * @param {Shapes.Kind} k The kind.
+         */
+        export function f(k: Shapes.Kind): void {}
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+    },
+    {
+      code: `
+        export namespace Outer {
+          export namespace Inner {
+            export enum Mode { A, B }
+          }
+        }
+        /**
+         * @param {Outer.Inner.Mode} m The mode.
+         */
+        export function f(m: Outer.Inner.Mode): void {}
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+    },
+    {
+      code: `
+        export namespace Cfg {
+          export const version = '1', build = 2;
+        }
+        /** See {@link Cfg.version} and {@link Cfg.build}. */
+        export function f(): void {}
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+    },
+    {
+      code: `
+        export namespace Api {
+          export function fn(): void {}
+          export declare function declared(): void;
+        }
+        /** See {@link Api.fn} and {@link Api.declared}. */
+        export function f(): void {}
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+    },
+    {
+      code: `
+        export namespace Api {
+          export import Alias = Elsewhere.Thing;
+          console.log('init');
+        }
+        /**
+         * @param {Api.Alias} a The alias.
+         */
+        export function f(a: Api.Alias): void {}
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+    },
+    {
+      code: `
         declare module "my-module" {
           export interface ModuleType {}
         }
@@ -2149,6 +2390,144 @@ export default /** @type {import('../index.js').TestCases} */ ({
         }
 
         console.log(Test);
+      `,
+    },
+    {
+      code: `
+        declare global {
+          const foo: number;
+        }
+
+        /**
+         * {@link foo}
+         */
+        export const bar = 1;
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+    },
+    {
+      code: `
+        /** {@link foo} */
+        function a(foo: number) {}
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+    },
+    {
+      code: `
+        /** {@link foo} */
+        const b = function (foo: number) {};
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+    },
+    {
+      code: `
+        /** {@link foo} */
+        const b = (foo: number) => {};
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+    },
+    {
+      code: `
+        /**
+         * @param {...Iterable<any>} its
+         * @returns {IteratorObject<any>}
+         * @see https://developer.mozilla.org/Web/JavaScript/Reference/Global_Objects/Iterator/concat
+         */
+        const concatIteratorJSDoc = (...its) => {
+            return Iterator.from(its.flat());
+        };
+      `,
+    },
+    {
+      code: `
+        /** xyz {@link property} */
+        export class MyClass {
+          public property: boolean
+        }
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+    },
+    {
+      code: `
+        /** xyz {@link property} */
+        export default class MyClass {
+          property = true;
+        }
+      `,
+      languageOptions: {
+        ecmaVersion: 2_022,
+      },
+    },
+    {
+      code: `
+        /** @type {Readonly<Record<string, string>>} */
+        export const a = {};
+
+        /** @type {ReadonlySet<string>} */
+        export const b = new Set();
+
+        /** @type {ReadonlyMap<string, number>} */
+        export const c = new Map();
+
+        /** @type {ReadonlyArray<string>} */
+        export const d = [];
+
+        /** @type {PropertyKey} */
+        export const e = 'e';
+
+        /**
+         * @param {ArrayLike<number>} list
+         * @param {PromiseLike<void>} thenable
+         * @param {TemplateStringsArray} strings
+         * @returns {Generator<number, void, unknown>}
+         */
+        export function * f (list, thenable, strings) {}
+
+        /**
+         * @param {AsyncIterable<string>} source
+         * @returns {AsyncGenerator<string>}
+         */
+        export async function * g (source) {}
+      `,
+      languageOptions: {
+        sourceType: 'module',
+      },
+    },
+    {
+      code: `
+        /**
+         * @template [T = unknown]
+         * @param {T} [x]
+         * @returns {T|undefined}
+         */
+        function get (x) {
+          return x;
+        }
+      `,
+    },
+    {
+      code: `
+        /**
+         * @param {<T>(value: T, cb?: (value: T) => string) => void} a
+         * @param {<T, U>(x: T[], f: (t: T) => U) => Promise<U[]>} b
+         * @param {<K extends string>(k: K) => {[P in K]: number}} c
+         * @param {{<T>(x: T): T}} d
+         * @param {{map<U>(f: (x: number) => U): U[]}} e
+         * @param {{new <T>(x: T): T}} f
+         * @param {<T>() => <U>(x: U) => [T, U]} g
+         * @returns {void}
+         */
+        function quux (a, b, c, d, e, f, g) {}
       `,
     },
   ],

@@ -7,9 +7,6 @@ import {
 import {
   getJsdocProcessorPlugin,
 } from './getJsdocProcessorPlugin.js';
-import {
-  createRequire,
-} from 'node:module';
 import checkAccess from './rules/checkAccess.js';
 import checkAlignment from './rules/checkAlignment.js';
 import checkExamples from './rules/checkExamples.js';
@@ -39,8 +36,10 @@ import noDefaults from './rules/noDefaults.js';
 import noMissingSyntax from './rules/noMissingSyntax.js';
 import noMultiAsterisks from './rules/noMultiAsterisks.js';
 import noRestrictedSyntax from './rules/noRestrictedSyntax.js';
+import normalizeSeeLinks from './rules/normalizeSeeLinks.js';
 import noTypes from './rules/noTypes.js';
 import noUndefinedTypes from './rules/noUndefinedTypes.js';
+import noUnnecessaryTypeAssertion from './rules/noUnnecessaryTypeAssertion.js';
 import preferImportTag from './rules/preferImportTag.js';
 import requireAsteriskPrefix from './rules/requireAsteriskPrefix.js';
 import requireDescription from './rules/requireDescription.js';
@@ -70,6 +69,7 @@ import requireYieldsCheck from './rules/requireYieldsCheck.js';
 import sortTags from './rules/sortTags.js';
 import tagLines from './rules/tagLines.js';
 import textEscaping from './rules/textEscaping.js';
+import tsBanTsComment from './rules/tsBanTsComment.js';
 import tsMethodSignatureStyle from './rules/tsMethodSignatureStyle.js';
 import tsNoEmptyObjectType from './rules/tsNoEmptyObjectType.js';
 import tsNoUnnecessaryTemplateExpression from './rules/tsNoUnnecessaryTemplateExpression.js';
@@ -77,30 +77,22 @@ import tsPreferFunctionType from './rules/tsPreferFunctionType.js';
 import typeFormatting from './rules/typeFormatting.js';
 import validTypes from './rules/validTypes.js';
 import {
+  ESLint,
+} from 'eslint';
+import {
   merge,
 } from 'object-deep-merge';
 import semver from 'semver';
-
-const requireFromHere = createRequire(import.meta.url);
-
-const getOptionalEslintVersion = () => {
-  try {
-    const eslint = requireFromHere('eslint');
-    return eslint.ESLint?.version ?? eslint.Linter?.version ?? '9.0.0';
-  } catch {
-    return '9.0.0';
-  }
-};
-
-const eslintVersion = getOptionalEslintVersion();
 
 /**
  * @typedef {"recommended" | "stylistic" | "contents" | "logical" | "requirements"} ConfigGroups
  * @typedef {"" | "-typescript" | "-typescript-flavor"} ConfigVariants
  * @typedef {"" | "-error"} ErrorLevelVariants
- * @type {import('eslint').ESLint.Plugin & {
+ * @typedef {`flat/${ConfigGroups}${ConfigVariants}${ErrorLevelVariants}` |
+ *   "flat/recommended-tsdoc" | "flat/recommended-tsdoc-error"} FlatConfigNames
+ * @typedef {import('eslint').ESLint.Plugin & {
  *   configs: Record<
- *       `flat/${ConfigGroups}${ConfigVariants}${ErrorLevelVariants}`,
+ *      FlatConfigNames,
  *       import('eslint').Linter.Config
  *     > &
  *     Record<
@@ -108,10 +100,10 @@ const eslintVersion = getOptionalEslintVersion();
  *       import('eslint').Linter.Config[]
  *     > &
  *     Record<"flat/recommended-mixed", import('eslint').Linter.Config[]>
- * }}
+ * }} JsdocPlugin
  */
-const index = {};
-index.configs = {};
+const index = /** @type {JsdocPlugin} */ ({});
+index.configs = /** @type {typeof index.configs} */ ({});
 index.rules = {
   'check-access': checkAccess,
   'check-alignment': checkAlignment,
@@ -144,6 +136,8 @@ index.rules = {
   'no-restricted-syntax': noRestrictedSyntax,
   'no-types': noTypes,
   'no-undefined-types': noUndefinedTypes,
+  'no-unnecessary-type-assertion': noUnnecessaryTypeAssertion,
+  'normalize-see-links': normalizeSeeLinks,
   'prefer-import-tag': preferImportTag,
   'reject-any-type': buildRejectOrPreferRuleDefinition({
     description: 'Reports use of `any` or `*` type',
@@ -277,6 +271,7 @@ index.rules = {
   'sort-tags': sortTags,
   'tag-lines': tagLines,
   'text-escaping': textEscaping,
+  'ts-ban-ts-comment': tsBanTsComment,
   'ts-method-signature-style': tsMethodSignatureStyle,
   'ts-no-empty-object-type': tsNoEmptyObjectType,
   'ts-no-unnecessary-template-expression': tsNoUnnecessaryTemplateExpression,
@@ -334,6 +329,8 @@ const createRecommendedRuleset = (warnOrError, flatName) => {
       'jsdoc/no-restricted-syntax': 'off',
       'jsdoc/no-types': 'off',
       'jsdoc/no-undefined-types': warnOrError,
+      'jsdoc/no-unnecessary-type-assertion': 'off',
+      'jsdoc/normalize-see-links': 'off',
       'jsdoc/prefer-import-tag': 'off',
       'jsdoc/reject-any-type': warnOrError,
       'jsdoc/reject-function-type': warnOrError,
@@ -372,6 +369,7 @@ const createRecommendedRuleset = (warnOrError, flatName) => {
       'jsdoc/sort-tags': 'off',
       'jsdoc/tag-lines': warnOrError,
       'jsdoc/text-escaping': 'off',
+      'jsdoc/ts-ban-ts-comment': 'off',
       'jsdoc/ts-method-signature-style': 'off',
       'jsdoc/ts-no-empty-object-type': warnOrError,
       'jsdoc/ts-no-unnecessary-template-expression': 'off',
@@ -445,6 +443,7 @@ const createRecommendedTypeScriptFlavorRuleset = (warnOrError, flatName) => {
       ...ruleset.rules,
       /* eslint-disable @stylistic/indent -- Extra indent to avoid use by auto-rule-editing */
         'jsdoc/no-undefined-types': 'off',
+        'jsdoc/ts-ban-ts-comment': warnOrError,
       /* eslint-enable @stylistic/indent */
     },
   };
@@ -657,7 +656,7 @@ index.configs.examples = /** @type {import('eslint').Linter.Config[]} */ ([
       'no-console': 0,
 
       /* c8 ignore next 11 -- Coercion should work */
-      ...(semver.gte(semver.coerce(eslintVersion) ?? '9.0.0', '9.0.0') ? {} : {
+      ...(semver.gte(semver.coerce(ESLint.version) ?? '9.0.0', '9.0.0') ? {} : {
         // "always" newline rule at end unlikely in sample code
         'eol-last': 0,
 
@@ -715,7 +714,7 @@ index.configs['default-expressions'] = /** @type {import('eslint').Linter.Config
       'no-new': 0,
       'no-unused-expressions': 0,
       /* c8 ignore next 8 -- Coercion should work */
-      ...(semver.gte(semver.coerce(eslintVersion) ?? '9.0.0', '9.0.0') ? {} : {
+      ...(semver.gte(semver.coerce(ESLint.version) ?? '9.0.0', '9.0.0') ? {} : {
         quotes: [
           'error', 'double',
         ],
@@ -778,7 +777,7 @@ export const rules = index.rules;
 
 /**
  * @type {Record<
- *       `flat/${ConfigGroups}${ConfigVariants}${ErrorLevelVariants}`,
+ *      FlatConfigNames,
  *       import('eslint').Linter.Config
  *     > &
  *     Record<
@@ -786,14 +785,13 @@ export const rules = index.rules;
  *       import('eslint').Linter.Config[]
  *     > &
  *     Record<"flat/recommended-mixed", import('eslint').Linter.Config[]>
- * }
- */
+  } */
 export const configs = index.configs;
 
 /**
  * @type {((
  *   cfg?: import('eslint').Linter.Config & {
- *     config?: `flat/${ConfigGroups}${ConfigVariants}${ErrorLevelVariants}`,
+ *     config?: FlatConfigNames,
  *     mergeSettings?: boolean,
  *     settings?: Partial<import('./iterateJsdoc.js').Settings>,
  *     rules?: {[key in keyof import('./rules.d.ts').Rules]?: import('eslint').Linter.RuleEntry<import('./rules.d.ts').Rules[key]>},

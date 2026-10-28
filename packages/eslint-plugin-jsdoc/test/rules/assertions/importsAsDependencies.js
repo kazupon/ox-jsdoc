@@ -70,6 +70,19 @@ export default /** @type {import('../index.js').TestCases} */ ({
         },
       ],
     },
+    {
+      code: `
+        /**
+         * @type {null|{bar: string, [Symbol.dispose](): import('sth').SomeApi}}
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'import points to package which is not found in dependencies',
+        },
+      ],
+    },
   ],
   valid: [
     {
@@ -89,7 +102,7 @@ export default /** @type {import('../index.js').TestCases} */ ({
     {
       code: `
         /**
-         * @type {null|import('@ox-jsdoc/jsdoccomment').InlineTag}
+         * @type {null|import('@es-joy/jsdoccomment').InlineTag}
          */
       `,
     },
@@ -110,8 +123,8 @@ export default /** @type {import('../index.js').TestCases} */ ({
     {
       code: `
         /**
-         * @type {null|import('@ox-jsdoc/jsdoccomment').InlineTag|
-         *   import('@ox-jsdoc/jsdoccomment').JsdocBlock}
+         * @type {null|import('@es-joy/jsdoccomment').InlineTag|
+         *   import('@es-joy/jsdoccomment').JsdocBlock}
          */
       `,
     },

@@ -43,7 +43,7 @@ export default iterateJsdoc(({
   ] of
     /**
      * @type {(
-     *   import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline & {
+     *   import('@es-joy/jsdoccomment').JsdocTagWithInline & {
      *     originalIndex: import('../iterateJsdoc.js').Integer,
      *     originalLine: import('../iterateJsdoc.js').Integer,
      *   }

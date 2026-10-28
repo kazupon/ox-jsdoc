@@ -45,6 +45,11 @@ The following patterns are considered problems:
  * @type {null|import('sinon').SomeApi}
  */
 // Message: import points to package which is not found in dependencies
+
+/**
+ * @type {null|{bar: string, [Symbol.dispose](): import('sth').SomeApi}}
+ */
+// Message: import points to package which is not found in dependencies
 ````
 
 
@@ -65,7 +70,7 @@ The following patterns are not considered problems:
  */
 
 /**
- * @type {null|import('@ox-jsdoc/jsdoccomment').InlineTag}
+ * @type {null|import('@es-joy/jsdoccomment').InlineTag}
  */
 
 /**
@@ -77,8 +82,8 @@ The following patterns are not considered problems:
  */
 
 /**
- * @type {null|import('@ox-jsdoc/jsdoccomment').InlineTag|
- *   import('@ox-jsdoc/jsdoccomment').JsdocBlock}
+ * @type {null|import('@es-joy/jsdoccomment').InlineTag|
+ *   import('@es-joy/jsdoccomment').JsdocBlock}
  */
 
 /**

@@ -85,6 +85,20 @@ describe('iterateJsdoc', () => {
       });
     });
   });
+  describe('custom language compatibility', () => {
+    it('does not iterate without the JavaScript token API', () => {
+      const rule = iterateJsdoc(() => {}, {
+        iterateAllJsdocs: true,
+        meta: {
+          type: 'suggestion',
+        },
+      });
+
+      expect(rule.create(/** @type {BadArgument} */ ({
+        sourceCode: {},
+      }))).to.deep.equal({});
+    });
+  });
   describe('parseComment', () => {
     context('Parses comments', () => {
       it('parses a comment', () => {
@@ -157,7 +171,7 @@ describe('iterateJsdoc', () => {
           ],
           tags: [
             {
-              description: 'desc',
+              description: '          desc',
               inlineTags: [],
               name: 'name',
               optional: false,

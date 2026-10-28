@@ -5,6 +5,20 @@ import {
 export default /** @type {import('../index.js').TestCases} */ ({
   invalid: [
     {
+      code: '/**  Indented on first line\n */',
+      errors: [
+        {
+          line: 1,
+          message: 'There must be no indentation.',
+        },
+      ],
+      options: [
+        {
+          allowIndentedSections: true,
+        },
+      ],
+    },
+    {
       code: `
           /**  foo */
           function quux () {
@@ -258,13 +272,116 @@ export default /** @type {import('../index.js').TestCases} */ ({
       `,
       errors: [
         {
-          line: 3,
+          line: 2,
           message: 'There must be no indentation.',
         },
       ],
       options: [
         {
           allowIndentedSections: true,
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         *text
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be a space after the asterisk.',
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         *@constant
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be a space after the asterisk.',
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         *@param {number} val
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be a space after the asterisk.',
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         * @param {number} a
+         *@returns {void}
+         */
+      `,
+      errors: [
+        {
+          line: 4,
+          message: 'There must be a space after the asterisk.',
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         *@constant
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be a space after the asterisk.',
+        },
+      ],
+      options: [
+        {
+          allowIndentedSections: true,
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         *text
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be a space after the asterisk.',
+        },
+      ],
+      options: [
+        {
+          allowIndentedSections: true,
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         *   foo
+         *@constant
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'There must be no indentation.',
         },
       ],
     },
@@ -516,6 +633,73 @@ export default /** @type {import('../index.js').TestCases} */ ({
          * Description
          *
          * More content
+         */
+      `,
+      options: [
+        {
+          allowIndentedSections: true,
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         * @constant
+         */
+      `,
+    },
+    {
+      code: `
+        /**
+         * @param {number} a
+         *@returns {void}
+         */
+      `,
+      options: [
+        {
+          allowNoSpaceAfterAsterisk: true,
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         *@constant
+         */
+      `,
+      options: [
+        {
+          allowIndentedSections: true,
+          allowNoSpaceAfterAsterisk: true,
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         *text
+         */
+      `,
+      options: [
+        {
+          allowIndentedSections: true,
+          allowNoSpaceAfterAsterisk: true,
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         * Two ordered items, the second holding a nested bullet list whose items
+         * carry inline link tags.
+         *
+         * 1. **First** runs first; if the session is missing, it re-authenticates
+         *    before the request leaves the method.
+         * 2. **{@link Second}** chain — nests them with outer to inner order:
+         *    - {@link Outer} (outermost): short-circuits with {@link Error} if
+         *      the gate is paused.
+         *    - {@link Middle}: consume a token and replay exactly once.
+         *    - {@link Inner} (innermost): retries with exponential backoff.
          */
       `,
       options: [

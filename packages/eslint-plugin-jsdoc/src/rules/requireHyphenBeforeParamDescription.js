@@ -17,7 +17,7 @@ export default iterateJsdoc(({
                */ (tags);
 
   /**
-   * @param {import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline} jsdocTag
+   * @param {import('@es-joy/jsdoccomment').JsdocTagWithInline} jsdocTag
    * @param {string} targetTagName
    * @param {"always"|"never"} [circumstance]
    * @returns {void}

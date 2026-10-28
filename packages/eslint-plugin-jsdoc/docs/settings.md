@@ -208,7 +208,7 @@ aliases) are as follows:
 - `@throws` (over `@exception`)
 - `@yields` (over `@yield`)
 
-This setting is utilized by the the rule for tag name checking
+This setting is utilized by the rule for tag name checking
 (`check-tag-names`) as well as in the `@param` and `@require` rules:
 
 - `check-param-names`
@@ -404,4 +404,8 @@ default contexts, including for function rules, so if, for example, you exclude
 `FunctionDeclaration` here, rules like `require-param` will not check
 function declarations.
 
-See the "AST and Selectors" section for more on this format.
+A context object's `comment` property is not supported by `require-jsdoc` or
+`convert-to-jsdoc-comments`; these rules throw if the setting contains one, so
+give them their own `contexts` option to override the setting.
+
+See the ["AST and Selectors"](./advanced.md#ast-and-selectors) section for more on this format.

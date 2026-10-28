@@ -5,7 +5,10 @@ import {
 import {
   parse as parseType,
   traverse,
-} from '@ox-jsdoc/jsdoccomment';
+} from '@es-joy/jsdoccomment';
+import {
+  parse as espree,
+} from 'espree';
 
 export default iterateJsdoc(({
   context,
@@ -19,14 +22,18 @@ export default iterateJsdoc(({
   } = context.options[1] ?? {};
 
   /**
-   * @param {import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline} tag
+   * @param {import('@es-joy/jsdoccomment').JsdocTagWithInline} tag
    */
   const checkType = (tag) => {
     const potentialType = tag.type;
     let parsedType;
     try {
       parsedType = parseType(
-        /** @type {string} */ (potentialType), 'typescript',
+        /** @type {string} */ (potentialType),
+        'typescript',
+        {
+          computedPropertyParser: espree,
+        },
       );
     } catch {
       return;
@@ -44,8 +51,11 @@ export default iterateJsdoc(({
             break;
           }
 
+          // A `readonly` function property has no method signature
+          //   equivalent (`readonly` is not allowed on methods)
           if (parentNode?.type === 'JsdocTypeObjectField' &&
-            typeof parentNode.key === 'string'
+            typeof parentNode.key === 'string' &&
+            !parentNode.readonly
           ) {
             utils.reportJSDoc(
               'Found function property; prefer method signature.',
@@ -73,6 +83,7 @@ export default iterateJsdoc(({
                       quote: objectField.meta.quote,
                     },
                   name: /** @type {string} */ (objectField.key),
+                  optional: objectField.optional,
                   parameters: nde.parameters,
                   returnType: /** @type {import('jsdoc-type-pratt-parser').RootResult} */ (
                     nde.returnType
@@ -93,7 +104,9 @@ export default iterateJsdoc(({
             // @ts-expect-error Our own added API
             parentNode.parentNode.parentNode.type === 'JsdocTypeObjectField' &&
             // @ts-expect-error Our own added API
-            typeof parentNode.parentNode.parentNode.key === 'string'
+            typeof parentNode.parentNode.parentNode.key === 'string' &&
+            // @ts-expect-error Our own added API
+            !parentNode.parentNode.parentNode.readonly
           ) {
             // @ts-expect-error Our own added API
             const intersection = parentNode.parentNode;
@@ -116,6 +129,7 @@ export default iterateJsdoc(({
                     quote: objectField.meta.quote,
                   },
                 name: /** @type {string} */ (objectField.key),
+                optional: objectField.optional,
                 parameters: func.parameters,
                 returnType: /** @type {import('jsdoc-type-pratt-parser').RootResult} */ (
                   func.returnType
@@ -219,7 +233,7 @@ export default iterateJsdoc(({
                 object.elements[idx] = /** @type {import('jsdoc-type-pratt-parser').ObjectFieldResult} */ ({
                   key: nde.name,
                   meta: nde.meta,
-                  optional: false,
+                  optional: nde.optional === true,
                   readonly: false,
                   right: funcs[0],
                   type: 'JsdocTypeObjectField',
@@ -232,7 +246,7 @@ export default iterateJsdoc(({
                 object.elements[idx] = {
                   key: nde.name,
                   meta: nde.meta,
-                  optional: false,
+                  optional: nde.optional === true,
                   readonly: false,
                   right: {
                     elements: funcs.map((func) => {

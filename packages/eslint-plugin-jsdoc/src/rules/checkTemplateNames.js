@@ -1,8 +1,8 @@
-import iterateJsdoc from '../iterateJsdoc.js';
+import iterateJsdoc, {
+  parseComment,
+} from '../iterateJsdoc.js';
 import {
-  parseCommentForSource,
-} from '../parseCommentStrategy.js';
-import {
+  getClosureTemplateTagDefaults,
   getTags,
 } from '../jsdocUtils.js';
 import {
@@ -10,7 +10,10 @@ import {
   parse as parseType,
   traverse,
   tryParse as tryParseType,
-} from '@ox-jsdoc/jsdoccomment';
+} from '@es-joy/jsdoccomment';
+import {
+  parse as espree,
+} from 'espree';
 
 export default iterateJsdoc(({
   jsdoc,
@@ -41,18 +44,30 @@ export default iterateJsdoc(({
     let parsedType;
     try {
       parsedType = mode === 'permissive' ?
-        tryParseType(/** @type {string} */ (potentialType)) :
-        parseType(/** @type {string} */ (potentialType), mode);
+        tryParseType(/** @type {string} */ (potentialType), undefined, {
+          computedPropertyParser: espree,
+        }) :
+        parseType(/** @type {string} */ (potentialType), mode, {
+          computedPropertyParser: espree,
+        });
     } catch {
       return;
     }
 
-    traverse(parsedType, (nde) => {
+    traverse(parsedType, (nde, parentNode) => {
       const {
         type,
         value,
       } = /** @type {import('jsdoc-type-pratt-parser').NameResult} */ (nde);
       if (type === 'JsdocTypeName') {
+        usedNames.add(value);
+      // An unquoted index of an indexed access type, e.g., `K` in `T[K]`
+      } else if (
+        type === 'JsdocTypeProperty' &&
+        parentNode?.type === 'JsdocTypeNamePath' &&
+        parentNode.pathType === 'property-brackets' &&
+        !(/** @type {import('jsdoc-type-pratt-parser').PropertyResult} */ (nde).meta.quote)
+      ) {
         usedNames.add(value);
       }
     });
@@ -77,6 +92,16 @@ export default iterateJsdoc(({
   };
 
   const checkTemplateTags = () => {
+    // A template name may be used only within the constraint or default of
+    //   another template, e.g., `T` in `@template {keyof T} K` or
+    //   `@template [U=T[]]`
+    for (const tag of templateTags) {
+      checkForUsedTypes(tag.type);
+      for (const defaultType of getClosureTemplateTagDefaults(tag)) {
+        checkForUsedTypes(defaultType);
+      }
+    }
+
     for (const tag of templateTags) {
       const names = utils.parseClosureTemplateTag(tag);
       for (const nme of names) {
@@ -119,7 +144,7 @@ export default iterateJsdoc(({
           continue;
         }
 
-        const innerJsdoc = parseCommentForSource(sourceCode, commentNode, settings, '');
+        const innerJsdoc = parseComment(commentNode, '');
         checkParamsAndReturnsTags(innerJsdoc);
 
         const typeName = /** @type {string} */ (utils.getPreferredTagName({
@@ -129,6 +154,16 @@ export default iterateJsdoc(({
         for (const typeTag of typeTags) {
           checkForUsedTypes(typeTag.type);
         }
+      }
+    }
+
+    // Template names may be used only within the heritage clause types of a
+    // class/interface, e.g. `@template T` used in `@augments {Base<T>}`.
+    for (const heritageTagName of [
+      'augments', 'extends', 'implements',
+    ]) {
+      for (const heritageTag of getTags(jsdoc, heritageTagName)) {
+        checkForUsedTypes(heritageTag.type);
       }
     }
 

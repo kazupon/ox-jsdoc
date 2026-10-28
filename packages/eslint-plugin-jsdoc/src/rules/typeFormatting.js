@@ -3,11 +3,17 @@ import {
   rewireByParsedType,
 } from '../jsdocUtils.js';
 import {
+  generate,
+} from '@es-joy/escodegen';
+import {
   parse as parseType,
   stringify,
   traverse,
   tryParse as tryParseType,
-} from '@ox-jsdoc/jsdoccomment';
+} from '@es-joy/jsdoccomment';
+import {
+  parse as espree,
+} from 'espree';
 
 const digitRegex = (/^(\d+(\.\d*)?|\.\d+)([eE][\-+]?\d+)?$/v);
 
@@ -58,15 +64,19 @@ export default iterateJsdoc(({
   } = settings;
 
   /**
-   * @param {import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline} tag
+   * @param {import('@es-joy/jsdoccomment').JsdocTagWithInline} tag
    */
   const checkTypeFormats = (tag) => {
     const potentialType = tag.type;
     let parsedType;
     try {
       parsedType = mode === 'permissive' ?
-        tryParseType(/** @type {string} */ (potentialType)) :
-        parseType(/** @type {string} */ (potentialType), mode);
+        tryParseType(/** @type {string} */ (potentialType), undefined, {
+          computedPropertyParser: espree,
+        }) :
+        parseType(/** @type {string} */ (potentialType), mode, {
+          computedPropertyParser: espree,
+        });
     } catch {
       return;
     }
@@ -342,9 +352,9 @@ export default iterateJsdoc(({
             /* c8 ignore next 5 -- jsdoc-type-pratt-parser doesn't encode as should */
             ((typeNode.meta.trailingPunctuation ?? false) !== objectFieldSeparatorTrailingPunctuation &&
               ((typeNode.meta.trailingPunctuation && (!trailingPunctuationMultilineOnly ||
-                !stringify(typeNode).includes('\n'))) ||
+                !stringify(typeNode, generate).includes('\n'))) ||
               (!typeNode.meta.trailingPunctuation && (!trailingPunctuationMultilineOnly ||
-                stringify(typeNode).includes('\n')))))
+                stringify(typeNode, generate).includes('\n')))))
           ) {
             typeNode.meta.separator = objectFieldSeparatorOptionalLinebreak && !separator.endsWith('and-linebreak') ?
               objectFieldSeparator.replace(/-and-linebreak$/v, '') :
@@ -465,7 +475,7 @@ export default iterateJsdoc(({
     });
 
     const differentResult = tag.type !==
-      typeBracketSpacing + stringify(parsedType) + typeBracketSpacing;
+      typeBracketSpacing + stringify(parsedType, generate) + typeBracketSpacing;
 
     if (errorMessages.length && differentResult) {
       for (const errorMessage of errorMessages) {
@@ -668,7 +678,7 @@ or \`double\`. Defaults to 'double'.`,
             type: 'string',
           },
           trailingPunctuationMultilineOnly: {
-            description: 'If `objectFieldSeparatorTrailingPunctuation` is set, this will determine whether the trailing puncutation is only added when the type is multiline',
+            description: 'If `objectFieldSeparatorTrailingPunctuation` is set, this will determine whether the trailing punctuation is only added when the type is multiline',
             type: 'boolean',
           },
           typeBracketSpacing: {

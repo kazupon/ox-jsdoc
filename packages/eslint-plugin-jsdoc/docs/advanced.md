@@ -58,7 +58,7 @@ properties:
     semantics (e.g., it will be attached to a `VariableDeclaration` if above
     that rather than to the `FunctionExpression` it is fundamentally
     describing). See
-    [@ox-jsdoc/jsdoccomment](https://github.com/kazupon/ox-jsdoc)
+    [@es-joy/jsdoccomment](https://github.com/es-joy/jsdoccomment)
     for the precise structure of the comment (and comment type) nodes.
 
 <a name="user-content-advanced-ast-and-selectors-discovering-available-ast-definitions"></a>
@@ -69,7 +69,7 @@ To know all of the AST definitions one may target, it will depend on the
 [parser](https://eslint.org/docs/user-guide/configuring#specifying-parser)
 you are using with ESLint (e.g., `espree` is the default parser for ESLint,
 and this follows [EStree AST](https://github.com/estree/estree) but
-to support the the latest experimental features of JavaScript, one may use
+to support the latest experimental features of JavaScript, one may use
 `@babel/eslint-parser` or to be able to have one's rules (including JSDoc rules)
 apply to TypeScript, one may use `typescript-eslint`, etc.
 
@@ -82,7 +82,7 @@ providing some of your JavaScript to the wonderful
 [AST Explorer](https://astexplorer.net/) tool and see what AST is built out
 of your code. You can set the tool to the specific parser which you are using.
 
-For comment AST, see [@ox-jsdoc/jsdoccomment](https://github.com/kazupon/ox-jsdoc)
+For comment AST, see the [@es-joy/jsdoccomment demo](https://es-joy.github.io/jsdoccomment/demo/)
 or if you are only interested in type AST, see the
 [jsdoc-type-pratt-parser demo](https://jsdoc-type-pratt-parser.github.io/jsdoc-type-pratt-parser/).
 
@@ -129,7 +129,7 @@ For each `forbid` key, add the name of the context (this will be appended to
 created will be `forbid-Any`). Then provide an optional `description` and
 `url` keys (which will be used for the created rule's `meta.docs`
 `description` and `url` properties) and the `contexts` array.
-See the `jsdoc/restricted-syntax` rule for more details.
+See the `jsdoc/no-restricted-syntax` rule for more details.
 
 ```js
 import {jsdoc} from 'eslint-plugin-jsdoc';
@@ -217,7 +217,7 @@ export default [
         promise: {
           description: 'This rule disallows Promises without a generic type',
           overrideSettings: {
-            // Uses the same keys are are available on the `preferredTypes` settings
+            // Uses the same keys as are available on the `preferredTypes` settings
 
             // This key will indicate the type node name to find
             Promise: {

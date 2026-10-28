@@ -25,17 +25,6 @@ const maskCodeBlocks = (str) => {
   });
 };
 
-/**
- * @param {string[]} lines
- * @param {number} lineIndex
- * @returns {number}
- */
-const getLineNumber = (lines, lineIndex) => {
-  const precedingText = lines.slice(0, lineIndex).join('\n');
-  const lineBreaks = precedingText.match(/\n/gv) || [];
-  return lineBreaks.length + 1;
-};
-
 export default iterateJsdoc(({
   context,
   jsdocNode,
@@ -43,8 +32,17 @@ export default iterateJsdoc(({
   sourceCode,
 }) => {
   const options = context.options[0] || {};
-  const /** @type {{excludeTags: string[], allowIndentedSections: boolean}} */ {
+
+  /**
+   * @type {{
+   *   excludeTags: string[],
+   *   allowIndentedSections: boolean,
+   *   allowNoSpaceAfterAsterisk: boolean,
+   * }}
+   */
+  const {
     allowIndentedSections = false,
+    allowNoSpaceAfterAsterisk = false,
     excludeTags = [
       'example',
     ],
@@ -64,6 +62,14 @@ export default iterateJsdoc(({
       lineIndex,
       line,
     ] of lines.entries()) {
+      // Check for no space between the asterisk prefix and content
+      if (!allowNoSpaceAfterAsterisk && /^(?:\/?\**|[\t ]*)\*[^\s*\/]/v.test(line)) {
+        report('There must be a space after the asterisk.', null, {
+          line: lineIndex,
+        });
+        return;
+      }
+
       // Check for indentation (two or more spaces after *)
       const indentMatch = line.match(/^(?:\/?\**|[\t ]*)\*([\t ]{2,})/v);
 
@@ -75,7 +81,7 @@ export default iterateJsdoc(({
         // If this is a tag line with indentation, always report
         if (/^@\w+/v.test(afterIndent)) {
           report('There must be no indentation.', null, {
-            line: getLineNumber(lines, lineIndex),
+            line: lineIndex,
           });
           return;
         }
@@ -83,7 +89,7 @@ export default iterateJsdoc(({
         // If we haven't seen any content yet (main description first line) and there's content, report
         if (!hasSeenContent && afterIndent.trim().length > 0) {
           report('There must be no indentation.', null, {
-            line: getLineNumber(lines, lineIndex),
+            line: lineIndex,
           });
           return;
         }
@@ -96,7 +102,7 @@ export default iterateJsdoc(({
           } else if (indentAmount < currentSectionIndent) {
             // Indentation is less than the established level (inconsistent)
             report('There must be no indentation.', null, {
-              line: getLineNumber(lines, lineIndex),
+              line: lineIndex,
             });
             return;
           }
@@ -112,17 +118,43 @@ export default iterateJsdoc(({
         hasSeenContent = true;
       }
 
-      // Reset section indent when we encounter a tag
-      if (/@\w+/v.test(line)) {
+      // Reset section indent when we encounter a block tag
+      if (/^(?:\/?\**|[\t ]*)\*[ \t]*@\w+/v.test(line)) {
         currentSectionIndent = null;
       }
     }
   } else {
+    // Check for no space between the asterisk prefix and content
+    let noSpaceLastIndex = 0;
+    if (!allowNoSpaceAfterAsterisk) {
+      const noSpaceReg = /^(?:\/?\**|[ \t]*)\*[^\s*\/]/gmv;
+      if (noSpaceReg.test(text)) {
+        noSpaceLastIndex = noSpaceReg.lastIndex;
+      }
+    }
+
+    // Check for indentation (two or more spaces after *)
     const reg = /^(?:\/?\**|[ \t]*)\*[ \t]{2}/gmv;
+    let hasIndent = false;
+    let indentLastIndex = 0;
     if (reg.test(text)) {
-      const lineBreaks = text.slice(0, reg.lastIndex).match(/\n/gv) || [];
+      hasIndent = true;
+      indentLastIndex = reg.lastIndex;
+    }
+
+    // Report whichever issue appears first in the text
+    if (noSpaceLastIndex && (!hasIndent || noSpaceLastIndex <= indentLastIndex)) {
+      const line = text.slice(0, noSpaceLastIndex).split('\n').length - 1;
+      report('There must be a space after the asterisk.', null, {
+        line,
+      });
+      return;
+    }
+
+    if (hasIndent) {
+      const line = text.slice(0, indentLastIndex).split('\n').length - 1;
       report('There must be no indentation.', null, {
-        line: lineBreaks.length,
+        line,
       });
     }
   }
@@ -139,6 +171,10 @@ export default iterateJsdoc(({
         properties: {
           allowIndentedSections: {
             description: 'Allows indentation of nested sections on subsequent lines (like bullet lists)',
+            type: 'boolean',
+          },
+          allowNoSpaceAfterAsterisk: {
+            description: 'Allows there to be no space after asterisks and before content.',
             type: 'boolean',
           },
           excludeTags: {

@@ -1,8 +1,9 @@
 {
   "compilerOptions": {
     "lib": ["es2024"],
-    "moduleResolution": "Bundler",
-    "module": "ESNext",
+    "types": ["node", "mocha"],
+    "moduleResolution": "nodenext",
+    "module": "nodenext",
     "allowJs": true,
     "checkJs": true,
     "noEmit": true,

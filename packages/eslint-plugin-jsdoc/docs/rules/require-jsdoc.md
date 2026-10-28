@@ -41,9 +41,6 @@ to insert.
 
 A single options object has the following properties.
 
-Has the following optional keys.
-
-
 <a name="user-content-require-jsdoc-options-checkallfunctionexpressions"></a>
 <a name="require-jsdoc-options-checkallfunctionexpressions"></a>
 ### <code>checkAllFunctionExpressions</code>
@@ -97,7 +94,7 @@ for it to require documentation.
 Note that you may need to disable `require` items (e.g., `MethodDefinition`)
 if you are specifying a more precise form in `contexts` (e.g., `MethodDefinition:not([accessibility="private"] > FunctionExpression`).
 
-See the ["AST and Selectors"](#user-content-eslint-plugin-jsdoc-advanced-ast-and-selectors)
+See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
 section of our Advanced docs for more on the expected format.
 
 <a name="user-content-require-jsdoc-options-enablefixer"></a>
@@ -1169,6 +1166,36 @@ const foo = autolog(
 )
 // "jsdoc/require-jsdoc": ["error"|"warn", {"checkAllFunctionExpressions":true,"contexts":["FunctionExpression"],"require":{"FunctionExpression":false}}]
 // Message: Missing JSDoc comment.
+
+function quux (foo) {\r
+}
+// Message: Missing JSDoc comment.
+
+/** The controller. */
+export default class extends Controller {
+  connect () {
+  }
+}
+// "jsdoc/require-jsdoc": ["error"|"warn", {"publicOnly":true,"require":{"MethodDefinition":true}}]
+// Message: Missing JSDoc comment.
+
+export default {
+  data () {
+  },
+  methods: {
+    go () {
+    },
+  },
+};
+// "jsdoc/require-jsdoc": ["error"|"warn", {"publicOnly":true,"require":{"FunctionExpression":true}}]
+// Message: Missing JSDoc comment.
+
+export const obj = {
+  method () {
+  },
+};
+// "jsdoc/require-jsdoc": ["error"|"warn", {"publicOnly":true,"require":{"FunctionExpression":true}}]
+// Message: Missing JSDoc comment.
 ````
 
 
@@ -2167,5 +2194,48 @@ const foo = autolog(function foo() {
 })
 // Settings: {"jsdoc":{"skipInvokedExpressionsForCommentFinding":true}}
 // "jsdoc/require-jsdoc": ["error"|"warn", {"checkAllFunctionExpressions":true,"contexts":["FunctionDeclaration","MethodDefinition","ClassDeclaration","TSDeclareFunction"],"require":{"FunctionExpression":true}}]
+
+/**
+ * Description for myFunction
+ */
+function myFunction(foo: string): string
+function myFunction(foo: number): string
+function myFunction(...args: any[]) {
+  return ''
+}
+// "jsdoc/require-jsdoc": ["error"|"warn", {"require":{"FunctionDeclaration":true,"MethodDefinition":true}}]
+
+class Foo {
+  /**
+   * Description for bar
+   */
+  bar(foo: string): string
+  bar(foo: number): string
+  bar(...args: any[]) {
+    return ''
+  }
+}
+// "jsdoc/require-jsdoc": ["error"|"warn", {"require":{"FunctionDeclaration":true,"MethodDefinition":true}}]
+
+/** Foo here */
+export class Foo {
+    /** with string */
+    constructor(arg1: string);
+    /** with number */
+    constructor(arg1: number);
+
+    constructor(arg1: string | number) {
+        // implementation
+    }
+}
+// "jsdoc/require-jsdoc": ["error"|"warn", {"publicOnly":true,"require":{"MethodDefinition":true}}]
+
+const obj = {
+  method () {
+  },
+};
+export default wrap(function () {
+});
+// "jsdoc/require-jsdoc": ["error"|"warn", {"publicOnly":true,"require":{"FunctionExpression":true}}]
 ````
 

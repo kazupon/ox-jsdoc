@@ -42,6 +42,14 @@ The following types are always considered defined.
 - `this`, `true`, `false`
 - `Array`, `Object`, `RegExp`, `Date`, `Function`
 
+In "typescript" `settings.jsdoc.mode`, the global types of TypeScript's
+standard library (`typescript/lib/lib.es*.d.ts` and
+`typescript/lib/lib.decorators*.d.ts`) are also considered defined, e.g., the
+[utility types](https://www.typescriptlang.org/docs/handbook/utility-types.html)
+and `ReadonlyArray`, `ReadonlyMap`, `ReadonlySet`, `PropertyKey`, `ArrayLike`,
+`PromiseLike`, `Generator`, `AsyncGenerator`, `AsyncIterable` or
+`TemplateStringsArray`.
+
 Note that preferred types indicated within `settings.jsdoc.preferredTypes` will
 also be assumed to be defined.
 
@@ -427,6 +435,34 @@ const a = 's';
 const b = 's';
 // "jsdoc/no-undefined-types": ["error"|"warn", {"definedTypes":["MyNamespace"]}]
 // Message: The type 'MyNamespace.OtherType' is undefined.
+
+export namespace Api {
+  export enum Status { Ok, Fail }
+  export const { destructured } = { destructured: 1 };
+  export import Alias = Elsewhere.Thing;
+}
+/**
+ * @param {Api.Status} s The status.
+ * @param {Api.Missing} m Not declared in the namespace.
+ */
+export function f(s: Api.Status, m: unknown): void {}
+// Message: The type 'Api.Missing' is undefined.
+
+/** xyz {@link property} */
+export default function () {}
+// Message: The type 'property' is undefined.
+
+/** @type {ReadonlyArray<string>} */
+export const d = [];
+// Settings: {"jsdoc":{"mode":"jsdoc"}}
+// Message: The type 'ReadonlyArray' is undefined.
+
+/**
+ * @param {{a: <T>(x: T) => T, b: T}} obj
+ * @param {{m<U>(): U, n(): U}} obj2
+ */
+function quux (obj, obj2) {}
+// Message: The type 'T' is undefined.
 ````
 
 
@@ -995,6 +1031,36 @@ class Foo {
   }
 }
 
+class MyClass {
+  property = true;
+
+  /** xyz {@link property} */
+  otherProperty = false;
+}
+
+class MyClass {
+  property: boolean;
+
+  /** xyz {@link property} and {@link MyClass.property} */
+  otherProperty: boolean;
+}
+// Settings: {"jsdoc":{"mode":"typescript"}}
+
+/** xyz {@link property} */
+class MyClass {
+  property = true;
+}
+
+/** xyz {@link property} and {@link MyClass.property} */
+class MyClass {
+  public property: boolean;
+}
+// Settings: {"jsdoc":{"mode":"typescript"}}
+
+const MyClass = /** xyz {@link property} */ class {
+  property = true;
+};
+
 /* globals SomeGlobal, AnotherGlobal */
 import * as Ably from "ably"
 import Testing, { another as Another, stillMore as StillMore } from "testing"
@@ -1229,6 +1295,60 @@ declare namespace NamespaceWithEnum {
 const x = {};
 // "jsdoc/no-undefined-types": ["error"|"warn", {"definedTypes":["NamespaceWithEnum"]}]
 
+export namespace Api {
+  export enum Status { Ok, Fail }
+}
+/**
+ * @param {Api.Status} s The status.
+ */
+export function f(s: Api.Status): void {}
+
+export namespace Api {
+  export enum Status { Ok, Fail, 'Not-Ident' = 2 }
+}
+/** See {@link Api.Status.Ok}. */
+export function f(): void {}
+
+declare namespace Shapes {
+  enum Kind { Circle, Square }
+}
+/**
+ * @param {Shapes.Kind} k The kind.
+ */
+export function f(k: Shapes.Kind): void {}
+
+export namespace Outer {
+  export namespace Inner {
+    export enum Mode { A, B }
+  }
+}
+/**
+ * @param {Outer.Inner.Mode} m The mode.
+ */
+export function f(m: Outer.Inner.Mode): void {}
+
+export namespace Cfg {
+  export const version = '1', build = 2;
+}
+/** See {@link Cfg.version} and {@link Cfg.build}. */
+export function f(): void {}
+
+export namespace Api {
+  export function fn(): void {}
+  export declare function declared(): void;
+}
+/** See {@link Api.fn} and {@link Api.declared}. */
+export function f(): void {}
+
+export namespace Api {
+  export import Alias = Elsewhere.Thing;
+  console.log('init');
+}
+/**
+ * @param {Api.Alias} a The alias.
+ */
+export function f(a: Api.Alias): void {}
+
 declare module "my-module" {
   export interface ModuleType {}
 }
@@ -1251,5 +1371,92 @@ class Test {
 }
 
 console.log(Test);
+
+declare global {
+  const foo: number;
+}
+
+/**
+ * {@link foo}
+ */
+export const bar = 1;
+
+/** {@link foo} */
+function a(foo: number) {}
+
+/** {@link foo} */
+const b = function (foo: number) {};
+
+/** {@link foo} */
+const b = (foo: number) => {};
+
+/**
+ * @param {...Iterable<any>} its
+ * @returns {IteratorObject<any>}
+ * @see https://developer.mozilla.org/Web/JavaScript/Reference/Global_Objects/Iterator/concat
+ */
+const concatIteratorJSDoc = (...its) => {
+    return Iterator.from(its.flat());
+};
+
+/** xyz {@link property} */
+export class MyClass {
+  public property: boolean
+}
+
+/** xyz {@link property} */
+export default class MyClass {
+  property = true;
+}
+
+/** @type {Readonly<Record<string, string>>} */
+export const a = {};
+
+/** @type {ReadonlySet<string>} */
+export const b = new Set();
+
+/** @type {ReadonlyMap<string, number>} */
+export const c = new Map();
+
+/** @type {ReadonlyArray<string>} */
+export const d = [];
+
+/** @type {PropertyKey} */
+export const e = 'e';
+
+/**
+ * @param {ArrayLike<number>} list
+ * @param {PromiseLike<void>} thenable
+ * @param {TemplateStringsArray} strings
+ * @returns {Generator<number, void, unknown>}
+ */
+export function * f (list, thenable, strings) {}
+
+/**
+ * @param {AsyncIterable<string>} source
+ * @returns {AsyncGenerator<string>}
+ */
+export async function * g (source) {}
+
+/**
+ * @template [T = unknown]
+ * @param {T} [x]
+ * @returns {T|undefined}
+ */
+function get (x) {
+  return x;
+}
+
+/**
+ * @param {<T>(value: T, cb?: (value: T) => string) => void} a
+ * @param {<T, U>(x: T[], f: (t: T) => U) => Promise<U[]>} b
+ * @param {<K extends string>(k: K) => {[P in K]: number}} c
+ * @param {{<T>(x: T): T}} d
+ * @param {{map<U>(f: (x: number) => U): U[]}} e
+ * @param {{new <T>(x: T): T}} f
+ * @param {<T>() => <U>(x: U) => [T, U]} g
+ * @returns {void}
+ */
+function quux (a, b, c, d, e, f, g) {}
 ````
 

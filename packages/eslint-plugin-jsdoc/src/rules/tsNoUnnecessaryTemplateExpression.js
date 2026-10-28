@@ -5,7 +5,10 @@ import {
 import {
   parse as parseType,
   traverse,
-} from '@ox-jsdoc/jsdoccomment';
+} from '@es-joy/jsdoccomment';
+import {
+  parse as espree,
+} from 'espree';
 
 export default iterateJsdoc(({
   context,
@@ -23,7 +26,7 @@ export default iterateJsdoc(({
   } = context.options[0] ?? {};
 
   /**
-   * @param {import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline} tag
+   * @param {import('@es-joy/jsdoccomment').JsdocTagWithInline} tag
    */
   const checkType = (tag) => {
     const potentialType = tag.type;
@@ -31,7 +34,11 @@ export default iterateJsdoc(({
     let parsedType;
     try {
       parsedType = parseType(
-        /** @type {string} */ (potentialType), 'typescript',
+        /** @type {string} */ (potentialType),
+        'typescript',
+        {
+          computedPropertyParser: espree,
+        },
       );
     } catch {
       return;

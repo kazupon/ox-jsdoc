@@ -162,7 +162,7 @@ export default iterateJsdoc(({
 
   /**
    *
-   * @param {(import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline & {
+   * @param {(import('@es-joy/jsdoccomment').JsdocTagWithInline & {
    *   newAdd?: boolean
    * })[]} jsdocTags
    * @param {import('../iterateJsdoc.js').Integer} indexAtFunctionParams
@@ -441,7 +441,7 @@ export default iterateJsdoc(({
           delimiter: '*',
           description: '',
           end: '',
-          lineEnd: '',
+          lineEnd: utils.newLineEnd,
           name: functionParameterName,
           newAdd: true,
           postDelimiter: ' ',
@@ -455,7 +455,7 @@ export default iterateJsdoc(({
       };
 
       /**
-       * @type {(import('@ox-jsdoc/jsdoccomment').JsdocTagWithInline & {
+       * @type {(import('@es-joy/jsdoccomment').JsdocTagWithInline & {
        *   newAdd?: true
        * })[]}
        */ (jsdoc.tags).splice(tagIndex, spliceCount, {
@@ -684,7 +684,7 @@ Overrides the default contexts (\`ArrowFunctionExpression\`, \`FunctionDeclarati
 \`TSMethodSignature\` in TypeScript or restricting the contexts
 which are checked.
 
-See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
 section of our Advanced docs for more on the expected format.`,
             items: {
               anyOf: [

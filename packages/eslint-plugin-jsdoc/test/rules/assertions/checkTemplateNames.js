@@ -7,6 +7,23 @@ export default /** @type {import('../index.js').TestCases} */ ({
     {
       code: `
         /**
+         * @template T
+         * @template {keyof T} K
+         * @param {string} x
+         * @returns {void}
+         */
+        function quux (x) {}
+      `,
+      errors: [
+        {
+          line: 4,
+          message: '@template K not in use',
+        },
+      ],
+    },
+    {
+      code: `
+        /**
          * @template D
          * @template V
          */
@@ -283,6 +300,21 @@ export default /** @type {import('../index.js').TestCases} */ ({
     {
       code: `
         /**
+         * @template T
+         * @template K
+         * @typedef {T["K"]} ValueOfK
+         */
+      `,
+      errors: [
+        {
+          line: 4,
+          message: '@template K not in use',
+        },
+      ],
+    },
+    {
+      code: `
+        /**
          * @template D
          * @template V
          */
@@ -484,6 +516,21 @@ export default /** @type {import('../index.js').TestCases} */ ({
         },
       },
     },
+    {
+      code: `
+        /**
+         * @template [T = string]
+         * @template [U = number]
+         * @typedef {[T]} Single
+         */
+      `,
+      errors: [
+        {
+          line: 4,
+          message: '@template U not in use',
+        },
+      ],
+    },
   ],
   valid: [
     {
@@ -540,6 +587,15 @@ export default /** @type {import('../index.js').TestCases} */ ({
         /**
          * @typedef Foo
          * @prop {string} bar
+         */
+      `,
+    },
+    {
+      code: `
+        /**
+         * @template T
+         * @template {keyof T} K
+         * @typedef {T[K]} ValueOf
          */
       `,
     },
@@ -785,6 +841,82 @@ export default /** @type {import('../index.js').TestCases} */ ({
 
           return messageChannel;
         }
+      `,
+    },
+    {
+      code: `
+        /**
+         * @template [T = "json"]
+         * @template {string} [ U = string ] - A key
+         * @typedef {(this: T, key: U) => void} SimpleCallback
+         */
+      `,
+    },
+    {
+      code: `
+        /**
+         * @template T
+         * @augments {Set<T>}
+         */
+        export class MySet extends Set {}
+      `,
+    },
+    {
+      code: `
+        /**
+         * @template U
+         * @extends {Set<U>}
+         */
+        export class MySet extends Set {}
+      `,
+    },
+    {
+      code: `
+        /**
+         * @template T
+         * @implements {Iterable<T>}
+         */
+        export class MyIterable {}
+      `,
+    },
+    {
+      code: `
+        /**
+         * @template {Record<string, unknown>} T
+         * @template {keyof T} K
+         * @param {K} key
+         * @returns {void}
+         */
+        function quux (key) {}
+      `,
+    },
+    {
+      code: `
+        /**
+         * @template T
+         * @template [U=T[]]
+         * @param {U} x
+         * @returns {void}
+         */
+        function quux (x) {}
+      `,
+    },
+    {
+      code: `
+        /**
+         * @template {B} A
+         * @template B
+         * @typedef {A} AssertExtends
+         */
+      `,
+    },
+    {
+      code: `
+        /**
+         * @template T
+         * @param {{bar: string, [Symbol.dispose](): T}} Single
+         */
+        function quux () {}
       `,
     },
   ],

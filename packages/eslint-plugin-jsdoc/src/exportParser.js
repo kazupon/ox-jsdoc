@@ -1,6 +1,6 @@
 import {
   findJSDocComment,
-} from '@ox-jsdoc/jsdoccomment';
+} from '@es-joy/jsdoccomment';
 import debugModule from 'debug';
 
 const debug = debugModule('requireExportJsdoc');
@@ -20,8 +20,7 @@ const debug = debugModule('requireExportJsdoc');
  *   },
  *   special?: true,
  *   globalVars?: CreatedNode,
- *   exported?: boolean,
- *   ANONYMOUS_DEFAULT?: import('eslint').Rule.Node
+ *   exported?: boolean
  * }} CreatedNode
  */
 
@@ -260,47 +259,20 @@ const getSymbol = function (node, globals, scope, opt) {
       const val = createNode();
       val.type = 'object';
       for (const prop of node.properties) {
+        if ([
         // @babel/eslint-parser
-        /** @type {string} */
-        const propType = prop.type;
-        if (
-          propType === 'ExperimentalSpreadProperty' ||
+          'ExperimentalSpreadProperty',
 
           // typescript-eslint, espree, acorn, etc.
-          prop.type === 'SpreadElement'
-        ) {
-          continue;
-        }
-
-        if (prop.type !== 'Property') {
-          continue;
-        }
-
-        /** @type {import('estree').Property} */
-        const propNode = prop;
-        /** @type {import('estree').Property['key']} */
-        const propKey = propNode.key;
-        let propName = null;
-
-        if (
-          propKey.type === 'Identifier'
-        ) {
-          propName = propKey.name;
-        } else if (propKey.type === 'Literal') {
-          if (typeof propKey.value === 'string') {
-            propName = propKey.value;
-          } else if (typeof propKey.value === 'number') {
-            propName = String(propKey.value);
-          }
-        }
-
-        if (propName === null) {
+          'SpreadElement',
+        ].includes(prop.type)) {
           continue;
         }
 
         const propVal = getSymbol(
         /** @type {import('eslint').Rule.Node} */ (
-          propNode.value
+          /** @type {import('estree').Property} */
+            (prop).value
           ),
           globals,
           scope,
@@ -308,7 +280,12 @@ const getSymbol = function (node, globals, scope, opt) {
         );
         /* c8 ignore next 8 */
         if (propVal) {
-          val.props[propName] = propVal;
+          val.props[
+          /** @type {import('estree').Identifier} */
+            (
+            /** @type {import('estree').Property} */ (prop).key
+            ).name
+          ] = propVal;
         }
       }
 
@@ -541,12 +518,19 @@ const mapVariables = function (node, globals, opt, isExport) {
       );
       if (symbol) {
         symbol.exported = true;
-        /* c8 ignore next 6 */
       } else {
-      // if (!node.id) {
-        globals.ANONYMOUS_DEFAULT = /** @type {import('eslint').Rule.Node} */ (
-          node.declaration
+        // Anonymous default export, e.g., `export default class {}` or
+        //   `export default {}`; `default` cannot be a variable name
+        const anonymousSymbol = getSymbol(
+          /** @type {import('eslint').Rule.Node} */
+          (node.declaration),
+          globals,
+          globals,
         );
+        if (anonymousSymbol) {
+          anonymousSymbol.exported = true;
+          globals.props.default = anonymousSymbol;
+        }
       }
 
       break;
@@ -826,7 +810,11 @@ const findExportedNode = function (block, node, cache) {
   for (const propval of Object.values(props)) {
     const pval = /** @type {CreatedNode} */ (propval);
     blockCache.push(pval);
-    if (pval.exported && (node === pval.value || findNode(node, pval.value))) {
+    if (pval.exported && (
+      node === pval.value || findNode(node, pval.value) ||
+      // Object literals, e.g., `export const obj = {method () {}}`
+      findNode(node, pval)
+    )) {
       return true;
     }
 

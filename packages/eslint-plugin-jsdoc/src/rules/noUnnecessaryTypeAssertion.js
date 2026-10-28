@@ -1,0 +1,734 @@
+/* eslint-disable no-bitwise -- Convenient */
+/* eslint-disable jsdoc/reject-any-type -- TypeScript types need not be installed */
+import iterateJsdoc from '../iterateJsdoc.js';
+import {
+  createRequire,
+} from 'module';
+
+let warned = false;
+
+/** @type {any} */
+let ts;
+
+let tsAttempted = false;
+
+// 1. Create a require function bound to the current file's URL
+const require = createRequire(import.meta.url);
+
+// Helper to check for standard literals and boolean/enum/template literals
+/**
+ * @param {any} type The type is `ts.Type`
+ * @returns {boolean}
+ */
+const isLiteralType = (type) => {
+  // Standard primitive literals (string, number, bigint, boolean literal flags)
+  if (type.isLiteral()) {
+    return true;
+  }
+
+  // Check using TypeFlags for specific edge cases like boolean or template literals
+
+  if (type.flags & (ts.TypeFlags.BooleanLiteral | ts.TypeFlags.TemplateLiteral)) {
+    return true;
+  }
+
+  // If dealing with a union (e.g. 'a' | 'b'), you can check if all constituents are literals
+  if (type.isUnion()) {
+    return type.types.every(
+      /**
+       * @param {any} typ
+       */
+      (typ) => {
+        return isLiteralType(typ);
+      },
+    );
+  }
+
+  return false;
+};
+
+export default iterateJsdoc(({
+  context,
+  jsdoc,
+  jsdocNode,
+  node: nde,
+  report,
+  sourceCode,
+  utils,
+// eslint-disable-next-line complexity -- Numerous type/option permutations
+}) => {
+  // Already handled
+  if (!ts) {
+    /* c8 ignore next 3 -- Guard (only reachable if `typescript` failed to load on a prior call) */
+    if (tsAttempted) {
+      return;
+    }
+
+    try {
+      // 2. Attempt to import the package synchronously
+      ts = require('typescript');
+    /* c8 ignore next 10 -- Guard */
+    } catch (error) {
+      // 3. Fall back gracefully if it is not installed
+      if (/** @type {{code?: string}} */ (error).code !== 'MODULE_NOT_FOUND') {
+        // Re-throw if it's a different error (e.g., syntax error inside the package)
+        throw error;
+      }
+
+      // eslint-disable-next-line no-console -- Warning user
+      console.warn('⚠️ typescript is not installed. `jsdoc/no-unnecessary-type-assertion` will not work. To disable this warning, you must disable the rule.');
+      return;
+    } finally {
+      tsAttempted = true;
+    }
+  }
+
+  const types = utils.getTags('type');
+
+  // 1. Only proceed if there is a @type tag
+  if (!types.length) {
+    return;
+  }
+
+  const {
+    // https://typescript-eslint.io/rules/no-unnecessary-type-assertion/
+    checkLiteralConstAssertions = false,
+    enableFixer = true,
+    fixTypeChangingCasts = true,
+    preferConstToLiteralTuples = false,
+    treatAnyAsRedundant = false,
+    typesToIgnore = [],
+  } = context.options[0] ?? {};
+
+  /**
+   * Removes the redundant `@type` tag, deleting the whole JSDoc block if it
+   * is left empty.
+   * @returns {void}
+   */
+  const removeType = () => {
+    utils.removeTag(jsdoc.tags.indexOf(/** @type {any} */ (types[0])), {
+      removeEmptyBlock: true,
+    });
+
+    // `removeTag` only drops the enclosing block for a single-line comment; for
+    // a multi-line block whose sole content was the `@type` tag, clear what is
+    // left (only the delimiter lines) so the now-empty comment is removed too.
+    const blockIsEmpty = jsdoc.source.every(({
+      tokens: {
+        description,
+        name,
+        tag,
+        type,
+      },
+    }) => {
+      return !tag && !type && !name && !description.trim();
+    });
+    if (blockIsEmpty) {
+      jsdoc.source.splice(0);
+    }
+  };
+
+  const fixer = enableFixer ? removeType : null;
+
+  const node =
+    /**
+     * @type {import('@typescript-eslint/utils').TSESTree.Node}
+     */ (nde);
+
+  // 2. Safely get TypeScript parser services and TypeChecker
+  const services =
+    /**
+     * @type {import('@typescript-eslint/utils').ParserServices}
+     */ (context.sourceCode.parserServices);
+
+  /* c8 ignore next 10 -- Guard */
+  if (!services || !services.program) {
+    if (!warned) {
+      // Cannot proceed without type-aware linting enabled
+      // eslint-disable-next-line no-console -- Feedback
+      console.warn('⚠️ You must point ESLint to the `typescript-eslint` parser using `languageOptions`. See the documentation for `jsdoc/no-unnecessary-type-assertion`.');
+      warned = true;
+    }
+
+    return;
+  }
+
+  // 1. Grab the parser services and the active TypeChecker
+  // const services = ESLintUtils.getParserServices(context);
+  const checker = services.program.getTypeChecker();
+
+  const assertedTypeStr = types[0].type;
+
+  const message = assertedTypeStr === 'const' ?
+    'The @type tag declaring "{{ type }}" is redundant as TypeScript infers it automatically for literals.' :
+    'The @type tag declaring "{{ type }}" is redundant as TypeScript infers it automatically.';
+
+  const preferConstMessage =
+    'The @type tag declaring "{{ type }}" is better written as the "const" assertion `/** @type {const} */` (TypeScript 4.5+).';
+
+  /**
+   * Rewrites the reported `@type` tag's type to `const`.
+   * @returns {void}
+   */
+  const convertToConst = () => {
+    for (const {
+      tokens,
+    } of /** @type {import('comment-parser').Spec} */ (types[0]).source) {
+      if (tokens.type) {
+        tokens.type = '{const}';
+        break;
+      }
+    }
+  };
+
+  /**
+   * Whether `inferredType` is a generic reference carrying `any` type arguments
+   * that `assertedType` replaces with concrete ones (e.g. an untyped
+   * `document.querySelectorAll(sel)` giving `NodeListOf<any>`, asserted as
+   * `NodeListOf<HTMLElement>`, or `new Map()` giving `Map<any, any>`). Such an
+   * assertion supplies real type information, so it is not redundant even though
+   * `any` leaves the two types mutually assignable.
+   * @param {any} inferredType `ts.Type`
+   * @param {any} assertedType `ts.Type`
+   * @returns {boolean}
+   */
+  const tightensAnyTypeArgument = (inferredType, assertedType) => {
+    // Only ever called for an object type, which always carries `objectFlags`.
+    if ((inferredType.objectFlags & ts.ObjectFlags.Reference) === 0) {
+      return false;
+    }
+
+    const assertedTypeArguments = checker.getTypeArguments(assertedType);
+
+    return checker.getTypeArguments(inferredType).some((inferredTypeArgument, index) => {
+      return (inferredTypeArgument.flags & ts.TypeFlags.Any) !== 0 &&
+        assertedTypeArguments[index] !== undefined &&
+        (assertedTypeArguments[index].flags & ts.TypeFlags.Any) === 0;
+    });
+  };
+
+  /**
+   * A generic call/`new` expression takes its type arguments partly from the
+   * surrounding contextual type, which under a `@type` (a cast, or a
+   * declaration) is the asserted type itself. `getTypeAtLocation` then just
+   * echoes the asserted type back, so a genuine tightening looks redundant
+   * (`document.querySelectorAll(sel)` is really `NodeListOf<Element>`, not the
+   * asserted `NodeListOf<HTMLElement>`). The uncontaminated type cannot be
+   * recovered here, so such expressions are left alone.
+   * @param {any} tsExpression `ts.Node`
+   * @returns {boolean}
+   */
+  const isGenericCall = (tsExpression) => {
+    if (!ts.isCallExpression(tsExpression) && !ts.isNewExpression(tsExpression)) {
+      return false;
+    }
+
+    const signature = /** @type {any} */ (
+      checker.getResolvedSignature(tsExpression)
+    );
+    return Boolean(
+      signature &&
+      (signature.typeParameters ?? signature.target?.typeParameters)?.length,
+    );
+  };
+
+  /**
+   * A template literal with interpolations widens to `string` on its own, but a
+   * surrounding `@type` (a cast, or a declaration) contextually narrows it to a
+   * template-literal type, so `getTypeAtLocation` echoes the asserted literal
+   * back and a genuine narrowing (`\`${x}Reference\`` really being `string`,
+   * asserted as `AvailableType`) looks redundant.
+   * @param {any} estreeExpression
+   * @returns {boolean}
+   */
+  const isInterpolatedTemplateLiteral = (estreeExpression) => {
+    return estreeExpression?.type === 'TemplateLiteral' &&
+      estreeExpression.expressions.length > 0;
+  };
+
+  /**
+   * Whether `type` carries no real structure to compare against — `any`,
+   * `never`, `null`, `undefined`, an empty array (`[]` -> `never[]`), an empty
+   * object (`{}`), or an array whose element type is itself such a placeholder
+   * (`any[]`). An assertion onto a placeholder is always supplying real type
+   * information, so it is not redundant.
+   * @param {any} type `ts.Type`
+   * @returns {boolean}
+   */
+  const isPlaceholderType = (type) => {
+    if ((type.flags & (
+      ts.TypeFlags.Any | ts.TypeFlags.Never |
+      ts.TypeFlags.Null | ts.TypeFlags.Undefined
+    )) !== 0) {
+      return true;
+    }
+
+    if ((type.flags & ts.TypeFlags.Object) === 0) {
+      return false;
+    }
+
+    if (checker.isArrayType(type)) {
+      const [
+        elementType,
+      ] = checker.getTypeArguments(/** @type {import('typescript').TypeReference} */ (
+        type
+      ));
+      return !elementType || (elementType.flags & (
+        ts.TypeFlags.Never | ts.TypeFlags.Undefined | ts.TypeFlags.Any
+      )) !== 0;
+    }
+
+    const {
+      objectFlags,
+    } = /** @type {import('typescript').ObjectType} */ (type);
+    return (objectFlags & ts.ObjectFlags.EmptyObjectLiteral) !== 0 ||
+      checker.getPropertiesOfType(type).length === 0;
+  };
+
+  /**
+   * Whether the JSDoc-asserted type adds nothing over the type TypeScript
+   * already infers for the expression it is attached to.
+   * @param {any} rawInferredType `ts.Type`
+   * @param {any} rawAssertedType `ts.Type`
+   * @returns {boolean}
+   */
+  const isRedundantAssertion = (rawInferredType, rawAssertedType) => {
+    if (assertedTypeStr === 'const') {
+      return checkLiteralConstAssertions && isLiteralType(rawInferredType);
+    }
+
+    if (!treatAnyAsRedundant && assertedTypeStr === 'any') {
+      return false;
+    }
+
+    if (typesToIgnore.includes(assertedTypeStr)) {
+      return false;
+    }
+
+    // An `any` expression (e.g. a property of `JSON.parse(s)`) is assignable to
+    // everything, so a concrete assertion on it is genuinely narrowing rather
+    // than redundant. (`@type {any}` on `any` still falls through to the
+    // `treatAnyAsRedundant` handling above/below.)
+    if (
+      (rawInferredType.flags & ts.TypeFlags.Any) !== 0 &&
+      (rawAssertedType.flags & ts.TypeFlags.Any) === 0
+    ) {
+      return false;
+    }
+
+    // A union such as `never[] | {}` (from `cond ? [] : {}`) reaches the
+    // primitive path below; if every constituent is a structureless placeholder
+    // the assertion is supplying the real shape, so it is not redundant.
+    if (rawInferredType.isUnion() && rawInferredType.types.every(isPlaceholderType)) {
+      return false;
+    }
+
+    const isObjectOrArray = (rawInferredType.flags & ts.TypeFlags.Object) !== 0;
+
+    if (!isObjectOrArray) {
+      // Primitives and individual literal values ("text" -> string) use unidirectional verification
+      return checker.isTypeAssignableTo(rawInferredType, rawAssertedType);
+    }
+
+    if (isPlaceholderType(rawInferredType)) {
+      return false;
+    }
+
+    if (checker.isArrayType(rawInferredType)) {
+      // Arrays: standard structural bidirectional assignment matches string[] vs string[]
+      return checker.isTypeAssignableTo(rawInferredType, rawAssertedType) &&
+        checker.isTypeAssignableTo(rawAssertedType, rawInferredType);
+    }
+
+    if (tightensAnyTypeArgument(rawInferredType, rawAssertedType)) {
+      return false;
+    }
+
+    // Objects: strip the literal-initialization flags, then require structural
+    // equivalence in both directions, so `{prop: string}` vs `{prop: string}` is
+    // redundant while `{prop?: string}` vs `{prop: string}` fails backward.
+    const inferredBaseType = checker.getBaseTypeOfLiteralType(rawInferredType);
+    const assertedBaseType = checker.getBaseTypeOfLiteralType(rawAssertedType);
+
+    return checker.isTypeAssignableTo(inferredBaseType, assertedBaseType) &&
+      checker.isTypeAssignableTo(assertedBaseType, inferredBaseType);
+  };
+
+  /**
+   * Whether the fixer may remove a redundant assertion. With
+   * `fixTypeChangingCasts` (the default) every redundant assertion may be
+   * removed. Without it, a broader assertion (e.g. `unknown` on a `string`, or
+   * `'x' | 'y'` on `'x'`) is only reported, since dropping it would change the
+   * declared or returned type; it is removed only when the asserted type is
+   * also assignable back to the inferred one. A plain widening of a literal
+   * (`string` on `'hello'`) is the type TypeScript gives a mutable binding
+   * anyway, so it is kept removable.
+   * @param {any} rawInferredType `ts.Type`
+   * @param {any} rawAssertedType `ts.Type`
+   * @returns {boolean}
+   */
+  const mayRemove = (rawInferredType, rawAssertedType) => {
+    if (
+      fixTypeChangingCasts || assertedTypeStr === 'const' ||
+      checker.isTypeAssignableTo(rawAssertedType, rawInferredType)
+    ) {
+      return true;
+    }
+
+    const inferredBaseType = checker.getBaseTypeOfLiteralType(rawInferredType);
+    return checker.isTypeAssignableTo(inferredBaseType, rawAssertedType) &&
+      checker.isTypeAssignableTo(rawAssertedType, inferredBaseType);
+  };
+
+  /**
+   * A non-`const` tuple type annotation on an array literal (asserting `['foo']`
+   * onto `['foo']`) turns the literal's inferred `T[]` into a tuple; since the
+   * literal only takes that tuple type *from* the assertion, the assertion is
+   * never genuinely redundant even though the contextually-typed expression
+   * echoes the asserted tuple straight back. It is the pre-TypeScript-4.5
+   * stand-in for a `const` assertion.
+   * @param {any} assertedType `ts.Type`
+   * @param {import('@typescript-eslint/utils').TSESTree.Node | null | undefined} operand
+   * @returns {boolean}
+   */
+  const isTupleConversionIdiom = (assertedType, operand) => {
+    return assertedTypeStr !== 'const' &&
+      operand?.type === 'ArrayExpression' &&
+      checker.isTupleType(assertedType);
+  };
+
+  /**
+   * An array-literal annotation whose element type is a literal (or union of
+   * literals) — `type {ViewType[]}` on `['single-panel', 'user']` —
+   * narrows the element type that the bare literal would widen (`string[]` ->
+   * `ViewType[]`). Like the tuple idiom, the literal takes that element type
+   * only *from* the annotation, so the contextually-typed initializer echoes
+   * the asserted array straight back and the genuine narrowing looks redundant.
+   * @param {any} assertedType `ts.Type`
+   * @param {import('@typescript-eslint/utils').TSESTree.Node | null | undefined} operand
+   * @returns {boolean}
+   */
+  const narrowsArrayLiteralElement = (assertedType, operand) => {
+    if (operand?.type !== 'ArrayExpression' || !checker.isArrayType(assertedType)) {
+      return false;
+    }
+
+    const [
+      elementType,
+    ] = checker.getTypeArguments(assertedType);
+    return isLiteralType(elementType);
+  };
+
+  /**
+   * Whether `operand` is an object literal carrying a method or function-valued
+   * property. Under a surrounding `@type` object annotation such a function is
+   * contextually typed by the annotation — its otherwise-implicit-`any`
+   * parameters (and hence its signature) come straight from it — so
+   * `getTypeAtLocation` echoes the asserted object shape back and a genuine
+   * typing looks redundant. As elsewhere in this rule the uncontaminated type
+   * cannot be recovered here, so such literals are left alone (at the cost of
+   * missing the rare object annotation that only restates a fully
+   * self-evident method signature).
+   * @param {import('@typescript-eslint/utils').TSESTree.Node | null | undefined} operand
+   * @returns {boolean}
+   */
+  const hasContextuallyTypedFunctionMember = (operand) => {
+    return operand?.type === 'ObjectExpression' &&
+      operand.properties.some((property) => {
+        return property.type === 'Property' && (
+          property.value.type === 'FunctionExpression' ||
+          property.value.type === 'ArrowFunctionExpression'
+        );
+      });
+  };
+
+  /**
+   * Whether every element of `tupleType` is a literal type, so a `const`
+   * assertion would reproduce the same element types (`['foo', 1]` but not
+   * `[string]`).
+   * @param {any} tupleType `ts.Type`
+   * @returns {boolean}
+   */
+  const tupleElementsAllLiteral = (tupleType) => {
+    const elements = checker.getTypeArguments(tupleType);
+    return elements.length > 0 && elements.every(isLiteralType);
+  };
+
+  /**
+   * Reports an array-literal tuple assertion, offering (under `enableFixer`) a
+   * rewrite to the equivalent, more concise `const` assertion.
+   * @returns {void}
+   */
+  const reportPreferConst = () => {
+    utils.reportJSDoc(
+      preferConstMessage,
+      types[0],
+      enableFixer ? convertToConst : null,
+      false,
+      {
+        type: assertedTypeStr,
+      },
+    );
+  };
+
+  // Positions where a bare expression of any precedence is valid and equivalent
+  // to the parenthesized form, so a redundant `/** @type {T} */ (expr)` cast can
+  // be unwrapped to `expr` without changing meaning.
+  const unwrappableParentTypes = new Set([
+    'ArrayExpression',
+    'AssignmentExpression',
+    'ReturnStatement',
+    'ThrowStatement',
+    'VariableDeclarator',
+  ]);
+
+  /**
+   * The type TypeScript infers for an initializer. A mutable binding (`let` or
+   * `var`) widens a literal (`'a'` becomes `string`, `5` becomes `number`), so
+   * a `@type` that only matches the unwidened literal is still narrowing. A
+   * `const` binding keeps the literal type.
+   * @param {any} initializerTsNode `ts.Node`
+   * @param {boolean} mutableBinding `true` when the declaration is not `const`
+   * @returns {any} `ts.Type`
+   */
+  const inferredInitializerType = (initializerTsNode, mutableBinding) => {
+    const inferredType = checker.getTypeAtLocation(initializerTsNode);
+
+    return mutableBinding ?
+      checker.getBaseTypeOfLiteralType(inferredType) :
+      inferredType;
+  };
+
+  // 3. `/** @type {T} */ const x = 5;`
+  if (node?.type === 'VariableDeclaration') {
+    // A leading `@type` tag only influences the first declarator (TypeScript
+    // leaves the rest to their own inferred types), so checking `[0]` fully
+    // determines whether the tag is redundant even for `const a = 1, b = 2;`.
+    const decl = node.declarations[0];
+
+    /* c8 ignore next 4 -- How to cover? */
+    if (!decl.init) {
+      // No initializer, type is likely `any`, so @type isn't redundant
+      return;
+    }
+
+    // Resolve the `@type` tag through the real TypeNode that TypeScript already
+    // parsed and bound as part of the program. Re-parsing the type string into
+    // a detached virtual source file (as an earlier approach did) leaves object
+    // type literals unbound, so `{prop: string}` collapses to `{}`.
+    const jsdocTypeNode = ts.getJSDocType(
+      services.esTreeNodeToTSNodeMap.get(decl),
+    );
+
+    /* c8 ignore next 3 -- Every `@type` tag reaching here has a bound TypeNode */
+    if (!jsdocTypeNode) {
+      return;
+    }
+
+    const declInitTsNode = services.esTreeNodeToTSNodeMap.get(decl.init);
+    if (isGenericCall(declInitTsNode) || isInterpolatedTemplateLiteral(decl.init)) {
+      return;
+    }
+
+    // Widen `let`/`var` the same way as an inline cast. Otherwise
+    // `/** @type {'a' | 'b'} */ let mode = 'a'` looks redundant, and removing
+    // the tag widens `mode` to `string`.
+    const declInferredType = inferredInitializerType(
+      declInitTsNode,
+      node.kind !== 'const',
+    );
+    const declAssertedType = checker.getTypeFromTypeNode(jsdocTypeNode);
+
+    if (isTupleConversionIdiom(declAssertedType, decl.init)) {
+      if (preferConstToLiteralTuples && tupleElementsAllLiteral(declAssertedType)) {
+        reportPreferConst();
+      }
+
+      return;
+    }
+
+    if (
+      narrowsArrayLiteralElement(declAssertedType, decl.init) ||
+      hasContextuallyTypedFunctionMember(decl.init)
+    ) {
+      return;
+    }
+
+    if (isRedundantAssertion(declInferredType, declAssertedType)) {
+      utils.reportJSDoc(
+        message,
+        types[0],
+        mayRemove(declInferredType, declAssertedType) ? fixer : null,
+        true,
+        {
+          type: assertedTypeStr,
+        },
+      );
+    }
+
+    return;
+  }
+
+  // 4. Inline cast: `/** @type {T} */ (expr)` (TypeScript's JSDoc assertion).
+  const exprTsNode = services.esTreeNodeToTSNodeMap.get(node);
+  const paren = exprTsNode?.parent;
+  if (!paren || !ts.isParenthesizedExpression(paren)) {
+    return;
+  }
+
+  const typeTag = ts.getJSDocTypeTag(paren);
+
+  /* c8 ignore next 4 -- Defensive: `getJSDocTypeTag` can also surface a `@type`
+     inherited from an enclosing statement, whose position precedes the paren */
+  if (!typeTag || typeTag.pos < paren.pos) {
+    return;
+  }
+
+  // The `@type` TypeScript resolves for `paren` must be the very comment being
+  // iterated. When the comment actually sits on an inner parenthesized
+  // sub-expression that is then a member/argument of the paren's operand
+  // (`/** @type {DOMException} */ (reader.error).message`), `paren` is a
+  // different, outer cast carrying a different comment, so measuring or fixing
+  // against it would target the wrong expression (and drop the inner cast).
+  if (typeTag.parent.end !== jsdocNode.range[1]) {
+    return;
+  }
+
+  if (isGenericCall(exprTsNode) || isInterpolatedTemplateLiteral(node)) {
+    return;
+  }
+
+  // The `unknown` half of a "cast through `unknown`"
+  // (`/** @type {T} */ (/** @type {unknown} */ (x))`) is the load-bearing
+  // bridge that lets the outer assertion reach an otherwise-incompatible type;
+  // it is never redundant, even though `unknown` is broader than everything.
+  if (assertedTypeStr === 'unknown' && ts.isParenthesizedExpression(paren.parent)) {
+    const outerTypeTag = ts.getJSDocTypeTag(paren.parent);
+    if (outerTypeTag && outerTypeTag.pos >= paren.parent.pos) {
+      return;
+    }
+  }
+
+  const parent = /** @type {any} */ (node.parent);
+  const declaration = parent.type === 'VariableDeclarator' ? parent.parent : null;
+
+  // A `/** @type {const} */` cast only fails to do real work on a `const`
+  // declarator, which already infers the literal type. Anywhere else (`let`, a
+  // return, an object-property value, some generic call arguments, …) it
+  // suppresses widening, so it is not redundant.
+  if (assertedTypeStr === 'const' && declaration?.kind !== 'const') {
+    return;
+  }
+
+  // For a mutable binding (`let`/`var`) TypeScript widens the initializer, so a
+  // narrowing cast such as `/** @type {5} */` is doing real work; widen the
+  // uncast type to match before judging redundancy.
+  const castInferredType = inferredInitializerType(
+    exprTsNode,
+    Boolean(declaration) && declaration.kind !== 'const',
+  );
+  const castAssertedType = checker.getTypeFromTypeNode(typeTag.typeExpression.type);
+
+  if (isTupleConversionIdiom(castAssertedType, node)) {
+    if (preferConstToLiteralTuples && tupleElementsAllLiteral(castAssertedType)) {
+      reportPreferConst();
+    }
+
+    return;
+  }
+
+  if (
+    narrowsArrayLiteralElement(castAssertedType, node) ||
+    hasContextuallyTypedFunctionMember(node)
+  ) {
+    return;
+  }
+
+  if (!isRedundantAssertion(castInferredType, castAssertedType)) {
+    return;
+  }
+
+  const canUnwrap = enableFixer && mayRemove(castInferredType, castAssertedType) && (
+    unwrappableParentTypes.has(parent.type) ||
+    (parent.type === 'ConditionalExpression' && parent.test !== node) ||
+    ((parent.type === 'CallExpression' || parent.type === 'NewExpression') &&
+      parent.callee !== node)
+  );
+
+  report(
+    message,
+    canUnwrap ?
+      /**
+       * @param {import('eslint').Rule.RuleFixer} ruleFixer
+       * @returns {import('eslint').Rule.Fix}
+       */
+      (ruleFixer) => {
+        const closeParen = /** @type {import('eslint').AST.Token} */ (
+          sourceCode.getTokenAfter(/** @type {any} */ (node), {
+            filter: ({
+              type,
+              value,
+            }) => {
+              return type === 'Punctuator' && value === ')';
+            },
+          })
+        );
+
+        return ruleFixer.replaceTextRange(
+          [
+            jsdocNode.range[0], closeParen.range[1],
+          ],
+          sourceCode.getText(/** @type {any} */ (node)),
+        );
+      } :
+      null,
+    types[0],
+    {
+      type: assertedTypeStr,
+    },
+  );
+}, {
+  iterateAllJsdocs: true,
+  meta: {
+    docs: {
+      description: 'Reports redundant @type tags that match or broaden the naturally inferred TypeScript type.',
+    },
+    fixable: 'code',
+    schema: [
+      {
+        additionalProperties: false,
+        properties: {
+          checkLiteralConstAssertions: {
+            description: 'Whether to check `const` type assertions as redundant',
+            type: 'boolean',
+          },
+          enableFixer: {
+            description: 'Whether to enable the fixer that removes the redundant `@type` tag (and the JSDoc block if it becomes empty). Defaults to `true`.',
+            type: 'boolean',
+          },
+          fixTypeChangingCasts: {
+            description: 'Whether the fixer may also remove a redundant assertion that is broader than the inferred type, which changes the declared, exported or returned type (e.g. `/** @type {unknown} */` on a `string`). When `false`, such an assertion is still reported but not fixed. Only matters when `enableFixer` is `true`. Defaults to `true`.',
+            type: 'boolean',
+          },
+          preferConstToLiteralTuples: {
+            description: 'Whether to report a non-`const` literal-tuple assertion on an array literal (e.g. `/** @type {[\'foo\']} */ ([\'foo\'])`) and fix it to the equivalent, more concise `/** @type {const} */` assertion. Defaults to `false`.',
+            type: 'boolean',
+          },
+          treatAnyAsRedundant: {
+            description: 'Whether to treat `any` type casts as redundant',
+            type: 'boolean',
+          },
+          typesToIgnore: {
+            description: 'An array list of types to ignore',
+            items: {
+              type: 'string',
+            },
+            type: 'array',
+          },
+        },
+        type: 'object',
+      },
+    ],
+    type: 'suggestion',
+  },
+});

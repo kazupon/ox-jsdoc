@@ -3,8 +3,11 @@ import {
   parse,
   traverse,
   tryParse,
-} from '@ox-jsdoc/jsdoccomment';
+} from '@es-joy/jsdoccomment';
 import * as resolve from '@es-joy/resolve.exports';
+import {
+  parse as espree,
+} from 'espree';
 import {
   readFileSync,
 } from 'node:fs';
@@ -69,7 +72,13 @@ export default iterateJsdoc(({
   for (const tag of jsdoc.tags) {
     let typeAst;
     try {
-      typeAst = mode === 'permissive' ? tryParse(tag.type) : parse(tag.type, mode);
+      typeAst = mode === 'permissive' ?
+        tryParse(tag.type, undefined, {
+          computedPropertyParser: espree,
+        }) :
+        parse(tag.type, mode, {
+          computedPropertyParser: espree,
+        });
     } catch {
       continue;
     }

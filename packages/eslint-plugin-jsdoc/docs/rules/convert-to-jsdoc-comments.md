@@ -25,7 +25,7 @@ A single options object has the following properties.
 
 An array of prefixes to allow at the beginning of a comment.
 
-Defaults to `['@ts-', 'istanbul ', 'c8 ', 'v8 ', 'eslint', 'prettier-']`.
+Defaults to `['@ts-', '@license', '@license-end', 'istanbul ', 'c8 ', 'v8 ', 'eslint', 'prettier-']`.
 
 Supplying your own value overrides the defaults.
 
@@ -215,6 +215,55 @@ class TestClass {
 
 var a = []; // Test comment
 // "jsdoc/convert-to-jsdoc-comments": ["error"|"warn", {"contextsBeforeAndAfter":["VariableDeclarator"]}]
+// Message: Line comments should be JSDoc-style.
+
+/*
+ * Seniority levels that participate in distribution, in display
+ * order. `custom` is never a real distribution key. Every test shown in this
+ * modal can recruit each of these levels, so all three are always editable.
+ */
+const SENIORITY_ORDER = ['senior', 'middle', 'specialist'];
+// "jsdoc/convert-to-jsdoc-comments": ["error"|"warn", {"contexts":["any"],"lineOrBlockStyle":"block"}]
+// Message: Block comments should be JSDoc-style.
+
+// one
+// two
+// three
+type Foo = string;
+// "jsdoc/convert-to-jsdoc-comments": ["error"|"warn", {"contexts":["TSTypeAliasDeclaration"]}]
+// Message: Line comments should be JSDoc-style.
+
+// one
+// two
+// three
+function quux () {}
+// "jsdoc/convert-to-jsdoc-comments": ["error"|"warn", {"enforceJsdocLineStyle":"single"}]
+// Message: Line comments should be JSDoc-style.
+
+// separate paragraph
+
+// one
+// two
+function quux () {}
+// Message: Line comments should be JSDoc-style.
+
+// eslint-disable-next-line no-magic-numbers
+// one
+// two
+function quux () {}
+// Message: Line comments should be JSDoc-style.
+
+// Matches every compiled file, e.g. dist/**/*.js
+function quux () {}
+// Message: Line comments should be JSDoc-style.
+
+// see the pattern a*/b used by parsers
+function quux () {}
+// Message: Line comments should be JSDoc-style.
+
+// first line
+// closes */ here
+function quux () {}
 // Message: Line comments should be JSDoc-style.
 ````
 

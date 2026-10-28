@@ -42,6 +42,15 @@ The following patterns are considered problems:
 
 ````ts
 /**
+ * @template T
+ * @template {keyof T} K
+ * @param {string} x
+ * @returns {void}
+ */
+function quux (x) {}
+// Message: @template K not in use
+
+/**
  * @template D
  * @template V
  */
@@ -143,6 +152,13 @@ export function identity<Type>(arg: Type): Type {
 // Message: @template D not in use
 
 /**
+ * @template T
+ * @template K
+ * @typedef {T["K"]} ValueOfK
+ */
+// Message: @template K not in use
+
+/**
  * @template D
  * @template V
  */
@@ -220,6 +236,13 @@ export default class <NumType> {
  */
 // Settings: {"jsdoc":{"tagNamePreference":{"template":false}}}
 // Message: Unexpected tag `@template`
+
+/**
+ * @template [T = string]
+ * @template [U = number]
+ * @typedef {[T]} Single
+ */
+// Message: @template U not in use
 ````
 
 
@@ -262,6 +285,12 @@ export type Extras<D, U, V> = [D, U, V | undefined];
 /**
  * @typedef Foo
  * @prop {string} bar
+ */
+
+/**
+ * @template T
+ * @template {keyof T} K
+ * @typedef {T[K]} ValueOf
  */
 
 /**
@@ -417,5 +446,57 @@ export function createMessageChannel(messageType) {
 
   return messageChannel;
 }
+
+/**
+ * @template [T = "json"]
+ * @template {string} [ U = string ] - A key
+ * @typedef {(this: T, key: U) => void} SimpleCallback
+ */
+
+/**
+ * @template T
+ * @augments {Set<T>}
+ */
+export class MySet extends Set {}
+
+/**
+ * @template U
+ * @extends {Set<U>}
+ */
+export class MySet extends Set {}
+
+/**
+ * @template T
+ * @implements {Iterable<T>}
+ */
+export class MyIterable {}
+
+/**
+ * @template {Record<string, unknown>} T
+ * @template {keyof T} K
+ * @param {K} key
+ * @returns {void}
+ */
+function quux (key) {}
+
+/**
+ * @template T
+ * @template [U=T[]]
+ * @param {U} x
+ * @returns {void}
+ */
+function quux (x) {}
+
+/**
+ * @template {B} A
+ * @template B
+ * @typedef {A} AssertExtends
+ */
+
+/**
+ * @template T
+ * @param {{bar: string, [Symbol.dispose](): T}} Single
+ */
+function quux () {}
 ````
 

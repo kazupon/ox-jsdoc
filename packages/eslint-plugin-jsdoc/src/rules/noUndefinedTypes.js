@@ -1,7 +1,6 @@
-import iterateJsdoc from '../iterateJsdoc.js';
-import {
-  parseCommentForSource,
-} from '../parseCommentStrategy.js';
+import iterateJsdoc, {
+  parseComment,
+} from '../iterateJsdoc.js';
 import {
   getDocumentNamepathDefiningTags,
   getJSDocCommentBlocks,
@@ -11,7 +10,10 @@ import {
   parse as parseType,
   traverse,
   tryParse as tryParseType,
-} from '@ox-jsdoc/jsdoccomment';
+} from '@es-joy/jsdoccomment';
+import {
+  parse as espree,
+} from 'espree';
 import {
   parseImportsExports,
 } from 'parse-imports-exports';
@@ -29,7 +31,15 @@ const globalTypes = [
   'globalThis', 'global', 'window', 'self',
 ];
 
+const iterableIterator = [
+  'Iterable',
+  'Iterator',
+  'IteratorObject',
+];
+
 const typescriptGlobals = [
+  ...iterableIterator,
+
   // https://www.typescriptlang.org/docs/handbook/utility-types.html
   'Awaited',
   'Partial',
@@ -52,6 +62,172 @@ const typescriptGlobals = [
   'Lowercase',
   'Capitalize',
   'Uncapitalize',
+
+  // Type-only globals of TypeScript's standard library, grouped by the
+  //   `typescript/lib` file which first declares them
+
+  // lib.es5.d.ts
+  'ArrayBufferConstructor',
+  'ArrayBufferLike',
+  'ArrayBufferTypes',
+  'ArrayBufferView',
+  'ArrayConstructor',
+  'ArrayLike',
+  'BooleanConstructor',
+  'CallableFunction',
+  'ConcatArray',
+  'DataViewConstructor',
+  'DateConstructor',
+  'ErrorConstructor',
+  'EvalErrorConstructor',
+  'Float32ArrayConstructor',
+  'Float64ArrayConstructor',
+  'FunctionConstructor',
+  'IArguments',
+  'ImportAssertions',
+  'ImportAttributes',
+  'ImportCallOptions',
+  'ImportMeta',
+  'Int16ArrayConstructor',
+  'Int32ArrayConstructor',
+  'Int8ArrayConstructor',
+  'NewableFunction',
+  'NoInfer',
+  'NumberConstructor',
+  'ObjectConstructor',
+  'PromiseConstructorLike',
+  'PromiseLike',
+  'PropertyDescriptor',
+  'PropertyDescriptorMap',
+  'PropertyKey',
+  'RangeErrorConstructor',
+  'ReadonlyArray',
+  'ReferenceErrorConstructor',
+  'RegExpConstructor',
+  'RegExpExecArray',
+  'RegExpMatchArray',
+  'StringConstructor',
+  'SyntaxErrorConstructor',
+  'TemplateStringsArray',
+  'TypeErrorConstructor',
+  'TypedPropertyDescriptor',
+  'URIErrorConstructor',
+  'Uint16ArrayConstructor',
+  'Uint32ArrayConstructor',
+  'Uint8ArrayConstructor',
+  'Uint8ClampedArrayConstructor',
+  'WeakKey',
+  'WeakKeyTypes',
+
+  // lib.es2015.collection.d.ts
+  'MapConstructor',
+  'ReadonlyMap',
+  'ReadonlySet',
+  'SetConstructor',
+  'WeakMapConstructor',
+  'WeakSetConstructor',
+
+  // lib.es2015.generator.d.ts
+  'Generator',
+  'GeneratorFunction',
+  'GeneratorFunctionConstructor',
+
+  // lib.es2015.iterable.d.ts
+  'ArrayIterator',
+  'BuiltinIteratorReturn',
+  'IterableIterator',
+  'IteratorResult',
+  'IteratorReturnResult',
+  'IteratorYieldResult',
+  'MapIterator',
+  'PromiseConstructor',
+  'SetIterator',
+  'StringIterator',
+  'SymbolConstructor',
+
+  // lib.es2015.proxy.d.ts
+  'ProxyConstructor',
+  'ProxyHandler',
+
+  // lib.es2017.sharedmemory.d.ts
+  'SharedArrayBufferConstructor',
+
+  // lib.es2018.asyncgenerator.d.ts
+  'AsyncGenerator',
+  'AsyncGeneratorFunction',
+  'AsyncGeneratorFunctionConstructor',
+
+  // lib.es2018.asynciterable.d.ts
+  'AsyncIterable',
+  'AsyncIterableIterator',
+  'AsyncIterator',
+  'AsyncIteratorObject',
+
+  // lib.es2019.array.d.ts
+  'FlatArray',
+
+  // lib.es2020.bigint.d.ts
+  'BigInt64ArrayConstructor',
+  'BigIntConstructor',
+  'BigIntToLocaleStringOptions',
+  'BigUint64ArrayConstructor',
+
+  // lib.es2020.promise.d.ts
+  'PromiseFulfilledResult',
+  'PromiseRejectedResult',
+  'PromiseSettledResult',
+
+  // lib.es2020.symbol.wellknown.d.ts
+  'RegExpStringIterator',
+
+  // lib.es2021.promise.d.ts
+  'AggregateErrorConstructor',
+
+  // lib.es2021.weakref.d.ts
+  'FinalizationRegistryConstructor',
+  'WeakRefConstructor',
+
+  // lib.es2022.error.d.ts
+  'ErrorOptions',
+
+  // lib.es2022.regexp.d.ts
+  'RegExpIndicesArray',
+
+  // lib.es2024.promise.d.ts
+  'PromiseWithResolvers',
+
+  // lib.es2025.collection.d.ts
+  'ReadonlySetLike',
+
+  // lib.es2025.iterator.d.ts
+  'IteratorObjectConstructor',
+
+  // lib.esnext.disposable.d.ts
+  'AsyncDisposable',
+  'AsyncDisposableStackConstructor',
+  'Disposable',
+  'DisposableStackConstructor',
+  'SuppressedErrorConstructor',
+
+  // lib.decorators.d.ts
+  'ClassAccessorDecoratorContext',
+  'ClassAccessorDecoratorResult',
+  'ClassAccessorDecoratorTarget',
+  'ClassDecoratorContext',
+  'ClassFieldDecoratorContext',
+  'ClassGetterDecoratorContext',
+  'ClassMemberDecoratorContext',
+  'ClassMethodDecoratorContext',
+  'ClassSetterDecoratorContext',
+  'DecoratorContext',
+  'DecoratorMetadata',
+  'DecoratorMetadataObject',
+
+  // lib.decorators.legacy.d.ts
+  'ClassDecorator',
+  'MethodDecorator',
+  'ParameterDecorator',
+  'PropertyDecorator',
 ];
 
 /**
@@ -128,7 +304,7 @@ export default iterateJsdoc(({
   }
 
   const allComments = sourceCode.getAllComments();
-  const comments = getJSDocCommentBlocks(sourceCode, settings);
+  const comments = getJSDocCommentBlocks(sourceCode);
 
   const globals = allComments
     .filter((comment) => {
@@ -137,7 +313,7 @@ export default iterateJsdoc(({
       return commentNode.value.replace(/^\s*globals/v, '').trim().split(/,\s*/v);
     }).concat(Object.keys(context.languageOptions.globals ?? []));
 
-  const typedefs = getDocumentNamepathDefiningTags(sourceCode, settings);
+  const typedefs = getDocumentNamepathDefiningTags(sourceCode);
 
   const typedefDeclarations = typedefs
     .map((tag) => {
@@ -208,7 +384,7 @@ export default iterateJsdoc(({
       return [];
     }
 
-    const jsdc = parseCommentForSource(sourceCode, commentNode, settings, '');
+    const jsdc = parseComment(commentNode, '');
 
     return jsdc.tags.filter((tag) => {
       return tag.tag === 'template';
@@ -247,6 +423,31 @@ export default iterateJsdoc(({
     const result = new Set();
 
     let scp = scope;
+
+    /**
+     * @param {import("eslint").Scope.Scope | null} sc
+     */
+    const getChildScopes = (sc) => {
+      if (sc) {
+        // We must check child scopes because when multiple nodes find
+        //   the same comment block, only one node is reported by our code,
+        //   and it can be the children which are not reported.
+        for (const childScope of sc.childScopes) {
+          for (const {
+            name,
+          } of childScope.variables) {
+            result.add(name);
+          }
+
+          for (const grandChildScope of childScope.childScopes) {
+            getChildScopes(grandChildScope);
+          }
+        }
+      }
+    };
+
+    getChildScopes(scp);
+
     while (scp) {
       for (const {
         name,
@@ -327,7 +528,51 @@ export default iterateJsdoc(({
         ];
       }
 
-      // Fallback for unhandled declaration types (e.g., TSEnumDeclaration, FunctionDeclaration, etc.).
+      if (declaration.type === 'TSImportEqualsDeclaration') {
+        return [
+          `${prefix}.${declaration.id.name}`,
+        ];
+      }
+
+      if (declaration.type === 'TSEnumDeclaration') {
+        return [
+          `${prefix}.${declaration.id.name}`,
+          ...declaration.body.members.map((member) => {
+            // Only handle Identifier member names, not string literals.
+            if (member.id.type !== 'Identifier') {
+              return '';
+            }
+
+            return `${prefix}.${declaration.id.name}.${member.id.name}`;
+          }).filter(Boolean),
+        ];
+      }
+
+      if (declaration.type === 'VariableDeclaration') {
+        return declaration.declarations.flatMap((declarator) => {
+          // Destructuring patterns are not handled.
+          if (declarator.id.type !== 'Identifier') {
+            return [];
+          }
+
+          return [
+            `${prefix}.${declarator.id.name}`,
+          ];
+        });
+      }
+
+      if (declaration.type === 'FunctionDeclaration' || declaration.type === 'TSDeclareFunction') {
+        /* c8 ignore next 3 -- Guard for anonymous default-exported functions which can't exist in a namespace. */
+        if (!declaration.id) {
+          return [];
+        }
+
+        return [
+          `${prefix}.${declaration.id.name}`,
+        ];
+      }
+
+      // Fallback for unhandled declaration types.
       return [];
     });
   };
@@ -340,6 +585,21 @@ export default iterateJsdoc(({
 
   /** @type {Set<string>} */
   const closedTypes = new Set();
+
+  const tsModuleVariables = scopeManager.scopes.filter(({
+    type,
+  }) => {
+    // @ts-expect-error TS
+    return type === 'tsModule';
+  }).flatMap(({
+    variables,
+  }) => {
+    return variables.map(({
+      name,
+    }) => {
+      return name;
+    });
+  });
 
   const allDefinedTypes = new Set(globalScope.variables.map(({
     name,
@@ -432,33 +692,46 @@ export default iterateJsdoc(({
     .concat(typedefDeclarations)
     .concat(importTags)
     .concat(definedTypes)
+    .concat(tsModuleVariables)
     .concat(/** @type {string[]} */ (definedPreferredTypes))
     .concat((() => {
-      // Other methods are not in scope, but we need them, and we grab them here
-      if (node?.type === 'MethodDefinition') {
-        return /** @type {import('estree').ClassBody} */ (node.parent).body.flatMap((methodOrProp) => {
-          if (methodOrProp.type === 'MethodDefinition') {
-            // eslint-disable-next-line unicorn/no-lonely-if -- Pattern
-            if (methodOrProp.key.type === 'Identifier') {
-              return [
-                methodOrProp.key.name,
-                `${/** @type {import('estree').ClassDeclaration} */ (
-                  node.parent?.parent
-                )?.id?.name}.${methodOrProp.key.name}`,
-              ];
-            }
-          }
+      let nodeToCheck = node;
+      if (node?.type === 'ExportNamedDeclaration' || node?.type === 'ExportDefaultDeclaration') {
+        nodeToCheck = /** @type {import('estree').ClassDeclaration & import('eslint').Rule.NodeParentExtension} */ (
+          /** @type {import('estree').ExportNamedDeclaration & import('eslint').Rule.NodeParentExtension} */
+          (nodeToCheck)?.declaration
+        );
+      }
 
-          if (methodOrProp.type === 'PropertyDefinition') {
-            // eslint-disable-next-line unicorn/no-lonely-if -- Pattern
-            if (methodOrProp.key.type === 'Identifier') {
-              return [
-                methodOrProp.key.name,
-                `${/** @type {import('estree').ClassDeclaration} */ (
-                  node.parent?.parent
-                )?.id?.name}.${methodOrProp.key.name}`,
-              ];
-            }
+      // Other class members are not in scope, but we need them (e.g., for a
+      //   sibling property or method referenced by `{@link}`, or a member
+      //   referenced by `{@link}` from the class's own JSDoc block), and we
+      //   grab them here
+      /** @type {import('estree').ClassBody|undefined} */
+      let classBody;
+      /** @type {string|undefined} */
+      let className;
+      if (nodeToCheck?.type === 'MethodDefinition' || nodeToCheck?.type === 'PropertyDefinition') {
+        classBody = /** @type {import('estree').ClassBody} */ (nodeToCheck.parent);
+        className = /** @type {import('estree').ClassDeclaration} */ (
+          nodeToCheck.parent?.parent
+        )?.id?.name;
+      } else if (nodeToCheck?.type === 'ClassDeclaration' || nodeToCheck?.type === 'ClassExpression') {
+        classBody = nodeToCheck.body;
+        className = nodeToCheck.id?.name;
+      }
+
+      if (classBody) {
+        return classBody.body.flatMap((methodOrProp) => {
+          if (
+            (methodOrProp.type === 'MethodDefinition' ||
+            methodOrProp.type === 'PropertyDefinition') &&
+            methodOrProp.key.type === 'Identifier'
+          ) {
+            return [
+              methodOrProp.key.name,
+              `${className}.${methodOrProp.key.name}`,
+            ];
           }
           /* c8 ignore next 2 -- Not yet built */
 
@@ -510,7 +783,7 @@ export default iterateJsdoc(({
   /**
    * @typedef {{
    *   parsedType: import('jsdoc-type-pratt-parser').RootResult;
-   *   tag: import('comment-parser').Spec|import('@ox-jsdoc/jsdoccomment').JsdocInlineTagNoType & {
+   *   tag: import('comment-parser').Spec|import('@es-joy/jsdoccomment').JsdocInlineTagNoType & {
    *     line?: import('../iterateJsdoc.js').Integer
    *   }
    * }} TypeAndTagInfo
@@ -518,7 +791,7 @@ export default iterateJsdoc(({
 
   /**
    * @param {string} propertyName
-   * @returns {(tag: (import('@ox-jsdoc/jsdoccomment').JsdocInlineTagNoType & {
+   * @returns {(tag: (import('@es-joy/jsdoccomment').JsdocInlineTagNoType & {
    *     name?: string,
    *     type?: string,
    *     line?: import('../iterateJsdoc.js').Integer
@@ -535,8 +808,12 @@ export default iterateJsdoc(({
         ];
         return {
           parsedType: mode === 'permissive' ?
-            tryParseType(/** @type {string} */ (potentialType)) :
-            parseType(/** @type {string} */ (potentialType), mode),
+            tryParseType(/** @type {string} */ (potentialType), undefined, {
+              computedPropertyParser: espree,
+            }) :
+            parseType(/** @type {string} */ (potentialType), mode, {
+              computedPropertyParser: espree,
+            }),
           tag,
         };
       } catch {
@@ -644,13 +921,24 @@ export default iterateJsdoc(({
             return;
           }
 
-          if (parent?.type === 'JsdocTypeFunction' &&
-            /** @type {import('jsdoc-type-pratt-parser').FunctionResult} */
-            (parent)?.typeParameters?.some((typeParam) => {
+          // Type parameters of a function type or signature (e.g.,
+          //   `<T>(x: T) => T` or `{<T>(x: T): T}`) are in scope anywhere
+          //   within that function type
+          /**
+           * @type {import('jsdoc-type-pratt-parser').NonRootResult & {
+           *   _parent?: import('jsdoc-type-pratt-parser').NonRootResult,
+           *   typeParameters?: import('jsdoc-type-pratt-parser').TypeParameterResult[]
+           * }|undefined}
+           */
+          let ancestor = parent;
+          while (ancestor) {
+            if (ancestor.typeParameters?.some((typeParam) => {
               return value === typeParam.name.value;
-            })
-          ) {
-            return;
+            })) {
+              return;
+            }
+
+            ancestor = ancestor._parent;
           }
 
           if (parent?.type === 'JsdocTypeInfer' && value === parent.element.value) {
@@ -685,7 +973,6 @@ export default iterateJsdoc(({
   //   too many times.
   exit ({
     context,
-    settings,
     state,
     utils,
   }) {
@@ -704,7 +991,7 @@ export default iterateJsdoc(({
       })
       .map((commentNode) => {
         return {
-          doc: parseCommentForSource(context.sourceCode, commentNode, settings, ''),
+          doc: parseComment(commentNode, ''),
           loc: commentNode.loc,
         };
       });

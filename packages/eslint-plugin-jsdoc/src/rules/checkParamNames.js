@@ -1,14 +1,156 @@
 import iterateJsdoc from '../iterateJsdoc.js';
 
 /**
+ * @param {import('../jsdocUtils.js').ParamNameInfo} parameter
+ * @returns {string|undefined}
+ */
+const getSimpleParameterName = (parameter) => {
+  if (typeof parameter === 'string') {
+    return parameter;
+  }
+
+  if (
+    !parameter ||
+    Array.isArray(parameter) ||
+    typeof parameter !== 'object' ||
+    !('name' in parameter) ||
+    typeof parameter.name !== 'string'
+  ) {
+    return undefined;
+  }
+
+  return parameter.name;
+};
+
+const contentKeys = /** @type {const} */ ([
+  'description',
+  'postName',
+  'name',
+  'postType',
+  'type',
+  'postTag',
+  'tag',
+]);
+
+/**
+ * @param {import('comment-parser').Tokens} tokens
+ * @returns {boolean}
+ */
+const hasContent = (tokens) => {
+  return contentKeys.some((key) => {
+    return tokens[key];
+  });
+};
+
+/**
+ * Copies tokens, omitting any closing delimiter (and the whitespace
+ * preceding it).
+ * @param {import('comment-parser').Tokens} tokens
+ * @param {string} newLineEnd
+ * @returns {import('comment-parser').Tokens}
+ */
+const withoutClosing = (tokens, newLineEnd) => {
+  const copy = {
+    ...tokens,
+    end: '',
+  };
+  if (tokens.end) {
+    copy.lineEnd = newLineEnd;
+
+    const lastKey = contentKeys.find((key) => {
+      return copy[key];
+    });
+    if (lastKey) {
+      copy[lastKey] = copy[lastKey].trimEnd();
+    }
+  }
+
+  return copy;
+};
+
+/**
+ * @param {import('../iterateJsdoc.js').Integer} firstChangedTagIndex
+ * @param {import('comment-parser').Spec[]} orderedTags
+ * @param {import('comment-parser').Block} jsdoc
+ * @param {import('../iterateJsdoc.js').Utils} utils
+ * @returns {() => void}
+ */
+const makeParamOrderFix = (
+  firstChangedTagIndex, orderedTags, jsdoc, utils,
+) => {
+  return () => {
+    // Otherwise, the closing delimiter would be copied along with the last tag
+    utils.moveClosingDelimiterToOwnLine();
+
+    const itemsToMoveRange = [
+      ...Array.from({
+        length: jsdoc.tags.length - firstChangedTagIndex,
+      }).keys(),
+    ];
+
+    const unchangedPriorTagDescriptions = jsdoc.tags.slice(
+      0,
+      firstChangedTagIndex,
+    ).reduce((count, {
+      source,
+    }) => {
+      return count + source.length - 1;
+    }, 0);
+
+    const initialOffset =
+      /** @type {import('../iterateJsdoc.js').Integer} */ (utils.getFirstLine()) +
+      firstChangedTagIndex + unchangedPriorTagDescriptions;
+
+    for (const index of itemsToMoveRange) {
+      utils.removeTag(index + firstChangedTagIndex);
+    }
+
+    const changedTags = orderedTags.slice(firstChangedTagIndex);
+    let extraTagCount = 0;
+
+    for (const index of itemsToMoveRange) {
+      const changedTag = changedTags[index];
+
+      const [
+        firstLine,
+        ...otherLines
+      ] = changedTag.source;
+
+      utils.addTag(
+        changedTag.tag,
+        extraTagCount + initialOffset + index,
+        withoutClosing(firstLine.tokens, utils.newLineEnd),
+      );
+
+      for (const {
+        tokens,
+      } of otherLines) {
+        // A closing delimiter alone on its line is not part of the tag
+        if (!tokens.end || hasContent(tokens)) {
+          utils.addLine(
+            extraTagCount + initialOffset + index + 1,
+            withoutClosing(tokens, utils.newLineEnd),
+          );
+          extraTagCount++;
+        }
+      }
+    }
+  };
+};
+
+/**
  * @param {string} targetTagName
  * @param {boolean} allowExtraTrailingParamDocs
+ * @param {boolean} badParamNames
+ * @param {boolean} badParamOrder
  * @param {boolean} checkDestructured
  * @param {boolean} checkRestProperty
  * @param {RegExp} checkTypesRegex
  * @param {boolean} disableExtraPropertyReporting
  * @param {boolean} disableMissingParamChecks
+ * @param {boolean} duplicateParams
  * @param {boolean} enableFixer
+ * @param {boolean} extraParams
  * @param {import('../jsdocUtils.js').ParamNameInfo[]} functionParameterNames
  * @param {import('comment-parser').Block} jsdoc
  * @param {import('../iterateJsdoc.js').Utils} utils
@@ -18,12 +160,16 @@ import iterateJsdoc from '../iterateJsdoc.js';
 const validateParameterNames = (
   targetTagName,
   allowExtraTrailingParamDocs,
+  badParamNames,
+  badParamOrder,
   checkDestructured,
   checkRestProperty,
   checkTypesRegex,
   disableExtraPropertyReporting,
   disableMissingParamChecks,
+  duplicateParams,
   enableFixer,
+  extraParams,
   functionParameterNames, jsdoc, utils, report,
 ) => {
   const paramTags = Object.entries(jsdoc.tags).filter(([
@@ -36,12 +182,39 @@ const validateParameterNames = (
   ]) => {
     return !tag.name.includes('.');
   });
+  const actualParamNames = paramTagsNonNested.map(([
+    , tag,
+  ]) => {
+    return tag.name.trim();
+  });
+  const documentsThis = actualParamNames.includes('this');
+  const simpleFunctionParameterNames = functionParameterNames.filter((parameter) => {
+    return documentsThis || parameter !== 'this';
+  }).map(getSimpleParameterName);
+  const hasOnlySimpleParameterNames = simpleFunctionParameterNames.every((name) => {
+    return name !== undefined;
+  });
+  const expectedParamNames = /** @type {string[]} */ (simpleFunctionParameterNames);
+  const sortedActualParamNames = actualParamNames.toSorted();
+  const sortedExpectedParamNames = expectedParamNames.toSorted();
+  const sameParamNames = hasOnlySimpleParameterNames &&
+    actualParamNames.length === expectedParamNames.length &&
+    sortedActualParamNames.every((name, index) => {
+      return name === sortedExpectedParamNames[index];
+    });
+  const isBadParamOrder = sameParamNames && actualParamNames.some((name, index) => {
+    return name !== expectedParamNames[index];
+  });
+  const canFixParamOrder =
+    paramTags.length === paramTagsNonNested.length &&
+    new Set(actualParamNames).size === actualParamNames.length;
 
   let dotted = 0;
   let thisOffset = 0;
 
   return paramTags.some(([
-    , tag,
+    ,
+    tag,
   // eslint-disable-next-line complexity
   ], index) => {
     /** @type {import('../iterateJsdoc.js').Integer} */
@@ -54,12 +227,20 @@ const validateParameterNames = (
 
       return tg.name === tag.name && idx !== index;
     });
-    if (dupeTagInfo) {
+    if (dupeTagInfo && duplicateParams) {
       utils.reportJSDoc(`Duplicate @${targetTagName} "${tag.name}"`, dupeTagInfo[1], enableFixer ? () => {
         utils.removeTag(tagsIndex);
       } : null);
 
       return true;
+    }
+
+    if (!duplicateParams && paramTags.some(([
+      , earlierTag,
+    ], earlierIndex) => {
+      return earlierIndex < index && earlierTag.name === tag.name;
+    })) {
+      return false;
     }
 
     if (tag.name.includes('.')) {
@@ -69,7 +250,7 @@ const validateParameterNames = (
     }
 
     let functionParameterName = functionParameterNames[index - dotted + thisOffset];
-    if (functionParameterName === 'this' && tag.name.trim() !== 'this') {
+    if (!documentsThis && functionParameterName === 'this' && tag.name.trim() !== 'this') {
       ++thisOffset;
       functionParameterName = functionParameterNames[index - dotted + thisOffset];
     }
@@ -79,10 +260,25 @@ const validateParameterNames = (
         return false;
       }
 
-      report(
+      const removeExtraParam = () => {
+        const currentTagIndex = jsdoc.tags.indexOf(tag);
+        if (currentTagIndex !== -1) {
+          utils.removeTag(currentTagIndex);
+        }
+      };
+
+      utils.reportJSDoc(
         `@${targetTagName} "${tag.name}" does not match an existing function parameter.`,
-        null,
         tag,
+        extraParams ? removeExtraParam : null,
+        false,
+        undefined,
+        [
+          {
+            desc: `Remove the extra @${targetTagName} "${tag.name}".`,
+            handler: removeExtraParam,
+          },
+        ],
       );
 
       return true;
@@ -267,8 +463,59 @@ const validateParameterNames = (
 
         return item;
       }).filter((item) => {
-        return item !== 'this';
+        return documentsThis || item !== 'this';
       });
+      const message = `Expected @${targetTagName} names to be "${
+        expectedNames.map((expectedName) => {
+          return typeof expectedName === 'object' &&
+            'name' in expectedName &&
+            expectedName.restElement ?
+            '...' + expectedName.name :
+            expectedName;
+        }).join(', ')
+      }". Got "${actualNames.join(', ')}".`;
+
+      if (isBadParamOrder) {
+        if (!badParamOrder) {
+          return false;
+        }
+
+        let orderFix = null;
+        if (enableFixer && canFixParamOrder) {
+          const orderedTags =
+            /** @type {import('comment-parser').Spec[]} */ (
+              JSON.parse(JSON.stringify(jsdoc.tags))
+            );
+          for (const [
+            paramIndex,
+            expectedName,
+          ] of expectedParamNames.entries()) {
+            const matchingTag = /** @type {[string, import('comment-parser').Spec]} */ (
+              paramTagsNonNested.find(([
+                , candidateTag,
+              ]) => {
+                return candidateTag.name.trim() === expectedName;
+              })
+            );
+            orderedTags[Number(paramTagsNonNested[paramIndex][0])] =
+              JSON.parse(JSON.stringify(matchingTag[1]));
+          }
+
+          const firstChangedParamIndex = actualParamNames.findIndex((name, paramIndex) => {
+            return name !== expectedParamNames[paramIndex];
+          });
+          orderFix = makeParamOrderFix(
+            Number(paramTagsNonNested[firstChangedParamIndex][0]),
+            orderedTags,
+            jsdoc,
+            utils,
+          );
+        }
+
+        utils.reportJSDoc(message, tag, orderFix, true);
+
+        return true;
+      }
 
       // When disableMissingParamChecks is true tag names can be omitted.
       // Report when the tag names do not match the expected names or they are used out of order.
@@ -286,18 +533,22 @@ const validateParameterNames = (
         }
       }
 
-      report(
-        `Expected @${targetTagName} names to be "${
-          expectedNames.map((expectedName) => {
-            return typeof expectedName === 'object' &&
-              'name' in expectedName &&
-              expectedName.restElement ?
-              '...' + expectedName.name :
-              expectedName;
-          }).join(', ')
-        }". Got "${actualNames.join(', ')}".`,
-        null,
+      const renameBadParam = () => {
+        tag.source[0].tokens.name = String(funcParamName);
+      };
+
+      utils.reportJSDoc(
+        message,
         tag,
+        badParamNames ? renameBadParam : null,
+        true,
+        undefined,
+        [
+          {
+            desc: `Rename @${targetTagName} "${tag.name.trim()}" to "${funcParamName}".`,
+            handler: renameBadParam,
+          },
+        ],
       );
 
       return true;
@@ -377,12 +628,16 @@ export default iterateJsdoc(({
 }) => {
   const {
     allowExtraTrailingParamDocs,
+    badParamNames = false,
+    badParamOrder = true,
     checkDestructured = true,
     checkRestProperty = false,
     checkTypesPattern = '/^(?:[oO]bject|[aA]rray|PlainObject|Generic(?:Object|Array))$/',
     disableExtraPropertyReporting = false,
     disableMissingParamChecks = false,
+    duplicateParams = true,
     enableFixer = false,
+    extraParams = false,
     useDefaultObjectProperties = false,
   } = context.options[0] || {};
 
@@ -393,7 +648,7 @@ export default iterateJsdoc(({
   //   checks if they are not functions but say variables), the user may
   //   instead wish to narrow contexts in those settings, so this check
   //   is still useful
-  if (!allowedNodes.includes(nde.type) ||
+  if (!nde || !allowedNodes.includes(nde.type) ||
     nde.type === 'TSPropertySignature' &&
       (/** @type {import('@typescript-eslint/types').TSESTree.TSPropertySignature} */ (
         nde
@@ -416,12 +671,16 @@ export default iterateJsdoc(({
   const isError = validateParameterNames(
     targetTagName,
     allowExtraTrailingParamDocs,
+    badParamNames,
+    badParamOrder,
     checkDestructured,
     checkRestProperty,
     checkTypesRegex,
     disableExtraPropertyReporting,
     disableMissingParamChecks,
+    duplicateParams,
     enableFixer,
+    extraParams,
     functionParameterNames,
     jsdoc,
     utils,
@@ -443,6 +702,7 @@ export default iterateJsdoc(({
       url: 'https://github.com/gajus/eslint-plugin-jsdoc/blob/main/docs/rules/check-param-names.md#repos-sticky-header',
     },
     fixable: 'code',
+    hasSuggestions: true,
     schema: [
       {
         additionalProperties: false,
@@ -452,6 +712,16 @@ export default iterateJsdoc(({
 representing future expected or virtual params) to be present without needing
 their presence within the function signature. Other inconsistencies between
 \`@param\`'s and present function parameters will still be reported.`,
+            type: 'boolean',
+          },
+          badParamNames: {
+            description: `Whether to auto-fix a mismatched \`@param\` name to the corresponding
+function parameter name. A suggestion is always offered. Defaults to \`false\`.`,
+            type: 'boolean',
+          },
+          badParamOrder: {
+            description: `Whether to report \`@param\` definitions whose names match the function
+parameters but appear in a different order. Defaults to \`true\`.`,
             type: 'boolean',
           },
           checkDestructured: {
@@ -516,13 +786,22 @@ that are available and actually used in the function.`,
             description: 'Whether to avoid checks for missing `@param` definitions. Defaults to `false`. Change to `true` if you want to be able to omit properties.',
             type: 'boolean',
           },
+          duplicateParams: {
+            description: 'Whether to report duplicate `@param` definitions. Defaults to `true`.',
+            type: 'boolean',
+          },
           enableFixer: {
-            description: `Set to \`true\` to auto-remove \`@param\` duplicates (based on identical
-names).
+            description: `Set to \`true\` to reorder non-nested \`@param\` definitions to match the
+function signature and to auto-remove duplicates (based on identical names).
 
 Note that this option will remove duplicates of the same name even if
 the definitions do not match in other ways (e.g., the second param will
 be removed even if it has a different type or description).`,
+            type: 'boolean',
+          },
+          extraParams: {
+            description: `Whether to auto-remove an \`@param\` that has no corresponding function
+parameter. A suggestion is always offered. Defaults to \`false\`.`,
             type: 'boolean',
           },
           useDefaultObjectProperties: {

@@ -1525,28 +1525,9 @@ export default /** @type {import('../index.js').TestCases} */ ({
     {
       code: `
       /**
-       * Maybe return a boolean.
-       * @return {boolean|void} true, or undefined.
-       */
-      function maybeTrue() {
-        if (Math.random() > 0.5) {
-          return true;
-        }
-      }
-      `,
-      ignoreReadme: true,
-      settings: {
-        jsdoc: {
-          mode: 'permissive',
-        },
-      },
-    },
-    {
-      code: `
-      /**
        * @param {string} name
        *
-       * @typedef {{ loadTime: number; runTime: number; totalTime: number } | void} PerfResult
+       * @typedef {void | { loadTime: number; runTime: number; totalTime: number }} PerfResult
        * @returns {PerfResult} Perf result
        */
       const perfCase = name => {
@@ -1583,7 +1564,26 @@ export default /** @type {import('../index.js').TestCases} */ ({
     {
       code: `
       /**
-       * @typedef {{ ok: boolean } | void} MaybeResult
+       * Maybe return a boolean.
+       * @return {boolean|void} true, or undefined.
+       */
+      function maybeTrue() {
+        if (Math.random() > 0.5) {
+          return true;
+        }
+      }
+      `,
+      ignoreReadme: true,
+      settings: {
+        jsdoc: {
+          mode: 'permissive',
+        },
+      },
+    },
+    {
+      code: `
+      /**
+       * @typedef {void | { ok: boolean }} MaybeResult
        */
 
       /**
@@ -1599,7 +1599,7 @@ export default /** @type {import('../index.js').TestCases} */ ({
     {
       code: `
       /**
-       * @typedef {{ ok: boolean } | void} MaybeResult
+       * @typedef {void | { ok: boolean }} MaybeResult
        */
 
       /**
@@ -1629,14 +1629,14 @@ export default /** @type {import('../index.js').TestCases} */ ({
       };
 
       /**
-       * @typedef {{ ok: boolean } | void} MaybeResult
+       * @typedef {void | { ok: boolean }} MaybeResult
        */
       `,
     },
     {
       code: `
       /**
-       * @typedef {{ ok: boolean } | undefined} MaybeResult
+       * @typedef {undefined | { ok: boolean }} MaybeResult
        */
 
       /**
@@ -1815,6 +1815,19 @@ export default /** @type {import('../index.js').TestCases} */ ({
             }
           }
         }
+      `,
+    },
+    {
+      code: `
+      /**
+       * Maybe return undefined.
+       * @returns {{bar: string, [Symbol.dispose](): void}|void} true, or undefined.
+       */
+      function maybeTrue() {
+        if (Math.random() > 0.5) {
+          return true;
+        }
+      }
       `,
     },
   ],

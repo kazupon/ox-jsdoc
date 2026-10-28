@@ -4457,6 +4457,135 @@ function quux (foo) {
         )
       `,
     },
+    {
+      code: 'function quux (foo) {\r\n}',
+      errors: [
+        {
+          line: 1,
+          message: 'Missing JSDoc comment.',
+        },
+      ],
+      output: '/**\r\n *\r\n */\r\nfunction quux (foo) {\r\n}',
+    },
+    {
+      code: `
+        /** The controller. */
+        export default class extends Controller {
+          connect () {
+          }
+        }
+      `,
+      errors: [
+        {
+          line: 4,
+          message: 'Missing JSDoc comment.',
+        },
+      ],
+      languageOptions: {
+        sourceType: 'module',
+      },
+      options: [
+        {
+          publicOnly: true,
+          require: {
+            MethodDefinition: true,
+          },
+        },
+      ],
+      output: `
+        /** The controller. */
+        export default class extends Controller {
+          /**
+           *
+           */
+          connect () {
+          }
+        }
+      `,
+    },
+    {
+      code: `
+        export default {
+          data () {
+          },
+          methods: {
+            go () {
+            },
+          },
+        };
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Missing JSDoc comment.',
+        },
+        {
+          line: 6,
+          message: 'Missing JSDoc comment.',
+        },
+      ],
+      languageOptions: {
+        sourceType: 'module',
+      },
+      options: [
+        {
+          publicOnly: true,
+          require: {
+            FunctionExpression: true,
+          },
+        },
+      ],
+      output: `
+        export default {
+          /**
+           *
+           */
+          data () {
+          },
+          methods: {
+            /**
+             *
+             */
+            go () {
+            },
+          },
+        };
+      `,
+    },
+    {
+      code: `
+        export const obj = {
+          method () {
+          },
+        };
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Missing JSDoc comment.',
+        },
+      ],
+      languageOptions: {
+        sourceType: 'module',
+      },
+      options: [
+        {
+          publicOnly: true,
+          require: {
+            FunctionExpression: true,
+          },
+        },
+      ],
+      output: `
+        export const obj = {
+          /**
+           *
+           */
+          method () {
+          },
+        };
+      `,
+    },
   ],
   valid: [
     {
@@ -6792,6 +6921,101 @@ function quux (foo) {
           skipInvokedExpressionsForCommentFinding: true,
         },
       },
+    },
+    {
+      code: `
+        /**
+         * Description for myFunction
+         */
+        function myFunction(foo: string): string
+        function myFunction(foo: number): string
+        function myFunction(...args: any[]) {
+          return ''
+        }
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+      options: [
+        {
+          require: {
+            FunctionDeclaration: true,
+            MethodDefinition: true,
+          },
+        },
+      ],
+    },
+    {
+      code: `
+        class Foo {
+          /**
+           * Description for bar
+           */
+          bar(foo: string): string
+          bar(foo: number): string
+          bar(...args: any[]) {
+            return ''
+          }
+        }
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+      options: [
+        {
+          require: {
+            FunctionDeclaration: true,
+            MethodDefinition: true,
+          },
+        },
+      ],
+    },
+    {
+      code: `
+        /** Foo here */
+        export class Foo {
+            /** with string */
+            constructor(arg1: string);
+            /** with number */
+            constructor(arg1: number);
+
+            constructor(arg1: string | number) {
+                // implementation
+            }
+        }
+      `,
+      languageOptions: {
+        parser: typescriptEslintParser,
+      },
+      options: [
+        {
+          publicOnly: true,
+          require: {
+            MethodDefinition: true,
+          },
+        },
+      ],
+    },
+    {
+      code: `
+        const obj = {
+          method () {
+          },
+        };
+        export default wrap(function () {
+        });
+      `,
+      languageOptions: {
+        sourceType: 'module',
+      },
+      options: [
+        {
+          publicOnly: true,
+          require: {
+            FunctionExpression: true,
+          },
+        },
+      ],
     },
   ],
 });

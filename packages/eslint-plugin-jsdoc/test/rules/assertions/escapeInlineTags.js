@@ -3,6 +3,58 @@ export default {
     {
       code: `
         /**
+         * @file Use @outside before \`npm init @eslint/config\`.
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Unexpected inline JSDoc tag. Did you mean to use {@outside}, \\@outside, or `@outside`?',
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         * @file Run \`npm init @eslint/config\` with @outside.
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Unexpected inline JSDoc tag. Did you mean to use {@outside}, \\@outside, or `@outside`?',
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         * @file Run \`npm init @eslint/config without a closing backtick.
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Unexpected inline JSDoc tag. Did you mean to use {@eslint}, \\@eslint, or `@eslint`?',
+        },
+      ],
+    },
+    {
+      code: `
+        /**
+         * @file Literal \\\`npm init @eslint/config\` text.
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Unexpected inline JSDoc tag. Did you mean to use {@eslint}, \\@eslint, or `@eslint`?',
+        },
+      ],
+    },
+    {
+      code: `
+        /**
          *
          * Whether to include a @yearly, @monthly etc text labels in the generated expression.
          */
@@ -212,6 +264,98 @@ export default {
     {
       code: `
         /**
+         * Some description @scope and {@link @scope/pkg#Member}
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Unexpected inline JSDoc tag. Did you mean to use {@scope}, \\@scope, or `@scope`?',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+        /**
+         * Some description \\@scope and {@link @scope/pkg#Member}
+         */
+      `,
+    },
+    {
+      code: `
+        /**
+         * Some description {@example @scope/pkg}
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Unexpected inline JSDoc tag. Did you mean to use {@scope}, \\@scope, or `@scope`?',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+        /**
+         * Some description {@example \\@scope/pkg}
+         */
+      `,
+    },
+    {
+      code: `
+        /**
+         * Some description {@link @scope/pkg#Member
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Unexpected inline JSDoc tag. Did you mean to use {@scope}, \\@scope, or `@scope`?',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+        /**
+         * Some description {@link \\@scope/pkg#Member
+         */
+      `,
+    },
+    {
+      code: `
+        /**
+         * Some description {@ @scope/pkg}
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Unexpected inline JSDoc tag. Did you mean to use {@scope}, \\@scope, or `@scope`?',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+        /**
+         * Some description {@ \\@scope/pkg}
+         */
+      `,
+    },
+    {
+      code: `
+        /**
          * @param includeNonStandard Whether to include a @yearly, @monthly etc text labels in the generated expression.
          */
       `,
@@ -317,6 +461,20 @@ export default {
     {
       code: `
         /**
+         * @file Main CLI that is run via the \`npm init @eslint/config\` command.
+         */
+      `,
+    },
+    {
+      code: `
+        /**
+         * @param value Run \`\`npm \`init\` @eslint/config\`\`.
+         */
+      `,
+    },
+    {
+      code: `
+        /**
          * A description with an escaped \\@tag.
          */
       `,
@@ -373,6 +531,13 @@ export default {
     {
       code: `
         /**
+         * Use this CodeMirror {@link @codemirror/state#StateField} reference.
+         */
+      `,
+    },
+    {
+      code: `
+        /**
          * @someTag {@link https://example.com}
          */
       `,
@@ -387,7 +552,22 @@ export default {
     {
       code: `
         /**
+         * @param {SomeType} aName {@inheritDoc @scope-name/pkg-name#Member}
+         */
+      `,
+    },
+    {
+      code: `
+        /**
          * @param {SomeType} aName A description with a {@link https://example.com}.
+         */
+      `,
+    },
+    {
+      code: `
+        /**
+         * A description with a multi-line inline tag {@link
+         * @scope/pkg#Member} reference.
          */
       `,
     },

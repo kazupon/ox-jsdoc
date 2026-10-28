@@ -8,6 +8,10 @@ export interface Rules {
     | [
         {
           /**
+           * Whether to ignore empty and whitespace-only lines (e.g., to allow a formatter to handle)
+           */
+          ignoreEmptyLines?: boolean;
+          /**
            * Set to 0 if you wish to avoid the normal requirement for an inner indentation of
            * one space. Defaults to 1 (one space of normal inner indentation).
            */
@@ -51,6 +55,10 @@ export interface Rules {
            * Allows indentation of nested sections on subsequent lines (like bullet lists)
            */
           allowIndentedSections?: boolean;
+          /**
+           * Allows there to be no space after asterisks and before content.
+           */
+          allowNoSpaceAfterAsterisk?: boolean;
           /**
            * Array of tags (e.g., `['example', 'description']`) whose content will be
            * "hidden" from the `check-indentation` rule. Defaults to `['example']`.
@@ -121,6 +129,7 @@ export interface Rules {
           /**
            * Use this to change the tags which are sought for alignment changes. Defaults to an array of
            * `['param', 'arg', 'argument', 'property', 'prop', 'returns', 'return', 'template']`.
+           * Add the value "-any" to the array if you want alignment to apply to all tags.
            */
           tags?: string[];
           /**
@@ -143,6 +152,16 @@ export interface Rules {
            * `@param`'s and present function parameters will still be reported.
            */
           allowExtraTrailingParamDocs?: boolean;
+          /**
+           * Whether to auto-fix a mismatched `@param` name to the corresponding
+           * function parameter name. A suggestion is always offered. Defaults to `false`.
+           */
+          badParamNames?: boolean;
+          /**
+           * Whether to report `@param` definitions whose names match the function
+           * parameters but appear in a different order. Defaults to `true`.
+           */
+          badParamOrder?: boolean;
           /**
            * Whether to check destructured properties. Defaults to `true`.
            */
@@ -206,14 +225,23 @@ export interface Rules {
            */
           disableMissingParamChecks?: boolean;
           /**
-           * Set to `true` to auto-remove `@param` duplicates (based on identical
-           * names).
+           * Whether to report duplicate `@param` definitions. Defaults to `true`.
+           */
+          duplicateParams?: boolean;
+          /**
+           * Set to `true` to reorder non-nested `@param` definitions to match the
+           * function signature and to auto-remove duplicates (based on identical names).
            *
            * Note that this option will remove duplicates of the same name even if
            * the definitions do not match in other ways (e.g., the second param will
            * be removed even if it has a different type or description).
            */
           enableFixer?: boolean;
+          /**
+           * Whether to auto-remove an `@param` that has no corresponding function
+           * parameter. A suggestion is always offered. Defaults to `false`.
+           */
+          extraParams?: boolean;
           /**
            * Set to `true` if you wish to avoid reporting of child property documentation
            * where instead of destructuring, a whole plain object is supplied as default
@@ -242,7 +270,19 @@ export interface Rules {
       ];
 
   /** Reports against syntax not valid for the mode (e.g., Google Closure Compiler in non-Closure mode). */
-  "jsdoc/check-syntax": [];
+  "jsdoc/check-syntax": 
+    | []
+    | [
+        {
+          /**
+           * Whether to enable the fixer to replace the Closure Compiler style `{type=}`
+           * with `{type} [name]` on `@param` and `@property` tags, and with
+           * `{type|undefined}` on other tags.
+           * Defaults to `false`.
+           */
+          enableFixer?: boolean;
+        }
+      ];
 
   /** Reports invalid block tag names. */
   "jsdoc/check-tag-names": 
@@ -294,14 +334,21 @@ export interface Rules {
            * class
            * enum
            * implements
-           * private
            * property
-           * protected
-           * public
            * readonly
            * this
            * type
            * typedef
+           * ```
+           *
+           * These tags are unnecessary on class members (where TypeScript has access
+           * modifiers), but are allowed elsewhere (e.g., the `@public` release tag of
+           * TSDoc/API Extractor on an exported function):
+           *
+           * ```
+           * private
+           * protected
+           * public
            * ```
            *
            * These tags are unnecessary except when inside a TypeScript `declare` context:
@@ -428,7 +475,7 @@ export interface Rules {
           /**
            * An array of prefixes to allow at the beginning of a comment.
            *
-           * Defaults to `['@ts-', 'istanbul ', 'c8 ', 'v8 ', 'eslint', 'prettier-']`.
+           * Defaults to `['@ts-', '@license', '@license-end', 'istanbul ', 'c8 ', 'v8 ', 'eslint', 'prettier-']`.
            *
            * Supplying your own value overrides the defaults.
            */
@@ -575,7 +622,7 @@ export interface Rules {
            * expression, i.e., `@callback` or `@function` (or its aliases `@func` or
            * `@method`) (including those associated with an `@interface`).
            *
-           * See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+           * See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
            * section of our Advanced docs for more on the expected format.
            */
           contexts?: (
@@ -705,7 +752,7 @@ export interface Rules {
            * `FunctionExpression`). Set to `"any"` if you want the rule to apply to any
            * JSDoc block throughout your files.
            *
-           * See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+           * See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
            * section of our Advanced docs for more on the expected format.
            */
           contexts?: (
@@ -900,7 +947,7 @@ export interface Rules {
             /**
              * AST to confine the allowing or disallowing to JSDoc blocks
              * associated with a particular context. See the
-             * ["AST and Selectors"](../#advanced-ast-and-selectors)
+             * ["AST and Selectors"](../advanced.md#ast-and-selectors)
              * section of our Advanced docs for more on the expected format.
              */
             context?: string;
@@ -1041,8 +1088,11 @@ export interface Rules {
            * An array of directives that will not be reported if present at the beginning of
            * a multi-comment block and at-sign `/* @`.
            *
-           * Defaults to `['ts-check', 'ts-expect-error', 'ts-ignore', 'ts-nocheck']`
-           * (some directives [used by TypeScript](https://www.typescriptlang.org/docs/handbook/intro-to-js-ts.html#ts-check)).
+           * Defaults to `['ts-check', 'ts-expect-error', 'ts-ignore', 'ts-nocheck',
+           * 'license', 'license-end', 'licstart', 'licend', 'source',]`
+           *
+           * (directives that are either [used by TypeScript](https://www.typescriptlang.org/docs/handbook/intro-to-js-ts.html#ts-check)
+           * or by the [LibreJS standard](https://www.gnu.org/software/librejs/free-your-javascript.html)).
            */
           ignore?: string[];
           /**
@@ -1087,7 +1137,7 @@ export interface Rules {
            * expression, i.e., `@callback` or `@function` (or its aliases `@func` or
            * `@method`) (including those associated with an `@interface`).
            *
-           * See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+           * See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
            * section of our Advanced docs for more on the expected format.
            */
           contexts?: (
@@ -1133,7 +1183,7 @@ export interface Rules {
            * function declaration or expression, i.e., `@callback` or `@function` (or its
            * aliases `@func` or `@method`) (including those associated with an `@interface`).
            *
-           * See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+           * See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
            * section of our Advanced docs for more on the expected format.
            */
           contexts?: (
@@ -1215,7 +1265,7 @@ export interface Rules {
            * function declaration or expression, i.e., `@callback` or `@function` (or its
            * aliases `@func` or `@method`) (including those associated with an `@interface`).
            *
-           * See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+           * See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
            * section of our Advanced docs for more on the expected format.
            */
           contexts: (
@@ -1248,7 +1298,7 @@ export interface Rules {
            * expression, i.e., `@callback` or `@function` (or its aliases `@func` or
            * `@method`) (including those associated with an `@interface`).
            *
-           * See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+           * See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
            * section of our Advanced docs for more on the expected format.
            */
           contexts?: (
@@ -1289,6 +1339,58 @@ export interface Rules {
            * importing types unless used in code.
            */
           markVariablesAsUsed?: boolean;
+        }
+      ];
+
+  /** Reports redundant @type tags that match or broaden the naturally inferred TypeScript type. */
+  "jsdoc/no-unnecessary-type-assertion": 
+    | []
+    | [
+        {
+          /**
+           * Whether to check `const` type assertions as redundant
+           */
+          checkLiteralConstAssertions?: boolean;
+          /**
+           * Whether to enable the fixer that removes the redundant `@type` tag (and the JSDoc block if it becomes empty). Defaults to `true`.
+           */
+          enableFixer?: boolean;
+          /**
+           * Whether the fixer may also remove a redundant assertion that is broader than the inferred type, which changes the declared, exported or returned type (e.g. `/** @type {unknown} * /` on a `string`). When `false`, such an assertion is still reported but not fixed. Only matters when `enableFixer` is `true`. Defaults to `true`.
+           */
+          fixTypeChangingCasts?: boolean;
+          /**
+           * Whether to report a non-`const` literal-tuple assertion on an array literal (e.g. `/** @type {['foo']} * / (['foo'])`) and fix it to the equivalent, more concise `/** @type {const} * /` assertion. Defaults to `false`.
+           */
+          preferConstToLiteralTuples?: boolean;
+          /**
+           * Whether to treat `any` type casts as redundant
+           */
+          treatAnyAsRedundant?: boolean;
+          /**
+           * An array list of types to ignore
+           */
+          typesToIgnore?: string[];
+        }
+      ];
+
+  /** Normalizes labeled links in `@see` tags to a canonical `{@link}` form. */
+  "jsdoc/normalize-see-links": 
+    | []
+    | [
+        {
+          /**
+           * The canonical `{@link}` form: `"pipe"` produces `{@link url|label}`, while `"prefix"` produces `[label]{@link url}`. Defaults to `"pipe"`.
+           */
+          canonicalForm?: "pipe" | "prefix";
+          /**
+           * Whether to enable the fixer. Defaults to `true`.
+           */
+          enableFixer?: boolean;
+          /**
+           * Whether to wrap an `@see` description containing only a lowercase `http:` or `https:` URL (for example, `@see https://example.com`) in a plain `{@link https://example.com}`. Defaults to `false`.
+           */
+          wrapBareUrls?: boolean;
         }
       ];
 
@@ -1396,7 +1498,7 @@ export interface Rules {
            * expression, i.e., `@callback` or `@function` (or its aliases `@func` or
            * `@method`) (including those associated with an `@interface`).
            *
-           * See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+           * See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
            * section of our Advanced docs for more on the expected format.
            */
           contexts?: (
@@ -1495,7 +1597,7 @@ export interface Rules {
            * `FunctionExpression`). Set to `"any"` if you want the rule to apply to any
            * JSDoc block throughout your files.
            *
-           * See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+           * See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
            * section of our Advanced docs for more on the expected format.
            */
           contexts?: (
@@ -1681,7 +1783,7 @@ export interface Rules {
            * Note that you may need to disable `require` items (e.g., `MethodDefinition`)
            * if you are specifying a more precise form in `contexts` (e.g., `MethodDefinition:not([accessibility="private"] > FunctionExpression`).
            *
-           * See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+           * See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
            * section of our Advanced docs for more on the expected format.
            */
           contexts?: (
@@ -1938,7 +2040,7 @@ export interface Rules {
            * `TSMethodSignature` in TypeScript or restricting the contexts
            * which are checked.
            *
-           * See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+           * See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
            * section of our Advanced docs for more on the expected format.
            */
           contexts?: (
@@ -2090,7 +2192,7 @@ export interface Rules {
            * expression, i.e., `@callback` or `@function` (or its aliases `@func` or
            * `@method`) (including those associated with an `@interface`).
            *
-           * See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+           * See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
            * section of our Advanced docs for more on the expected format.
            */
           contexts?: (
@@ -2134,7 +2236,7 @@ export interface Rules {
            * expression, i.e., `@callback` or `@function` (or its aliases `@func` or
            * `@method`) (including those associated with an `@interface`).
            *
-           * See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+           * See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
            * section of our Advanced docs for more on the expected format.
            */
           contexts?: (
@@ -2165,7 +2267,7 @@ export interface Rules {
            * expression, i.e., `@callback` or `@function` (or its aliases `@func` or
            * `@method`) (including those associated with an `@interface`).
            *
-           * See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+           * See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
            * section of our Advanced docs for more on the expected format.
            */
           contexts?: (
@@ -2394,7 +2496,7 @@ export interface Rules {
            * expression, i.e., `@callback` or `@function` (or its aliases `@func` or
            * `@method`) (including those associated with an `@interface`).
            *
-           * See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+           * See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
            * section of our Advanced docs for more on the expected format.
            */
           contexts?: (
@@ -2425,7 +2527,7 @@ export interface Rules {
            * expression, i.e., `@callback` or `@function` (or its aliases `@func` or
            * `@method`) (including those associated with an `@interface`).
            *
-           * See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+           * See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
            * section of our Advanced docs for more on the expected format.
            */
           contexts?: (
@@ -2452,7 +2554,6 @@ export interface Rules {
             | {
                 context?: string;
                 tag?: string;
-                [k: string]: unknown;
               }
           )[];
         }
@@ -2995,6 +3096,66 @@ export interface Rules {
         }
       ];
 
+  /** Disallows (or requires descriptions for) `@ts-<directive>` comments, mirroring `@typescript-eslint/ban-ts-comment`. */
+  "jsdoc/ts-ban-ts-comment": 
+    | []
+    | [
+        {
+          /**
+           * A minimum character length for descriptions when `allow-with-description` is enabled. Defaults to `3`.
+           */
+          minimumDescriptionLength?: number;
+          /**
+           * Whether (and how) to allow `@ts-check` directives.
+           */
+          "ts-check"?:
+            | boolean
+            | "allow-with-description"
+            | {
+                /**
+                 * A regular expression indicating the format the directive should follow
+                 */
+                descriptionFormat?: string;
+              };
+          /**
+           * Whether (and how) to allow `@ts-expect-error` directives.
+           */
+          "ts-expect-error"?:
+            | boolean
+            | "allow-with-description"
+            | {
+                /**
+                 * A regular expression indicating the format the directive should follow
+                 */
+                descriptionFormat?: string;
+              };
+          /**
+           * Whether (and how) to allow `@ts-ignore` directives.
+           */
+          "ts-ignore"?:
+            | boolean
+            | "allow-with-description"
+            | {
+                /**
+                 * A regular expression indicating the format the directive should follow
+                 */
+                descriptionFormat?: string;
+              };
+          /**
+           * Whether (and how) to allow `@ts-nocheck` directives.
+           */
+          "ts-nocheck"?:
+            | boolean
+            | "allow-with-description"
+            | {
+                /**
+                 * A regular expression indicating the format the directive should follow
+                 */
+                descriptionFormat?: string;
+              };
+        }
+      ];
+
   /** Prefers either function properties or method signatures */
   "jsdoc/ts-method-signature-style": 
     | []
@@ -3167,7 +3328,7 @@ export interface Rules {
            */
           stringQuotes?: "double" | "single";
           /**
-           * If `objectFieldSeparatorTrailingPunctuation` is set, this will determine whether the trailing puncutation is only added when the type is multiline
+           * If `objectFieldSeparatorTrailingPunctuation` is set, this will determine whether the trailing punctuation is only added when the type is multiline
            */
           trailingPunctuationMultilineOnly?: boolean;
           /**

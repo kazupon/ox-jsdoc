@@ -375,7 +375,7 @@ Overrides the default contexts (`ArrowFunctionExpression`, `FunctionDeclaration`
 `TSMethodSignature` in TypeScript or restricting the contexts
 which are checked.
 
-See the ["AST and Selectors"](#user-content-eslint-plugin-jsdoc-advanced-ast-and-selectors)
+See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
 section of our Advanced docs for more on the expected format.
 
 <a name="user-content-require-param-options-enablefixer"></a>
@@ -1017,16 +1017,6 @@ function test(): (id: number) => string;
 // Message: Missing JSDoc @param "id" declaration.
 
 /**
- * A function with return type
- */
-let test = (): (id: number) => string =>
-{
-  return (id) => `${id}`;
-}
-// "jsdoc/require-param": ["error"|"warn", {"contexts":["TSFunctionType"]}]
-// Message: Missing JSDoc @param "id" declaration.
-
-/**
  * @param baz
  * @param options
  */
@@ -1313,6 +1303,12 @@ function quux (foo, bar, baz) {
  */
 export const checkResourceOwnership = ({ entryPoint, filterField, paramIdField, resourceId = () => '' }) => {};
 // Message: Missing JSDoc @param "options.resourceId" declaration.
+
+/**\r
+ * Does it.\r
+ */\r
+function quux (foo, bar) {}
+// Message: Missing JSDoc @param "foo" declaration.
 ````
 
 
@@ -2017,5 +2013,14 @@ export async function fetchMarketstackEOD(
 export function x(foo) {
   console.log(foo);
 }
+
+/**
+ * A function with return type
+ */
+let test = (): (id: number) => string =>
+{
+  return (id) => `${id}`;
+}
+// "jsdoc/require-param": ["error"|"warn", {"contexts":["TSFunctionType"]}]
 ````
 

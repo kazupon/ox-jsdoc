@@ -5,7 +5,10 @@ import {
   parseNamePath,
   traverse,
   tryParse,
-} from '@ox-jsdoc/jsdoccomment';
+} from '@es-joy/jsdoccomment';
+import {
+  parse as espree,
+} from 'espree';
 
 const inlineTags = new Set([
   // Typdoc
@@ -219,10 +222,12 @@ export default iterateJsdoc(({
         if (mode === 'permissive') {
           parsedTypes = tryParse(type, undefined, {
             classContext: true,
+            computedPropertyParser: espree,
           });
         } else {
           parsedTypes = parse(type, mode, {
             classContext: true,
+            computedPropertyParser: espree,
           });
         }
       } catch {
@@ -293,6 +298,7 @@ export default iterateJsdoc(({
       let parsedTypes;
 
       try {
+        // We don't need the second arg. for `closure` mode
         parsedTypes = tryParse(tag.type);
       } catch {
         // Ignore
@@ -399,13 +405,7 @@ export default iterateJsdoc(({
 
     if (hasNamepathPosition) {
       if (mode !== 'jsdoc' && tag.tag === 'template') {
-        if (!tryParsePathIgnoreError(
-          // May be an issue with the commas of
-          //   `utils.parseClosureTemplateTag`, so first try a raw
-          //   value; we really need a proper parser instead, however.
-          tag.name.trim().replace(/^\[?(?<name>.*?)=.*$/v, '$<name>'),
-          mode,
-        )) {
+        if (!tryParsePathIgnoreError(tag.name.trim(), mode)) {
           for (const namepath of utils.parseClosureTemplateTag(tag)) {
             validNamepathParsing(namepath);
           }
