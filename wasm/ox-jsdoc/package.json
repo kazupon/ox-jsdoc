@@ -35,7 +35,8 @@
     ".": {
       "types": "./src-js/index.d.ts",
       "default": "./src-js/index.js"
-    }
+    },
+    "./ox_jsdoc_wasm_bg.wasm": "./pkg/ox_jsdoc_wasm_bg.wasm"
   },
   "publishConfig": {
     "access": "public"
