@@ -52,7 +52,7 @@
   },
   "dependencies": {
     "@types/estree": "^1.0.9",
-    "@typescript-eslint/types": "^8.59.4",
+    "@typescript-eslint/types": "^8.72.0",
     "comment-parser": "1.4.9",
     "esquery": "^1.7.0",
     "jsdoc-type-pratt-parser": "~9.4.0",
