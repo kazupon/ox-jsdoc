@@ -48,14 +48,14 @@
     "access": "public"
   },
   "engines": {
-    "node": "^20.19.0 || ^22.13.0 || >=24"
+    "node": "^22.22.2 || >=24.15.0"
   },
   "dependencies": {
     "@types/estree": "^1.0.9",
     "@typescript-eslint/types": "^8.59.4",
     "comment-parser": "1.4.9",
     "esquery": "^1.7.0",
-    "jsdoc-type-pratt-parser": "~7.3.0",
+    "jsdoc-type-pratt-parser": "~9.4.0",
     "ox-jsdoc": "workspace:*"
   },
   "devDependencies": {

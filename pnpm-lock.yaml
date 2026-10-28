@@ -175,8 +175,8 @@ importers:
         specifier: ^2.6.0
         version: 2.6.0
       jsdoc-type-pratt-parser:
-        specifier: ~7.3.0
-        version: 7.3.0
+        specifier: ~9.4.0
+        version: 9.4.0
       object-deep-merge:
         specifier: ^2.0.0
         version: 2.0.0
@@ -329,8 +329,8 @@ importers:
         specifier: ^1.7.0
         version: 1.7.0
       jsdoc-type-pratt-parser:
-        specifier: ~7.3.0
-        version: 7.3.0
+        specifier: ~9.4.0
+        version: 9.4.0
       ox-jsdoc:
         specifier: workspace:*
         version: link:../../napi/ox-jsdoc
@@ -6881,6 +6881,10 @@ packages:
 
   jsdoc-type-pratt-parser@9.3.0:
     resolution: {integrity: sha512-JZ8lKMCZXDlM1jAjAK5tTmtFJtgv6iFQQfjE3Fza6jBRACUueaEXLY17n1u05JO1lcPkNxgP+ddEDtiPsk5ktg==}
+    engines: {node: ^22.22.2 || >=24.15.0}
+
+  jsdoc-type-pratt-parser@9.4.0:
+    resolution: {integrity: sha512-orXhi2Y06rag47r4SW4JPII6WlUJbp0xe9cIcqLaSbb/8tREcEZSq99Lu3AFfra6PAlMqTYIxV+ZHxl1dFUrWw==}
     engines: {node: ^22.22.2 || >=24.15.0}
 
   jsdom@6.5.1:
@@ -14999,6 +15003,10 @@ snapshots:
       '@types/estree': 1.0.9
 
   jsdoc-type-pratt-parser@9.3.0:
+    dependencies:
+      '@types/estree': 1.0.9
+
+  jsdoc-type-pratt-parser@9.4.0:
     dependencies:
       '@types/estree': 1.0.9
 
