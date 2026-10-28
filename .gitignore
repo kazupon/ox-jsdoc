@@ -43,6 +43,7 @@ packages/jsdoccomment/coverage/
 packages/jsdoccomment/.dts/
 .notes/
 .plans/
+.issues/
 .playwright-cli
 tasks/benchmark/.tmp
 tasks/benchmark/results/*
