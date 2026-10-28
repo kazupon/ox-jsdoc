@@ -409,3 +409,27 @@ A context object's `comment` property is not supported by `require-jsdoc` or
 give them their own `contexts` option to override the setting.
 
 See the ["AST and Selectors"](./advanced.md#ast-and-selectors) section for more on this format.
+
+<a name="user-content-settings-oxparsestrategy"></a>
+<a name="settings-oxparsestrategy"></a>
+### <code>oxParseStrategy</code>
+
+This setting is specific to `@ox-jsdoc/eslint-plugin-jsdoc`. It chooses how the
+rules parse JSDoc comments with `@ox-jsdoc/jsdoccomment`:
+
+- `"single"` (the default): a rule parses a comment with `parseComment` when it
+  needs it.
+- `"batch"`: when a rule first needs a comment of a file, all JSDoc comments of
+  the file are parsed at once with `parseCommentBatch`, and the result is
+  cached for the file. Each rule gets its own copy of a parsed comment, so a
+  rule (or its fixer) that changes the comment does not affect other rules.
+
+```js
+{
+  settings: {
+    jsdoc: {
+      oxParseStrategy: 'batch',
+    },
+  },
+}
+```

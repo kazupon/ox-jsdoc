@@ -58,7 +58,7 @@ properties:
     semantics (e.g., it will be attached to a `VariableDeclaration` if above
     that rather than to the `FunctionExpression` it is fundamentally
     describing). See
-    [@es-joy/jsdoccomment](https://github.com/es-joy/jsdoccomment)
+    [@ox-jsdoc/jsdoccomment](https://github.com/kazupon/ox-jsdoc)
     for the precise structure of the comment (and comment type) nodes.
 
 <a name="user-content-advanced-ast-and-selectors-discovering-available-ast-definitions"></a>
@@ -82,7 +82,7 @@ providing some of your JavaScript to the wonderful
 [AST Explorer](https://astexplorer.net/) tool and see what AST is built out
 of your code. You can set the tool to the specific parser which you are using.
 
-For comment AST, see the [@es-joy/jsdoccomment demo](https://es-joy.github.io/jsdoccomment/demo/)
+For comment AST, see [@ox-jsdoc/jsdoccomment](https://github.com/kazupon/ox-jsdoc)
 or if you are only interested in type AST, see the
 [jsdoc-type-pratt-parser demo](https://jsdoc-type-pratt-parser.github.io/jsdoc-type-pratt-parser/).
 
