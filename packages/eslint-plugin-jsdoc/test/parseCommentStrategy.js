@@ -89,13 +89,55 @@ describe('parseCommentStrategy', () => {
       expect(firstParsed.tags[0].name).to.equal('first');
       expect(secondParsed.description).to.equal('Second.');
       expect(secondParsed.tags[0].tag).to.equal('returns');
-      expect(parseCommentForSource(
+      const firstParsedAgain = parseCommentForSource(
         sourceCode,
         firstComment,
         settings,
         '',
-      )).to.equal(firstParsed);
+      );
+      expect(firstParsedAgain).to.deep.equal(firstParsed);
+      expect(firstParsedAgain).to.not.equal(firstParsed);
       expect(getAllCommentsCalls).to.equal(1);
+    });
+
+    it('gives each call its own copy of a cached block', () => {
+      const comment = {
+        value: '* Description.\n * @param {string} first First.\n * @returns {number} Count.\n ',
+      };
+      let getAllCommentsCalls = 0;
+      const sourceCode = /** @type {import('eslint').SourceCode} */ (
+        /** @type {unknown} */ ({
+          getAllComments () {
+            getAllCommentsCalls++;
+            return [
+              comment,
+            ];
+          },
+        })
+      );
+      const settings = /** @type {import('../src/parseCommentStrategy.js').ParseSettings} */ ({
+        oxParseStrategy: 'batch',
+      });
+
+      const parsed = parseCommentForSource(sourceCode, comment, settings, '');
+      expect(parsed.tags[0].source[0]).to.equal(parsed.source[1]);
+
+      // Like a fixer of one rule (for example `sort-tags`)
+      parsed.source.splice(0);
+      parsed.tags.splice(0);
+
+      const parsedAgain = parseCommentForSource(sourceCode, comment, settings, '');
+      expect(getAllCommentsCalls).to.equal(1);
+      expect(parsedAgain.source).to.have.length(4);
+      expect(parsedAgain.tags.map(({
+        tag,
+      }) => {
+        return tag;
+      })).to.deep.equal([
+        'param',
+        'returns',
+      ]);
+      expect(parsedAgain.tags[0].source[0]).to.equal(parsedAgain.source[1]);
     });
   });
 });

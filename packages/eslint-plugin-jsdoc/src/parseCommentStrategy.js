@@ -86,6 +86,11 @@ const getBatchCache = (sourceCode, indent) => {
 };
 
 /**
+ * In the batch strategy, the cached block is copied for each call. Rules
+ * change the block they get (for example, the fixer of `sort-tags` splices
+ * `source`), and ESLint and Oxlint call fixers as soon as a rule reports.
+ * Without the copy, one rule's changes would reach the next rule.
+ * `structuredClone` keeps the lines that `source` and `tags[].source` share.
  * @param {import('eslint').SourceCode} sourceCode
  * @param {CommentNode} commentNode
  * @param {ParseSettings} settings
@@ -97,8 +102,8 @@ const parseCommentForSource = (sourceCode, commentNode, settings, indent = '') =
     return parseComment(commentNode, indent);
   }
 
-  const cache = getBatchCache(sourceCode, indent);
-  return cache.get(commentNode) ?? parseComment(commentNode, indent);
+  const cached = getBatchCache(sourceCode, indent).get(commentNode);
+  return cached ? structuredClone(cached) : parseComment(commentNode, indent);
 };
 
 export {
