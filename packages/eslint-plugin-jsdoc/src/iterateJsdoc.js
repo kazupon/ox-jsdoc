@@ -709,7 +709,9 @@ const getBasicUtils = (context, {
  * @param {undefined|{
  *   [key: string]: string
  * }} [data]
- * @param {import('eslint').Rule.SuggestionReportDescriptor[]} [suggest]
+ * @param {import('@eslint/core').SuggestedEdit[]} [suggest] The same type as
+ *   `import('eslint').Rule.SuggestionReportDescriptor`, from the version of
+ *   `@eslint/core` that this package uses (ESLint 9 uses an older one).
  * @returns {void}
  */
 
