@@ -97,7 +97,7 @@
     "@types/node": "^25.5.0",
     "@types/semver": "^7.7.1",
     "@types/spdx-expression-parse": "^4.0.0",
-    "@typescript-eslint/types": "8.61.0",
+    "@typescript-eslint/types": "8.72.0",
     "babel-plugin-add-module-exports": "^1.0.4",
     "babel-plugin-transform-import-meta": "^2.3.3",
     "c8": "^11.0.0",
@@ -120,7 +120,7 @@
     "sinon": "^22.0.0",
     "ts-api-utils": "^2.5.0",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.61.0"
+    "typescript-eslint": "8.72.0"
   },
   "peerDependencies": {
     "eslint": "^7.0.0 || ^8.0.0 || ^9.0.0 || ^10.0.0"
