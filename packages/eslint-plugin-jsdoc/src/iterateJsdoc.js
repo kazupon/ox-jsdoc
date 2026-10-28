@@ -120,6 +120,13 @@ import esquery from 'esquery';
  */
 
 /**
+ * @typedef {{
+ *   desc: string,
+ *   handler: (fixer: import('eslint').Rule.RuleFixer) => import('eslint').Rule.Fix|void
+ * }[]} JsdocSuggestions
+ */
+
+/**
  * @callback ReportJSDoc
  * @param {string} msg
  * @param {null|import('comment-parser').Spec|{line: Integer, column?: Integer}} [tag]
@@ -128,6 +135,7 @@ import esquery from 'esquery';
  * @param {undefined|{
  *   [key: string]: string
  * }} [data]
+ * @param {JsdocSuggestions} [suggestions]
  */
 
 /**
@@ -186,10 +194,10 @@ import esquery from 'esquery';
  */
 
 /**
- * @callback ChangeTag
- * @param {import('comment-parser').Spec} tag
- * @param {...Partial<import('comment-parser').Tokens>} tokens
- * @returns {void}
+ * @typedef {(
+ *   tag: import('comment-parser').Spec,
+ *   ...tokens: Partial<import('comment-parser').Tokens>[]
+ * ) => void} ChangeTag
  */
 
 /**
@@ -514,6 +522,8 @@ import esquery from 'esquery';
  *   addLine: AddLine,
  *   addLines: AddLines,
  *   makeMultiline: MakeMultiline,
+ *   moveClosingDelimiterToOwnLine: () => boolean,
+ *   newLineEnd: string,
  *   flattenRoots: import('./jsdocUtils.js').FlattenRoots,
  *   getFunctionParameterNames: GetFunctionParameterNames,
  *   hasParams: HasParams,
@@ -618,8 +628,7 @@ const getBasicUtils = (context, {
   mode,
   tagNamePreference,
 }) => {
-  /** @type {BasicUtils} */
-  const utils = {};
+  const utils = /** @type {BasicUtils} */ ({});
 
   for (const method of [
     'isNameOrNamepathDefiningTag',
@@ -700,6 +709,9 @@ const getBasicUtils = (context, {
  * @param {undefined|{
  *   [key: string]: string
  * }} [data]
+ * @param {import('@eslint/core').SuggestedEdit[]} [suggest] The same type as
+ *   `import('eslint').Rule.SuggestionReportDescriptor`, from the version of
+ *   `@eslint/core` that this package uses (ESLint 9 uses an older one).
  * @returns {void}
  */
 
@@ -810,24 +822,42 @@ const getUtils = (
   };
 
   /** @type {ReportJSDoc} */
-  utils.reportJSDoc = (msg, tag, handler, specRewire, data) => {
-    report(msg, handler ? /** @type {import('eslint').Rule.ReportFixer} */ (
-      fixer,
-    ) => {
-      const extraFix = handler(fixer);
+  utils.reportJSDoc = (msg, tag, handler, specRewire, data, suggestions) => {
+    /**
+     * @param {(fixer: import('eslint').Rule.RuleFixer) => import('eslint').Rule.Fix|void} fixHandler
+     * @returns {import('eslint').Rule.ReportFixer}
+     */
+    const makeFix = (fixHandler) => {
+      return (fixer) => {
+        const extraFix = fixHandler(fixer);
 
-      const replacement = utils.stringify(jsdoc, specRewire);
+        const replacement = utils.stringify(jsdoc, specRewire);
 
-      if (!replacement) {
-        const text = sourceCode.getText();
-        const lastLineBreakPos = text.slice(
-          0, jsdocNode.range[0],
-        ).search(/\n[ \t]*$/v);
-        if (lastLineBreakPos > -1) {
+        if (!replacement) {
+          const text = sourceCode.getText();
+          const lastLineBreakPos = text.slice(
+            0, jsdocNode.range[0],
+          ).search(/\n[ \t]*$/v);
+          if (lastLineBreakPos > -1) {
+            return [
+              fixer.removeRange([
+                lastLineBreakPos, jsdocNode.range[1],
+              ]),
+              /* c8 ignore next 2 -- Guard */
+              ...(extraFix ? [
+                extraFix,
+              ] : []),
+            ];
+          }
+
           return [
-            fixer.removeRange([
-              lastLineBreakPos, jsdocNode.range[1],
-            ]),
+            fixer.removeRange(
+              (/\s/v).test(text.charAt(jsdocNode.range[1])) ?
+                [
+                  jsdocNode.range[0], jsdocNode.range[1] + 1,
+                ] :
+                jsdocNode.range,
+            ),
             /* c8 ignore next 2 -- Guard */
             ...(extraFix ? [
               extraFix,
@@ -836,27 +866,29 @@ const getUtils = (
         }
 
         return [
-          fixer.removeRange(
-            (/\s/v).test(text.charAt(jsdocNode.range[1])) ?
-              [
-                jsdocNode.range[0], jsdocNode.range[1] + 1,
-              ] :
-              jsdocNode.range,
-          ),
-          /* c8 ignore next 2 -- Guard */
+          fixer.replaceText(jsdocNode, replacement),
           ...(extraFix ? [
             extraFix,
           ] : []),
         ];
-      }
+      };
+    };
 
-      return [
-        fixer.replaceText(jsdocNode, replacement),
-        ...(extraFix ? [
-          extraFix,
-        ] : []),
-      ];
-    } : null, tag, data);
+    report(
+      msg,
+      handler ? makeFix(handler) : null,
+      tag,
+      data,
+      suggestions?.map(({
+        desc,
+        handler: suggestionHandler,
+      }) => {
+        return {
+          desc,
+          fix: makeFix(suggestionHandler),
+        };
+      }),
+    );
   };
 
   /** @type {GetRegexFromString} */
@@ -1162,30 +1194,150 @@ const getUtils = (
     //         correct information will be available)
   };
 
-  /** @type {AddTag} */
-  utils.addTag = (
-    targetTagName,
-    number = (jsdoc.tags[jsdoc.tags.length - 1]?.source[0]?.number ?? jsdoc.source.findIndex(({
+  // `comment-parser` keeps the `\r` of a CRLF line break in `lineEnd`
+  const newLineEnd = sourceCode.text.includes('\r\n') ? '\r' : '';
+  utils.newLineEnd = newLineEnd;
+
+  // From last to first, as printed on a line
+  const contentKeys = /** @type {const} */ ([
+    'description',
+    'postName',
+    'name',
+    'postType',
+    'type',
+    'postTag',
+    'tag',
+  ]);
+
+  /**
+   * @param {import('comment-parser').Tokens} lineTokens
+   * @returns {boolean}
+   */
+  const hasContent = (lineTokens) => {
+    return contentKeys.some((key) => {
+      return lineTokens[key];
+    });
+  };
+
+  /**
+   * Moves a closing delimiter which follows content on the same line to a
+   * line of its own.
+   * @returns {boolean} Whether a change was made
+   */
+  utils.moveClosingDelimiterToOwnLine = () => {
+    const closingIndex = jsdoc.source.length - 1;
+    const {
+      tokens: closingTokens,
+    } = jsdoc.source[closingIndex];
+
+    if (!closingTokens.end || !hasContent(closingTokens)) {
+      return false;
+    }
+
+    const {
+      end,
+      lineEnd,
+    } = closingTokens;
+
+    // Tags may hold their own copies of the line (see `rewireSpecs`)
+    const {
+      number: closingNumber,
+    } = jsdoc.source[closingIndex];
+    const lines = [
+      jsdoc.source[closingIndex],
+      ...jsdoc.tags.flatMap(({
+        source,
+      }) => {
+        return source.filter(({
+          number,
+        }) => {
+          return number === closingNumber;
+        });
+      }),
+    ];
+
+    for (const {
+      tokens: lineTokens,
+    } of lines) {
+      lineTokens.end = '';
+      lineTokens.lineEnd = newLineEnd;
+
+      // Strip the whitespace which preceded the closing delimiter
+      const lastKey = /** @type {NonNullable<typeof contentKeys[number]>} */ (
+        contentKeys.find((key) => {
+          return lineTokens[key];
+        })
+      );
+      lineTokens[lastKey] = lineTokens[lastKey].trimEnd();
+    }
+
+    utils.addLine(closingIndex + 1, {
+      end,
+      lineEnd,
+      start: indent + ' ',
+    });
+
+    return true;
+  };
+
+  /**
+   * Prepares the block for, and gets, the index at which a new tag belongs:
+   * after the last line of the last tag (including its continuation lines),
+   * or at the end of a description if there are no tags, and in any case
+   * before the closing delimiter, which is moved to a line of its own
+   * (mutating `jsdoc.source`) if need be.
+   * @returns {Integer}
+   */
+  const prepareTagInsertionIndex = () => {
+    const closingIndex = jsdoc.source.length - 1;
+
+    if (utils.moveClosingDelimiterToOwnLine()) {
+      return closingIndex + 1;
+    }
+
+    if (!jsdoc.source.some(({
       tokens: {
         tag,
       },
     }) => {
       return tag;
-    }) - 1) + 1,
+    })) {
+      return closingIndex;
+    }
+
+    // Blank lines before the closing delimiter do not belong to the tag
+    return jsdoc.source.findLastIndex(({
+      tokens: lineTokens,
+    }, idx) => {
+      return idx < closingIndex && hasContent(lineTokens);
+    }) + 1;
+  };
+
+  /** @type {AddTag} */
+  utils.addTag = (
+    targetTagName,
+    number,
     tokens = {},
   ) => {
-    jsdoc.source.splice(number, 0, {
-      number,
+    if (number === undefined && jsdoc.source.length === 1) {
+      utils.makeMultiline();
+    }
+
+    const insertionIndex = number ?? prepareTagInsertionIndex();
+
+    jsdoc.source.splice(insertionIndex, 0, {
+      number: insertionIndex,
       source: '',
       tokens: seedTokens({
         delimiter: '*',
+        lineEnd: newLineEnd,
         postDelimiter: ' ',
         start: indent + ' ',
         tag: `@${targetTagName}`,
         ...tokens,
       }),
     });
-    for (const src of jsdoc.source.slice(number + 1)) {
+    for (const src of jsdoc.source.slice(insertionIndex + 1)) {
       src.number++;
     }
   };
@@ -1270,6 +1422,7 @@ const getUtils = (
           source: '',
           tokens: seedTokens({
             delimiter: '*',
+            lineEnd: newLineEnd,
             start: indent + ' ',
           }),
         };
@@ -1350,6 +1503,7 @@ const getUtils = (
     }
 
     utils.emptyTokens(tokens);
+    tokens.lineEnd = newLineEnd;
 
     utils.addLine(1, {
       delimiter: '*',
@@ -1357,6 +1511,7 @@ const getUtils = (
       // If a description were present, it may have whitespace attached
       //   due to being at the end of the single line
       description: description.trimEnd(),
+      lineEnd: newLineEnd,
       name,
       postDelimiter,
       postName,
@@ -1740,7 +1895,7 @@ const getUtils = (
   utils.findContext = (contexts, comment) => {
     const foundContext = contexts.find((cntxt) => {
       return typeof cntxt === 'string' ?
-        esquery.matches(
+        cntxt === 'any' || esquery.matches(
           /** @type {Node} */ (node),
           esquery.parse(cntxt),
           undefined,
@@ -1920,7 +2075,9 @@ const getSettings = (context) => {
 /** @type {MakeReport} */
 const makeReport = (context, commentNode) => {
   /** @type {Report} */
-  const report = (message, fix = null, jsdocLoc = null, data = undefined) => {
+  const report = (
+    message, fix = null, jsdocLoc = null, data = undefined, suggest = undefined,
+  ) => {
     let loc;
 
     if (jsdocLoc) {
@@ -1962,6 +2119,7 @@ const makeReport = (context, commentNode) => {
       loc,
       message,
       node: commentNode,
+      suggest,
     });
   };
 
@@ -2321,6 +2479,13 @@ const iterateAllJsdocs = (iterator, ruleConfig, contexts, additiveCommentContext
         // @ts-ignore ESLint < 10
         sourceCode = context.getSourceCode(),
       } = context;
+
+      // Custom languages provide their own `SourceCode` implementations.
+      // JSDoc traversal requires the JavaScript token API.
+      if (typeof sourceCode.getTokenBefore !== 'function') {
+        return {};
+      }
+
       settings = getSettings(context);
       if (!settings) {
         return {};
@@ -2518,7 +2683,9 @@ export default function iterateJsdoc (iterator, ruleConfig) {
           return iterateAllJsdocs(
             iterator,
             ruleConfig,
-            hasObjectAny ? /** @type {ContextObject[]} */ (contexts) : null,
+            hasObjectAny || ruleConfig.matchContext ?
+              /** @type {ContextObject[]} */ (contexts) :
+              null,
             ruleConfig.matchContext,
           ).create(context);
         }

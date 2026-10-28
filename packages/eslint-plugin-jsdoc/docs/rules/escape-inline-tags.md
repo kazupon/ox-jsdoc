@@ -61,6 +61,26 @@ The following patterns are considered problems:
 
 ````ts
 /**
+ * @file Use @outside before `npm init @eslint/config`.
+ */
+// Message: Unexpected inline JSDoc tag. Did you mean to use {@outside}, \@outside, or `@outside`?
+
+/**
+ * @file Run `npm init @eslint/config` with @outside.
+ */
+// Message: Unexpected inline JSDoc tag. Did you mean to use {@outside}, \@outside, or `@outside`?
+
+/**
+ * @file Run `npm init @eslint/config without a closing backtick.
+ */
+// Message: Unexpected inline JSDoc tag. Did you mean to use {@eslint}, \@eslint, or `@eslint`?
+
+/**
+ * @file Literal \`npm init @eslint/config` text.
+ */
+// Message: Unexpected inline JSDoc tag. Did you mean to use {@eslint}, \@eslint, or `@eslint`?
+
+/**
  *
  * Whether to include a @yearly, @monthly etc text labels in the generated expression.
  */
@@ -112,6 +132,30 @@ The following patterns are considered problems:
 // Message: Unexpected inline JSDoc tag. Did you mean to use {@yearly}, \@yearly, or `@yearly`?
 
 /**
+ * Some description @scope and {@link @scope/pkg#Member}
+ */
+// "jsdoc/escape-inline-tags": ["error"|"warn", {"enableFixer":true}]
+// Message: Unexpected inline JSDoc tag. Did you mean to use {@scope}, \@scope, or `@scope`?
+
+/**
+ * Some description {@example @scope/pkg}
+ */
+// "jsdoc/escape-inline-tags": ["error"|"warn", {"enableFixer":true}]
+// Message: Unexpected inline JSDoc tag. Did you mean to use {@scope}, \@scope, or `@scope`?
+
+/**
+ * Some description {@link @scope/pkg#Member
+ */
+// "jsdoc/escape-inline-tags": ["error"|"warn", {"enableFixer":true}]
+// Message: Unexpected inline JSDoc tag. Did you mean to use {@scope}, \@scope, or `@scope`?
+
+/**
+ * Some description {@ @scope/pkg}
+ */
+// "jsdoc/escape-inline-tags": ["error"|"warn", {"enableFixer":true}]
+// Message: Unexpected inline JSDoc tag. Did you mean to use {@scope}, \@scope, or `@scope`?
+
+/**
  * @param includeNonStandard Whether to include a @yearly, @monthly etc text labels in the generated expression.
  */
 // "jsdoc/escape-inline-tags": ["error"|"warn", {"allowedInlineTags":["monthly"],"enableFixer":true,"fixType":"backticks"}]
@@ -148,6 +192,14 @@ The following patterns are not considered problems:
 
 ````ts
 /**
+ * @file Main CLI that is run via the `npm init @eslint/config` command.
+ */
+
+/**
+ * @param value Run ``npm `init` @eslint/config``.
+ */
+
+/**
  * A description with an escaped \@tag.
  */
 
@@ -180,6 +232,10 @@ The following patterns are not considered problems:
  */
 
 /**
+ * Use this CodeMirror {@link @codemirror/state#StateField} reference.
+ */
+
+/**
  * @someTag {@link https://example.com}
  */
 
@@ -188,7 +244,16 @@ The following patterns are not considered problems:
  */
 
 /**
+ * @param {SomeType} aName {@inheritDoc @scope-name/pkg-name#Member}
+ */
+
+/**
  * @param {SomeType} aName A description with a {@link https://example.com}.
+ */
+
+/**
+ * A description with a multi-line inline tag {@link
+ * @scope/pkg#Member} reference.
  */
 
 /**

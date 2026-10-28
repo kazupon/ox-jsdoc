@@ -417,6 +417,72 @@ function quux () {
         const sleep = (ms: number): Promise<unknown> => {};
       `,
     },
+    {
+      code: `
+        /** Calculates 3D Euclidean distance between two positions */
+        export function getDistance(a, b) {
+          return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+        }
+      `,
+      errors: [
+        {
+          line: 2,
+          message: 'Missing JSDoc @example declaration.',
+        },
+      ],
+      output: `
+        /**
+         * Calculates 3D Euclidean distance between two positions
+         * @example
+         */
+        export function getDistance(a, b) {
+          return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+        }
+      `,
+    },
+    {
+      code: `
+        /**
+         * @param foo The thing
+         *   continues here
+         */
+        function quux (foo) {}
+      `,
+      errors: [
+        {
+          line: 2,
+          message: 'Missing JSDoc @example declaration.',
+        },
+      ],
+      output: `
+        /**
+         * @param foo The thing
+         *   continues here
+         * @example
+         */
+        function quux (foo) {}
+      `,
+    },
+    {
+      code: `
+        /**
+         * @param foo */
+        function quux (foo) {}
+      `,
+      errors: [
+        {
+          line: 2,
+          message: 'Missing JSDoc @example declaration.',
+        },
+      ],
+      output: `
+        /**
+         * @param foo
+         * @example
+         */
+        function quux (foo) {}
+      `,
+    },
   ],
   valid: [
     {

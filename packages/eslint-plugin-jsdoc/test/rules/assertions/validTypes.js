@@ -738,7 +738,7 @@ export default /** @type {import('../index.js').TestCases} */ ({
       errors: [
         {
           line: 3,
-          message: 'Syntax error in namepath: T<~',
+          message: 'Syntax error in namepath: T<~, R',
         },
       ],
       settings: {
@@ -2078,6 +2078,41 @@ export default /** @type {import('../index.js').TestCases} */ ({
             BITMASK_VALUE_B: somePrivateVariableHere
         };
       `,
+    },
+    {
+      code: `
+        /**
+         * @template [T=Record<string, unknown>]
+         */
+        function quux () {}
+      `,
+    },
+    {
+      code: `
+        /**
+         * @type {{bar: string, [Symbol.dispose](): void}}
+         */
+        using foo = {
+            bar: "baz",
+            [Symbol.dispose]: () => console.log("dispose")
+        };
+      `,
+    },
+    {
+      code: `
+        /**
+         * @type {{bar: string, [Symbol.dispose](): void}}
+         */
+        using foo = {
+            bar: "baz",
+            [Symbol.dispose]: () => console.log("dispose")
+        };
+      `,
+      settings: {
+        jsdoc: {
+          mode: 'permissive',
+        },
+      },
     },
   ],
 });

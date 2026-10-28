@@ -203,6 +203,27 @@ class Foo { }
     expect(tag.source[1].tokens.description).to.equal('The foo.');
   });
 
+  it('keeps continuation lines as description when the tag has no type', function () {
+    // comment-parser looks for the name on the following lines only after
+    // a type; without one, those lines are the description.
+    const parsed = parseComment(`/**
+ * @param
+ *   foo The foo.
+ * @see
+ *   https://example.com/continued
+ */`);
+    const [param, see] = parsed.tags;
+
+    expect(param.name).to.equal('');
+    expect(param.description).to.equal('foo The foo.');
+    expect(param.source[1].tokens.name).to.equal('');
+    expect(param.source[1].tokens.description).to.equal('foo The foo.');
+    expect(see.name).to.equal('');
+    expect(see.description).to.equal('https://example.com/continued');
+    expect(see.source[1].tokens.name).to.equal('');
+    expect(see.source[1].tokens.description).to.equal('https://example.com/continued');
+  });
+
   it('does not treat comment openers inside descriptions as delimiters', function () {
     const parsed = parseComment(`/**
  * Description.

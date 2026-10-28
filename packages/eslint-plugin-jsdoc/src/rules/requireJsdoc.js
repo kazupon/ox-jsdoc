@@ -34,7 +34,6 @@ import {
 /** @type {import('json-schema').JSONSchema4} */
 const OPTIONS_SCHEMA = {
   additionalProperties: false,
-  description: 'Has the following optional keys.\n',
   properties: {
     checkAllFunctionExpressions: {
       default: false,
@@ -102,7 +101,7 @@ for it to require documentation.
 Note that you may need to disable \`require\` items (e.g., \`MethodDefinition\`)
 if you are specifying a more precise form in \`contexts\` (e.g., \`MethodDefinition:not([accessibility="private"] > FunctionExpression\`).
 
-See the ["AST and Selectors"](../#advanced-ast-and-selectors)
+See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
 section of our Advanced docs for more on the expected format.`,
       items: {
         anyOf: [
@@ -380,6 +379,21 @@ const getOption = (context, baseObject, option, key) => {
   )[key].default;
 };
 
+// Shared by `getOptions` and `meta.defaultOptions` so the two cannot drift.
+// `contexts` is omitted so `settings.contexts` still applies, and `require` /
+// `publicOnly` stay unset so `getOption` keeps reading their schema defaults.
+const defaultOptions = {
+  checkAllFunctionExpressions: false,
+  enableFixer: true,
+
+  // Code defaults this to `true` (the schema `default` is stale).
+  exemptEmptyConstructors: true,
+  exemptEmptyFunctions: false,
+  exemptOverloadedImplementations: false,
+  fixerMessage: '',
+  skipInterveningOverloadedDeclarations: true,
+};
+
 /**
  * @param {import('eslint').Rule.RuleContext} context
  * @param {import('../iterateJsdoc.js').Settings} settings
@@ -403,16 +417,17 @@ const getOption = (context, baseObject, option, key) => {
  */
 const getOptions = (context, settings) => {
   const {
-    checkAllFunctionExpressions = false,
+    checkAllFunctionExpressions = defaultOptions.checkAllFunctionExpressions,
     contexts = settings.contexts || [],
-    enableFixer = true,
-    exemptEmptyConstructors = true,
-    exemptEmptyFunctions = false,
-    exemptOverloadedImplementations = false,
-    fixerMessage = '',
+    enableFixer = defaultOptions.enableFixer,
+    exemptEmptyConstructors = defaultOptions.exemptEmptyConstructors,
+    exemptEmptyFunctions = defaultOptions.exemptEmptyFunctions,
+    exemptOverloadedImplementations = defaultOptions.exemptOverloadedImplementations,
+    fixerMessage = defaultOptions.fixerMessage,
     minLineCount = undefined,
     publicOnly,
-    skipInterveningOverloadedDeclarations = true,
+    skipInterveningOverloadedDeclarations = defaultOptions.skipInterveningOverloadedDeclarations,
+    /* c8 ignore next -- Guard for ESLint versions that ignore meta.defaultOptions */
   } = context.options[0] || {};
 
   return {
@@ -716,10 +731,12 @@ export default {
             } = contxt;
             return ctxt === node.type;
           })) || {};
+        // Use the line break of the source for the generated block
+        const lineBreak = sourceCode.text.includes('\r\n') ? '\r\n' : '\n';
         const insertion = (inlineCommentBlock ?
           `/** ${fixerMessage}` :
-          `/**\n${indent}*${fixerMessage}\n${indent}`) +
-            `*/${'\n'.repeat(lines)}${indent.slice(0, -1)}`;
+          `/**${lineBreak}${indent}*${fixerMessage}${lineBreak}${indent}`) +
+            `*/${lineBreak.repeat(lines)}${indent.slice(0, -1)}`;
 
         return fixer.insertTextBefore(
           /** @type {import('eslint').Rule.Node} */
@@ -875,6 +892,10 @@ export default {
     };
   },
   meta: {
+    defaultOptions: [
+      defaultOptions,
+    ],
+
     docs: {
       description: 'Checks for presence of JSDoc comments, on functions and potentially other contexts (optionally limited to exports).',
       recommended: true,

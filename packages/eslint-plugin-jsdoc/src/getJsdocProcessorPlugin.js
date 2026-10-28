@@ -81,9 +81,6 @@ const getLinesCols = (text) => {
 };
 
 /**
- * @typedef {number} Integer
- */
-/**
  * @typedef {object} JsdocProcessorOptions
  * @property {boolean} [captionRequired] Require captions for example tags
  * @property {Integer} [paddedIndent] See docs
@@ -154,16 +151,22 @@ export const getJsdocProcessorPlugin = (options = {}) => {
   }
 
   /**
-   * @type {{
+   * @typedef {{
    *   targetTagName: string,
    *   ext: string,
    *   codeStartLine: number,
    *   codeStartCol: number,
    *   nonJSPrefacingCols: number,
    *   commentLineCols: [number, number]
-   * }[]}
+   * }} OtherInfo
    */
-  const otherInfo = [];
+
+  /**
+   * Keyed by filename, as the same plugin instance preprocesses many files
+   *   (including the example files it produces) before postprocessing them.
+   * @type {Map<string, OtherInfo[]>}
+   */
+  const otherInfoByFilename = new Map();
 
   /** @type {import('eslint').Linter.LintMessage[]} */
   let extraMessages = [];
@@ -172,8 +175,9 @@ export const getJsdocProcessorPlugin = (options = {}) => {
    * @param {JsdocBlockWithInline} jsdoc
    * @param {string} jsFileName
    * @param {[number, number]} commentLineCols
+   * @param {OtherInfo[]} otherInfo
    */
-  const getTextsAndFileNames = (jsdoc, jsFileName, commentLineCols) => {
+  const getTextsAndFileNames = (jsdoc, jsFileName, commentLineCols, otherInfo) => {
     /**
      * @type {TextAndFileName[]}
      */
@@ -532,8 +536,12 @@ export const getJsdocProcessorPlugin = (options = {}) => {
         postprocess ([
           jsMessages,
           ...messages
-        // eslint-disable-next-line no-unused-vars -- Placeholder
         ], filename) {
+          const otherInfo = /** @type {OtherInfo[]} */ (
+            otherInfoByFilename.get(filename)
+          );
+          otherInfoByFilename.delete(filename);
+
           for (const [
             idx,
             message,
@@ -562,7 +570,11 @@ export const getJsdocProcessorPlugin = (options = {}) => {
                 // fix: {range: [number, number], text: string}
                 // suggestions: {desc: , messageId:, fix: }[],
               } = msg;
+
+              // Ranges are relative to the example file, so drop them rather
+              //   than let them be applied to the parent file
               delete msg.fix;
+              delete msg.suggestions;
 
               const [
                 codeCtxLine,
@@ -603,6 +615,10 @@ export const getJsdocProcessorPlugin = (options = {}) => {
          */
         preprocess (text, filename) {
           try {
+            /** @type {OtherInfo[]} */
+            const otherInfo = [];
+            otherInfoByFilename.set(filename, otherInfo);
+
             let ast;
 
             // May be running a second time so catch and ignore
@@ -666,6 +682,7 @@ export const getJsdocProcessorPlugin = (options = {}) => {
                   jsdoc,
                   filename,
                   commentLineCols[idx],
+                  otherInfo,
                 );
               }).filter(
                 /**

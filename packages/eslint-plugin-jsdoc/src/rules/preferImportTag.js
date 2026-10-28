@@ -3,6 +3,9 @@ import {
   parseCommentForSource,
 } from '../parseCommentStrategy.js';
 import {
+  generate,
+} from '@es-joy/escodegen';
+import {
   commentParserToESTree,
   estreeToString,
   // getJSDocComment,
@@ -14,6 +17,9 @@ import {
 import {
   createRequire,
 } from 'node:module';
+import {
+  parse as espree,
+} from 'espree';
 import {
   parseImportsExports,
 } from 'parse-imports-exports';
@@ -57,15 +63,24 @@ export default iterateJsdoc(({
       return commentParserToESTree(
         parseCommentForSource(sourceCode, commentNode, settings, ''),
         mode === 'permissive' ? 'typescript' : mode,
+        {
+          jsdocTypePrattParserArgs: {
+            // Pass it for parity, but probably not needed
+            //   with the typedefs and import statements below
+            computedPropertyParser: espree,
+          },
+        },
       );
     });
 
+  // Only `@typedef` names are type aliases; names of `@param`,
+  //   `@property`, `@const`, etc. are not types
   const typedefs = comments
     .flatMap((doc) => {
       return doc.tags.filter(({
         tag,
       }) => {
-        return utils.isNameOrNamepathDefiningTag(tag);
+        return tag === 'typedef';
       });
     });
 
@@ -89,6 +104,17 @@ export default iterateJsdoc(({
    */
   const createImportInserter = (importText) => {
     return (fixer) => {
+      // A hashbang (`#!`) must stay on the first line
+      const hashbang = (/^#!.*(?:\r\n|\n)/v).exec(sourceCode.text);
+      if (hashbang) {
+        return fixer.insertTextAfterRange(
+          [
+            0, hashbang[0].length,
+          ],
+          `${importText}${hashbang[0].endsWith('\r\n') ? '\r\n' : '\n'}`,
+        );
+      }
+
       const programNode = sourceCode.ast;
       const commentNodes = sourceCode.getCommentsBefore(programNode);
 
@@ -144,8 +170,12 @@ export default iterateJsdoc(({
     let parsedType;
     try {
       parsedType = mode === 'permissive' ?
-        tryParseType(/** @type {string} */ (potentialType)) :
-        parseType(/** @type {string} */ (potentialType), mode);
+        tryParseType(/** @type {string} */ (potentialType), undefined, {
+          computedPropertyParser: espree,
+        }) :
+        parseType(/** @type {string} */ (potentialType), mode, {
+          computedPropertyParser: espree,
+        });
     } catch {
       return;
     }
@@ -164,6 +194,7 @@ export default iterateJsdoc(({
         return;
       }
 
+      /** @type {import('jsdoc-type-pratt-parser').NonRootResult} */
       let currentNode = nde;
 
       /** @type {string[]} */
@@ -191,7 +222,7 @@ export default iterateJsdoc(({
 
         pathSegments.unshift(
           currentNode.right.type === 'JsdocTypeIndexedAccessIndex' ?
-            stringify(currentNode.right.right) :
+            stringify(currentNode.right.right, generate) :
             currentNode.right.value,
         );
         nodes.unshift(currentNode);
@@ -204,11 +235,11 @@ export default iterateJsdoc(({
       }
 
       /**
-       * @param {string} name
+       * @param {string} matchingName An identifier (escape module specifiers
+       *   with `toValidIdentifier` before passing them)
        * @param {string[]} extrPathSegments
        */
-      const getFixer = (name, extrPathSegments) => {
-        const matchingName = toValidIdentifier(name);
+      const getFixer = (matchingName, extrPathSegments) => {
         return () => {
           /** @type {import('jsdoc-type-pratt-parser').NamePathResult|undefined} */
           let node = nodes.at(0);
@@ -270,7 +301,7 @@ export default iterateJsdoc(({
 
           for (const src of tag.source) {
             if (src.tokens.type) {
-              src.tokens.type = `{${stringify(parsedType)}}`;
+              src.tokens.type = `{${stringify(parsedType, generate)}}`;
               break;
             }
           }
@@ -301,7 +332,7 @@ export default iterateJsdoc(({
 
             if (
               (typedefNode.right.type === 'JsdocTypeIndexedAccessIndex' &&
-                stringify(typedefNode.right.right) !== pathSegment) ||
+                stringify(typedefNode.right.right, generate) !== pathSegment) ||
               (typedefNode.right.type !== 'JsdocTypeIndexedAccessIndex' &&
                 typedefNode.right.value !== pathSegment)
             ) {
@@ -349,7 +380,9 @@ export default iterateJsdoc(({
       const findMatchingImport = () => {
         for (const imprt of imports) {
           const parsedImport = parseImportsExports(
-            estreeToString(imprt).replace(/^\s*@/v, '').trim(),
+            estreeToString(imprt, {
+              jtppStringificationRules: generate,
+            }).replace(/^\s*@/v, '').trim(),
           );
 
           const namedImportsModuleSpecifier = Object.keys(parsedImport.namedImports || {})[0];
@@ -434,7 +467,7 @@ export default iterateJsdoc(({
           'Inline `import()` found; prefer `@import`',
           tag,
           enableFixer ? (fixer) => {
-            getFixer(element.value, [])();
+            getFixer(toValidIdentifier(element.value), [])();
             return createImportInserter(
               `/** @import * as ${toValidIdentifier(element.value)} from '${element.value}'; */`,
             )(fixer);
@@ -449,9 +482,9 @@ export default iterateJsdoc(({
           'Inline `import()` found; prefer `@import`',
           tag,
           enableFixer ? (fixer) => {
-            getFixer(element.value, [])();
+            getFixer(toValidIdentifier(element.value), [])();
             return createImportInserter(
-              `/** @import ${element.value} from '${element.value}'; */`,
+              `/** @import ${toValidIdentifier(element.value)} from '${element.value}'; */`,
             )(fixer);
           } : null,
         );
@@ -463,12 +496,12 @@ export default iterateJsdoc(({
         tag,
         enableFixer ? (fixer) => {
           if (outputType === 'namespaced-import') {
-            getFixer(element.value, [
+            getFixer(toValidIdentifier(element.value), [
               ...pathSegments,
             ])();
           } else {
             getFixer(
-              /** @type {string} */ (pathSegments.at(-1)),
+              toValidIdentifier(/** @type {string} */ (pathSegments.at(-1))),
               pathSegments.slice(0, -1),
             )();
           }
@@ -489,7 +522,9 @@ export default iterateJsdoc(({
   for (const tag of jsdoc.tags) {
     const mightHaveTypePosition = utils.tagMightHaveTypePosition(tag.tag);
     const hasTypePosition = mightHaveTypePosition === true && Boolean(tag.type);
-    if (hasTypePosition && (!exemptTypedefs || !utils.isNameOrNamepathDefiningTag(tag.tag))) {
+    // Only the `@typedef` itself is exempt; `@param`, `@property`, `@const`,
+    //   etc. are not type aliases and their `import()` types are reported
+    if (hasTypePosition && (!exemptTypedefs || tag.tag !== 'typedef')) {
       iterateInlineImports(tag);
     }
   }

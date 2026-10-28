@@ -13,6 +13,24 @@ import {
   getReducedASTNode,
 } from '@ox-jsdoc/jsdoccomment';
 
+const defaultAllowedPrefixes = [
+  '@ts-', '@license', '@license-end',
+  'istanbul ', 'c8 ', 'v8 ', 'eslint', 'prettier-',
+];
+
+// Shared by `create` and `meta.defaultOptions` so the two cannot drift.
+// `contexts` is omitted so `settings.contexts` still applies when unset.
+const defaultOptions = {
+  allowedPrefixes: defaultAllowedPrefixes,
+  contextsAfter: /** @type {string[]} */ ([]),
+  contextsBeforeAndAfter: [
+    'VariableDeclarator', 'TSPropertySignature', 'PropertyDefinition',
+  ],
+  enableFixer: true,
+  enforceJsdocLineStyle: 'multi',
+  lineOrBlockStyle: 'both',
+};
+
 /** @type {import('eslint').Rule.RuleModule} */
 export default {
   create (context) {
@@ -44,17 +62,14 @@ export default {
     }
 
     const {
-      allowedPrefixes = [
-        '@ts-', 'istanbul ', 'c8 ', 'v8 ', 'eslint', 'prettier-',
-      ],
+      allowedPrefixes = defaultOptions.allowedPrefixes,
       contexts = settings.contexts || [],
-      contextsAfter = /** @type {string[]} */ ([]),
-      contextsBeforeAndAfter = [
-        'VariableDeclarator', 'TSPropertySignature', 'PropertyDefinition',
-      ],
-      enableFixer = true,
-      enforceJsdocLineStyle = 'multi',
-      lineOrBlockStyle = 'both',
+      contextsAfter = defaultOptions.contextsAfter,
+      contextsBeforeAndAfter = defaultOptions.contextsBeforeAndAfter,
+      enableFixer = defaultOptions.enableFixer,
+      enforceJsdocLineStyle = defaultOptions.enforceJsdocLineStyle,
+      lineOrBlockStyle = defaultOptions.lineOrBlockStyle,
+      /* c8 ignore next -- Guard for ESLint versions that ignore meta.defaultOptions */
     } = context.options[0] ?? {};
 
     let reportingNonJsdoc = false;
@@ -63,7 +78,7 @@ export default {
      * @param {string} messageId
      * @param {import('estree').Comment|Token} comment
      * @param {import('eslint').Rule.Node} node
-     * @param {import('eslint').Rule.ReportFixer} fixer
+     * @param {import('eslint').Rule.ReportFixer|null} fixer
      */
     const report = (messageId, comment, node, fixer) => {
       const loc = {
@@ -163,9 +178,24 @@ export default {
      * @param {import('eslint').Rule.Node} node
      * @param {AddComment} addComment
      * @param {import('../iterateJsdoc.js').Context[]} ctxts
+     * @param {Token} [locComment] Comment to anchor the report location to,
+     *   e.g., the first comment of a stacked group of line comments, so the
+     *   report does not read as though only the last line were at fault.
+     * @param {Token[]} [commentGroup] The comments which the fixer would
+     *   convert. Defaults to just `comment`.
      */
-    const reportings = (comment, node, addComment, ctxts) => {
-      const fixer = getFixer(node, comment, addComment, ctxts);
+    const reportings = (comment, node, addComment, ctxts, locComment, commentGroup = [
+      /** @type {Token} */ (comment),
+    ]) => {
+      // A `*/` inside a comment's text would end the generated JSDoc block
+      // early, so leave such comments for the user to convert
+      const fixer = commentGroup.some(({
+        value,
+      }) => {
+        return value.includes('*/');
+      }) ?
+        null :
+        getFixer(node, comment, addComment, ctxts);
 
       if (comment.type === 'Block') {
         if (lineOrBlockStyle === 'line') {
@@ -181,8 +211,89 @@ export default {
           return;
         }
 
-        report('lineCommentsJsdocStyle', comment, node, fixer);
+        report('lineCommentsJsdocStyle', locComment ?? comment, node, fixer);
       }
+    };
+
+    /**
+     * Walks backward from a `//` comment which immediately precedes a node,
+     * collecting any directly adjacent (no intervening blank line) `//`
+     * comments stacked above it, so that the fixer can convert the whole
+     * run into a single JSDoc block instead of leaving all but the last
+     * line behind.
+     * @param {Token} comment
+     * @returns {Token[]}
+     */
+    const getPrecedingLineCommentGroup = (comment) => {
+      const group = [
+        comment,
+      ];
+      let current = comment;
+
+      for (;;) {
+        const prev = /** @type {Token|null} */ (
+          sourceCode.getTokenBefore(
+            /** @type {import('eslint').AST.Token} */ (current),
+            {
+              includeComments: true,
+            },
+          )
+        );
+
+        if (
+          !prev ||
+          prev.type !== 'Line' ||
+          // @ts-expect-error Ok
+          prev.loc.end.line !== current.loc.start.line - 1 ||
+          /** @type {string[]} */
+          (allowedPrefixes).some((prefix) => {
+            return prev.value.trimStart().startsWith(prefix);
+          })
+        ) {
+          break;
+        }
+
+        group.unshift(prev);
+        current = prev;
+      }
+
+      return group;
+    };
+
+    /**
+     * Builds the opening portion of the JSDoc comment, i.e. everything before
+     * the closing delimiter. When more than one comment is supplied (e.g., a
+     * stacked group of `//` lines), each is rendered on its own JSDoc line.
+     * @param {string} indent
+     * @param {Token[]} comments
+     * @param {boolean|undefined} inlineCommentBlock
+     * @returns {string}
+     */
+    const getCommentOpening = (indent, comments, inlineCommentBlock) => {
+      if (inlineCommentBlock || enforceJsdocLineStyle === 'single') {
+        return `/** ${comments.map((comment) => {
+          return comment.value.trim();
+        }).join(' ')} `;
+      }
+
+      if (comments.length === 1) {
+        const body = comments[0].value.trimEnd();
+
+        // When the comment's text already begins on its own line (e.g. a
+        // multi-line block comment), there is no need for the fixer to add a
+        // leading blank `*` line.
+        if ((/^[ \t]*\n/v).test(body)) {
+          return `/**${body.replace(/^[ \t]+/v, '')}\n${indent}`;
+        }
+
+        return `/**\n${indent}*${body}\n${indent}`;
+      }
+
+      const inner = comments.map((comment) => {
+        return `${indent}*${comment.value.trimEnd()}`;
+      }).join('\n');
+
+      return `/**\n${inner}\n${indent}`;
     };
 
     /**
@@ -203,23 +314,29 @@ export default {
 
       reportingNonJsdoc = true;
 
+      const commentGroup = comment.type === 'Line' ?
+        getPrecedingLineCommentGroup(/** @type {Token} */ (comment)) :
+        [
+          /** @type {Token} */ (comment),
+        ];
+
       /** @type {AddComment} */
       const addComment = (inlineCommentBlock, commentToAdd, indent, lines, fixer) => {
-        const insertion = (
-          inlineCommentBlock || enforceJsdocLineStyle === 'single' ?
-            `/** ${commentToAdd.value.trim()} ` :
-            `/**\n${indent}*${commentToAdd.value.trimEnd()}\n${indent}`
-        ) +
+        const insertion = getCommentOpening(indent, commentGroup, inlineCommentBlock) +
             `*/${'\n'.repeat((lines || 1) - 1)}`;
 
-        return fixer.replaceText(
-          /** @type {import('eslint').AST.Token} */
-          (commentToAdd),
+        return fixer.replaceTextRange(
+          [
+            /* c8 ignore next -- Guard */
+            commentGroup[0].range?.[0] ?? 0,
+            /* c8 ignore next -- Guard */
+            commentToAdd.range?.[1] ?? 0,
+          ],
           insertion,
         );
       };
 
-      reportings(comment, node, addComment, contexts);
+      reportings(comment, node, addComment, contexts, commentGroup[0], commentGroup);
     };
 
     /**
@@ -242,11 +359,9 @@ export default {
 
       /** @type {AddComment} */
       const addComment = (inlineCommentBlock, commentToAdd, indent, lines, fixer) => {
-        const insertion = (
-          inlineCommentBlock || enforceJsdocLineStyle === 'single' ?
-            `/** ${commentToAdd.value.trim()} ` :
-            `/**\n${indent}*${commentToAdd.value.trimEnd()}\n${indent}`
-        ) +
+        const insertion = getCommentOpening(indent, [
+          /** @type {Token} */ (commentToAdd),
+        ], inlineCommentBlock) +
             `*/${'\n'.repeat((lines || 1) - 1)}${lines ? `\n${indent.slice(1)}` : ' '}`;
 
         return [
@@ -268,12 +383,16 @@ export default {
       ...getContextObject(
         enforcedContexts(context, true, settings),
         checkNonJsdoc,
+        undefined,
+        true,
       ),
       ...getContextObject(
         contextsAfter,
         (_info, _handler, node) => {
           checkNonJsdocAfter(node, contextsAfter);
         },
+        undefined,
+        true,
       ),
       ...getContextObject(
         contextsBeforeAndAfter,
@@ -283,10 +402,16 @@ export default {
             checkNonJsdocAfter(node, contextsBeforeAndAfter);
           }
         },
+        undefined,
+        true,
       ),
     };
   },
   meta: {
+    defaultOptions: [
+      defaultOptions,
+    ],
+
     docs: {
       description: 'Converts non-JSDoc comments preceding or following nodes into JSDoc ones',
       url: 'https://github.com/gajus/eslint-plugin-jsdoc/blob/main/docs/rules/convert-to-jsdoc-comments.md#repos-sticky-header',
@@ -305,7 +430,7 @@ export default {
           allowedPrefixes: {
             description: `An array of prefixes to allow at the beginning of a comment.
 
-Defaults to \`['@ts-', 'istanbul ', 'c8 ', 'v8 ', 'eslint', 'prettier-']\`.
+Defaults to \`['@ts-', '@license', '@license-end', 'istanbul ', 'c8 ', 'v8 ', 'eslint', 'prettier-']\`.
 
 Supplying your own value overrides the defaults.`,
             items: {

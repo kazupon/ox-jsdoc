@@ -1967,6 +1967,207 @@ export default /** @type {import('../index.js').TestCases} */ ({
         },
       ],
     },
+    {
+      code: `
+        /** Calculates the answer */
+        function quux () {
+          return 1;
+        }
+      `,
+      errors: [
+        {
+          line: 2,
+          message: 'Missing JSDoc @returns declaration.',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+        /**
+         * Calculates the answer
+         * @returns
+         */
+        function quux () {
+          return 1;
+        }
+      `,
+    },
+    {
+      code: `
+        /**
+         * @param foo The thing
+         *   continues here
+         */
+        function quux (foo) {
+          return foo;
+        }
+      `,
+      errors: [
+        {
+          line: 2,
+          message: 'Missing JSDoc @returns declaration.',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+        /**
+         * @param foo The thing
+         *   continues here
+         * @returns
+         */
+        function quux (foo) {
+          return foo;
+        }
+      `,
+    },
+    {
+      code: `
+        /**
+         * @param foo */
+        function quux (foo) {
+          return foo;
+        }
+      `,
+      errors: [
+        {
+          line: 2,
+          message: 'Missing JSDoc @returns declaration.',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+        /**
+         * @param foo
+         * @returns
+         */
+        function quux (foo) {
+          return foo;
+        }
+      `,
+    },
+    {
+      code: `
+        /**
+         * Calculates the answer
+         *
+         */
+        function quux () {
+          return 1;
+        }
+      `,
+      errors: [
+        {
+          line: 2,
+          message: 'Missing JSDoc @returns declaration.',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+        /**
+         * Calculates the answer
+         *
+         * @returns
+         */
+        function quux () {
+          return 1;
+        }
+      `,
+    },
+    {
+      code: `
+        /** @param foo */
+        function quux (foo) {
+          return foo;
+        }
+      `,
+      errors: [
+        {
+          line: 2,
+          message: 'Missing JSDoc @return declaration.',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: `
+        /**
+         * @param foo
+         * @return
+         */
+        function quux (foo) {
+          return foo;
+        }
+      `,
+      settings: {
+        jsdoc: {
+          tagNamePreference: {
+            returns: 'return',
+          },
+        },
+      },
+    },
+    {
+      code: '/**\r\n * @param a\r\n */\r\nfunction quux (a) {\r\n  return a;\r\n}',
+      errors: [
+        {
+          line: 1,
+          message: 'Missing JSDoc @returns declaration.',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: '/**\r\n * @param a\r\n * @returns\r\n */\r\nfunction quux (a) {\r\n  return a;\r\n}',
+    },
+    {
+      code: '/**\r\n * @param a */\r\nfunction quux (a) {\r\n  return a;\r\n}',
+      errors: [
+        {
+          line: 1,
+          message: 'Missing JSDoc @returns declaration.',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: '/**\r\n * @param a\r\n * @returns\r\n */\r\nfunction quux (a) {\r\n  return a;\r\n}',
+    },
+    {
+      code: '/** @param a */\r\nfunction quux (a) {\r\n  return a;\r\n}',
+      errors: [
+        {
+          line: 1,
+          message: 'Missing JSDoc @returns declaration.',
+        },
+      ],
+      options: [
+        {
+          enableFixer: true,
+        },
+      ],
+      output: '/**\r\n * @param a\r\n * @returns\r\n */\r\nfunction quux (a) {\r\n  return a;\r\n}',
+    },
   ],
   valid: [
     {

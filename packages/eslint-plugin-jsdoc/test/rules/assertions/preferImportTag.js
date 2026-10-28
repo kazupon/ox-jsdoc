@@ -969,6 +969,188 @@ let foo;
         /** @type {$k$$l$lib$l$someFile$k$js.someImport} */
       `,
     },
+    {
+      code: `
+        /** @import * as $k$$l$lib$l$someFile$k$js from './lib/someFile.js'; */
+        /** @type { import('./lib/someFile.js').anotherImport } */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Inline `import()` found; prefer `@import`',
+        },
+      ],
+      output: `
+        /** @import * as $k$$l$lib$l$someFile$k$js from './lib/someFile.js'; */
+        /** @type {$k$$l$lib$l$someFile$k$js.anotherImport} */
+      `,
+    },
+    {
+      code: `
+        /** @import * as $ from 'jquery'; */
+        /** @type { import('jquery').Event } */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Inline `import()` found; prefer `@import`',
+        },
+      ],
+      output: `
+        /** @import * as $ from 'jquery'; */
+        /** @type {$.Event} */
+      `,
+    },
+    {
+      code: `
+        /** @import { $Ref } from './refs.js'; */
+        /** @type { import('./refs.js').$Ref } */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Inline `import()` found; prefer `@import`',
+        },
+      ],
+      output: `
+        /** @import { $Ref } from './refs.js'; */
+        /** @type {$Ref} */
+      `,
+    },
+    {
+      code: `
+        /** @type { import('./lib/someFile.js').default } */
+      `,
+      errors: [
+        {
+          line: 2,
+          message: 'Inline `import()` found; prefer `@import`',
+        },
+      ],
+      output: `/** @import $k$$l$lib$l$someFile$k$js from './lib/someFile.js'; */
+        /** @type {$k$$l$lib$l$someFile$k$js} */
+      `,
+    },
+    {
+      code: `#!/usr/bin/env node
+/** @type {import('eslint').Linter} */
+let linter;
+`,
+      errors: [
+        {
+          line: 2,
+          message: 'Inline `import()` found; prefer `@import`',
+        },
+      ],
+      output: `#!/usr/bin/env node
+/** @import * as eslint from 'eslint'; */
+/** @type {eslint.Linter} */
+let linter;
+`,
+    },
+    {
+      code: '#!/usr/bin/env node\r\n/** @type {import(\'eslint\').Linter} */\r\nlet linter;\r\n',
+      errors: [
+        {
+          line: 2,
+          message: 'Inline `import()` found; prefer `@import`',
+        },
+      ],
+      output: '#!/usr/bin/env node\r\n/** @import * as eslint from \'eslint\'; */\r\n/** @type {eslint.Linter} */\r\nlet linter;\r\n',
+    },
+    {
+      code: `
+        /**
+         * @param {import('eslint').Linter} linter
+         */
+        function quux (linter) {}
+
+        /** @type {import('eslint').Linter} */
+        let x;
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Inline `import()` found; prefer `@import`',
+        },
+        {
+          line: 7,
+          message: 'Inline `import()` found; prefer `@import`',
+        },
+      ],
+      output: `
+        /** @import * as eslint from 'eslint'; */
+        /**
+         * @param {eslint.Linter} linter
+         */
+        function quux (linter) {}
+
+        /** @type {import('eslint').Linter} */
+        let x;
+      `,
+    },
+    {
+      code: `
+        /**
+         * @typedef {object} Options
+         * @property {import('./config.js').Config} config
+         */
+
+        /**
+         * @returns {import('./config.js').Config}
+         */
+        function load () {}
+      `,
+      errors: [
+        {
+          line: 4,
+          message: 'Inline `import()` found; prefer `@import`',
+        },
+        {
+          line: 8,
+          message: 'Inline `import()` found; prefer `@import`',
+        },
+      ],
+      output: `
+        /** @import * as $k$$l$config$k$js from './config.js'; */
+        /**
+         * @typedef {object} Options
+         * @property {$k$$l$config$k$js.Config} config
+         */
+
+        /**
+         * @returns {import('./config.js').Config}
+         */
+        function load () {}
+      `,
+    },
+    {
+      code: `
+        /** @const {import('eslint').Linter} LINTER */
+        const LINTER = getLinter();
+
+        /** @type {import('eslint').Linter} */
+        let x;
+      `,
+      errors: [
+        {
+          line: 2,
+          message: 'Inline `import()` found; prefer `@import`',
+        },
+        {
+          line: 5,
+          message: 'Inline `import()` found; prefer `@import`',
+        },
+      ],
+      output: `
+        /** @import * as eslint from 'eslint'; */
+        /** @const {eslint.Linter} LINTER */
+        const LINTER = getLinter();
+
+        /** @type {import('eslint').Linter} */
+        let x;
+      `,
+    },
   ],
   valid: [
     {

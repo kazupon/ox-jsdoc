@@ -825,6 +825,127 @@ export default /** @type {import('../index.js').TestCases} */ ({
     {
       code: `
         /**
+         * Some description.
+         *
+         *
+         *
+         * More.
+         */
+      `,
+      errors: [
+        {
+          line: 2,
+          message: 'Expected a maximum of 1 line within block description',
+        },
+      ],
+      options: [
+        'never',
+        {
+          maxBlockLines: 1,
+        },
+      ],
+      output: `
+        /**
+         * Some description.
+         *
+         * More.
+         */
+      `,
+    },
+    {
+      code: `
+        /**
+         * Some description.
+         *
+         *
+         *
+         * More.
+         * @param {string} a
+         */
+      `,
+      errors: [
+        {
+          line: 2,
+          message: 'Expected a maximum of 1 line within block description',
+        },
+      ],
+      options: [
+        'any',
+        {
+          maxBlockLines: 1,
+        },
+      ],
+      output: `
+        /**
+         * Some description.
+         *
+         * More.
+         * @param {string} a
+         */
+      `,
+    },
+    {
+      code: `
+        /**
+         * Some description.
+         * Abc
+         *
+         *
+         *
+         * More.
+         */
+      `,
+      errors: [
+        {
+          line: 3,
+          message: 'Expected a maximum of 1 line within block description',
+        },
+      ],
+      options: [
+        'any',
+        {
+          maxBlockLines: 1,
+        },
+      ],
+      output: `
+        /**
+         * Some description.
+         * Abc
+         *
+         * More.
+         */
+      `,
+    },
+    {
+      code: `
+        /**
+         * Some description.
+         *
+         * More.
+         */
+      `,
+      errors: [
+        {
+          line: 2,
+          message: 'Expected a maximum of 0 lines within block description',
+        },
+      ],
+      options: [
+        'any',
+        {
+          maxBlockLines: 0,
+        },
+      ],
+      output: `
+        /**
+         * Some description.
+         * More.
+         */
+      `,
+    },
+    {
+      code: `
+        /**
          *
          * Some description
          *
@@ -995,6 +1116,67 @@ export default /** @type {import('../index.js').TestCases} */ ({
           checkbox: boolean
         }
       `,
+    },
+    {
+      code: '/**\r\n * Some description.\r\n * @param {string} a x\r\n * @returns {string} y\r\n */\r\nfunction quux (a) {}',
+      errors: [
+        {
+          line: 3,
+          message: 'Expected 1 line between tags but found 0',
+        },
+      ],
+      options: [
+        'always',
+      ],
+      output: '/**\r\n * Some description.\r\n * @param {string} a x\r\n *\r\n * @returns {string} y\r\n */\r\nfunction quux (a) {}',
+    },
+    {
+      code: '/**\r\n * Some description\r\n * @param {string} a\r\n */\r\nfunction quux (a) {}',
+      errors: [
+        {
+          line: 2,
+          message: 'Expected 1 lines after block description',
+        },
+      ],
+      options: [
+        'any',
+        {
+          startLines: 1,
+        },
+      ],
+      output: '/**\r\n * Some description\r\n *\r\n * @param {string} a\r\n */\r\nfunction quux (a) {}',
+    },
+    {
+      code: '/**\r\n * Some description\r\n *\r\n * @param {string} a\r\n */\r\nfunction quux (a) {}',
+      errors: [
+        {
+          line: 2,
+          message: 'Expected only 0 lines after block description',
+        },
+      ],
+      options: [
+        'any',
+        {
+          startLines: 0,
+        },
+      ],
+      output: '/**\r\n * Some description\r\n * @param {string} a\r\n */\r\nfunction quux (a) {}',
+    },
+    {
+      code: '/**\r\n *\r\n * Some description\r\n *\r\n * Abc\r\n *\r\n *\r\n *\r\n * Def\r\n *\r\n * @param {string} a\r\n */\r\nfunction quux (a) {}',
+      errors: [
+        {
+          line: 5,
+          message: 'Expected a maximum of 2 lines within block description',
+        },
+      ],
+      options: [
+        'any',
+        {
+          maxBlockLines: 2,
+        },
+      ],
+      output: '/**\r\n *\r\n * Some description\r\n *\r\n * Abc\r\n *\r\n *\r\n * Def\r\n *\r\n * @param {string} a\r\n */\r\nfunction quux (a) {}',
     },
   ],
   valid: [

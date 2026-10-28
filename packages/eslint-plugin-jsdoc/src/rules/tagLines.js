@@ -38,13 +38,16 @@ const checkMaxBlockLines = ({
       },
       () => {
         utils.setBlockDescription((info, seedTokens, descLines, postDelims) => {
+          // The run of newlines starts at the end of the preceding text line,
+          //   so the blank lines to drop begin after that line.
+          const excessStart = descLines[excessIndexLine] ? excessIndexLine + 1 : excessIndexLine;
           const newPostDelims = [
-            ...postDelims.slice(0, excessIndexLine),
-            ...postDelims.slice(excessIndexLine + excessBlockLines - 1 - maxBlockLines),
+            ...postDelims.slice(0, excessStart),
+            ...postDelims.slice(excessStart + excessBlockLines - 1 - maxBlockLines),
           ];
           return [
-            ...descLines.slice(0, excessIndexLine),
-            ...descLines.slice(excessIndexLine + excessBlockLines - 1 - maxBlockLines),
+            ...descLines.slice(0, excessStart),
+            ...descLines.slice(excessStart + excessBlockLines - 1 - maxBlockLines),
           ].map((desc, idx) => {
             return {
               number: 0,
@@ -52,6 +55,7 @@ const checkMaxBlockLines = ({
               tokens: seedTokens({
                 ...info,
                 description: desc,
+                lineEnd: utils.newLineEnd,
                 postDelimiter: newPostDelims[idx],
               }),
             };
@@ -327,6 +331,7 @@ export default iterateJsdoc(({
                 tokens: seedTokens({
                   ...info,
                   description: desc,
+                  lineEnd: utils.newLineEnd,
                   postDelimiter: postDelims[idx],
                 }),
               };
@@ -356,6 +361,7 @@ export default iterateJsdoc(({
                 tokens: seedTokens({
                   ...info,
                   description: desc,
+                  lineEnd: utils.newLineEnd,
                   postDelimiter: desc.trim() ? postDelims[idx] : '',
                 }),
               };

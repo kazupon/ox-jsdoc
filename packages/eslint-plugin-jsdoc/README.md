@@ -1,7 +1,7 @@
 # @ox-jsdoc/eslint-plugin-jsdoc
 
 `@ox-jsdoc/eslint-plugin-jsdoc` is a fork of `eslint-plugin-jsdoc` adapted
-for `ox-jsdoc`.
+for `ox-jsdoc`. It follows `eslint-plugin-jsdoc` v65.4.2.
 
 This package reuses the rule implementations from `eslint-plugin-jsdoc` while
 exercising `@ox-jsdoc/jsdoccomment` as the JSDoc parser. It is published as part
@@ -41,6 +41,10 @@ needs of the `ox-jsdoc` integration packages.
 npm install @ox-jsdoc/eslint-plugin-jsdoc
 ```
 
+The package is ESM only and requires Node.js `^22.22.2 || >=24.15.0`.
+`require()` also works (through `require(esm)`), and gives `rules` and
+`configs` as named exports.
+
 ## oxParseStrategy
 
 This fork lets you switch how JSDoc comments are parsed via
@@ -75,10 +79,38 @@ export default [
 | `single` | Calls `parseComment` from `@ox-jsdoc/jsdoccomment` once per comment. Default.                                   |
 | `batch`  | Collects JSDoc comments from `SourceCode#getAllComments()` and parses them all at once via `parseCommentBatch`. |
 
-`batch` caches the parse result per `SourceCode`, reusing the same parsed
-comments within a single lint run. This makes it easier to measure the
-benefit of batch parsing even when multiple rules are enabled at the same
-time.
+`batch` parses the JSDoc comments of a file once and caches the result per
+`SourceCode`. Each rule gets its own copy of a parsed comment, so a rule (or
+its fixer) that changes the comment does not affect the other rules. See also
+[`oxParseStrategy` in the settings](./docs/settings.md#settings-oxparsestrategy).
+
+## Oxlint
+
+The plugin also runs as an Oxlint JS plugin. `jsdoc` is the name of Oxlint's
+built-in JSDoc plugin, so give the JS plugin another name:
+
+```json
+{
+  "jsPlugins": [{ "name": "jsdoc-js", "specifier": "@ox-jsdoc/eslint-plugin-jsdoc" }],
+  "settings": {
+    "jsdoc": {
+      "oxParseStrategy": "batch"
+    }
+  },
+  "rules": {
+    "jsdoc-js/empty-tags": "error"
+  }
+}
+```
+
+The `ox-jsdoc` repository checks in CI that ESLint and Oxlint report the same
+diagnostics for a set of rules (`jsdoc-linter:parity`). Some features need
+ESLint:
+
+- `no-unnecessary-type-assertion` needs the type information of
+  `typescript-eslint`, which Oxlint JS plugins do not get.
+- Processors (`getJsdocProcessorPlugin`, used by the `examples` configs) are
+  not supported by Oxlint.
 
 ## Intended benchmark scenarios
 

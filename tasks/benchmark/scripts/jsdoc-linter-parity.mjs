@@ -45,13 +45,15 @@ const EXTRA_RULES = [
   'no-bad-blocks',
   'no-blank-block-descriptions',
   'no-blank-blocks',
+  'normalize-see-links',
   'require-asterisk-prefix',
   'require-description',
   'require-description-complete-sentence',
   'require-hyphen-before-param-description',
   'require-template',
   'require-throws',
-  'sort-tags'
+  'sort-tags',
+  'ts-ban-ts-comment'
 ]
 
 /**

@@ -66,7 +66,7 @@ Overrides the default contexts (`ArrowFunctionExpression`, `FunctionDeclaration`
 `FunctionExpression`). Set to `"any"` if you want the rule to apply to any
 JSDoc block throughout your files.
 
-See the ["AST and Selectors"](#user-content-eslint-plugin-jsdoc-advanced-ast-and-selectors)
+See the ["AST and Selectors"](../advanced.md#ast-and-selectors)
 section of our Advanced docs for more on the expected format.
 
 <a name="user-content-require-example-options-enablefixer"></a>
@@ -247,6 +247,24 @@ function quux (someParam) {
  */
 const sleep = (ms: number): Promise<unknown> => {};
 // "jsdoc/require-example": ["error"|"warn", {"contexts":["any"]}]
+// Message: Missing JSDoc @example declaration.
+
+/** Calculates 3D Euclidean distance between two positions */
+export function getDistance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+// Message: Missing JSDoc @example declaration.
+
+/**
+ * @param foo The thing
+ *   continues here
+ */
+function quux (foo) {}
+// Message: Missing JSDoc @example declaration.
+
+/**
+ * @param foo */
+function quux (foo) {}
 // Message: Missing JSDoc @example declaration.
 ````
 

@@ -306,3 +306,12 @@ export const after = 2
 export function shorthand(aligned) {
   return aligned
 }
+
+/**
+ * Has a labeled see link.
+ * @see [The options](https://example.com/api)
+ */
+export function seeLink() {}
+
+// @ts-ignore
+export const ignored = 1

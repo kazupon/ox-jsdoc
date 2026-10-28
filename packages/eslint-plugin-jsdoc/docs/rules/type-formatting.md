@@ -199,7 +199,7 @@ or `double`. Defaults to 'double'.
 <a name="type-formatting-options-trailingpunctuationmultilineonly"></a>
 ### <code>trailingPunctuationMultilineOnly</code>
 
-If `objectFieldSeparatorTrailingPunctuation` is set, this will determine whether the trailing puncutation is only added when the type is multiline
+If `objectFieldSeparatorTrailingPunctuation` is set, this will determine whether the trailing punctuation is only added when the type is multiline
 
 <a name="user-content-type-formatting-options-typebracketspacing"></a>
 <a name="type-formatting-options-typebracketspacing"></a>
@@ -538,6 +538,19 @@ The following patterns are considered problems:
  */
 // "jsdoc/type-formatting": ["error"|"warn", {"objectFieldSeparator":"comma-and-linebreak","objectFieldSeparatorTrailingPunctuation":true,"objectTypeBracketSpacing":" ","trailingPunctuationMultilineOnly":true}]
 // Message: Inconsistent comma-and-linebreak separator usage
+
+/**
+ * @param {{a: string; b: {bar: string; [Symbol.dispose](): void}; c: boolean,}} cfg
+ */
+// "jsdoc/type-formatting": ["error"|"warn", {"objectFieldSeparator":"semicolon"}]
+// Message: Inconsistent semicolon separator usage
+
+/**
+ * @param {{a: string; b: {bar: string; [Symbol.dispose](): void}; c: boolean,}} cfg
+ */
+// Settings: {"jsdoc":{"mode":"permissive"}}
+// "jsdoc/type-formatting": ["error"|"warn", {"objectFieldSeparator":"semicolon"}]
+// Message: Inconsistent semicolon separator usage
 ````
 
 

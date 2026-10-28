@@ -785,6 +785,73 @@ window.quux = function quux (foo) {
 };
 // "jsdoc/require-returns": ["error"|"warn", {"publicOnly":{"window":true}}]
 // Message: Missing JSDoc @returns declaration.
+
+/** Calculates the answer */
+function quux () {
+  return 1;
+}
+// "jsdoc/require-returns": ["error"|"warn", {"enableFixer":true}]
+// Message: Missing JSDoc @returns declaration.
+
+/**
+ * @param foo The thing
+ *   continues here
+ */
+function quux (foo) {
+  return foo;
+}
+// "jsdoc/require-returns": ["error"|"warn", {"enableFixer":true}]
+// Message: Missing JSDoc @returns declaration.
+
+/**
+ * @param foo */
+function quux (foo) {
+  return foo;
+}
+// "jsdoc/require-returns": ["error"|"warn", {"enableFixer":true}]
+// Message: Missing JSDoc @returns declaration.
+
+/**
+ * Calculates the answer
+ *
+ */
+function quux () {
+  return 1;
+}
+// "jsdoc/require-returns": ["error"|"warn", {"enableFixer":true}]
+// Message: Missing JSDoc @returns declaration.
+
+/** @param foo */
+function quux (foo) {
+  return foo;
+}
+// Settings: {"jsdoc":{"tagNamePreference":{"returns":"return"}}}
+// "jsdoc/require-returns": ["error"|"warn", {"enableFixer":true}]
+// Message: Missing JSDoc @return declaration.
+
+/**\r
+ * @param a\r
+ */\r
+function quux (a) {\r
+  return a;\r
+}
+// "jsdoc/require-returns": ["error"|"warn", {"enableFixer":true}]
+// Message: Missing JSDoc @returns declaration.
+
+/**\r
+ * @param a */\r
+function quux (a) {\r
+  return a;\r
+}
+// "jsdoc/require-returns": ["error"|"warn", {"enableFixer":true}]
+// Message: Missing JSDoc @returns declaration.
+
+/** @param a */\r
+function quux (a) {\r
+  return a;\r
+}
+// "jsdoc/require-returns": ["error"|"warn", {"enableFixer":true}]
+// Message: Missing JSDoc @returns declaration.
 ````
 
 
