@@ -55,7 +55,7 @@
     "@typescript-eslint/types": "^8.59.4",
     "comment-parser": "1.4.9",
     "esquery": "^1.7.0",
-    "jsdoc-type-pratt-parser": "~7.3.0",
+    "jsdoc-type-pratt-parser": "~9.4.0",
     "ox-jsdoc": "workspace:*"
   },
   "devDependencies": {
