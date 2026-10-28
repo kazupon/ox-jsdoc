@@ -94,11 +94,39 @@ export interface BatchParseJsdocCommentInputResult extends BatchParseResult {
 }
 
 /**
- * Initialize the WASM module. Must be called once before {@link parse}.
+ * The `.wasm` file: a URL, a `Request` or `Response`, its bytes, or a
+ * compiled module. Same as wasm-bindgen's `InitInput`, but spelled with types
+ * that also exist without the DOM lib (Node.js projects), where `RequestInfo`
+ * and `BufferSource` would be `any`.
  */
-export function initWasm(
-  wasmUrl?: string | URL | Request | Response | WebAssembly.Module | ArrayBuffer | BufferSource
-): Promise<void>
+type WasmSource =
+  | string
+  | URL
+  | Request
+  | Response
+  | ArrayBuffer
+  | ArrayBufferView
+  | WebAssembly.Module
+
+/**
+ * What {@link initWasm} accepts: the `.wasm` file, a promise of it, or
+ * wasm-bindgen's object form `{ module_or_path }`.
+ */
+export type InitWasmInput =
+  | WasmSource
+  | Promise<WasmSource>
+  | { module_or_path: WasmSource | Promise<WasmSource> }
+
+/**
+ * Initialize the WASM module. Must be called once before {@link parse}.
+ *
+ * Concurrent and repeated calls share one initialization; the input of later
+ * calls is ignored. After a failure, the next call starts over.
+ *
+ * @param input The `.wasm` file. When omitted, the file next to the generated
+ *   glue is fetched (browsers and bundlers).
+ */
+export function initWasm(input?: InitWasmInput): Promise<void>
 
 /**
  * Parse a complete `/** ... *​/` JSDoc block comment into a lazy decoder root.
