@@ -305,6 +305,9 @@ jobs:
           node --input-type=module -e "import { parse } from 'ox-jsdoc-binary'; const result = parse('/** hi */'); if (result.diagnostics.length !== 0) throw new Error('ox-jsdoc-binary diagnostics mismatch'); console.log('ox-jsdoc-binary smoke ok')"
           node --input-type=module -e "import { parseComment } from '@ox-jsdoc/jsdoccomment'; const block = parseComment('/** hi */'); if (!block.description.includes('hi')) throw new Error('@ox-jsdoc/jsdoccomment smoke mismatch'); console.log('@ox-jsdoc/jsdoccomment smoke ok')"
           node --input-type=module -e "import jsdoc from '@ox-jsdoc/eslint-plugin-jsdoc'; if (!jsdoc?.rules) throw new Error('@ox-jsdoc/eslint-plugin-jsdoc rules missing'); console.log('@ox-jsdoc/eslint-plugin-jsdoc smoke ok')"
+          # The two jsdoc packages are ESM only; require() loads them through require(esm).
+          node -e "const { parseComment } = require('@ox-jsdoc/jsdoccomment'); const block = parseComment('/** hi */'); if (!block.description.includes('hi')) throw new Error('@ox-jsdoc/jsdoccomment require() mismatch'); console.log('@ox-jsdoc/jsdoccomment require() ok')"
+          node -e "const { rules, configs } = require('@ox-jsdoc/eslint-plugin-jsdoc'); if (!rules?.['valid-types'] || !configs?.['flat/recommended']) throw new Error('@ox-jsdoc/eslint-plugin-jsdoc require() mismatch'); console.log('@ox-jsdoc/eslint-plugin-jsdoc require() ok')"
 
   crate-publish:
     name: Publish ox_jsdoc to crates.io
