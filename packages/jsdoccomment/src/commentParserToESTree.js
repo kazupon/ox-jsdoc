@@ -49,6 +49,7 @@ const stripEncapsulatingBrackets = (container, isArr) => {
  */
 
 /**
+ * An inline tag whose `text` is the unescaped label value.
  * @typedef {{
  *   format: 'pipe' | 'plain' | 'prefix' | 'space',
  *   namepathOrURL: string,
@@ -147,7 +148,7 @@ const inlineTagToAST = ({text, tag, format, namepathOrURL}) => ({
 
 /**
  * Converts comment parser AST to ESTree format.
- * @param {import('.').JsdocBlockWithInline} jsdoc
+ * @param {import('./index.js').JsdocBlockWithInline} jsdoc
  * @param {import('jsdoc-type-pratt-parser').ParseMode} mode
  * @param {CommentParserToESTreeOptions} [opts]
  * @returns {JsdocBlock}
@@ -186,7 +187,7 @@ const commentParserToESTree = (jsdoc, mode = 'typescript', {
       );
     } catch (err) {
       // Ignore
-      if (lastTag.rawType && throwOnTypeParsingErrors) {
+      if (throwOnTypeParsingErrors && lastTag.rawType) {
         /** @type {Error} */ (
           err
         ).message = `Tag @${lastTag.tag} with raw type ` +
@@ -335,7 +336,7 @@ const commentParserToESTree = (jsdoc, mode = 'typescript', {
 
       if (!tokens.name) {
         let i = 1;
-        while (source[idx + i]) {
+        while (Object.hasOwn(source, idx + i)) {
           const {tokens: {
             name,
             postName,
@@ -358,21 +359,18 @@ const commentParserToESTree = (jsdoc, mode = 'typescript', {
       /**
        * @type {JsdocInlineTag[]}
        */
-      let tagInlineTags = [];
-      if (tag) {
-        // Assuming the tags from `source` are in the same order as `jsdoc.tags`
-        // we can use the `tags` length as index into the parser result tags.
-        tagInlineTags =
-          /**
-           * @type {import('comment-parser').Spec & {
-           *   inlineTags: JsdocInlineTagNoType[]
-           * }}
-           */ (
-            jsdoc.tags[tags.length]
-          ).inlineTags.map(
-            (t) => inlineTagToAST(t)
-          );
-      }
+      const tagInlineTags =
+      // Assuming the tags from `source` are in the same order as `jsdoc.tags`
+      // we can use the `tags` length as index into the parser result tags.
+        /**
+         * @type {import('comment-parser').Spec & {
+         *   inlineTags: JsdocInlineTagNoType[]
+         * }}
+         */ (
+          jsdoc.tags[tags.length]
+        ).inlineTags.map(
+          (t) => inlineTagToAST(t)
+        );
 
       /** @type {JsdocTag} */
       const tagObj = {
@@ -426,7 +424,7 @@ const commentParserToESTree = (jsdoc, mode = 'typescript', {
     //
     // In `preserve` mode process when `description` is not the `empty string
     // or the `delimiter` is not `/**` ensuring empty lines are preserved.
-    if (((spacing === 'compact' && description) || lastTag) ||
+    if ((lastTag || (spacing === 'compact' && description)) ||
         (spacing === 'preserve' && (description || delimiter !== '/**'))) {
       const holder = lastTag || ast;
 
@@ -453,9 +451,8 @@ const commentParserToESTree = (jsdoc, mode = 'typescript', {
           const isFirstDescriptionLine = holder.descriptionLines.length === 0;
 
           // For `compact` spacing must allow through first description line.
-          if ((spacing === 'compact' &&
-              (description || isFirstDescriptionLine)) ||
-              spacing === 'preserve') {
+          if (spacing === 'preserve' || (spacing === 'compact' &&
+              (description || isFirstDescriptionLine))) {
             holder.descriptionLines.push({
               delimiter: isFirstDescriptionLine ? '' : delimiter,
               description,
@@ -480,7 +477,8 @@ const commentParserToESTree = (jsdoc, mode = 'typescript', {
           // For `compact` spacing must filter out any empty description lines
           // after the initial `holder.description` has content.
           if (tagDescriptionSeen && !(spacing === 'compact' &&
-            holder.description && description === '')) {
+            description === '' &&
+            holder.description)) {
             holder.description += !holder.description
               ? description
               : '\n' + description;
@@ -494,17 +492,19 @@ const commentParserToESTree = (jsdoc, mode = 'typescript', {
     }
 
     // Clean-up where last line itself has tag content
-    if (end && tag) {
-      ast.terminal = end;
-      ast.hasPreterminalTagDescription = 1;
-
-      // Remove terminal line break at end when tag is defined on last line.
-      if (ast.terminal === '*/') {
-        ast.preterminalLineBreak = '';
-      }
-
-      cleanUpLastTag(/** @type {JsdocTag} */ (lastTag));
+    if (!end || !tag) {
+      return;
     }
+
+    ast.terminal = end;
+    ast.hasPreterminalTagDescription = 1;
+
+    // Remove terminal line break at end when tag is defined on last line.
+    if (ast.terminal === '*/') {
+      ast.preterminalLineBreak = '';
+    }
+
+    cleanUpLastTag(/** @type {JsdocTag} */ (lastTag));
   });
 
   ast.lastDescriptionLine = lastDescriptionLine;
