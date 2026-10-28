@@ -4,7 +4,7 @@ High-performance JSDoc parser for the browser, powered by WebAssembly, that retu
 
 `@ox-jsdoc/wasm` parses `/** ... */` comment blocks on the Rust (WASM) side and returns a single binary buffer. Node access on the JavaScript side is lazy: the [`@ox-jsdoc/decoder`](../../packages/decoder/) library walks the buffer on demand and only allocates JS objects for nodes the caller actually inspects. This minimizes allocation churn for large batch passes and unlocks **batch parsing** so common strings (`*`, `*/`, tag names) are interned once across many comments.
 
-It exposes the same API as the canonical native [`ox-jsdoc`](../../napi/ox-jsdoc/) NAPI binding, but runs in any browser environment via a WebAssembly binary built from the same Rust core (`crates/ox_jsdoc`).
+It exposes the same `parse` / `parseBatch` / `parseType` / `parseTypeCheck` API as the canonical native [`ox-jsdoc`](../../napi/ox-jsdoc/) NAPI binding, and runs in any browser environment via a WebAssembly binary built from the same Rust core (`crates/ox_jsdoc`). The differences: call [`initWasm()`](#initwasminput) once first, results have a `free()` method that releases the WASM-side bytes, and the `emptyStringForNull` option is not supported.
 
 This is the canonical Binary AST WASM binding (post-cutover, see [`design/010-main-stream-binary/README.md`](../../design/010-main-stream-binary/README.md)). The original typed AST + JSON implementation is preserved as the private reference package [`@ox-jsdoc/wasm-origin`](../ox-jsdoc-origin/).
 
@@ -28,6 +28,36 @@ yarn add @ox-jsdoc/wasm
 ## Usage
 
 The WASM module must be initialized once before calling `parse()` / `parseBatch()`.
+
+### `initWasm(input?)`
+
+Initialize the WASM module. Must be called once before `parse()`, `parseBatch()`, `parseType()` or `parseTypeCheck()`.
+
+- Concurrent and repeated calls share one initialization, so it is safe to `await initWasm()` wherever you parse. The `input` of later calls is ignored.
+- If the initialization fails, the next call starts over.
+
+`input` tells where the `.wasm` file is: a URL (or URL string), a `Request` or `Response`, its bytes (`ArrayBuffer` or a typed array), a compiled `WebAssembly.Module`, a promise of one of them, or wasm-bindgen's `{ module_or_path }` object.
+
+When `input` is omitted, the `.wasm` file next to the generated glue is fetched. This works in browsers, and with bundlers that handle `new URL('…', import.meta.url)` (Vite does).
+
+The `.wasm` file is also exported as `@ox-jsdoc/wasm/ox_jsdoc_wasm_bg.wasm`, so you can pass its URL yourself. For example, with Vite:
+
+```js
+import wasmUrl from '@ox-jsdoc/wasm/ox_jsdoc_wasm_bg.wasm?url'
+import { initWasm } from '@ox-jsdoc/wasm'
+
+await initWasm(wasmUrl)
+```
+
+In Node.js, `fetch` cannot read the default `file:` URL, so pass the bytes. Without them, `initWasm()` rejects with an error that says so. On Node.js, the native [`ox-jsdoc`](../../napi/ox-jsdoc/) package has the same API and needs no `initWasm()`.
+
+```js
+import { readFile } from 'node:fs/promises'
+import { initWasm } from '@ox-jsdoc/wasm'
+
+const wasmPath = new URL(import.meta.resolve('@ox-jsdoc/wasm/ox_jsdoc_wasm_bg.wasm'))
+await initWasm(await readFile(wasmPath))
+```
 
 ### `parse(sourceText, options?)`
 
@@ -195,7 +225,7 @@ This package is built with [`wasm-pack`](https://rustwasm.github.io/wasm-pack/):
 ```sh
 pnpm build         # debug build (faster compile, slower runtime)
 pnpm build:release # release build (slower compile, optimized runtime)
-pnpm test          # run vitest tests
+pnpm test          # run vitest tests (browser and Node.js projects)
 ```
 
 The compiled WASM module is dropped into `pkg/` and is not checked in.
