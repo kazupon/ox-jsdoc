@@ -70,20 +70,55 @@ function _growU32(pool, need) {
   return new Uint32Array(cap)
 }
 
+/**
+ * @typedef {string | URL | Request | Response | ArrayBuffer | ArrayBufferView | WebAssembly.Module} WasmSource
+ * @typedef {WasmSource | Promise<WasmSource> | { module_or_path: WasmSource | Promise<WasmSource> }} InitWasmInput
+ */
+
 /** @type {WebAssembly.Memory | null} */
 let wasmMemory = null
+/** @type {Promise<void> | null} */
+let initPromise = null
+
+/**
+ * Wrap the input in the object form that wasm-bindgen expects (0.2.93+); it
+ * prints a deprecation warning for the other forms. An object that has
+ * `module_or_path` is already that form. It is copied, so the glue always
+ * gets a plain object of this realm.
+ *
+ * @param {InitWasmInput | undefined} input
+ */
+function toInitOptions(input) {
+  if (input === undefined) {
+    return undefined
+  }
+  const isOptions = typeof input === 'object' && input !== null && 'module_or_path' in input
+  return { module_or_path: isOptions ? input.module_or_path : input }
+}
 
 /**
  * Initialize the WASM module. Must be called once before {@link parse}.
  *
- * @param {string | URL | Request | Response | WebAssembly.Module | ArrayBuffer | BufferSource} [wasmUrl]
+ * Concurrent and repeated calls share one initialization; the input of later
+ * calls is ignored. After a failure, the next call starts over.
+ *
+ * @param {InitWasmInput} [input] The `.wasm` file: a URL, a `Response`, its
+ *   bytes, a compiled module, a promise of one of them, or
+ *   `{ module_or_path }`. When omitted, the file next to the generated glue
+ *   is fetched.
  * @returns {Promise<void>}
  */
-export async function initWasm(wasmUrl) {
-  if (wasmMemory === null) {
-    const exports = await init(wasmUrl)
-    wasmMemory = exports.memory
-  }
+export function initWasm(input) {
+  initPromise ??= init(toInitOptions(input)).then(
+    exports => {
+      wasmMemory = exports.memory
+    },
+    error => {
+      initPromise = null
+      throw error
+    }
+  )
+  return initPromise
 }
 
 /**
