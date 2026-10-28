@@ -124,7 +124,9 @@ export type InitWasmInput =
  * calls is ignored. After a failure, the next call starts over.
  *
  * @param input The `.wasm` file. When omitted, the file next to the generated
- *   glue is fetched (browsers and bundlers).
+ *   glue is fetched (browsers and bundlers). If that fails (always in Node.js,
+ *   where `fetch` cannot read its `file:` URL), the error says what to pass
+ *   instead, with the original error as its `cause`.
  */
 export function initWasm(input?: InitWasmInput): Promise<void>
 

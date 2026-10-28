@@ -97,6 +97,22 @@ function toInitOptions(input) {
 }
 
 /**
+ * The error for a failed initialization without an input: the `.wasm` file
+ * next to the generated glue could not be loaded. In Node.js that always
+ * happens, because `fetch` cannot read its `file:` URL.
+ *
+ * @param {unknown} cause
+ */
+function defaultLoadError(cause) {
+  return new Error(
+    'Could not load the default ox_jsdoc_wasm_bg.wasm. Pass the .wasm source to initWasm(): ' +
+      'its URL, a Response, or its bytes (in Node.js, read the file with fs). ' +
+      'In Node.js, the native `ox-jsdoc` package needs no initWasm().',
+    { cause }
+  )
+}
+
+/**
  * Initialize the WASM module. Must be called once before {@link parse}.
  *
  * Concurrent and repeated calls share one initialization; the input of later
@@ -105,7 +121,8 @@ function toInitOptions(input) {
  * @param {InitWasmInput} [input] The `.wasm` file: a URL, a `Response`, its
  *   bytes, a compiled module, a promise of one of them, or
  *   `{ module_or_path }`. When omitted, the file next to the generated glue
- *   is fetched.
+ *   is fetched. If that fails (always in Node.js), the error says what to
+ *   pass instead, with the original error as its `cause`.
  * @returns {Promise<void>}
  */
 export function initWasm(input) {
@@ -115,7 +132,7 @@ export function initWasm(input) {
     },
     error => {
       initPromise = null
-      throw error
+      throw input === undefined ? defaultLoadError(error) : error
     }
   )
   return initPromise
