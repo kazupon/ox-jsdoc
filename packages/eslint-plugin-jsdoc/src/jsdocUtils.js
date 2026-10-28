@@ -1088,18 +1088,34 @@ const isNameOrNamepathDefiningTag = (tag, tagMap = tagStructure) => {
 };
 
 /**
+ * The parsed JSDoc blocks of each file (and fix pass), keyed by its
+ * `SourceCode` object. Rules such as `no-undefined-types` and
+ * `require-returns-check` ask for all blocks of the file once per JSDoc
+ * block they check, so without this, every comment of the file was parsed
+ * again for each block (quadratic time on larger files).
+ * @type {WeakMap<import('eslint').SourceCode, import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline[]>}
+ */
+const jsdocCommentBlocksCache = new WeakMap();
+
+/**
  * @param {import('eslint').SourceCode} sourceCode
- * @param {import('./parseCommentStrategy.js').ParseSettings} settings
+ * @param {import('./parseCommentStrategy.js').ParseSettings} [settings]
  * @returns {import('@ox-jsdoc/jsdoccomment').JsdocBlockWithInline[]}
  */
-const getJSDocCommentBlocks = (sourceCode, settings) => {
-  return sourceCode.getAllComments()
-    .filter((comment) => {
-      return (/^\*(?!\*)/v).test(comment.value);
-    })
-    .map((commentNode) => {
-      return parseCommentForSource(sourceCode, commentNode, settings, '');
-    });
+const getJSDocCommentBlocks = (sourceCode, settings = {}) => {
+  let blocks = jsdocCommentBlocksCache.get(sourceCode);
+  if (!blocks) {
+    blocks = sourceCode.getAllComments()
+      .filter((comment) => {
+        return (/^\*(?!\*)/v).test(comment.value);
+      })
+      .map((commentNode) => {
+        return parseCommentForSource(sourceCode, commentNode, settings, '');
+      });
+    jsdocCommentBlocksCache.set(sourceCode, blocks);
+  }
+
+  return blocks;
 };
 
 /**
