@@ -1,3 +1,5 @@
+/* eslint-disable unicorn/no-top-level-side-effects -- Not tree-shaking or
+    reusing */
 // Data for round trip parsing tests w/ `spacing` option of
 // `compact or `preserve`.
 
@@ -531,6 +533,16 @@ commentBlocks.push(`/**
  * @param
  * foo bar
  */`);
+
+compactResults.push(commentBlocks.at(-1));
+compactResultsPratt.push(compactResults.at(-1));
+
+preserveResults.push(commentBlocks.at(-1));
+preserveResultsPratt.push(preserveResults.at(-1));
+
+// Escaped inline-tag label; block output deliberately preserves raw lines.
+
+commentBlocks.push(String.raw`/** This is {@link Something|a\}b} */`);
 
 compactResults.push(commentBlocks.at(-1));
 compactResultsPratt.push(compactResults.at(-1));

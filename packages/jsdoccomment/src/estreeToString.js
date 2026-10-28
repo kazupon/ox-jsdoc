@@ -1,5 +1,7 @@
 import {stringify as prattStringify} from 'jsdoc-type-pratt-parser';
 
+import {encodeInlineTagText} from './inlineTagEscapes.js';
+
 /* eslint-disable jsdoc/reject-function-type -- Different functions */
 /** @type {Record<string, Function>} */
 const stringifiers = {
@@ -7,7 +9,7 @@ const stringifiers = {
   JsdocBlock,
 
   /**
-   * @param {import('./commentParserToESTree').JsdocDescriptionLine} node
+   * @param {import('./commentParserToESTree.js').JsdocDescriptionLine} node
    * @returns {string}
    */
   JsdocDescriptionLine ({
@@ -17,7 +19,7 @@ const stringifiers = {
   },
 
   /**
-   * @param {import('./commentParserToESTree').JsdocTypeLine} node
+   * @param {import('./commentParserToESTree.js').JsdocTypeLine} node
    * @returns {string}
    */
   JsdocTypeLine ({
@@ -27,17 +29,18 @@ const stringifiers = {
   },
 
   /**
-   * @param {import('./commentParserToESTree').JsdocInlineTag} node
+   * @param {import('./commentParserToESTree.js').JsdocInlineTag} node
    */
   JsdocInlineTag ({format, namepathOrURL, tag, text}) {
+    const encodedText = encodeInlineTagText(text, format);
     return format === 'pipe'
-      ? `{@${tag} ${namepathOrURL}|${text}}`
+      ? `{@${tag} ${namepathOrURL}|${encodedText}}`
       : format === 'plain'
         ? `{@${tag} ${namepathOrURL}}`
         : format === 'prefix'
-          ? `[${text}]{@${tag} ${namepathOrURL}}`
+          ? `[${encodedText}]{@${tag} ${namepathOrURL}}`
           // "space"
-          : `{@${tag} ${namepathOrURL} ${text}}`;
+          : `{@${tag} ${namepathOrURL} ${encodedText}}`;
   },
 
   JsdocTag
@@ -46,14 +49,14 @@ const stringifiers = {
 /**
  * @todo convert for use by escodegen (until may be patched to support
  *   custom entries?).
- * @param {import('./commentParserToESTree').JsdocBlock|
- *   import('./commentParserToESTree').JsdocDescriptionLine|
- *   import('./commentParserToESTree').JsdocTypeLine|
- *   import('./commentParserToESTree').JsdocTag|
- *   import('./commentParserToESTree').JsdocInlineTag|
+ * @param {import('./commentParserToESTree.js').JsdocBlock|
+ *   import('./commentParserToESTree.js').JsdocDescriptionLine|
+ *   import('./commentParserToESTree.js').JsdocTypeLine|
+ *   import('./commentParserToESTree.js').JsdocTag|
+ *   import('./commentParserToESTree.js').JsdocInlineTag|
  *   import('jsdoc-type-pratt-parser').RootResult
  * } node
- * @param {import('.').ESTreeToStringOptions} [opts]
+ * @param {import('./index.js').ESTreeToStringOptions} [opts]
  * @throws {Error}
  * @returns {string}
  */
@@ -61,10 +64,10 @@ function estreeToString (node, opts = {}) {
   if (Object.hasOwn(stringifiers, node.type)) {
     return stringifiers[
       /**
-       * @type {import('./commentParserToESTree').JsdocBlock|
-       *   import('./commentParserToESTree').JsdocDescriptionLine|
-       *   import('./commentParserToESTree').JsdocTypeLine|
-       *   import('./commentParserToESTree').JsdocTag}
+       * @type {import('./commentParserToESTree.js').JsdocBlock|
+       *   import('./commentParserToESTree.js').JsdocDescriptionLine|
+       *   import('./commentParserToESTree.js').JsdocTypeLine|
+       *   import('./commentParserToESTree.js').JsdocTag}
        */
       (node).type
     ](
@@ -89,8 +92,8 @@ function estreeToString (node, opts = {}) {
 }
 
 /**
- * @param {import('./commentParserToESTree').JsdocBlock} node
- * @param {import('.').ESTreeToStringOptions} opts
+ * @param {import('./commentParserToESTree.js').JsdocBlock} node
+ * @param {import('./index.js').ESTreeToStringOptions} opts
  * @returns {string}
  */
 function JsdocBlock (node, opts) {
@@ -125,8 +128,8 @@ function JsdocBlock (node, opts) {
 }
 
 /**
- * @param {import('./commentParserToESTree').JsdocTag} node
- * @param {import('.').ESTreeToStringOptions} opts
+ * @param {import('./commentParserToESTree.js').JsdocTag} node
+ * @param {import('./index.js').ESTreeToStringOptions} opts
  * @returns {string}
  */
 function JsdocTag (node, opts) {
@@ -142,7 +145,7 @@ function JsdocTag (node, opts) {
   // parsedType
   // Comment this out later in favor of `parsedType`
   // We can't use raw `typeLines` as first argument has delimiter on it
-  if (opts.preferRawType || !parsedType) {
+  if (!parsedType || opts.preferRawType) {
     if (typeLines.length) {
       result += '{';
 
@@ -156,14 +159,14 @@ function JsdocTag (node, opts) {
 
       result += '}';
     }
-    /* v8 ignore start */
+    /* v8 ignore start -- Not covered by tests; JSDoc-specific type handling */
   } else if (parsedType?.type.startsWith('JsdocType')) {
     result += `{${prattStringify(
       /** @type {import('jsdoc-type-pratt-parser').RootResult} */ (
         parsedType
       )
     )}}`;
-    /* v8 ignore stop */
+    /* v8 ignore stop -- End of untested JSDoc-specific type handling */
   }
 
   // Check if the name appears on a separate line from the tag/type
@@ -175,7 +178,8 @@ function JsdocTag (node, opts) {
 
     if (descriptionLines.length > 0) {
       const firstDescLine = descriptionLines[0];
-      /* v8 ignore next 3 */
+      /* v8 ignore next 4 -- Defensive: blank first line not
+          expected in practice */
       if (firstDescLine.description === '' && firstDescLine.delimiter === '' &&
           firstDescLine.postDelimiter === '' && firstDescLine.initial === '') {
         // Empty first line, check if there's a second line with formatting
@@ -190,21 +194,22 @@ function JsdocTag (node, opts) {
           }`;
           nameLineOffset = 2;
         } else {
-          /* v8 ignore start */
+          /* v8 ignore start -- Fallback is not expected to occur normally */
           // Fallback: just add name (shouldn't normally happen)
           result += name + postName;
           nameLineOffset = 1;
-          /* v8 ignore stop */
+          /* v8 ignore stop -- End of fallback */
         }
       } else {
-        /* v8 ignore start */
+        // eslint-disable-next-line @stylistic/max-len -- Long
+        /* v8 ignore start -- Not covered by tests; first description line with content */
         // First description line has content, use it for the name line
         const nameLine = descriptionLines[0];
         result += `${nameLine.initial}${
           nameLine.delimiter
         }${nameLine.postDelimiter}${name}${postName}${nameLine.description}`;
         nameLineOffset = 1;
-        /* v8 ignore stop */
+        /* v8 ignore stop -- End of untested branch */
       }
     } else {
       // No description lines, need to construct the name line

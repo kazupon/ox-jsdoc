@@ -1,10 +1,19 @@
 import {
+  generate
+} from '@es-joy/escodegen';
+import {
   commentParserToESTree,
   estreeToString,
   parseComment
 } from '../src/index.js';
 
-/** @type {import('../src/commentParserToESTree').JsdocBlock} */
+/* eslint-disable jsdoc/reject-any-type -- Testing */
+/**
+ * @typedef {any} BadArgument
+ */
+/* eslint-enable jsdoc/reject-any-type -- Testing */
+
+/** @type {import('../src/commentParserToESTree.js').JsdocBlock} */
 const singleLineWithTag = {
   type: 'JsdocBlock',
   delimiter: '/**',
@@ -52,7 +61,7 @@ const singleLineWithTag = {
   ]
 };
 
-/** @type {import('../src/commentParserToESTree').JsdocBlock} */
+/** @type {import('../src/commentParserToESTree.js').JsdocBlock} */
 const jsdocBlock = {
   type: 'JsdocBlock',
   delimiter: '/**',
@@ -122,7 +131,7 @@ const jsdocBlock = {
   ]
 };
 
-/** @type {import('../src/commentParserToESTree').JsdocBlock} */
+/** @type {import('../src/commentParserToESTree.js').JsdocBlock} */
 const jsdocBlockMultilineDesc = {
   type: 'JsdocBlock',
   delimiter: '/**',
@@ -186,7 +195,7 @@ const jsdocBlockMultilineDesc = {
   ]
 };
 
-/** @type {import('../src/commentParserToESTree').JsdocBlock} */
+/** @type {import('../src/commentParserToESTree.js').JsdocBlock} */
 const jsdocBlockNoTags = {
   type: 'JsdocBlock',
   delimiter: '/**',
@@ -213,7 +222,7 @@ const jsdocBlockNoTags = {
   tags: []
 };
 
-/** @type {import('../src/commentParserToESTree').JsdocBlock} */
+/** @type {import('../src/commentParserToESTree.js').JsdocBlock} */
 const blockWithTagNameYetNoType = {
   delimiter: '/**',
   delimiterLineBreak: '\n',
@@ -250,7 +259,7 @@ const blockWithTagNameYetNoType = {
   type: 'JsdocBlock'
 };
 
-/** @type {import('../src/commentParserToESTree').JsdocBlock} */
+/** @type {import('../src/commentParserToESTree.js').JsdocBlock} */
 const jsdocBlockEmptyTags = {
   ...structuredClone(jsdocBlockNoTags),
   tags: []
@@ -352,7 +361,7 @@ describe('`estreeToString`', function () {
     () => {
       const parsedComment = parseComment({
         value: `* @type {SomeType} `
-      }, '    ');
+      }, ' '.repeat(4));
 
       const ast = commentParserToESTree(parsedComment, 'typescript');
       const str = estreeToString(ast);
@@ -380,7 +389,7 @@ describe('`estreeToString`', function () {
   );
 
   it('handles pipe inline tag', function () {
-    /** @type {import('../src/commentParserToESTree').JsdocInlineTag} */
+    /** @type {import('../src/commentParserToESTree.js').JsdocInlineTag} */
     const ast = {
       tag: 'link',
       namepathOrURL: 'Something',
@@ -393,7 +402,7 @@ describe('`estreeToString`', function () {
   });
 
   it('handles plain inline tag', function () {
-    /** @type {import('../src/commentParserToESTree').JsdocInlineTag} */
+    /** @type {import('../src/commentParserToESTree.js').JsdocInlineTag} */
     const ast = {
       tag: 'link',
       namepathOrURL: 'Something',
@@ -406,7 +415,7 @@ describe('`estreeToString`', function () {
   });
 
   it('handles space inline tag', function () {
-    /** @type {import('../src/commentParserToESTree').JsdocInlineTag} */
+    /** @type {import('../src/commentParserToESTree.js').JsdocInlineTag} */
     const ast = {
       tag: 'link',
       namepathOrURL: 'Something',
@@ -419,7 +428,7 @@ describe('`estreeToString`', function () {
   });
 
   it('handles prefix inline tag', function () {
-    /** @type {import('../src/commentParserToESTree').JsdocInlineTag} */
+    /** @type {import('../src/commentParserToESTree.js').JsdocInlineTag} */
     const ast = {
       tag: 'link',
       namepathOrURL: 'Something',
@@ -431,14 +440,157 @@ describe('`estreeToString`', function () {
     expect(str).to.equal('[something awesome!]{@link Something}');
   });
 
+  it('escapes a brace in a pipe inline-tag label', function () {
+    const str = estreeToString({
+      tag: 'link',
+      namepathOrURL: 'Something',
+      text: 'a}b',
+      format: 'pipe',
+      type: 'JsdocInlineTag'
+    });
+    expect(str).to.equal(String.raw`{@link Something|a\}b}`);
+  });
+
+  it('escapes a brace in a space inline-tag label', function () {
+    const str = estreeToString({
+      tag: 'link',
+      namepathOrURL: 'Something',
+      text: 'a}b',
+      format: 'space',
+      type: 'JsdocInlineTag'
+    });
+    expect(str).to.equal(String.raw`{@link Something a\}b}`);
+  });
+
+  it('escapes a bracket in a prefix inline-tag label', function () {
+    const str = estreeToString({
+      tag: 'link',
+      namepathOrURL: 'Something',
+      text: 'a]b',
+      format: 'prefix',
+      type: 'JsdocInlineTag'
+    });
+    expect(str).to.equal(String.raw`[a\]b]{@link Something}`);
+  });
+
+  it('escapes a trailing backslash in a pipe inline-tag label', function () {
+    const str = estreeToString({
+      tag: 'link',
+      namepathOrURL: 'Something',
+      text: 'a\\',
+      format: 'pipe',
+      type: 'JsdocInlineTag'
+    });
+    expect(str).to.equal(String.raw`{@link Something|a\\}`);
+  });
+
+  it('escapes a backslash followed by a brace in a pipe label', function () {
+    const str = estreeToString({
+      tag: 'link',
+      namepathOrURL: 'Something',
+      text: String.raw`a\}b`,
+      format: 'pipe',
+      type: 'JsdocInlineTag'
+    });
+    expect(str).to.equal(String.raw`{@link Something|a\\\}b}`);
+  });
+
+  it('does not gain an escape for an unescaped backslash', function () {
+    const str = estreeToString({
+      tag: 'link',
+      namepathOrURL: 'Something',
+      text: String.raw`a\b`,
+      format: 'pipe',
+      type: 'JsdocInlineTag'
+    });
+    expect(str).to.equal(String.raw`{@link Something|a\b}`);
+  });
+
+  it('does not escape a brace in a prefix inline-tag label', function () {
+    const str = estreeToString({
+      tag: 'link',
+      namepathOrURL: 'Something',
+      text: String.raw`a\}b`,
+      format: 'prefix',
+      type: 'JsdocInlineTag'
+    });
+    expect(str).to.equal(String.raw`[a\}b]{@link Something}`);
+  });
+
+  it('round-trips inline-tag label escapes with minimal encoding', function () {
+    const cases = [
+      {
+        source: String.raw`{@link url|a\}b}`,
+        text: 'a}b'
+      },
+      {
+        source: String.raw`[a\]b]{@link url}`,
+        text: 'a]b'
+      },
+      {
+        source: String.raw`{@link url|a\\}`,
+        text: 'a\\'
+      },
+      {
+        source: String.raw`{@link url|a\\\}b}`,
+        text: String.raw`a\}b`
+      },
+      {
+        source: String.raw`{@link url|a\\\b}`,
+        text: String.raw`a\\b`
+      },
+      {
+        source: String.raw`{@link url a\}b}`,
+        text: 'a}b'
+      },
+      {
+        source: String.raw`{@link url|a\b}`,
+        text: String.raw`a\b`
+      },
+      {
+        source: String.raw`{@link a\|b\|c}`,
+        text: String.raw`b\|c`
+      },
+      {
+        source: String.raw`[a\}b]{@link url}`,
+        text: String.raw`a\}b`
+      },
+      {
+        source: '{@link url}',
+        text: ''
+      }
+    ];
+
+    for (const {source, text} of cases) {
+      const parsed = parseComment({value: `* ${source}`});
+      const ast = commentParserToESTree(parsed, 'jsdoc');
+      const [inlineTag] = ast.inlineTags;
+      const parsedInlineTag =
+        /** @type {import('../src/index.js').InlineTag} */ (
+          parsed.inlineTags[0]
+        );
+      expect(inlineTag.text).to.equal(text);
+      expect(estreeToString(inlineTag)).to.equal(
+        parsed.description.slice(parsedInlineTag.start, parsedInlineTag.end)
+      );
+    }
+  });
+
+  it('documents superfluous-backslash normalization', function () {
+    const source = String.raw`{@link url|a\\b}`;
+    const parsed = parseComment({value: `* ${source}`});
+    const ast = commentParserToESTree(parsed, 'jsdoc');
+    const [inlineTag] = ast.inlineTags;
+
+    // The one non-byte-identical round-trip class: a superfluous `\\`
+    // before a non-special byte normalizes to `\`.
+    expect(inlineTag.text).to.equal(String.raw`a\b`);
+    expect(estreeToString(inlineTag)).to.equal(String.raw`{@link url|a\b}`);
+  });
+
   it('throws upon encountering an unhandled node type', function () {
     expect(() => {
-      /* eslint-disable jsdoc/reject-any-type -- Testing */
-      /**
-       * @typedef {any} BadArgument
-       */
       estreeToString(/** @type {BadArgument} */ ({
-        /* eslint-enable jsdoc/reject-any-type -- Testing */
         type: 'UnknownType'
       }));
     }).to.throw('Unhandled node type: UnknownType');
@@ -456,5 +608,167 @@ describe('`estreeToString`', function () {
       type: 'JsdocTypeName',
       value: 'string'
     }, {preferRawType: true})).to.equal('');
+  });
+
+  it('handles name on a separate line (no description lines)', function () {
+    const str = estreeToString({
+      type: 'JsdocBlock',
+      delimiter: '/**',
+      delimiterLineBreak: '\n',
+      description: '',
+      descriptionLines: [],
+      initial: '',
+      hasPreterminalDescription: 0,
+      terminal: '*/',
+      preterminalLineBreak: '\n',
+      endLine: 2,
+      lastDescriptionLine: 1,
+      lineEnd: '',
+      postDelimiter: '',
+      inlineTags: [],
+      tags: [
+        {
+          delimiter: '*',
+          description: '',
+          descriptionLines: [],
+          inlineTags: [],
+          name: 'Some',
+          parsedType: null,
+          postDelimiter: ' ',
+          postName: '',
+          postTag: '',
+          postType: '',
+          tag: 'param',
+          type: 'JsdocTag',
+          rawType: '',
+          initial: ' ',
+          typeLines: []
+        }
+      ]
+    });
+    expect(str).to.equal(`/**
+ * @param
+ * Some
+ */`);
+  });
+
+  it('handles name on a separate line (with description lines)', function () {
+    const str = estreeToString({
+      type: 'JsdocBlock',
+      delimiter: '/**',
+      delimiterLineBreak: '\n',
+      description: '',
+      descriptionLines: [],
+      initial: '',
+      hasPreterminalDescription: 0,
+      terminal: '*/',
+      preterminalLineBreak: '\n',
+      endLine: 3,
+      lastDescriptionLine: 2,
+      lineEnd: '',
+      postDelimiter: '',
+      inlineTags: [],
+      tags: [
+        {
+          delimiter: '*',
+          description: 'A description',
+          descriptionLines: [
+            {
+              delimiter: '',
+              description: '',
+              postDelimiter: '',
+              initial: '',
+              type: 'JsdocDescriptionLine'
+            },
+            {
+              delimiter: '*',
+              description: 'A description',
+              postDelimiter: ' ',
+              initial: ' ',
+              type: 'JsdocDescriptionLine'
+            }
+          ],
+          inlineTags: [],
+          name: 'Some',
+          parsedType: null,
+          postDelimiter: ' ',
+          postName: ' ',
+          postTag: '',
+          postType: '',
+          tag: 'param',
+          type: 'JsdocTag',
+          rawType: '',
+          initial: ' ',
+          typeLines: []
+        }
+      ]
+    });
+    expect(str).to.equal(`/**
+ * @param
+ * Some A description
+ */`);
+  });
+
+  it('handles custom stringification rules', () => {
+    const str = estreeToString({
+      type: 'JsdocTypeObject',
+      meta: {
+        separator: 'comma'
+      },
+      elements: [
+        {
+          type: 'JsdocTypeObjectField',
+          optional: false,
+          readonly: false,
+          meta: {
+            quote: undefined
+          },
+          key: {
+            type: 'JsdocTypeComputedProperty',
+            value: {
+              type: 'Program',
+              start: 0,
+              end: 18,
+              body: [
+                {
+                  type: 'ExpressionStatement',
+                  start: 0,
+                  end: 18,
+                  expression: {
+                    type: 'MemberExpression',
+                    start: 0,
+                    end: 18,
+                    object: {
+                      type: 'Identifier',
+                      // @ts-expect-error Ok
+                      start: 0,
+                      end: 6,
+                      name: 'Symbol'
+                    },
+                    property: {
+                      type: 'Identifier',
+                      // @ts-expect-error Ok
+                      start: 7,
+                      end: 18,
+                      name: 'hasInstance'
+                    },
+                    computed: false
+                  }
+                }
+              ],
+              sourceType: 'script'
+            }
+          },
+          right: {
+            type: 'JsdocTypeName',
+            value: 'string'
+          }
+        }
+      ]
+    }, {
+      jtppStringificationRules: generate
+    });
+
+    expect(str).to.equal('{{[Symbol.hasInstance]: string}}');
   });
 });

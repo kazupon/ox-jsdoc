@@ -1,3 +1,5 @@
+import {decodeInlineTagText} from './inlineTagEscapes.js';
+
 /**
  * @param {RegExpMatchArray & {
  *   indices: {
@@ -15,34 +17,34 @@ function determineFormat (match) {
   const [tagStart] = match.indices.groups.tag;
   if (!text) {
     return 'plain';
-  } else if (separator === '|') {
-    return 'pipe';
-  } else if (textEnd < tagStart) {
-    return 'prefix';
   }
-  return 'space';
+  if (separator === '|') {
+    return 'pipe';
+  }
+  return textEnd < tagStart ? 'prefix' : 'space';
 }
 
 /**
  * Extracts inline tags from a description.
  * @param {string} description
- * @returns {import('.').InlineTag[]} Array of inline tags from the description.
+ * @returns {import('./index.js').InlineTag[]} Array of inline tags from
+ *   the description.
  */
 function parseDescription (description) {
+  /** @type {import('./index.js').InlineTag[]} */
+  const result = [];
+
   if (!description.includes('{@')) {
     return [];
   }
 
-  /** @type {import('.').InlineTag[]} */
-  const result = [];
-
   // This could have been expressed in a single pattern,
   // but having two avoids a potentially exponential time regex.
 
-  const prefixedTextPattern = /(?:\[(?<text>[^\]]+)\])\{@(?<tag>[^\}\s]+)\s?(?<namepathOrURL>[^\}\s\|]*)\}/gvd;
+  const prefixedTextPattern = /(?:\[(?<text>(?:[^\\\]]|\\[\s\S])+)\])\{@(?<tag>[^\}\s]+)\s?(?<namepathOrURL>[^\}\s\|]*)\}/gvd;
   // The pattern used to match for text after tag uses a negative lookbehind
   // on the ']' char to avoid matching the prefixed case too.
-  const suffixedAfterPattern = /(?<!\])\{@(?<tag>[^\}\s]+)\s?(?<namepathOrURL>[^\}\s\|]*)\s*(?<separator>[\s\|])?\s*(?<text>[^\}]*)\}/gvd;
+  const suffixedAfterPattern = /(?<!\])\{@(?<tag>[^\}\s]+)\s?(?<namepathOrURL>[^\}\s\|]*)\s*(?<separator>[\s\|])?\s*(?<text>(?:[^\\\}]|\\[\s\S])*)\}/gvd;
 
   const matches = [
     ...description.matchAll(prefixedTextPattern),
@@ -51,25 +53,28 @@ function parseDescription (description) {
 
   for (const mtch of matches) {
     const match = /**
-      * @type {RegExpMatchArray & {
-      *   indices: {
-      *     groups: {
-      *       [key: string]: [number, number]
-      *     }
-      *   }
-      *   groups: {[key: string]: string}
-      * }}
-      */ (
+                   * @type {RegExpMatchArray & {
+                   *   indices: {
+                   *     groups: {
+                   *       [key: string]: [number, number]
+                   *     }
+                   *   }
+                   *   groups: {[key: string]: string}
+                   * }}
+                   */ (
         mtch
       );
     const {tag, namepathOrURL, text} = match.groups;
-    const [start, end] = match.indices[0];
+    // `indices[0]` (the whole-match span) is always present for a successful
+    // match under the `d` flag, though the type includes `undefined`.
+    const [start, end] = /** @type {[number, number]} */ (match.indices[0]);
     const format = determineFormat(match);
+    const decodedText = decodeInlineTagText(text, format);
 
     result.push({
       tag,
       namepathOrURL,
-      text,
+      text: decodedText,
       format,
       start,
       end
@@ -83,30 +88,30 @@ function parseDescription (description) {
  * Splits the `{@ prefix}` from remaining `Spec.lines[].token.description`
  * into the `inlineTags` tokens, and populates `spec.inlineTags`
  * @param {import('comment-parser').Block} block
- * @returns {import('.').JsdocBlockWithInline}
+ * @returns {import('./index.js').JsdocBlockWithInline}
  */
 export function parseInlineTags (block) {
   const inlineTags =
     /**
-     * @type {(import('./commentParserToESTree').JsdocInlineTagNoType & {
-     *   line?: import('./commentParserToESTree').Integer
+     * @type {(import('./commentParserToESTree.js').JsdocInlineTagNoType & {
+     *   line?: import('./commentParserToESTree.js').Integer
      * })[]}
      */ (
       parseDescription(block.description)
     );
 
-  /** @type {import('.').JsdocBlockWithInline} */ (
+  /** @type {import('./index.js').JsdocBlockWithInline} */ (
     block
   ).inlineTags = inlineTags;
 
   for (const tag of block.tags) {
     /**
-     * @type {import('.').JsdocTagWithInline}
+     * @type {import('./index.js').JsdocTagWithInline}
      */ (tag).inlineTags = parseDescription(tag.description);
   }
   return (
     /**
-     * @type {import('.').JsdocBlockWithInline}
+     * @type {import('./index.js').JsdocBlockWithInline}
      */ (block)
   );
 }

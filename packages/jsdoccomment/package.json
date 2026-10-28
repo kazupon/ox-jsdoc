@@ -67,6 +67,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.0",
     "@babel/preset-env": "^7.29.2",
+    "@es-joy/escodegen": "^4.2.0",
     "@rollup/plugin-babel": "^7.0.0",
     "@vitest/coverage-v8": "catalog:",
     "@types/esquery": "^1.5.4",
