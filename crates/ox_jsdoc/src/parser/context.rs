@@ -1636,6 +1636,7 @@ fn emit_block_inner<'arena>(
     block_parent
 }
 
+/// Emit a description line of a block: one physical line.
 fn emit_description_line(
     writer: &mut BinaryWriter<'_>,
     line: &DescriptionLineData<'_>,
@@ -1653,25 +1654,73 @@ fn emit_description_line(
     // `span.end` would over-shoot because it includes the trailing
     // whitespace that `trim_end()` removed.
     let desc_byte_end = line.span.start + line.description.len() as u32;
+    debug_assert!(
+        writer.is_source_at(line.description, Span::new(line.span.start, desc_byte_end)),
+        "a block description line is the source text at its span"
+    );
     if compat {
         let desc_field = writer.intern_source_slice(line.span.start, desc_byte_end);
-        let delim = opt_string(writer, non_empty_str(line.delimiter));
-        let pdelim = opt_string(writer, non_empty_str(line.post_delimiter));
-        let init = opt_string(writer, non_empty_str(line.initial));
-        write_jsdoc_description_line_compat(
-            writer,
-            line.span,
-            parent_index,
-            desc_field,
-            delim,
-            pdelim,
-            init,
-        )
-        .as_u32()
+        emit_description_line_compat(writer, line, parent_index, desc_field)
     } else {
         let desc_idx = writer.intern_source_slice_for_leaf_payload(line.span.start, desc_byte_end);
         write_jsdoc_description_line(writer, line.span, parent_index, desc_idx).as_u32()
     }
+}
+
+/// Emit the description line of a tag. A tag has at most one, which holds
+/// the whole description: `line.description` is `tag.description`.
+///
+/// `desc_field` is the tag's description as `emit_tag` interned it; the
+/// line references the same bytes. For a tag body that spans several
+/// lines, the description is not in the source (`normalize_lines` joins
+/// the lines without their margins into a new string), so `desc_field` is
+/// a copy, and the source bytes at the line's span are other text.
+fn emit_tag_description_line(
+    writer: &mut BinaryWriter<'_>,
+    line: &DescriptionLineData<'_>,
+    desc_field: Option<StringField>,
+    parent_index: u32,
+    compat: bool,
+) -> u32 {
+    // A StringField holds at most `u16::MAX` bytes; intern a longer text
+    // on its own.
+    let desc_field = desc_field.filter(|field| field.length as usize == line.description.len());
+    let desc_span = Span::new(
+        line.span.start,
+        line.span.start + line.description.len() as u32,
+    );
+    if compat {
+        let desc_field = desc_field
+            .unwrap_or_else(|| writer.intern_source_or_string(line.description, desc_span));
+        emit_description_line_compat(writer, line, parent_index, desc_field)
+    } else {
+        let desc_idx = match desc_field {
+            Some(field) => writer.leaf_payload_for(field),
+            None => writer.intern_source_or_string_for_leaf_payload(line.description, desc_span),
+        };
+        write_jsdoc_description_line(writer, line.span, parent_index, desc_idx).as_u32()
+    }
+}
+
+fn emit_description_line_compat(
+    writer: &mut BinaryWriter<'_>,
+    line: &DescriptionLineData<'_>,
+    parent_index: u32,
+    desc_field: StringField,
+) -> u32 {
+    let delim = opt_string(writer, non_empty_str(line.delimiter));
+    let pdelim = opt_string(writer, non_empty_str(line.post_delimiter));
+    let init = opt_string(writer, non_empty_str(line.initial));
+    write_jsdoc_description_line_compat(
+        writer,
+        line.span,
+        parent_index,
+        desc_field,
+        delim,
+        pdelim,
+        init,
+    )
+    .as_u32()
 }
 
 fn non_empty_str(s: &str) -> Option<&str> {
@@ -1793,7 +1842,11 @@ fn emit_tag(
         crate::writer::nodes::comment_ast::JSDOC_TAG_DESC_LINES_SLOT,
     );
     for line in &tag.description_lines {
-        let child_idx = emit_description_line(writer, line, tag_parent, compat);
+        let line_desc = match tag.description {
+            Some(description) if std::ptr::eq(description, line.description) => desc_idx,
+            _ => None,
+        };
+        let child_idx = emit_tag_description_line(writer, line, line_desc, tag_parent, compat);
         writer.record_list_child(&mut desc_list, child_idx);
     }
     writer.finalize_node_list(desc_list);

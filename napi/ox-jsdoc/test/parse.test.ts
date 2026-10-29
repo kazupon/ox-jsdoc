@@ -1,5 +1,6 @@
 import type {
   RemoteJsdocBlock,
+  RemoteJsdocDescriptionLine,
   RemoteJsdocInlineTag,
   RemoteJsdocTag,
   RemoteJsdocTagName,
@@ -359,5 +360,52 @@ describe('string getters do not depend on the order of reads', () => {
       .map(path => read(ast, path))
       .reverse()
     expect(reversed).toEqual(truth)
+  })
+})
+
+// The parser joins the lines of a tag body without their margins (` * `), so
+// the strings of such a tag are not slices of the source text.
+describe('tags whose body spans several lines', () => {
+  const descriptions = (tag: RemoteJsdocTag) =>
+    tag.descriptionLines.map(line => (line as RemoteJsdocDescriptionLine).description)
+
+  it('reads the name after a multi-line type', () => {
+    const tag = parse('/**\n * @param {{\n *   a: string\n * }} options desc\n */').ast!
+      .tags[0] as RemoteJsdocTag
+    expect((tag.name as RemoteJsdocTagNameValue).raw).toBe('options')
+    expect(descriptions(tag)).toEqual(['desc'])
+  })
+
+  it.each([false, true])(
+    'reads the description line of a multi-line description (compatMode: %s)',
+    compatMode => {
+      const tag = parse('/**\n * @param foo the foo\n * second line\n */', { compatMode }).ast!
+        .tags[0] as RemoteJsdocTag
+      expect(descriptions(tag)).toEqual(['the foo\nsecond line'])
+    }
+  )
+
+  it('reads the type names of a multi-line type when parseTypes is enabled', () => {
+    const typeNames = (source: string) => {
+      const names: string[] = []
+      const walk = (node: unknown): void => {
+        if (node === null || typeof node !== 'object') {
+          return
+        }
+        const record = node as Record<string, unknown>
+        if (record.type === 'TypeName') {
+          names.push(record.value as string)
+        }
+        Object.entries(record).forEach(([key, child]) => key !== 'range' && walk(child))
+      }
+      const tag = parse(source, { parseTypes: true }).ast!.tags[0] as RemoteJsdocTag
+      walk(tag.parsedType?.toJSON() ?? null)
+      return names
+    }
+    const oneLine = typeNames('/** @param {{ a: Array<string>, b: number }} x */')
+    expect(oneLine).toEqual(['a', 'Array', 'string', 'b', 'number'])
+    expect(
+      typeNames('/**\n * @param {{\n *   a: Array<string>,\n *   b: number\n * }} x\n */')
+    ).toEqual(oneLine)
   })
 })
