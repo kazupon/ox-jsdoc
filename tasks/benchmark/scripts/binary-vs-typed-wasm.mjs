@@ -27,10 +27,10 @@ const repoRoot = path.resolve(__dirname, '../../..')
 const fixturePath = path.join(repoRoot, 'fixtures/perf/source/typescript-checker.ts')
 
 await initTypedWasm(
-  await readFile(path.join(repoRoot, 'wasm/ox-jsdoc/pkg/ox_jsdoc_wasm_bg.wasm'))
+  await readFile(path.join(repoRoot, 'wasm/ox-jsdoc-origin/pkg/ox_jsdoc_origin_wasm_bg.wasm'))
 )
 await initBinaryWasm(
-  await readFile(path.join(repoRoot, 'wasm/ox-jsdoc/pkg/ox_jsdoc_binary_wasm_bg.wasm'))
+  await readFile(path.join(repoRoot, 'wasm/ox-jsdoc/pkg/ox_jsdoc_wasm_bg.wasm'))
 )
 
 const sourceText = await readFile(fixturePath, 'utf8')

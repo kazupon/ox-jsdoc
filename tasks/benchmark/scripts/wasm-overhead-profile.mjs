@@ -30,8 +30,8 @@ import {
 import {
   parse_jsdoc as parseJsdocWasmRaw,
   parse_jsdoc_batch as parseJsdocBatchWasmRaw
-} from '../../../wasm/ox-jsdoc/pkg/ox_jsdoc_binary_wasm.js'
-import { RemoteSourceFile } from '../../../packages/decoder/src/index.js'
+} from '../../../wasm/ox-jsdoc/pkg/ox_jsdoc_wasm.js'
+import { RemoteSourceFile } from '../../../packages/decoder/dist/index.mjs'
 
 import { compareRobust, fmtDuration } from './lib/measure.mjs'
 
@@ -40,7 +40,7 @@ const repoRoot = path.resolve(__dirname, '../../..')
 const fixturePath = path.join(repoRoot, 'fixtures/perf/source/typescript-checker.ts')
 
 await initBinaryWasm(
-  await readFile(path.join(repoRoot, 'wasm/ox-jsdoc/pkg/ox_jsdoc_binary_wasm_bg.wasm'))
+  await readFile(path.join(repoRoot, 'wasm/ox-jsdoc/pkg/ox_jsdoc_wasm_bg.wasm'))
 )
 
 const sourceText = await readFile(fixturePath, 'utf8')

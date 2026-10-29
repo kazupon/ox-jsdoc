@@ -36,9 +36,9 @@ import {
   parseJsdocBatchRaw as napiRawCall,
   napiMarshallingInOnly,
   napiMarshallingOutOnly
-} from 'ox-jsdoc/src-js/bindings.js'
+} from '../../../napi/ox-jsdoc/src-js/bindings.js'
 import { parseBatch as parseBatchWrapper } from 'ox-jsdoc'
-import { RemoteSourceFile } from '../../../packages/decoder/src/index.js'
+import { RemoteSourceFile } from '../../../packages/decoder/dist/index.mjs'
 
 import { compareRobust, fmtDuration } from './lib/measure.mjs'
 
