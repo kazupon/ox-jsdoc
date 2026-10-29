@@ -521,6 +521,7 @@ dependencies = [
  "oxc_span 0.135.0",
  "rustc-hash",
  "smallvec",
+ "unicode-id-start",
 ]
 
 [[package]]

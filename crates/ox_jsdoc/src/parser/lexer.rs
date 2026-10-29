@@ -159,16 +159,62 @@ impl<'a> Lexer<'a> {
         if is_ident_start(b) || (self.loose && b == b'-') {
             return self.read_identifier(abs_start);
         }
+        if !b.is_ascii() {
+            return self.read_non_ascii(abs_start);
+        }
 
         self.offset += 1;
-        Token::new(TokenKind::EOF, abs_start, abs_start + 1)
+        Token::new(TokenKind::Unknown, abs_start, abs_start + 1)
     }
 
+    /// Read a token that starts with a non-ASCII character: an identifier if
+    /// the character is `ID_Start`, otherwise an [`TokenKind::Unknown`] token
+    /// for the character. Kept out of line so that the ASCII path stays small.
+    #[cold]
+    #[inline(never)]
+    fn read_non_ascii(&mut self, abs_start: u32) -> Token {
+        let ch = self.char_at(self.offset);
+        if unicode_id_start::is_id_start_unicode(ch) {
+            return self.read_identifier(abs_start);
+        }
+        self.offset += ch.len_utf8();
+        Token::new(
+            TokenKind::Unknown,
+            abs_start,
+            self.base_offset + self.offset as u32,
+        )
+    }
+
+    /// Skip whitespace as `\s` does in JavaScript (what jsdoc-type-pratt-parser
+    /// skips), including the non-ASCII spaces such as NBSP.
     #[inline]
     fn skip_whitespace(&mut self) {
         let bytes = self.source.as_bytes();
-        while self.offset < bytes.len() && bytes[self.offset].is_ascii_whitespace() {
-            self.offset += 1;
+        while let Some(&b) = bytes.get(self.offset) {
+            if is_ascii_whitespace(b) {
+                self.offset += 1;
+            } else if b.is_ascii() {
+                break;
+            } else {
+                let len = self.non_ascii_whitespace_len();
+                if len == 0 {
+                    break;
+                }
+                self.offset += len;
+            }
+        }
+    }
+
+    /// The byte length of the character at the current offset if it is
+    /// non-ASCII whitespace, or 0.
+    #[cold]
+    #[inline(never)]
+    fn non_ascii_whitespace_len(&self) -> usize {
+        let ch = self.char_at(self.offset);
+        if is_non_ascii_whitespace(ch) {
+            ch.len_utf8()
+        } else {
+            0
         }
     }
 
@@ -177,6 +223,25 @@ impl<'a> Lexer<'a> {
         self.source.as_bytes().get(self.offset + delta).copied()
     }
 
+    /// The character that starts at byte `offset`, which must be a character
+    /// boundary.
+    #[inline]
+    fn char_at(&self, offset: usize) -> char {
+        self.source[offset..].chars().next().unwrap_or('\0')
+    }
+
+    /// Whether the character at byte `offset` can continue an identifier.
+    #[inline]
+    fn continues_identifier_at(&self, offset: usize) -> bool {
+        match self.source.as_bytes().get(offset) {
+            Some(&b) if b.is_ascii() => is_ident_continue(b),
+            Some(_) => is_non_ascii_ident_continue(self.char_at(offset)),
+            None => false,
+        }
+    }
+
+    /// Read a quoted string. A string that is not closed becomes an
+    /// [`TokenKind::Unknown`] token up to the end of the text.
     fn read_string(&mut self, quote: u8, abs_start: u32) -> Token {
         self.offset += 1;
         let bytes = self.source.as_bytes();
@@ -195,13 +260,16 @@ impl<'a> Lexer<'a> {
                 self.offset += 1;
             }
         }
+        self.offset = bytes.len();
         Token::new(
-            TokenKind::StringValue,
+            TokenKind::Unknown,
             abs_start,
             self.base_offset + self.offset as u32,
         )
     }
 
+    /// Read a template literal. One that is not closed becomes an
+    /// [`TokenKind::Unknown`] token up to the end of the text.
     fn read_template_literal(&mut self, abs_start: u32) -> Token {
         self.offset += 1;
         let bytes = self.source.as_bytes();
@@ -220,8 +288,9 @@ impl<'a> Lexer<'a> {
                 self.offset += 1;
             }
         }
+        self.offset = bytes.len();
         Token::new(
-            TokenKind::TemplateLiteral,
+            TokenKind::Unknown,
             abs_start,
             self.base_offset + self.offset as u32,
         )
@@ -234,9 +303,7 @@ impl<'a> Lexer<'a> {
             pos += 1;
         }
         if self.loose && pos < bytes.len() {
-            if bytes[pos..].starts_with(b"NaN")
-                && !bytes.get(pos + 3).is_some_and(|&b| is_ident_continue(b))
-            {
+            if bytes[pos..].starts_with(b"NaN") && !self.continues_identifier_at(pos + 3) {
                 self.offset = pos + 3;
                 return Some(Token::new(
                     TokenKind::Number,
@@ -244,9 +311,7 @@ impl<'a> Lexer<'a> {
                     self.base_offset + self.offset as u32,
                 ));
             }
-            if bytes[pos..].starts_with(b"Infinity")
-                && !bytes.get(pos + 8).is_some_and(|&b| is_ident_continue(b))
-            {
+            if bytes[pos..].starts_with(b"Infinity") && !self.continues_identifier_at(pos + 8) {
                 self.offset = pos + 8;
                 return Some(Token::new(
                     TokenKind::Number,
@@ -297,18 +362,24 @@ impl<'a> Lexer<'a> {
         ))
     }
 
+    /// Read an identifier: ASCII is checked byte by byte, other characters
+    /// by the Unicode `ID_Continue` property (plus ZWNJ and ZWJ), as
+    /// jsdoc-type-pratt-parser does. The loose lexer also takes `-`.
     fn read_identifier(&mut self, abs_start: u32) -> Token {
         let bytes = self.source.as_bytes();
         let start = self.offset;
-        if self.loose {
-            while self.offset < bytes.len()
-                && (is_ident_continue(bytes[self.offset]) || bytes[self.offset] == b'-')
-            {
+        let loose = self.loose;
+        while let Some(&b) = bytes.get(self.offset) {
+            if is_ident_continue(b) || (loose && b == b'-') {
                 self.offset += 1;
-            }
-        } else {
-            while self.offset < bytes.len() && is_ident_continue(bytes[self.offset]) {
-                self.offset += 1;
+            } else if b.is_ascii() {
+                break;
+            } else {
+                let len = self.non_ascii_ident_continue_len();
+                if len == 0 {
+                    break;
+                }
+                self.offset += len;
             }
         }
         let text = &self.source[start..self.offset];
@@ -338,6 +409,19 @@ impl<'a> Lexer<'a> {
         };
         Token::new(kind, abs_start, abs_end)
     }
+
+    /// The byte length of the character at the current offset if it is a
+    /// non-ASCII character that continues an identifier, or 0.
+    #[cold]
+    #[inline(never)]
+    fn non_ascii_ident_continue_len(&self) -> usize {
+        let ch = self.char_at(self.offset);
+        if is_non_ascii_ident_continue(ch) {
+            ch.len_utf8()
+        } else {
+            0
+        }
+    }
 }
 
 #[inline]
@@ -348,4 +432,34 @@ fn is_ident_start(b: u8) -> bool {
 #[inline]
 fn is_ident_continue(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_' || b == b'$'
+}
+
+/// The ASCII characters that `\s` matches in JavaScript: tab, line feed,
+/// vertical tab, form feed, carriage return and space.
+#[inline]
+fn is_ascii_whitespace(b: u8) -> bool {
+    matches!(b, b'\t'..=b'\r' | b' ')
+}
+
+/// `ID_Continue`, ZWNJ (U+200C) or ZWJ (U+200D), for a non-ASCII character.
+#[inline]
+fn is_non_ascii_ident_continue(ch: char) -> bool {
+    unicode_id_start::is_id_continue_unicode(ch) || ch == '\u{200C}' || ch == '\u{200D}'
+}
+
+/// The non-ASCII characters that `\s` matches in JavaScript.
+#[inline]
+fn is_non_ascii_whitespace(ch: char) -> bool {
+    matches!(ch, '\u{2000}'..='\u{200A}')
+        || matches!(
+            ch,
+            '\u{00A0}'
+                | '\u{1680}'
+                | '\u{2028}'
+                | '\u{2029}'
+                | '\u{202F}'
+                | '\u{205F}'
+                | '\u{3000}'
+                | '\u{FEFF}'
+        )
 }

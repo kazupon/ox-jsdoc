@@ -318,3 +318,32 @@ describe('parseType / parseTypeCheck — standalone type expression API', () => 
     })
   })
 })
+
+// Inputs that used to abort the process, or to be cut short without an error.
+// The expected results follow jsdoc-type-pratt-parser 9.4.0.
+describe('non-ASCII names and unknown characters', () => {
+  it('accepts non-ASCII names', () => {
+    expect(parseType('Foo.é', 'jsdoc')).toBe('Foo.é')
+    expect(parseType('Größe', 'typescript')).toBe('Größe')
+    expect(parseType('Array<日本語>', 'typescript')).toBe('Array<日本語>')
+    expect(parseType('{é: string}', 'typescript')).toBe('{é: string}')
+    expect(parseType('module:é', 'jsdoc')).toBe('module:é')
+  })
+
+  it('rejects characters that are not part of the type syntax', () => {
+    expect(parseType('string%x', 'jsdoc')).toBeNull()
+    expect(parseTypeCheck('string%x', 'jsdoc')).toBe(false)
+    expect(parseType('my-type', 'typescript')).toBeNull()
+    expect(parseType('Foo.%', 'jsdoc')).toBeNull()
+    expect(parseType('{%: string}', 'typescript')).toBeNull()
+  })
+
+  it('rejects unterminated strings and template literals', () => {
+    expect(parseType('"abc', 'typescript')).toBeNull()
+    expect(parseType('`é', 'typescript')).toBeNull()
+  })
+
+  it('skips non-ASCII whitespace', () => {
+    expect(parseType('Array< string>', 'typescript')).toBe('Array<string>')
+  })
+})

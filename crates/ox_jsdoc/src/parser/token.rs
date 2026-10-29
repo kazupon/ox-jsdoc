@@ -60,6 +60,11 @@ pub enum TokenKind {
     StringValue,
     TemplateLiteral,
     Number,
+    /// A character that no rule accepts, or a string / template literal that
+    /// is not closed. The token covers whole characters, and no parse rule
+    /// accepts it, so the type expression fails to parse.
+    Unknown,
+    /// The end of the type text.
     EOF,
 }
 

@@ -72,6 +72,14 @@ describe('parse (binary NAPI binding)', () => {
     expect(parsed!.type).toBe('TypeUnion')
   })
 
+  it('parses non-ASCII type names when parseTypes is enabled', () => {
+    // `Foo.é` used to abort the process.
+    const result = parse('/** @param {Foo.é} x desc */', { parseTypes: true })
+    expect(result.diagnostics).toEqual([])
+    const tag = result.ast!.tags[0] as RemoteJsdocTag
+    expect(tag.parsedType).not.toBeNull()
+  })
+
   it('matches oxc_jsdoc tag splitting for indented code blocks', () => {
     const source =
       '/**\n * @deprecated\n *     @myDecorator\n *     class Foo {}\n * @type {string}\n */'

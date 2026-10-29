@@ -130,6 +130,15 @@ describe('parseType / parseTypeCheck (binary WASM binding)', () => {
     expect(parseTypeCheck('@', 'jsdoc')).toBe(false)
   })
 
+  it('parseType accepts non-ASCII names and rejects unknown characters', () => {
+    // Non-ASCII names used to make the parser panic, and `string%x` used to
+    // come out as `string`.
+    expect(parseType('Größe', 'jsdoc')).toBe('Größe')
+    expect(parseType('Foo.é', 'jsdoc')).toBe('Foo.é')
+    expect(parseType('Array<日本語>', 'typescript')).toBe('Array<日本語>')
+    expect(parseType('string%x', 'jsdoc')).toBeNull()
+  })
+
   it('defaults to jsdoc mode when mode is omitted', () => {
     expect(parseTypeCheck('Array.<string>')).toBe(true)
   })

@@ -9,6 +9,9 @@
 //! travel as a separate plain-object array (the binary buffer also carries
 //! them in its Diagnostics section, but exposing both lets the JS layer
 //! avoid a re-decode for the common case).
+//!
+//! The parse functions use `#[napi(catch_unwind)]`: a panic in the parser
+//! throws a JavaScript `Error` instead of aborting the Node.js process.
 
 use napi::bindgen_prelude::{Uint8Array, Uint32Array};
 use napi_derive::napi;
@@ -57,7 +60,7 @@ pub struct JsParseResult {
 }
 
 /// Parse a complete `/** ... */` JSDoc block and return the Binary AST.
-#[napi]
+#[napi(catch_unwind)]
 pub fn parse_jsdoc(source_text: String, options: Option<JsParseOptions>) -> JsParseResult {
     let opts = convert_options(options);
     let result = parse_to_bytes(source_text.as_str(), opts);
@@ -110,7 +113,7 @@ pub struct JsBatchParseResult {
 /// The returned buffer carries N roots side-by-side; the JS-side decoder
 /// exposes them via `RemoteSourceFile.asts`. Strings recur across comments
 /// (`*`, `*/`, common tag names) are interned once for the whole batch.
-#[napi]
+#[napi(catch_unwind)]
 pub fn parse_jsdoc_batch(
     items: Vec<JsBatchItem>,
     options: Option<JsParseOptions>,
@@ -160,7 +163,7 @@ pub fn parse_jsdoc_batch(
 /// The JS wrapper (`parseBatch` in `index.js`) builds those views via
 /// `TextEncoder`. Callers who need the original ergonomic API can keep
 /// using [`parse_jsdoc_batch`].
-#[napi]
+#[napi(catch_unwind)]
 pub fn parse_jsdoc_batch_raw(
     concat: Uint8Array,
     offsets: Uint32Array,
@@ -206,7 +209,7 @@ pub fn parse_jsdoc_batch_raw(
 
 /// Parse a standalone type expression (no comment parsing overhead).
 /// Returns the stringified result, or null if parsing fails.
-#[napi]
+#[napi(catch_unwind)]
 pub fn parse_type_expression(type_text: String, mode: Option<String>) -> Option<String> {
     let parse_mode = parse_mode_from_string(mode.as_deref());
     core_parse_type_expression(&type_text, parse_mode)
@@ -214,7 +217,7 @@ pub fn parse_type_expression(type_text: String, mode: Option<String>) -> Option<
 
 /// Parse a standalone type expression and return whether it succeeded.
 /// No stringify overhead — used for benchmarks.
-#[napi]
+#[napi(catch_unwind)]
 pub fn parse_type_check(type_text: String, mode: Option<String>) -> bool {
     let parse_mode = parse_mode_from_string(mode.as_deref());
     core_parse_type_check(&type_text, parse_mode)
