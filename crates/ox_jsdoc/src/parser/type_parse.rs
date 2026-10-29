@@ -242,7 +242,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         }
     }
 
+    /// Consume the current token if it is `kind`. Otherwise report it and
+    /// return `false` without consuming anything: the caller must then fail,
+    /// or the type would be accepted as if the token were there. Use `eat`
+    /// for a token that may be missing.
     #[inline]
+    #[must_use]
     fn expect(&mut self, lexer: &mut Lexer<'a>, kind: TokenKind) -> bool {
         if lexer.current.kind == kind {
             lexer.bump();
@@ -751,15 +756,17 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         })))
     }
 
+    /// Parse `<T, U extends X = Y>` if the current token is `<`. `None` when
+    /// the list is not closed with `>`.
     fn parse_type_parameters(
         &mut self,
         lexer: &mut Lexer<'a>,
         mode: ParseMode,
         disallow_conditional: &mut bool,
-    ) -> Vec<Box<TypeNodeData<'a>>> {
+    ) -> Option<Vec<Box<TypeNodeData<'a>>>> {
         let mut type_params = Vec::new();
         if lexer.current.kind != TokenKind::Lt {
-            return type_params;
+            return Some(type_params);
         }
         lexer.bump();
         loop {
@@ -798,8 +805,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 break;
             }
         }
-        self.expect(lexer, TokenKind::Gt);
-        type_params
+        if !self.expect(lexer, TokenKind::Gt) {
+            return None;
+        }
+        Some(type_params)
     }
 
     fn parse_call_signature(
@@ -820,8 +829,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 }
             }
         }
-        self.expect(lexer, TokenKind::RParen);
-        self.expect(lexer, TokenKind::Colon);
+        if !self.expect(lexer, TokenKind::RParen) {
+            return None;
+        }
+        // jsdoc-type-pratt-parser does not require the `:` before the
+        // return type.
+        self.eat(lexer, TokenKind::Colon);
         let return_type =
             self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?;
         let end = return_type.span().end;
@@ -840,8 +853,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         disallow_conditional: &mut bool,
         start: u32,
     ) -> Option<Box<TypeNodeData<'a>>> {
-        let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional);
-        self.expect(lexer, TokenKind::LParen);
+        let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional)?;
+        if !self.expect(lexer, TokenKind::LParen) {
+            return None;
+        }
         let mut parameters = Vec::new();
         if lexer.current.kind != TokenKind::RParen {
             loop {
@@ -852,8 +867,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 }
             }
         }
-        self.expect(lexer, TokenKind::RParen);
-        self.expect(lexer, TokenKind::Colon);
+        if !self.expect(lexer, TokenKind::RParen) {
+            return None;
+        }
+        // jsdoc-type-pratt-parser does not require the `:` before the
+        // return type.
+        self.eat(lexer, TokenKind::Colon);
         let return_type =
             self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?;
         let end = return_type.span().end;
@@ -873,8 +892,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         start: u32,
     ) -> Option<Box<TypeNodeData<'a>>> {
         lexer.bump();
-        let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional);
-        self.expect(lexer, TokenKind::LParen);
+        let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional)?;
+        if !self.expect(lexer, TokenKind::LParen) {
+            return None;
+        }
         let mut parameters = Vec::new();
         if lexer.current.kind != TokenKind::RParen {
             loop {
@@ -885,8 +906,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 }
             }
         }
-        self.expect(lexer, TokenKind::RParen);
-        self.expect(lexer, TokenKind::Colon);
+        if !self.expect(lexer, TokenKind::RParen) {
+            return None;
+        }
+        // jsdoc-type-pratt-parser does not require the `:` before the
+        // return type.
+        self.eat(lexer, TokenKind::Colon);
         let return_type =
             self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?;
         let end = return_type.span().end;
@@ -910,8 +935,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         name: &'a str,
         quote: Option<QuoteStyle>,
     ) -> Option<Box<TypeNodeData<'a>>> {
-        let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional);
-        self.expect(lexer, TokenKind::LParen);
+        let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional)?;
+        if !self.expect(lexer, TokenKind::LParen) {
+            return None;
+        }
         let mut parameters = Vec::new();
         if lexer.current.kind != TokenKind::RParen {
             loop {
@@ -922,8 +949,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 }
             }
         }
-        self.expect(lexer, TokenKind::RParen);
-        self.expect(lexer, TokenKind::Colon);
+        if !self.expect(lexer, TokenKind::RParen) {
+            return None;
+        }
+        // jsdoc-type-pratt-parser does not require the `:` before the
+        // return type.
+        self.eat(lexer, TokenKind::Colon);
         let return_type =
             self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?;
         let end = return_type.span().end;
@@ -955,9 +986,13 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             lexer.bump();
             let _right =
                 self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::All)?;
-            self.expect(lexer, TokenKind::RBracket);
+            if !self.expect(lexer, TokenKind::RBracket) {
+                return None;
+            }
             self.eat(lexer, TokenKind::Question);
-            self.expect(lexer, TokenKind::Colon);
+            if !self.expect(lexer, TokenKind::Colon) {
+                return None;
+            }
             let value =
                 self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::KeyValue)?;
             let end = value.span().end;
@@ -971,8 +1006,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             lexer.bump();
             let _index_type =
                 self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::All)?;
-            self.expect(lexer, TokenKind::RBracket);
-            self.expect(lexer, TokenKind::Colon);
+            if !self.expect(lexer, TokenKind::RBracket) {
+                return None;
+            }
+            if !self.expect(lexer, TokenKind::Colon) {
+                return None;
+            }
             let value =
                 self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::KeyValue)?;
             let end = value.span().end;
@@ -982,11 +1021,15 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 right: value,
             })));
         }
-        self.expect(lexer, TokenKind::RBracket);
+        if !self.expect(lexer, TokenKind::RBracket) {
+            return None;
+        }
         let optional = self.eat(lexer, TokenKind::Question);
         if lexer.current.kind == TokenKind::LParen || lexer.current.kind == TokenKind::Lt {
-            let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional);
-            self.expect(lexer, TokenKind::LParen);
+            let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional)?;
+            if !self.expect(lexer, TokenKind::LParen) {
+                return None;
+            }
             let mut parameters = Vec::new();
             if lexer.current.kind != TokenKind::RParen {
                 loop {
@@ -1000,8 +1043,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                     }
                 }
             }
-            self.expect(lexer, TokenKind::RParen);
-            self.expect(lexer, TokenKind::Colon);
+            if !self.expect(lexer, TokenKind::RParen) {
+                return None;
+            }
+            // jsdoc-type-pratt-parser does not require the `:` before the
+            // return type.
+            self.eat(lexer, TokenKind::Colon);
             let return_type =
                 self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?;
             let end = return_type.span().end;
@@ -1026,7 +1073,9 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 quote: None,
             })));
         }
-        self.expect(lexer, TokenKind::Colon);
+        if !self.expect(lexer, TokenKind::Colon) {
+            return None;
+        }
         let value =
             self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::KeyValue)?;
         let end = value.span().end;
@@ -1088,7 +1137,9 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 }
             }
         }
-        self.expect(lexer, TokenKind::RParen);
+        if !self.expect(lexer, TokenKind::RParen) {
+            return None;
+        }
         let return_type = if self.eat(lexer, TokenKind::Colon) {
             Some(self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?)
         } else {
@@ -1128,7 +1179,9 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 }
             }
         }
-        self.expect(lexer, TokenKind::RParen);
+        if !self.expect(lexer, TokenKind::RParen) {
+            return None;
+        }
         let (return_type, arrow) = if self.eat(lexer, TokenKind::Arrow) {
             (
                 Some(self.parse_type_pratt(
@@ -1225,7 +1278,9 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
     ) -> Option<Box<TypeNodeData<'a>>> {
         let start = lexer.current.start;
         lexer.bump();
-        self.expect(lexer, TokenKind::LParen);
+        if !self.expect(lexer, TokenKind::LParen) {
+            return None;
+        }
         let element_token = lexer.current;
         if element_token.kind != TokenKind::StringValue {
             self.type_diag(TypeDiagnosticKind::ExpectedToken);
@@ -1625,7 +1680,9 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 prop_text
             };
             lexer.bump();
-            self.expect(lexer, TokenKind::RBracket);
+            if !self.expect(lexer, TokenKind::RBracket) {
+                return None;
+            }
             let end = lexer.current.start;
             let right = Box::new(TypeNodeData::Property(TypeProperty {
                 span: Span::new(prop_token.start, prop_token.end),
@@ -1813,10 +1870,11 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         let mut nested_disallow = true;
         let extends_type =
             self.parse_type_pratt(lexer, mode, &mut nested_disallow, Precedence::All)?;
-        self.expect(lexer, TokenKind::Question);
+        // jsdoc-type-pratt-parser does not require the `?` and the `:`.
+        self.eat(lexer, TokenKind::Question);
         let true_type =
             self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::All)?;
-        self.expect(lexer, TokenKind::Colon);
+        self.eat(lexer, TokenKind::Colon);
         let false_type =
             self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::All)?;
         let end = false_type.span().end;
