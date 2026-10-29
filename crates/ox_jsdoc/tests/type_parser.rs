@@ -403,3 +403,128 @@ fn keeps_accepting_signatures_and_brackets() {
         assert_accepted(input, mode);
     }
 }
+
+// Punctuation where a name or key is expected used to be taken as the name.
+
+#[test]
+fn rejects_punctuation_where_a_name_or_key_is_expected() {
+    for (input, mode) in [
+        // The right side of a name path
+        ("Foo.(", Jsdoc),
+        ("Foo.)", Jsdoc),
+        ("Foo.>", Jsdoc),
+        ("Foo.|", Jsdoc),
+        ("Foo.:", Jsdoc),
+        ("Foo#(", Jsdoc),
+        ("Foo~)", Jsdoc),
+        ("Foo.`a`", Typescript),
+        // Object keys
+        ("{): string}", Typescript),
+        ("{,}", Typescript),
+        ("{;}", Typescript),
+        ("{a: string,,}", Typescript),
+        ("{a: string, ;}", Typescript),
+        ("{`a`: string}", Typescript),
+        // Index signature and mapped type keys; a mapped type needs a name
+        ("{[(: string]: number}", Typescript),
+        ("{[): string]: number}", Typescript),
+        ("{[1 in T]: V}", Typescript),
+        ("{[\"a\" in T]: V}", Typescript),
+        // Type parameters and `infer` need a name
+        ("{<1>(x: T): T}", Typescript),
+        ("{<\"a\">(x: T): T}", Typescript),
+        ("T extends infer ( ? 1 : 2", Typescript),
+        ("T extends infer ) ? 1 : 2", Typescript),
+        ("T extends infer 1 ? 1 : 2", Typescript),
+        ("T extends infer \"a\" ? 1 : 2", Typescript),
+        // The value of `module:` and the like is empty here, so the token is
+        // left over
+        ("module:(", Jsdoc),
+        ("module:)", Jsdoc),
+        ("module:,", Jsdoc),
+        ("module:{", Jsdoc),
+        ("module:<", Jsdoc),
+        ("module:(", Closure),
+        ("module:(", Typescript),
+        ("module:null", Jsdoc),
+        ("module:1", Jsdoc),
+        ("module:*", Jsdoc),
+        ("module:./foo", Jsdoc),
+    ] {
+        assert_rejected(input, mode);
+    }
+}
+
+#[test]
+fn accepts_names_numbers_and_strings_where_jsdoc_type_pratt_parser_does() {
+    for (input, mode) in [
+        ("Foo.1", Jsdoc),
+        ("Foo.\"a\"", Jsdoc),
+        ("Foo.null", Jsdoc),
+        ("Foo.function", Jsdoc),
+        ("Foo.module", Jsdoc),
+        ("{1: string}", Typescript),
+        ("{\"a\": string}", Typescript),
+        ("{null: string}", Typescript),
+        ("{function: string}", Typescript),
+        ("{in: string}", Typescript),
+        ("{<null>(x: T): T}", Typescript),
+        ("{<in>(x: T): T}", Typescript),
+        ("T extends infer in ? 1 : 2", Typescript),
+        ("module:", Jsdoc),
+        ("module:foo", Jsdoc),
+        ("module:\"a\"", Jsdoc),
+        ("module:/foo", Jsdoc),
+        ("module:@foo", Jsdoc),
+        ("module:#foo", Jsdoc),
+        ("module:~foo", Jsdoc),
+        ("module:foo/bar", Jsdoc),
+        ("module:foo.bar~baz#qux", Jsdoc),
+        ("module:foo-bar", Jsdoc),
+        ("module:@scope/pkg", Jsdoc),
+        ("event:", Jsdoc),
+        ("event:foo", Jsdoc),
+        ("external:foo", Jsdoc),
+        // An empty value leaves the closing token to the outer type
+        ("(module:)", Jsdoc),
+        ("Array<module:>", Jsdoc),
+        ("Array<module:foo>", Jsdoc),
+    ] {
+        assert_parsed(input, mode, input);
+    }
+    // A union of an empty `module:` and `string`
+    assert_parsed("module:|string", Jsdoc, "module: | string");
+    // Accepted. Their stringified forms drop the key type, which is a
+    // separate bug.
+    for input in [
+        "{[1: string]: number}",
+        "{[\"a\": string]: number}",
+        "{[null: string]: number}",
+        "{[in in T]: V}",
+    ] {
+        assert_accepted(input, Typescript);
+    }
+}
+
+// Valid types with a trailing separator used to be rejected.
+
+#[test]
+fn accepts_trailing_separators() {
+    for (input, mode, expected) in [
+        ("{a: string, }", Typescript, "{a: string}"),
+        ("{a: string,}", Typescript, "{a: string}"),
+        ("{a: string; }", Typescript, "{a: string}"),
+        ("{a: string, b: number,}", Typescript, "{a: string, b: number}"),
+        ("{a: string, }", Jsdoc, "{a: string}"),
+        ("{a, }", Jsdoc, "{a}"),
+        ("{a: string, }", Closure, "{a: string}"),
+        ("{(a: string, ): void}", Typescript, "{(a: string): void}"),
+        ("{<T>(a: T, ): T}", Typescript, "{<T>(a: T): T}"),
+        ("{foo(a: string, ): void}", Typescript, "{foo(a: string): void}"),
+        ("{new (a: string, ): Foo}", Typescript, "{new (a: string): Foo}"),
+    ] {
+        assert_parsed(input, mode, expected);
+    }
+    // Accepted. The stringified form drops `new`, which is a separate bug.
+    assert_accepted("new (a: string, ) => Foo", Typescript);
+}
