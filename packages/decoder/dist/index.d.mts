@@ -764,6 +764,11 @@ export declare class RemoteTypeTemplateLiteral implements LazyNode {
   literal(index: number): string;
   /** All literal segments as an array. */
   get literals(): string[];
+  /**
+   * The types of the `${…}` parts, between the literal segments (one fewer
+   * than the segments). They are the direct children of the node.
+   */
+  get interpolations(): LazyNode[];
   toJSON(): RemoteJsonObject;
   [inspectSymbol](): object;
 }
@@ -882,7 +887,7 @@ export declare const jsdocVisitorKeys: Readonly<{
   TypeMethodSignature: string[];
   TypeCallSignature: string[];
   TypeConstructorSignature: string[];
-  TypeTemplateLiteral: never[];
+  TypeTemplateLiteral: string[];
   TypeSymbol: string[];
 }>;
 /**

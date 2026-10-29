@@ -6,6 +6,7 @@ import {
   RemoteSourceFile,
   RemoteTypeName
 } from '../src/index.js'
+import type { RemoteTypeTemplateLiteral } from '../src/index.js'
 import { FixtureBuilder } from './fixture-builder.ts'
 
 interface RemoteSourceFileInstance {
@@ -377,5 +378,49 @@ describe('RemoteSourceFile strings by offset and length', () => {
     expect(sf.getStringByOffsetAndLength(0, 11)).toBe('foo the foo')
     expect(sf.getStringByOffsetAndLength(0, 3)).toBe('foo')
     expect(sf.getStringByField(0, 11)).toBe('foo the foo')
+  })
+})
+
+describe('RemoteTypeTemplateLiteral.interpolations', () => {
+  /**
+   * A buffer whose root is a `TypeTemplateLiteral` (Kind 0x9D) with the given
+   * literal segments and a `TypeName` (Kind 0x80) child for each name.
+   */
+  const build = (literals: string[], names: string[]) => {
+    const b = new FixtureBuilder()
+    const size = 2 + literals.length * 6
+    const ext = b.reserveExtended(size)
+    const bytes = new Uint8Array(size)
+    const view = new DataView(bytes.buffer)
+    view.setUint16(0, literals.length, true)
+    for (const [i, literal] of literals.entries()) {
+      const [start, end] = b.stringOffsets[b.internString(literal)]!
+      view.setUint32(2 + i * 6, start, true)
+      view.setUint16(2 + i * 6 + 4, end - start, true)
+    }
+    b.writeExtended(ext, bytes)
+    const node = b.emitExtendedNode({ parentIndex: 0, kind: 0x9d, extOffset: ext })
+    const children = names.map(value => b.emitStringNode({ parentIndex: node, kind: 0x80, value }))
+    b.pushRoot({ nodeIndex: node })
+    return { b, children }
+  }
+  const names = (sf: RemoteSourceFileInstance) =>
+    (sf.asts[0] as RemoteTypeTemplateLiteral).interpolations.map(
+      node => (node as unknown as RemoteTypeNameNode).value
+    )
+
+  it('reads the children between the literal segments', () => {
+    const { b } = build(['a', 'c', ''], ['b', 'd'])
+    const sf = new RemoteSourceFileCtor(b.build())
+    expect((sf.asts[0] as RemoteTypeTemplateLiteral).literals).toEqual(['a', 'c', ''])
+    expect(names(sf)).toEqual(['b', 'd'])
+  })
+
+  it('stops at the literal count when the sibling links loop', () => {
+    // A malformed buffer: the child is its own next sibling.
+    const { b, children } = build(['a', ''], ['b'])
+    new DataView(b.nodes[children[0]!]!.buffer).setUint32(20, children[0]!, true)
+    const sf = new RemoteSourceFileCtor(b.build())
+    expect(names(sf)).toEqual(['b'])
   })
 })

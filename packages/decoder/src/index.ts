@@ -181,10 +181,7 @@ export const jsdocVisitorKeys = Object.freeze({
   TypeMethodSignature: ['parameters', 'returnType', 'typeParameters'],
   TypeCallSignature: ['parameters', 'returnType', 'typeParameters'],
   TypeConstructorSignature: ['parameters', 'returnType', 'typeParameters'],
-  // TypeTemplateLiteral interpolations are stored as direct children but
-  // are not exposed via a named property on the lazy class today; consumers
-  // that need to walk them should iterate the node's children directly.
-  TypeTemplateLiteral: [],
+  TypeTemplateLiteral: ['interpolations'],
   TypeSymbol: ['element']
 })
 

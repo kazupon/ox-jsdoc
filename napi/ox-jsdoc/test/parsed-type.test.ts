@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { parse as jtpParse } from 'jsdoc-type-pratt-parser'
 
-import { parseType, parseTypeCheck } from '../src-js/index.js'
+import { jsdocVisitorKeys, parse, parseType, parseTypeCheck } from '../src-js/index.js'
 
 type Mode = 'jsdoc' | 'closure' | 'typescript'
 
@@ -414,5 +414,96 @@ describe('names, keys and trailing separators', () => {
     expect(parseType('{a: string, }', 'typescript')).toBe('{a: string}')
     expect(parseType('{a: string; }', 'typescript')).toBe('{a: string}')
     expect(parseType('{(a: string, ): void}', 'typescript')).toBe('{(a: string): void}')
+  })
+})
+
+// The parsed type used to lose parts of the type (#009). The expected shapes
+// follow jsdoc-type-pratt-parser 9.4.0.
+describe('parsed types keep every part of the type', () => {
+  /** The `toJSON()` of the parsed type of `@type {type}`, without ranges. */
+  const parsedType = (type: string, mode: Mode): unknown => {
+    const tag = parse(`/** @type {${type}} */`, { parseTypes: true, typeParseMode: mode }).ast!
+      .tags[0] as unknown as { parsedType: { toJSON(): unknown } | null }
+    const json = JSON.stringify(tag.parsedType?.toJSON() ?? null, (key, value) =>
+      key === 'range' ? undefined : value
+    )
+    return JSON.parse(json)
+  }
+
+  it('wraps an index signature in an object field, with the key type', () => {
+    expect(parsedType('{readonly [k: string]: number}', 'typescript')).toMatchObject({
+      type: 'TypeObject',
+      elements: [
+        {
+          type: 'TypeObjectField',
+          optional: false,
+          readonly: true,
+          key: {
+            type: 'TypeIndexSignature',
+            key: 'k',
+            right: { type: 'TypeName', value: 'string' }
+          },
+          right: { type: 'TypeName', value: 'number' }
+        }
+      ]
+    })
+  })
+
+  it('wraps a mapped type in an object field, with the constraint, readonly and ?', () => {
+    expect(parsedType('{readonly [K in keyof T]?: U}', 'typescript')).toMatchObject({
+      type: 'TypeObject',
+      elements: [
+        {
+          type: 'TypeObjectField',
+          optional: true,
+          readonly: true,
+          key: {
+            type: 'TypeMappedType',
+            key: 'K',
+            right: { type: 'TypeKeyOf', element: { type: 'TypeName', value: 'T' } }
+          },
+          right: { type: 'TypeName', value: 'U' }
+        }
+      ]
+    })
+  })
+
+  it('keeps new as a parameter of a function, not as a constructor', () => {
+    expect(parsedType('function(new:X)', 'jsdoc')).toMatchObject({
+      type: 'TypeFunction',
+      constructor: false,
+      parameters: {
+        elements: [{ type: 'TypeKeyValue', key: 'new', right: { type: 'TypeName', value: 'X' } }]
+      }
+    })
+    expect(parsedType('new(a): T', 'typescript')).toMatchObject({
+      type: 'TypeFunction',
+      constructor: true
+    })
+  })
+
+  it('reads the interpolations of a template literal', () => {
+    expect(parsedType('`a${b}c${d}`', 'typescript')).toEqual({
+      type: 'TypeTemplateLiteral',
+      literals: ['a', 'c', ''],
+      interpolations: [
+        { type: 'TypeName', value: 'b' },
+        { type: 'TypeName', value: 'd' }
+      ]
+    })
+    expect(jsdocVisitorKeys.TypeTemplateLiteral).toEqual(['interpolations'])
+  })
+
+  it('rejects the arrows that jsdoc-type-pratt-parser rejects', () => {
+    // These were `() => b`, without the parameter.
+    expect(parseType('(a) => b', 'jsdoc')).toBeNull()
+    expect(parseType('(a) => b', 'closure')).toBeNull()
+    expect(parseType('a => b', 'typescript')).toBeNull()
+    expect(parseType('(a) => b', 'typescript')).toBe('(a) => b')
+  })
+
+  it('reads symbol as a name in typescript mode', () => {
+    expect(parsedType('symbol', 'typescript')).toEqual({ type: 'TypeName', value: 'symbol' })
+    expect(parseType('{a: symbol}', 'typescript')).toBe('{a: symbol}')
   })
 })

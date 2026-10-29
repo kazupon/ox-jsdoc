@@ -143,9 +143,8 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             TokenKind::External if mode.is_jsdoc() => {
                 self.parse_special_name_path_or_name(lexer, mode, SpecialPathType::External)
             }
-            TokenKind::Symbol if mode.is_jsdoc() || mode.is_closure() => {
-                self.parse_name(lexer, mode)
-            }
+            // The primitive `symbol` (TypeScript), and a name elsewhere.
+            TokenKind::Symbol => self.parse_name(lexer, mode),
             TokenKind::Extends
             | TokenKind::Is
             | TokenKind::In
@@ -171,7 +170,6 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             TokenKind::Lt => Precedence::Generic,
             TokenKind::Dot if lexer.next.kind == TokenKind::Lt => Precedence::Generic,
             TokenKind::Dot | TokenKind::Hash | TokenKind::Tilde => Precedence::NamePath,
-            TokenKind::Arrow => Precedence::Arrow,
             TokenKind::Is if mode.is_typescript() => Precedence::Infix,
             TokenKind::Extends if mode.is_typescript() => Precedence::Infix,
             TokenKind::Ellipsis if mode.is_jsdoc() => Precedence::Infix,
@@ -203,7 +201,6 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             TokenKind::Question => self.parse_nullable_suffix(lexer, left),
             TokenKind::Bang => self.parse_not_nullable_suffix(lexer, left),
             TokenKind::Eq => self.parse_optional_suffix(lexer, left),
-            TokenKind::Arrow => self.parse_arrow_function(lexer, mode, disallow_conditional, left),
             TokenKind::Is if mode.is_typescript() => {
                 self.parse_predicate(lexer, mode, disallow_conditional, left)
             }
@@ -1012,6 +1009,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         start: u32,
         readonly: bool,
     ) -> Option<Box<TypeNodeData<'a>>> {
+        // As in jsdoc-type-pratt-parser, the `[…]` of an index signature or
+        // a mapped type is the key of an object field, whose right is the
+        // type of the values.
+        let bracket_start = lexer.current.start;
         lexer.bump();
         let key_token = self.expect_key_token(lexer)?;
         let key = lexer.token_text(key_token);
@@ -1023,28 +1024,37 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 return None;
             }
             lexer.bump();
-            let _right =
+            let constraint =
                 self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::All)?;
+            let bracket_end = lexer.current.end;
             if !self.expect(lexer, TokenKind::RBracket) {
                 return None;
             }
-            self.eat(lexer, TokenKind::Question);
+            let optional = self.eat(lexer, TokenKind::Question);
             if !self.expect(lexer, TokenKind::Colon) {
                 return None;
             }
             let value =
                 self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::KeyValue)?;
             let end = value.span().end;
-            return Some(Box::new(TypeNodeData::MappedType(TypeMappedType {
+            return Some(Box::new(TypeNodeData::ObjectField(TypeObjectField {
                 span: Span::new(start, end),
-                key,
-                right: value,
+                key: Box::new(TypeNodeData::MappedType(TypeMappedType {
+                    span: Span::new(bracket_start, bracket_end),
+                    key,
+                    right: constraint,
+                })),
+                right: Some(value),
+                optional,
+                readonly,
+                quote: None,
             })));
         }
         if lexer.current.kind == TokenKind::Colon {
             lexer.bump();
-            let _index_type =
+            let key_type =
                 self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::All)?;
+            let bracket_end = lexer.current.end;
             if !self.expect(lexer, TokenKind::RBracket) {
                 return None;
             }
@@ -1054,10 +1064,24 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             let value =
                 self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::KeyValue)?;
             let end = value.span().end;
-            return Some(Box::new(TypeNodeData::IndexSignature(TypeIndexSignature {
+            // A string key loses its quotes, as in jsdoc-type-pratt-parser.
+            // The lexer only gives a string token with both quotes.
+            let key = if key_token.kind == TokenKind::StringValue {
+                &key[1..key.len() - 1]
+            } else {
+                key
+            };
+            return Some(Box::new(TypeNodeData::ObjectField(TypeObjectField {
                 span: Span::new(start, end),
-                key,
-                right: value,
+                key: Box::new(TypeNodeData::IndexSignature(TypeIndexSignature {
+                    span: Span::new(bracket_start, bracket_end),
+                    key,
+                    right: key_type,
+                })),
+                right: Some(value),
+                optional: false,
+                readonly,
+                quote: None,
             })));
         }
         if !self.expect(lexer, TokenKind::RBracket) {
@@ -1159,11 +1183,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         }
         lexer.bump();
         let mut parameters = Vec::new();
-        let mut constructor = false;
         if lexer.current.kind != TokenKind::RParen {
-            if lexer.current.kind == TokenKind::New && lexer.next.kind == TokenKind::Colon {
-                constructor = true;
-            }
             loop {
                 // Conditional types are allowed in the parameter list.
                 let param = self.parse_key_value_or_type(lexer, mode, &mut false)?;
@@ -1192,7 +1212,9 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             parameters,
             return_type,
             type_parameters: Vec::new(),
-            constructor,
+            // `function(new:X)` is a function with a `new` parameter, as in
+            // jsdoc-type-pratt-parser, not a constructor (`new(…)`).
+            constructor: false,
             arrow: false,
             parenthesis: true,
         })))
@@ -1870,30 +1892,6 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             span: Span::new(start, end),
             element: left,
             position: ModifierPosition::Suffix,
-        })))
-    }
-
-    fn parse_arrow_function(
-        &mut self,
-        lexer: &mut Lexer<'a>,
-        mode: ParseMode,
-        disallow_conditional: &mut bool,
-        left: Box<TypeNodeData<'a>>,
-    ) -> Option<Box<TypeNodeData<'a>>> {
-        let start = left.span().start;
-        lexer.bump();
-        let return_type =
-            self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::All)?;
-        let end = return_type.span().end;
-        let parameters = Vec::new();
-        Some(Box::new(TypeNodeData::Function(TypeFunction {
-            span: Span::new(start, end),
-            parameters,
-            return_type: Some(return_type),
-            type_parameters: Vec::new(),
-            constructor: false,
-            arrow: true,
-            parenthesis: true,
         })))
     }
 
