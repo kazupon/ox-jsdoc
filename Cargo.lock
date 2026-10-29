@@ -518,7 +518,7 @@ dependencies = [
  "memchr",
  "oxc_allocator 0.135.0",
  "oxc_jsdoc",
- "oxc_span 0.135.0",
+ "oxc_span 0.155.0",
  "rustc-hash",
  "smallvec",
  "unicode-id-start",
@@ -534,7 +534,7 @@ dependencies = [
  "oxc_ast 0.135.0",
  "oxc_jsdoc",
  "oxc_parser",
- "oxc_span 0.135.0",
+ "oxc_span 0.155.0",
 ]
 
 [[package]]
@@ -553,7 +553,7 @@ version = "0.0.0"
 dependencies = [
  "oxc_allocator 0.135.0",
  "oxc_diagnostics 0.155.0",
- "oxc_span 0.135.0",
+ "oxc_span 0.155.0",
  "serde",
  "serde_json",
 ]
