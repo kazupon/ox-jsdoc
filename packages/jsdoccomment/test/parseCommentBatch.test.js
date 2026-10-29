@@ -1,4 +1,8 @@
 import {
+  parse as commentParserParse
+} from 'comment-parser';
+
+import {
   parseComment,
   parseCommentBatch
 } from '../src/index.js';
@@ -72,5 +76,37 @@ describe('parseCommentBatch', function () {
         throwOnError: true
       });
     }).to.throw('index 1');
+  });
+
+  it('Gives the same blocks as parseComment for tag names with punctuation', function () {
+    // parseComment used to cut the tag name at the punctuation (`transient`).
+    const comments = [
+      '/**\n * @transient()\n */',
+      '/**\n * @foo.bar baz\n */',
+      '/**\n * @foo:bar baz\n */'
+    ];
+    const parsed = parseCommentBatch(comments);
+
+    expect(parsed.blocks).to.deep.equal(comments.map(comment => {
+      return parseComment(comment);
+    }));
+    expect(comments.map(comment => {
+      return parseComment(comment).tags[0].tag;
+    })).to.deep.equal(comments.map(comment => {
+      return commentParserParse(comment)[0].tags[0].tag;
+    }));
+  });
+
+  it('Gives the same blocks as parseComment after non-ASCII text', function () {
+    const comments = [
+      '/**\n * 日本語の説明です。\n * @param a 引数\n * @returns 戻り値\n */',
+      '/**\n * 一行目の説明。\n * 二行目の説明。\n * @param a 引数\n * @throws {Error} 例外\n * @returns 戻り値\n */',
+      '/**\n * Party 🎉 time.\n * @param a arg\n * @returns value\n */'
+    ];
+    const parsed = parseCommentBatch(comments);
+
+    expect(parsed.blocks).to.deep.equal(comments.map(comment => {
+      return parseComment(comment);
+    }));
   });
 });
