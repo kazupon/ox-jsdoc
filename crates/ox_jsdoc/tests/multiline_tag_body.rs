@@ -6,10 +6,12 @@
 //!
 //! The parser joins the lines of a tag body without their margins (` * `)
 //! before it reads the type, the name and the description, so the strings
-//! of such a tag are not slices of the source text.
+//! of such a tag are not slices of the source text, and their positions in
+//! the joined text are not source positions.
 
+use ox_jsdoc::decoder::nodes::LazyNode;
 use ox_jsdoc::decoder::nodes::comment_ast::LazyJsdocTag;
-use ox_jsdoc::decoder::nodes::type_node::LazyTypeName;
+use ox_jsdoc::decoder::nodes::type_node::{LazyTypeName, LazyTypeObject};
 use ox_jsdoc::decoder::visitor::LazyJsdocVisitor;
 use ox_jsdoc::parser::{ParseOptions, parse};
 use oxc_allocator::Allocator;
@@ -131,4 +133,144 @@ fn type_names_in_a_multiline_type() {
         ["a", "Array", "string", "b", "number"]
     );
     assert_eq!(type_names(multiline), type_names(one_line));
+}
+
+/// The range of the first `needle` in `source`.
+fn at(source: &str, needle: &str) -> [u32; 2] {
+    let start = source.find(needle).expect("needle");
+    [start as u32, (start + needle.len()) as u32]
+}
+
+/// The range from the first `from` to the end of the first `to` after it.
+fn from_to(source: &str, from: &str, to: &str) -> [u32; 2] {
+    let start = source.find(from).expect("from");
+    let end = start + source[start..].find(to).expect("to") + to.len();
+    [start as u32, end as u32]
+}
+
+#[test]
+fn ranges_after_a_multiline_type() {
+    let arena = Allocator::default();
+    for source in [
+        "/**\n * @param {{\n *   a: string\n * }} options desc\n */",
+        "/**\r\n * @param {{\r\n *   a: string\r\n * }} options desc\r\n */",
+    ] {
+        let tag = tags(&arena, source, ParseOptions::default())[0];
+        let raw_type = from_to(source, "{{", "}}");
+        assert_eq!(
+            tag.raw_type().map(|t| t.range()),
+            Some(raw_type),
+            "{source:?}"
+        );
+        let type_lines: Vec<_> = tag.type_lines().map(|line| line.range()).collect();
+        assert_eq!(type_lines, [raw_type], "{source:?}");
+        let name = tag.name().map(|name| name.range());
+        assert_eq!(name, Some(at(source, "options")), "{source:?}");
+        let lines: Vec<_> = tag.description_lines().map(|line| line.range()).collect();
+        assert_eq!(lines, [at(source, "desc")], "{source:?}");
+    }
+}
+
+#[test]
+fn ranges_of_a_name_on_the_second_line() {
+    let arena = Allocator::default();
+    let source = "/**\n * @param {string}\n *   foo the foo\n */";
+    let tag = tags(&arena, source, ParseOptions::default())[0];
+    assert_eq!(tag.name().map(|name| name.range()), Some(at(source, "foo")));
+    let lines: Vec<_> = tag.description_lines().map(|line| line.range()).collect();
+    assert_eq!(lines, [at(source, "the foo")]);
+}
+
+#[test]
+fn range_of_a_multiline_description() {
+    let arena = Allocator::default();
+    let source = "/**\n * @param foo the foo\n *\n * second line\n */";
+    for options in [ParseOptions::default(), compat()] {
+        let tag = tags(&arena, source, options)[0];
+        assert_eq!(tag.description(), Some("the foo\n\nsecond line"));
+        let lines: Vec<_> = tag.description_lines().map(|line| line.range()).collect();
+        assert_eq!(lines, [from_to(source, "the foo", "second line")]);
+    }
+}
+
+#[test]
+fn ranges_of_inline_tags_after_a_line_break() {
+    let arena = Allocator::default();
+    let source = "/**\n * Summary {@link Foo}\n * more {@link Bar} text\n * @param foo the foo\n *   see {@link Baz} here\n */";
+    let result = parse(&arena, source, ParseOptions::default());
+    let block = result.lazy_root.expect("root");
+    let ranges: Vec<_> = block.inline_tags().map(|tag| tag.range()).collect();
+    assert_eq!(
+        ranges,
+        [at(source, "{@link Foo}"), at(source, "{@link Bar}")]
+    );
+    let tag = block.tags().next().expect("tag");
+    let ranges: Vec<_> = tag.inline_tags().map(|tag| tag.range()).collect();
+    assert_eq!(ranges, [at(source, "{@link Baz}")]);
+}
+
+/// Values and ranges of the `TypeName` nodes and ranges of the
+/// `TypeObject` nodes of a parsed type.
+#[derive(Default)]
+struct TypeRanges<'a> {
+    names: Vec<(&'a str, [u32; 2])>,
+    objects: Vec<[u32; 2]>,
+}
+
+impl<'a> LazyJsdocVisitor<'a> for TypeRanges<'a> {
+    fn visit_type_name(&mut self, node: LazyTypeName<'a>) {
+        self.names.push((node.value(), node.range()));
+    }
+    fn visit_type_object(&mut self, node: LazyTypeObject<'a>) {
+        self.objects.push(node.range());
+        self.visit_type_object_default(node);
+    }
+}
+
+#[test]
+fn ranges_of_type_nodes_in_a_multiline_type() {
+    let arena = Allocator::default();
+    let options = ParseOptions {
+        parse_types: true,
+        ..ParseOptions::default()
+    };
+    for source in [
+        "/**\n * @param {{\n *   a: Array<string>,\n *   b: number\n * }} x\n */",
+        "/**\r\n * @param {{\r\n *\ta: Array<string>,\r\n *\tb: number\r\n * }} x\r\n */",
+    ] {
+        let tag = tags(&arena, source, options)[0];
+        let mut ranges = TypeRanges::default();
+        ranges.visit_type_node(tag.parsed_type().expect("parsed type"));
+        let names: Vec<_> = ranges.names.iter().map(|(name, _)| *name).collect();
+        assert_eq!(names, ["a", "Array", "string", "b", "number"], "{source:?}");
+        for (name, [start, end]) in ranges.names {
+            assert_eq!(&source[start as usize..end as usize], name, "{source:?}");
+        }
+        // The object type is the inner `{ … }` of `{{ … }}`.
+        let [start, end] = from_to(source, "{{", "}}");
+        assert_eq!(ranges.objects, [[start + 1, end - 1]], "{source:?}");
+    }
+}
+
+#[test]
+fn description_raw_of_a_description_after_a_line_break() {
+    let arena = Allocator::default();
+    let options = ParseOptions {
+        compat_mode: true,
+        preserve_whitespace: true,
+        ..ParseOptions::default()
+    };
+    for (source, raw) in [
+        (
+            "/**\n * @param {string} foo\n *   The description.\n */",
+            "The description.",
+        ),
+        (
+            "/**\n * @param {{\n *   a: string\n * }} options desc\n * more\n */",
+            "desc\n * more",
+        ),
+    ] {
+        let tag = tags(&arena, source, options)[0];
+        assert_eq!(tag.description_raw(), Some(raw), "{source:?}");
+    }
 }
