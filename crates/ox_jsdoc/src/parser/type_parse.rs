@@ -14,7 +14,7 @@ use super::context::ParserContext;
 use super::diagnostics::TypeDiagnosticKind;
 use super::lexer::Lexer;
 use super::precedence::Precedence;
-use super::token::TokenKind;
+use super::token::{Token, TokenKind};
 use super::type_data::*;
 
 impl<'arena, 'a> ParserContext<'arena, 'a> {
@@ -251,6 +251,19 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             self.type_diag(TypeDiagnosticKind::ExpectedToken);
             false
         }
+    }
+
+    /// The current token, to be used as a name or a key. A character that no
+    /// rule accepts (`Unknown`) or the end of the type text cannot be one:
+    /// report it and leave it unconsumed, so the whole type fails to parse.
+    #[inline]
+    fn expect_name_token(&mut self, lexer: &Lexer<'a>) -> Option<Token> {
+        let token = lexer.current;
+        if matches!(token.kind, TokenKind::Unknown | TokenKind::EOF) {
+            self.type_diag(TypeDiagnosticKind::ExpectedToken);
+            return None;
+        }
+        Some(token)
     }
 
     #[inline]
@@ -694,7 +707,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 },
             )));
         }
-        let key_token = lexer.current;
+        let key_token = self.expect_name_token(lexer)?;
         let key_text = lexer.token_text(key_token);
         lexer.bump();
         if (lexer.current.kind == TokenKind::LParen || lexer.current.kind == TokenKind::Lt)
@@ -744,7 +757,9 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         lexer.bump();
         loop {
             let tp_start = lexer.current.start;
-            let name_token = lexer.current;
+            let Some(name_token) = self.expect_name_token(lexer) else {
+                break;
+            };
             let name_text = lexer.token_text(name_token);
             lexer.bump();
             let name = Box::new(TypeNodeData::Name(TypeName {
@@ -926,7 +941,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         readonly: bool,
     ) -> Option<Box<TypeNodeData<'a>>> {
         lexer.bump();
-        let key_token = lexer.current;
+        let key_token = self.expect_name_token(lexer)?;
         let key = lexer.token_text(key_token);
         lexer.bump();
         if lexer.current.kind == TokenKind::In {
@@ -1235,7 +1250,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
     ) -> Option<Box<TypeNodeData<'a>>> {
         let start = lexer.current.start;
         lexer.bump();
-        let name_token = lexer.current;
+        let name_token = self.expect_name_token(lexer)?;
         let name_text = lexer.token_text(name_token);
         lexer.bump();
         let element = Box::new(TypeNodeData::Name(TypeName {
@@ -1423,6 +1438,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 }
                 _ => None,
             };
+            // The value may be empty (`module:`), but not a character that
+            // no rule accepts.
+            if lexer.current.kind == TokenKind::Unknown {
+                self.type_diag(TypeDiagnosticKind::ExpectedToken);
+                return None;
+            }
             let value_start = lexer.current.start;
             let mut value_end = lexer.current.end;
             lexer.bump();
@@ -1642,7 +1663,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             _ => return Some(left),
         };
         lexer.bump();
-        let right_token = lexer.current;
+        let right_token = self.expect_name_token(lexer)?;
         let right_text = lexer.token_text(right_token);
         let quote = match right_token.kind {
             TokenKind::StringValue => {
