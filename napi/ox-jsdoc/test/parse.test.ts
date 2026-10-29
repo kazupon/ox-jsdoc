@@ -77,7 +77,11 @@ describe('parse (binary NAPI binding)', () => {
     const result = parse('/** @param {Foo.é} x desc */', { parseTypes: true })
     expect(result.diagnostics).toEqual([])
     const tag = result.ast!.tags[0] as RemoteJsdocTag
-    expect(tag.parsedType).not.toBeNull()
+    expect(tag.parsedType?.toJSON()).toMatchObject({
+      type: 'TypeNamePath',
+      left: { type: 'TypeName', value: 'Foo' },
+      right: { type: 'TypeProperty', value: 'é' }
+    })
   })
 
   it('matches oxc_jsdoc tag splitting for indented code blocks', () => {
