@@ -375,3 +375,20 @@ describe('nested conditional types', () => {
     }
   })
 })
+
+// A missing bracket, parenthesis or colon used to be accepted as if it were
+// there. The expected results follow jsdoc-type-pratt-parser 9.4.0.
+describe('missing brackets, parentheses and colons', () => {
+  it('rejects them where jsdoc-type-pratt-parser does', () => {
+    expect(parseType('function(string: boolean', 'jsdoc')).toBeNull()
+    expect(parseType('{(x: string: number}', 'typescript')).toBeNull()
+    expect(parseType('{[k: string: number}', 'typescript')).toBeNull()
+    expect(parseType('{[K in T] V}', 'typescript')).toBeNull()
+    expect(parseTypeCheck('import "foo")', 'typescript')).toBe(false)
+  })
+
+  it('accepts a missing colon or question mark where jsdoc-type-pratt-parser does', () => {
+    expect(parseType('{(x: string) number}', 'typescript')).toBe('{(x: string): number}')
+    expect(parseType('A extends B C : D', 'typescript')).toBe('A extends B ? C : D')
+  })
+})

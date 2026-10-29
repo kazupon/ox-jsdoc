@@ -110,6 +110,23 @@ describe('parse (binary NAPI binding)', () => {
     })
   })
 
+  it('leaves no diagnostics for a type that parses without its question mark', () => {
+    // Used to report "expected token" although the type parsed.
+    const result = parse('/** @type {A extends B C : D} */', {
+      parseTypes: true,
+      typeParseMode: 'typescript'
+    })
+    expect(result.diagnostics).toEqual([])
+    const tag = result.ast!.tags[0] as RemoteJsdocTag
+    expect(tag.parsedType?.toJSON()).toMatchObject({
+      type: 'TypeConditional',
+      checkType: { value: 'A' },
+      extendsType: { value: 'B' },
+      trueType: { value: 'C' },
+      falseType: { value: 'D' }
+    })
+  })
+
   it('matches oxc_jsdoc tag splitting for indented code blocks', () => {
     const source =
       '/**\n * @deprecated\n *     @myDecorator\n *     class Foo {}\n * @type {string}\n */'
