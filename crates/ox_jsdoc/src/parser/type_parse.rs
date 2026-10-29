@@ -1386,22 +1386,28 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                         interp_end += 1;
                     }
                 }
+                // `${` without its `}`.
+                if depth > 0 {
+                    self.type_diag(TypeDiagnosticKind::UnclosedTemplateLiteral);
+                    return None;
+                }
                 let interp_text = &inner[interp_start..interp_end];
                 let interp_base = token.start + 1 + interp_start as u32;
                 let mut interp_lexer = Lexer::new(interp_text, interp_base, mode.is_loose());
-                if let Some(node) = self.parse_type_pratt(
+                // The interpolation must be one whole type, like the type
+                // expression itself (`parse_type_expression`).
+                let node = self.parse_type_pratt(
                     &mut interp_lexer,
                     mode,
                     disallow_conditional,
                     Precedence::All,
-                ) {
-                    interpolations.push(node);
+                )?;
+                if interp_lexer.current.kind != TokenKind::EOF {
+                    self.type_diag(TypeDiagnosticKind::EarlyEndOfParse);
+                    return None;
                 }
-                pos = if interp_end < bytes.len() {
-                    interp_end + 1
-                } else {
-                    interp_end
-                };
+                interpolations.push(node);
+                pos = interp_end + 1;
                 lit_start = pos;
             } else {
                 pos += 1;

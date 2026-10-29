@@ -179,6 +179,31 @@ fn rejects_unterminated_strings_and_template_literals() {
 }
 
 #[test]
+fn rejects_invalid_template_literal_interpolations() {
+    for input in [
+        "`x${foo%bar}`",
+        "`x${foo bar}`",
+        "`x${foo`",
+        // jsdoc-type-pratt-parser 9.4.0 does not return on these two;
+        // TypeScript rejects them.
+        "`x${%}`",
+        "`x${}`",
+    ] {
+        assert_rejected(input, Typescript);
+    }
+    // Accepted. The stringified form drops the backquotes, which is a
+    // separate bug.
+    for input in [
+        "`x${foo}`",
+        "`x${foo}y${bar}`",
+        "`x${foo | bar}`",
+        "`x${Größe}`",
+    ] {
+        assert_accepted(input, Typescript);
+    }
+}
+
+#[test]
 fn skips_unicode_whitespace() {
     for (input, mode, expected) in [
         ("Array<\u{a0}string>", Typescript, "Array<string>"),
