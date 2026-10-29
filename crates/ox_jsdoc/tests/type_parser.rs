@@ -291,3 +291,115 @@ fn keeps_accepting_conditional_types() {
         assert_parsed(input, Typescript, input);
     }
 }
+
+// A missing bracket, parenthesis or colon used to be accepted as if it were
+// there, and the type was reported as valid.
+
+#[test]
+fn rejects_a_missing_bracket_parenthesis_or_colon() {
+    for (input, mode) in [
+        // `>` after type parameters
+        ("{<T(x: T): T}", Typescript),
+        ("{<T, U(x: T): U}", Typescript),
+        // `(` and `)` of call, constructor and method signatures
+        ("{(x: string: number}", Typescript),
+        ("{(x: string, y: number: number}", Typescript),
+        ("{<T> x: T): T}", Typescript),
+        ("{<T>(x: T: T}", Typescript),
+        ("{new <T> x: T): Foo}", Typescript),
+        ("{new (x: string: Foo}", Typescript),
+        ("{foo<T> x: T): T}", Typescript),
+        ("{foo(x: string: number}", Typescript),
+        ("{[k]<T> x: T): T}", Typescript),
+        ("{[k](x: string: number}", Typescript),
+        // `]` and `:` of mapped types, index signatures and computed keys
+        ("{[K in T: V}", Typescript),
+        ("{[K in T] V}", Typescript),
+        ("{[k: string: number}", Typescript),
+        ("{[k: string] number}", Typescript),
+        ("{[k string}", Typescript),
+        ("{[k] string}", Typescript),
+        // `)` of function types
+        ("function(string: boolean", Jsdoc),
+        ("function(string, number", Jsdoc),
+        ("function(string: boolean", Typescript),
+        ("function(string, number", Closure),
+        ("new (x: string => Foo", Typescript),
+        ("new (x: string, y: number => Foo", Typescript),
+        // `(` after `import`, and `]` after a quoted property
+        ("import \"foo\")", Typescript),
+        ("Foo[\"bar\".baz", Jsdoc),
+    ] {
+        assert_rejected(input, mode);
+    }
+}
+
+#[test]
+fn accepts_a_missing_colon_or_question_mark_where_jsdoc_type_pratt_parser_does() {
+    for (input, expected) in [
+        // The `:` before the return type of a signature
+        ("{(x: string) number}", "{(x: string): number}"),
+        ("{<T>(x: T) T}", "{<T>(x: T): T}"),
+        ("{new (x: string) Foo}", "{new (x: string): Foo}"),
+        ("{foo(x: string) number}", "{foo(x: string): number}"),
+        // The `?` and `:` of a conditional type
+        ("A extends B C : D", "A extends B ? C : D"),
+        ("A extends B ? C D", "A extends B ? C : D"),
+    ] {
+        assert_parsed(input, Typescript, expected);
+    }
+    // Accepted. The stringified form drops the brackets of the computed key,
+    // which is a separate bug.
+    assert_accepted("{[k](x: string) number}", Typescript);
+}
+
+#[test]
+fn leaves_no_diagnostics_for_a_type_that_parses() {
+    for source in [
+        "/** @type {A extends B C : D} */",
+        "/** @type {{(x: string) number}} */",
+    ] {
+        let diagnostics = run_isolated(format!("parse({source:?})"), move || {
+            let arena = Allocator::default();
+            let options = ParseOptions {
+                parse_types: true,
+                type_parse_mode: Typescript,
+                ..ParseOptions::default()
+            };
+            parse(&arena, source, options).diagnostics.len()
+        });
+        assert_eq!(diagnostics, 0, "{source:?}");
+    }
+}
+
+#[test]
+fn keeps_accepting_signatures_and_brackets() {
+    for (input, mode) in [
+        ("{<T>(x: T): T}", Typescript),
+        ("{(x: string): number}", Typescript),
+        ("{new (x: string): Foo}", Typescript),
+        ("{new <T>(x: T): Foo}", Typescript),
+        ("{foo(x: string): number}", Typescript),
+        ("{foo<T>(x: T): T}", Typescript),
+        ("function(string): boolean", Jsdoc),
+        ("function(string, number): boolean", Closure),
+        ("import(\"foo\")", Typescript),
+        ("A[B]", Typescript),
+        ("A extends B ? C : D", Typescript),
+    ] {
+        assert_parsed(input, mode, input);
+    }
+    // Accepted. Their stringified forms are lossy, which is a separate bug.
+    for (input, mode) in [
+        ("{[K in T]: V}", Typescript),
+        ("{[K in T]?: V}", Typescript),
+        ("{[k: string]: number}", Typescript),
+        ("{[k]: string}", Typescript),
+        ("{[k](x: string): number}", Typescript),
+        ("{[k]<T>(x: T): T}", Typescript),
+        ("new (x: string) => Foo", Typescript),
+        ("Foo[\"bar\"]", Jsdoc),
+    ] {
+        assert_accepted(input, mode);
+    }
+}
