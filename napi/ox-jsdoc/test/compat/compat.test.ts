@@ -17,6 +17,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { parse } from '../../src-js/index.js'
 
 import { FIXTURES } from './fixtures.js'
+import type { Fixture } from './fixtures.js'
 import { assertCompatible } from './helpers.js'
 import type { Mismatch } from './helpers.js'
 
@@ -56,4 +57,68 @@ describe('jsdoccomment compatibility (Level 2 — dynamic comparison)', () => {
       }
     })
   }
+})
+
+// The compat `toJSON()` block description is the one of comment-parser's
+// block (`parseComment().description`): the lines before the first tag, each
+// trimmed, the empty ones dropped, joined with a space. The ESTree
+// `JsdocBlock.description` joins them with `\n`, so the comparison above
+// skips it.
+describe('compat block description (comment-parser)', () => {
+  const samples: ReadonlyArray<Fixture> = [
+    ...FIXTURES,
+    {
+      name: 'tag with a continuation line',
+      source: '/**\n * Summary\n * @param a first\n * second line\n */'
+    },
+    {
+      name: 'two tags with continuation lines',
+      source:
+        '/**\n * Summary\n * more\n *\n * @param a first\n *   second\n * @returns {number} the value\n *   and more\n */'
+    },
+    { name: 'tags only', source: '/**\n * @param a first\n *   second\n */' },
+    {
+      name: 'description on the /** line',
+      source: '/** Summary\n * @param a first\n * second\n */'
+    },
+    { name: 'single line with an @', source: '/** Summary @param a */' },
+    {
+      name: '@ lines in a fence',
+      source:
+        '/**\n * Summary\n * ```\n * @example inside\n * ```\n * after\n * @param a first\n *   second\n */'
+    },
+    {
+      name: 'fence in a tag',
+      source: '/**\n * Summary\n * @example\n * ```\n * @foo bar\n * ```\n * @param a first\n */'
+    },
+    {
+      name: '@ in a line',
+      source: '/**\n * Summary with a @mention\n * @param a first\n * second\n */'
+    },
+    {
+      name: '@/path line',
+      source: '/**\n * Summary\n * @/path not a tag\n * @param a first\n * second\n */'
+    },
+    {
+      name: 'blank lines between tags',
+      source: '/**\n * Summary\n *\n * @param a first\n *\n * after a blank\n * @param b\n */'
+    }
+  ]
+
+  for (const sample of samples) {
+    it(`matches comment-parser for: ${sample.name}`, () => {
+      const expected = parseComment({ value: innerBody(sample.source), type: 'Block' } as never)
+      const result = parse(sample.source, { compatMode: true, emptyStringForNull: true })
+      const json = result.ast!.toJSON() as Record<string, unknown>
+      expect(json.description).toBe(expected.description)
+    })
+  }
+
+  it('leaves the continuation lines of a tag out', () => {
+    const result = parse('/**\n * Summary\n * @param a first\n * second line\n */', {
+      compatMode: true
+    })
+    const json = result.ast!.toJSON() as Record<string, unknown>
+    expect(json.description).toBe('Summary')
+  })
 })
