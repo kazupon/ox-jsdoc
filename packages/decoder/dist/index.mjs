@@ -2486,11 +2486,13 @@ var RemoteTypeTemplateLiteral = class {
 		const internal = this._internal;
 		const out = [];
 		const parent = thisNode(internal);
+		let remaining = this.literalCount - 1;
 		let child = firstChildIndex(internal.sourceFile, internal.index);
-		while (child !== 0) {
+		while (child !== 0 && remaining > 0) {
 			const node = internal.sourceFile.getNode(child, parent, internal.rootIndex);
 			if (node !== null) out.push(node);
 			child = readNextSibling(internal.sourceFile, child);
+			remaining--;
 		}
 		return out;
 	}

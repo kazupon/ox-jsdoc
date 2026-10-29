@@ -892,13 +892,17 @@ export class RemoteTypeTemplateLiteral implements LazyNode {
     const internal = this._internal
     const out: LazyNode[] = []
     const parent = thisNode(internal)
+    // The count also ends the walk when a malformed buffer links the
+    // siblings in a loop, as in the Rust decoder.
+    let remaining = this.literalCount - 1
     let child = firstChildIndex(internal.sourceFile, internal.index)
-    while (child !== 0) {
+    while (child !== 0 && remaining > 0) {
       const node = internal.sourceFile.getNode(child, parent, internal.rootIndex)
       if (node !== null) {
         out.push(node)
       }
       child = readNextSibling(internal.sourceFile, child)
+      remaining--
     }
     return out
   }
