@@ -1009,9 +1009,9 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         start: u32,
         readonly: bool,
     ) -> Option<Box<TypeNodeData<'a>>> {
-        // As in jsdoc-type-pratt-parser, the `[…]` of an index signature or
-        // a mapped type is the key of an object field, whose right is the
-        // type of the values.
+        // As in jsdoc-type-pratt-parser, the `[…]` of an index signature, a
+        // mapped type or a computed key is the key of an object field, whose
+        // right is the type of the values (a computed method has none).
         let bracket_start = lexer.current.start;
         lexer.bump();
         let key_token = self.expect_key_token(lexer)?;
@@ -1084,11 +1084,20 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 quote: None,
             })));
         }
+        // A computed key, which jsdoc-type-pratt-parser keeps as the key of
+        // the object field.
+        let bracket_end = lexer.current.end;
         if !self.expect(lexer, TokenKind::RBracket) {
             return None;
         }
+        let value = Box::new(computed_key_value(key_token, key));
         let optional = self.eat(lexer, TokenKind::Question);
         if lexer.current.kind == TokenKind::LParen || lexer.current.kind == TokenKind::Lt {
+            // jsdoc-type-pratt-parser: "Computed method may not be readonly"
+            if readonly {
+                self.type_diag(TypeDiagnosticKind::InvalidTypeExpression);
+                return None;
+            }
             let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional)?;
             if !self.expect(lexer, TokenKind::LParen) {
                 return None;
@@ -1115,41 +1124,37 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             let return_type =
                 self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?;
             let end = return_type.span().end;
-            let key_node = Box::new(TypeNodeData::Name(TypeName {
-                span: Span::new(key_token.start, key_token.end),
-                value: key,
-            }));
+            // The `?` belongs to the method, not to the field, and the field
+            // has no right.
             return Some(Box::new(TypeNodeData::ObjectField(TypeObjectField {
                 span: Span::new(start, end),
-                key: key_node,
-                right: Some(Box::new(TypeNodeData::Function(TypeFunction {
-                    span: Span::new(key_token.start, end),
+                key: Box::new(TypeNodeData::ComputedMethod(TypeComputedMethod {
+                    span: Span::new(bracket_start, end),
+                    value,
                     parameters,
-                    return_type: Some(return_type),
+                    return_type,
                     type_parameters,
-                    constructor: false,
-                    arrow: false,
-                    parenthesis: true,
-                }))),
-                optional,
-                readonly,
+                    optional,
+                })),
+                right: None,
+                optional: false,
+                readonly: false,
                 quote: None,
             })));
         }
         if !self.expect(lexer, TokenKind::Colon) {
             return None;
         }
-        let value =
+        let right =
             self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::KeyValue)?;
-        let end = value.span().end;
-        let key_node = Box::new(TypeNodeData::Name(TypeName {
-            span: Span::new(key_token.start, key_token.end),
-            value: key,
-        }));
+        let end = right.span().end;
         Some(Box::new(TypeNodeData::ObjectField(TypeObjectField {
             span: Span::new(start, end),
-            key: key_node,
-            right: Some(value),
+            key: Box::new(TypeNodeData::ComputedProperty(TypeComputedProperty {
+                span: Span::new(bracket_start, bracket_end),
+                value,
+            })),
+            right: Some(right),
             optional,
             readonly,
             quote: None,
@@ -2000,5 +2005,25 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             value,
             element,
         })))
+    }
+}
+
+/// The key in the brackets of a computed property or method, as a type. As in
+/// jsdoc-type-pratt-parser, a string and a number are themselves, and a name
+/// or a keyword (`null` too) is a name.
+fn computed_key_value<'a>(token: Token, text: &'a str) -> TypeNodeData<'a> {
+    let span = Span::new(token.start, token.end);
+    match token.kind {
+        TokenKind::StringValue => TypeNodeData::StringValue(TypeStringValue {
+            span,
+            value: text,
+            quote: if text.starts_with('"') {
+                QuoteStyle::Double
+            } else {
+                QuoteStyle::Single
+            },
+        }),
+        TokenKind::Number => TypeNodeData::Number(TypeNumber { span, value: text }),
+        _ => TypeNodeData::Name(TypeName { span, value: text }),
     }
 }

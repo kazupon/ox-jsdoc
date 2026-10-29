@@ -218,6 +218,34 @@ pub fn emit_type_node(
                 write_type_readonly_property(w, s, p, b).as_u32()
             })
         }
+        TypeNodeData::ComputedProperty(n) => {
+            emit_single_child(writer, parent_index, n.span, &n.value, |w, s, p, b| {
+                write_type_computed_property(w, s, p, b).as_u32()
+            })
+        }
+        TypeNodeData::ComputedMethod(n) => {
+            // value, parameters, return type, type parameters: the visitor
+            // order. The value and the return type are always there.
+            let mut bitmask = 0b0101;
+            if !n.parameters.is_empty() {
+                bitmask |= 0b0010;
+            }
+            if !n.type_parameters.is_empty() {
+                bitmask |= 0b1000;
+            }
+            let parent =
+                write_type_computed_method(writer, n.span, parent_index, n.optional, bitmask)
+                    .as_u32();
+            emit_type_node(writer, &n.value, parent);
+            if !n.parameters.is_empty() {
+                emit_parameter_list(writer, n.span, parent, &n.parameters);
+            }
+            emit_type_node(writer, &n.return_type, parent);
+            if !n.type_parameters.is_empty() {
+                emit_parameter_list(writer, n.span, parent, &n.type_parameters);
+            }
+            parent
+        }
 
         TypeNodeData::Nullable(n) => emit_modifier_child(
             writer,
@@ -575,17 +603,25 @@ where
     let parent = write_parent(writer, span, parent_index, bitmask);
 
     if !parameters.is_empty() {
-        // parameters child is itself a TypeParameterList that owns the
-        // elements list metadata in its own Extended Data block.
-        let (plist_idx, plist_ext) = write_type_parameter_list(writer, span, parent);
-        emit_node_list_into_parent(writer, plist_ext, plist_idx.as_u32(), parameters);
+        emit_parameter_list(writer, span, parent, parameters);
     }
     if let Some(rt) = return_type {
         emit_type_node(writer, rt, parent);
     }
     if !type_parameters.is_empty() {
-        let (tplist_idx, tplist_ext) = write_type_parameter_list(writer, span, parent);
-        emit_node_list_into_parent(writer, tplist_ext, tplist_idx.as_u32(), type_parameters);
+        emit_parameter_list(writer, span, parent, type_parameters);
     }
     parent
+}
+
+/// Emit `elements` as a `TypeParameterList` child of `parent_index`. The list
+/// owns the elements list metadata in its own Extended Data block.
+fn emit_parameter_list(
+    writer: &mut BinaryWriter<'_>,
+    span: oxc_span::Span,
+    parent_index: u32,
+    elements: &[Box<TypeNodeData<'_>>],
+) {
+    let (list_idx, list_ext) = write_type_parameter_list(writer, span, parent_index);
+    emit_node_list_into_parent(writer, list_ext, list_idx.as_u32(), elements);
 }

@@ -140,6 +140,8 @@ Examples: 0x10 = Major 1, Minor 0 (initial release)
 
 **Initial release**: `0x10` (Major 1, Minor 0)
 
+**Minor 1** (`0x11`): adds the `TypeComputedProperty` (`0xAD`) and `TypeComputedMethod` (`0xAE`) kinds. A decoder for Minor 0 does not know them: the JS decoder throws `unknown Kind`, and the Rust decoder gives `None` for those nodes
+
 **Implementation example (Rust)**:
 
 ```rust
@@ -1011,7 +1013,7 @@ The string and child node configurations of TypeNode are classified into the fol
    - Auxiliary information (quote, special_type, etc.) is stored in Common Data
 
 2. **"Children only" type** — no string fields, has fixed-arity child nodes → Set Node Data to **Children type (0b00)** and store a 30-bit bitmask
-   - Applies to: `TypeFunction`, `TypeParenthesis`, `TypeNullable`, `TypeNotNullable`, `TypeOptional`, `TypeVariadic`, `TypeConditional`, `TypeInfer`, `TypeKeyOf`, `TypeTypeOf`, `TypeImport`, `TypePredicate`, `TypeAsserts`, `TypeAssertsPlain`, `TypeReadonlyArray`, `TypeNamePath`, `TypeObjectField`, `TypeJsdocObjectField`, `TypeIndexedAccessIndex`, `TypeCallSignature`, `TypeConstructorSignature`, `TypeReadonlyProperty`
+   - Applies to: `TypeFunction`, `TypeParenthesis`, `TypeNullable`, `TypeNotNullable`, `TypeOptional`, `TypeVariadic`, `TypeConditional`, `TypeInfer`, `TypeKeyOf`, `TypeTypeOf`, `TypeImport`, `TypePredicate`, `TypeAsserts`, `TypeAssertsPlain`, `TypeReadonlyArray`, `TypeNamePath`, `TypeObjectField`, `TypeJsdocObjectField`, `TypeIndexedAccessIndex`, `TypeCallSignature`, `TypeConstructorSignature`, `TypeReadonlyProperty`, `TypeComputedProperty`, `TypeComputedMethod`
    - Booleans / small enums (constructor, arrow, parenthesis, brackets, dot, etc.) are stored in Common Data
 
 3. **"String + children" mixed / special structure / variable child list** — has both strings and children, or carries a variable-length child list whose `(head_index, count)` lives in Extended Data → Set Node Data to **Extended type (0b10)** and store an offset into Extended Data. See the "TypeNode Extended Data layout" table below for detailed layouts.
@@ -2015,7 +2017,7 @@ ox-jsdoc is a **parser-only implementation with no semantic analysis**, so flags
 
 ## Node catalog matrix
 
-All 60 variants + 1 sentinel + 1 reserved-only discriminant (`NodeList`, kept for legacy buffer compatibility but **never emitted by the encoder** — child lists are now expressed via inline `(head_index, count)` metadata in the parent's Extended Data block) = **62 discriminants**, listed by Node Data type / Common Data usage / Extended Data size (for use when implementing the decoder).
+All 62 variants + 1 sentinel + 1 reserved-only discriminant (`NodeList`, kept for legacy buffer compatibility but **never emitted by the encoder** — child lists are now expressed via inline `(head_index, count)` metadata in the parent's Extended Data block) = **64 discriminants**, listed by Node Data type / Common Data usage / Extended Data size (for use when implementing the decoder).
 
 For the detailed layout of the Kind number space (0x00 = Sentinel, 0x01-0x0F = comment AST, 0x7F = NodeList (reserved-only, never emitted), 0x80-0xFF = TypeNode), see [ast-nodes.md](./ast-nodes.md#kind-number-space).
 
@@ -2069,7 +2071,7 @@ For `JsdocBlock` and `JsdocTag`, the four Extended Data sizes are ordered as bas
 > - **0x0A `JsdocBorrowsTagBody`** and **0x0B `JsdocRawTagBody`** — the typed AST defines `JsdocTagBody::Borrows` / `JsdocTagBody::Raw` variants (for `@borrows source as target` / opaque tag bodies), but no parser path currently produces them. `@borrows` and friends are emitted as `JsdocGenericTagBody` (Kind 0x09). The discriminants are reserved so a future specialization can be added without renumbering.
 > - **`JsdocInlineTag.tag`** (the inline-tag name) is also currently dropped during emit; see the `JsdocInlineTag` row above.
 
-### TypeNode (45 kinds)
+### TypeNode (47 kinds)
 
 Classified per "TypeNode string/child configuration is split into 3 patterns by variant" (above):
 
@@ -2085,7 +2087,7 @@ Node Data type tag is **`TypeTag::String` (0b01) ‖ `TypeTag::StringInline` (0b
 | 0xA3 | `TypeProperty` | bits[0:1] = quote (3-state) |
 | 0x8F | `TypeSpecialNamePath` | bits[0:1] = special_type (3 variants) + bits[2:3] = quote (3-state) |
 
-#### Pattern 2: Children only (Children type 0b00, 22 kinds)
+#### Pattern 2: Children only (Children type 0b00, 24 kinds)
 
 The bitmask is stored in the 30-bit payload of Node Data. Visitor order of children follows the visitor keys.
 
@@ -2108,6 +2110,8 @@ The bitmask is stored in the 30-bit payload of Node Data. Visitor order of child
 | `TypeIndexedAccessIndex` | (unused) | 1 |
 | `TypeCallSignature` / `TypeConstructorSignature` | (unused) | 3 (parameters/return/typeParameters) |
 | `TypeReadonlyProperty` | (unused) | 1 |
+| `TypeComputedProperty` (0xAD) | (unused) | 1 (value) |
+| `TypeComputedMethod` (0xAE) | bit0=optional | 2-4 (value/parameters/return/typeParameters; value and return are required) |
 
 #### Pattern 3: Mixed string + children (Extended type 0b10, 13 kinds)
 

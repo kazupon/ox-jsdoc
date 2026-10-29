@@ -1,5 +1,5 @@
 /**
- * Lazy classes for the 45 TypeNode kinds (`0x80 - 0xAC`).
+ * Lazy classes for the 47 TypeNode kinds (`0x80 - 0xAE`).
  *
  * Mirrors `crates/ox_jsdoc/src/decoder/nodes/type_node.rs`.
  *
@@ -7,7 +7,7 @@
  *
  * - **Pattern 1 — String only** (5 kinds): payload lives in the 30-bit
  *   String slot, optionally with quote/special-type flags in Common Data.
- * - **Pattern 2 — Children only** (29 kinds): Children-type Node Data
+ * - **Pattern 2 — Children only** (31 kinds): Children-type Node Data
  *   carries the bitmask; child accessors use the Children-type helpers.
  * - **Pattern 3 — Mixed** (6 kinds): Extended type with a key/name string
  *   plus zero or one child node.
@@ -160,7 +160,7 @@ export class RemoteTypeSpecialNamePath extends defineStringPattern(
 ) {}
 
 // ===========================================================================
-// Pattern 2 — Children only (29 kinds)
+// Pattern 2 — Children only (31 kinds)
 // ===========================================================================
 
 /** Helper: build a class with one `elements` NodeList child. */
@@ -682,6 +682,97 @@ function defineSignature(typeName: string): LazyNodeConstructor {
 }
 export class RemoteTypeCallSignature extends defineSignature('TypeCallSignature') {}
 export class RemoteTypeConstructorSignature extends defineSignature('TypeConstructorSignature') {}
+
+/** `TypeComputedProperty` — the `[k]` key of a `TypeObjectField`. */
+export class RemoteTypeComputedProperty implements LazyNode {
+  readonly type = 'TypeComputedProperty'
+  readonly _internal: RemoteInternal
+
+  constructor(
+    view: DataView,
+    byteIndex: number,
+    index: number,
+    rootIndex: number,
+    parent: LazyNode | null,
+    sourceFile: RemoteSourceFileLike
+  ) {
+    this._internal = { view, byteIndex, index, rootIndex, parent, sourceFile }
+  }
+  get range(): readonly [number, number] {
+    return absoluteRange(this._internal)
+  }
+  get parent(): LazyNode | null {
+    return this._internal.parent
+  }
+  /** The type inside the brackets. */
+  get value(): LazyNode | null {
+    return childNodeAtVisitorIndexChildren(this._internal, 0)
+  }
+  toJSON(): RemoteJsonObject {
+    return {
+      type: this.type,
+      range: [...this.range],
+      value: this.value?.toJSON() ?? null
+    }
+  }
+  [inspectSymbol](): object {
+    return inspectPayload(this.toJSON(), 'TypeComputedProperty')
+  }
+}
+
+/** `TypeComputedMethod` — the `[k]<T>(a: A): R` key of a `TypeObjectField`. */
+export class RemoteTypeComputedMethod implements LazyNode {
+  readonly type = 'TypeComputedMethod'
+  readonly _internal: RemoteInternal
+
+  constructor(
+    view: DataView,
+    byteIndex: number,
+    index: number,
+    rootIndex: number,
+    parent: LazyNode | null,
+    sourceFile: RemoteSourceFileLike
+  ) {
+    this._internal = { view, byteIndex, index, rootIndex, parent, sourceFile }
+  }
+  get range(): readonly [number, number] {
+    return absoluteRange(this._internal)
+  }
+  get parent(): LazyNode | null {
+    return this._internal.parent
+  }
+  /** Whether `?` follows the brackets (`[k]?(): R`). */
+  get optional(): boolean {
+    return (commonData(this._internal) & 0b1) !== 0
+  }
+  /** The type inside the brackets. */
+  get value(): LazyNode | null {
+    return childNodeAtVisitorIndexChildren(this._internal, 0)
+  }
+  get parameters(): LazyNode | null {
+    return childNodeAtVisitorIndexChildren(this._internal, 1)
+  }
+  get returnType(): LazyNode | null {
+    return childNodeAtVisitorIndexChildren(this._internal, 2)
+  }
+  get typeParameters(): LazyNode | null {
+    return childNodeAtVisitorIndexChildren(this._internal, 3)
+  }
+  toJSON(): RemoteJsonObject {
+    return {
+      type: this.type,
+      range: [...this.range],
+      optional: this.optional,
+      value: this.value?.toJSON() ?? null,
+      parameters: this.parameters?.toJSON() ?? null,
+      returnType: this.returnType?.toJSON() ?? null,
+      typeParameters: this.typeParameters?.toJSON() ?? null
+    }
+  }
+  [inspectSymbol](): object {
+    return inspectPayload(this.toJSON(), 'TypeComputedMethod')
+  }
+}
 
 // ===========================================================================
 // Pattern 3 — Mixed string + child (6 kinds)

@@ -103,12 +103,11 @@ fn accepts_non_ascii_names() {
         ("Größe-Klasse", Jsdoc),
         // ZWNJ (U+200C) continues an identifier.
         ("a\u{200c}b", Typescript),
+        ("{[é: string]: number}", Typescript),
+        ("{[é]: number}", Typescript),
     ] {
         assert_parsed(input, mode, input);
     }
-    // Accepted. The stringified form drops the key type (`{[é: number]}`),
-    // as it does with ASCII names; that is a separate bug.
-    assert_accepted("{[é: string]: number}", Typescript);
 }
 
 #[test]
@@ -342,15 +341,13 @@ fn accepts_a_missing_colon_or_question_mark_where_jsdoc_type_pratt_parser_does()
         ("{<T>(x: T) T}", "{<T>(x: T): T}"),
         ("{new (x: string) Foo}", "{new (x: string): Foo}"),
         ("{foo(x: string) number}", "{foo(x: string): number}"),
+        ("{[k](x: string) number}", "{[k](x: string): number}"),
         // The `?` and `:` of a conditional type
         ("A extends B C : D", "A extends B ? C : D"),
         ("A extends B ? C D", "A extends B ? C : D"),
     ] {
         assert_parsed(input, Typescript, expected);
     }
-    // Accepted. The stringified form drops the brackets of the computed key,
-    // which is a separate bug.
-    assert_accepted("{[k](x: string) number}", Typescript);
 }
 
 #[test]
@@ -386,11 +383,6 @@ fn keeps_accepting_signatures_and_brackets() {
         ("import(\"foo\")", Typescript),
         ("A[B]", Typescript),
         ("A extends B ? C : D", Typescript),
-    ] {
-        assert_parsed(input, mode, input);
-    }
-    // Accepted. Their stringified forms are lossy, which is a separate bug.
-    for (input, mode) in [
         ("{[K in T]: V}", Typescript),
         ("{[K in T]?: V}", Typescript),
         ("{[k: string]: number}", Typescript),
@@ -400,7 +392,7 @@ fn keeps_accepting_signatures_and_brackets() {
         ("new (x: string) => Foo", Typescript),
         ("Foo[\"bar\"]", Jsdoc),
     ] {
-        assert_accepted(input, mode);
+        assert_parsed(input, mode, input);
     }
 }
 
@@ -489,21 +481,24 @@ fn accepts_names_numbers_and_strings_where_jsdoc_type_pratt_parser_does() {
         ("(module:)", Jsdoc),
         ("Array<module:>", Jsdoc),
         ("Array<module:foo>", Jsdoc),
+        ("{[1: string]: number}", Typescript),
+        ("{[null: string]: number}", Typescript),
+        ("{[in in T]: V}", Typescript),
+        ("{[1]: number}", Typescript),
+        ("{[\"a\"]: number}", Typescript),
+        ("{[null](): number}", Typescript),
     ] {
         assert_parsed(input, mode, input);
     }
     // A union of an empty `module:` and `string`
     assert_parsed("module:|string", Jsdoc, "module: | string");
-    // Accepted. Their stringified forms drop the key type, which is a
-    // separate bug.
-    for input in [
-        "{[1: string]: number}",
+    // The key of an index signature has no quotes, as in
+    // jsdoc-type-pratt-parser.
+    assert_parsed(
         "{[\"a\": string]: number}",
-        "{[null: string]: number}",
-        "{[in in T]: V}",
-    ] {
-        assert_accepted(input, Typescript);
-    }
+        Typescript,
+        "{[a: string]: number}",
+    );
 }
 
 // Valid types with a trailing separator used to be rejected.
@@ -655,4 +650,55 @@ fn stringifies_constructors_as_written() {
         "new(number, string): SomeType",
     );
     assert_parsed("new () => SomeType", Typescript, "new () => SomeType");
+}
+
+// Computed keys used to lose their brackets: `{[k]: T}` came back as
+// `{k: T}`, and `{[k](): T}` as `{k: function(): T}` without its type
+// parameters.
+
+#[test]
+fn keeps_the_brackets_of_computed_keys() {
+    for input in [
+        // The test fixtures of jsdoc-type-pratt-parser 9.4.0
+        "{[someType]: string}",
+        "{readonly [someType]: string}",
+        "{[someType]?: string}",
+        "{[someType](): AnotherType}",
+        "{[someType]?(): AnotherType}",
+        "{[someType](a: string, b: number[]): AnotherType}",
+        "{[someType]?<T>(a: T, b: number[]): AnotherType}",
+        "{[someType]<T = string>(a: T, b: number[]): AnotherType}",
+        "{[someType]<T extends A = string, V>(a: T, b: number[]): AnotherType}",
+        // Strings, numbers and keywords as keys
+        "{[\"a\"]: T}",
+        "{['a'](): T}",
+        "{[1]: T}",
+        "{[-1]: T}",
+        "{[typeof]: T}",
+        // With other fields
+        "{[a]: U, b: V}",
+        "{a: U; [b](): V}",
+        "{readonly [a]?: T, [b]?<U>(x: U): U}",
+    ] {
+        assert_parsed(input, Typescript, input);
+    }
+    // The last separator, the space before `(` and the missing `:` do not
+    // come back, as in jsdoc-type-pratt-parser.
+    assert_parsed("{[someType]: string;}", Typescript, "{[someType]: string}");
+    assert_parsed("{[a] (): T}", Typescript, "{[a](): T}");
+    assert_parsed("{[a]() T}", Typescript, "{[a](): T}");
+    // jsdoc and closure modes take them too, as they take index signatures.
+    for mode in [Jsdoc, Closure] {
+        assert_parsed("{[a]: T}", mode, "{[a]: T}");
+        assert_parsed("{[a](): T}", mode, "{[a](): T}");
+    }
+}
+
+#[test]
+fn rejects_readonly_computed_methods() {
+    // jsdoc-type-pratt-parser: "Computed method may not be readonly"
+    for mode in [Jsdoc, Closure, Typescript] {
+        assert_rejected("{readonly [someType](): string}", mode);
+        assert_rejected("{readonly [a]?<T>(x: T): T}", mode);
+    }
 }

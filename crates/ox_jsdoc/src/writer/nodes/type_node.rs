@@ -2,14 +2,14 @@
 // @license MIT
 //
 
-//! `write_*` helpers for the 45 TypeNode kinds (`0x80 - 0xAC`).
+//! `write_*` helpers for the 47 TypeNode kinds (`0x80 - 0xAE`).
 //!
 //! TypeNodes split into 4 patterns (see `format.md` "Node catalog matrix"):
 //!
 //! - **Pattern 1 — String leaf** (5 kinds): Extended type with a 6-byte ED
 //!   record holding a single [`StringField`] (formerly the v1 String-tag
 //!   payload).
-//! - **Pattern 2 — Children only** (29 kinds): payload is a 30-bit Children
+//! - **Pattern 2 — Children only** (31 kinds): payload is a 30-bit Children
 //!   bitmask.
 //! - **Pattern 3 — Mixed string + children** (6 kinds): payload is a
 //!   30-bit Extended Data offset; Extended Data holds the per-Kind layout.
@@ -103,7 +103,7 @@ pub fn write_type_special_name_path(
 }
 
 // ===========================================================================
-// Pattern 2: Children only (29 kinds, payload = Children bitmask)
+// Pattern 2: Children only (31 kinds, payload = Children bitmask)
 // ===========================================================================
 
 /// `TypeUnion` (Kind `0x87`, Pattern 3; ED holds list metadata).
@@ -534,6 +534,42 @@ pub fn write_type_readonly_property(
         parent_index,
         Kind::TypeReadonlyProperty,
         0,
+        span,
+        children_bitmask,
+    )
+}
+
+/// `TypeComputedProperty` (Kind `0xAD`, Pattern 2; 1 child = value).
+pub fn write_type_computed_property(
+    writer: &mut BinaryWriter<'_>,
+    span: Span,
+    parent_index: u32,
+    children_bitmask: u32,
+) -> NodeIndex {
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeComputedProperty,
+        0,
+        span,
+        children_bitmask,
+    )
+}
+
+/// `TypeComputedMethod` (Kind `0xAE`, Pattern 2; 2-4 children = value,
+/// parameters, return type, type parameters).
+///
+/// Common Data: `bit0 = optional`.
+pub fn write_type_computed_method(
+    writer: &mut BinaryWriter<'_>,
+    span: Span,
+    parent_index: u32,
+    optional: bool,
+    children_bitmask: u32,
+) -> NodeIndex {
+    writer.emit_children_node(
+        parent_index,
+        Kind::TypeComputedMethod,
+        optional as u8,
         span,
         children_bitmask,
     )

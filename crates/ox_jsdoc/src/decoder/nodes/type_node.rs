@@ -2,7 +2,7 @@
 // @license MIT
 //
 
-//! Lazy structs for the 45 TypeNode kinds (`0x80 - 0xAC`).
+//! Lazy structs for the 47 TypeNode kinds (`0x80 - 0xAE`).
 //!
 //! Each struct mirrors the comment-AST style in
 //! [`super::comment_ast`]: a `Copy` value type holding
@@ -153,7 +153,7 @@ impl<'a> LazyTypeSpecialNamePath<'a> {
 }
 
 // ===========================================================================
-// Pattern 2 — Children only (29 kinds)
+// Pattern 2 — Children only (31 kinds)
 //
 // Most of these wrap zero or more child TypeNodes accessed via
 // `child_at_visitor_index`. Phase 1.1b ships the structs + the most
@@ -676,6 +676,60 @@ define_signature_type!(
 );
 
 define_lazy_type_node!(
+    LazyTypeComputedProperty,
+    Kind::TypeComputedProperty,
+    "Lazy view of `TypeComputedProperty` (Kind 0xAD): the `[k]` key of a `TypeObjectField`."
+);
+impl<'a> LazyTypeComputedProperty<'a> {
+    /// The type inside the brackets.
+    pub fn value(&self) -> Option<LazyTypeNode<'a>> {
+        child_type_node(self.source_file, self.node_index, 0, self.root_index)
+    }
+}
+
+define_lazy_type_node!(
+    LazyTypeComputedMethod,
+    Kind::TypeComputedMethod,
+    "Lazy view of `TypeComputedMethod` (Kind 0xAE): the `[k]<T>(a: A): R` key of a \
+     `TypeObjectField`."
+);
+impl<'a> LazyTypeComputedMethod<'a> {
+    /// Whether `?` follows the brackets (`[k]?(): R`).
+    #[inline]
+    pub fn optional(&self) -> bool {
+        (self.common_data() & 0b1) != 0
+    }
+    /// The type inside the brackets.
+    pub fn value(&self) -> Option<LazyTypeNode<'a>> {
+        child_type_node(self.source_file, self.node_index, 0, self.root_index)
+    }
+    /// Parameter list (absent when there are no parameters).
+    pub fn parameters(&self) -> Option<LazyTypeParameterList<'a>> {
+        let bitmask = children_bitmask_payload(self.source_file, self.node_index) as u8;
+        let idx = child_at_visitor_index(self.source_file, self.node_index, bitmask, 1)?;
+        Some(LazyTypeParameterList::from_index(
+            self.source_file,
+            idx,
+            self.root_index,
+        ))
+    }
+    /// Return type.
+    pub fn return_type(&self) -> Option<LazyTypeNode<'a>> {
+        child_type_node(self.source_file, self.node_index, 2, self.root_index)
+    }
+    /// Type-parameter list (absent when there are no type parameters).
+    pub fn type_parameters(&self) -> Option<LazyTypeParameterList<'a>> {
+        let bitmask = children_bitmask_payload(self.source_file, self.node_index) as u8;
+        let idx = child_at_visitor_index(self.source_file, self.node_index, bitmask, 3)?;
+        Some(LazyTypeParameterList::from_index(
+            self.source_file,
+            idx,
+            self.root_index,
+        ))
+    }
+}
+
+define_lazy_type_node!(
     LazyTypeTypeParameter,
     Kind::TypeTypeParameter,
     "Lazy view of `TypeTypeParameter` (Kind 0xA6)."
@@ -919,6 +973,8 @@ pub enum LazyTypeNode<'a> {
     TypeParameter(LazyTypeTypeParameter<'a>),
     ParameterList(LazyTypeParameterList<'a>),
     ReadonlyProperty(LazyTypeReadonlyProperty<'a>),
+    ComputedProperty(LazyTypeComputedProperty<'a>),
+    ComputedMethod(LazyTypeComputedMethod<'a>),
     KeyValue(LazyTypeKeyValue<'a>),
     IndexSignature(LazyTypeIndexSignature<'a>),
     MappedType(LazyTypeMappedType<'a>),
@@ -993,6 +1049,8 @@ impl<'a> LazyTypeNode<'a> {
             TypeTypeParameter => TypeParameter(LazyTypeTypeParameter<'a>),
             TypeParameterList => ParameterList(LazyTypeParameterList<'a>),
             TypeReadonlyProperty => ReadonlyProperty(LazyTypeReadonlyProperty<'a>),
+            TypeComputedProperty => ComputedProperty(LazyTypeComputedProperty<'a>),
+            TypeComputedMethod => ComputedMethod(LazyTypeComputedMethod<'a>),
             TypeKeyValue => KeyValue(LazyTypeKeyValue<'a>),
             TypeIndexSignature => IndexSignature(LazyTypeIndexSignature<'a>),
             TypeMappedType => MappedType(LazyTypeMappedType<'a>),

@@ -83,6 +83,12 @@ fn write_node(buf: &mut String, node: &TypeNodeData<'_>) {
             buf.push_str("readonly ");
             write_node(buf, &n.element);
         }
+        TypeNodeData::ComputedProperty(n) => {
+            buf.push('[');
+            write_node(buf, &n.value);
+            buf.push(']');
+        }
+        TypeNodeData::ComputedMethod(n) => write_computed_method(buf, n),
     }
 }
 
@@ -463,6 +469,24 @@ fn write_constructor_signature(buf: &mut String, n: &TypeConstructorSignature<'_
 
 fn write_method_signature(buf: &mut String, n: &TypeMethodSignature<'_>) {
     buf.push_str(n.name);
+    if !n.type_parameters.is_empty() {
+        buf.push('<');
+        write_comma_separated(buf, &n.type_parameters);
+        buf.push('>');
+    }
+    buf.push('(');
+    write_comma_separated(buf, &n.parameters);
+    buf.push_str("): ");
+    write_node(buf, &n.return_type);
+}
+
+fn write_computed_method(buf: &mut String, n: &TypeComputedMethod<'_>) {
+    buf.push('[');
+    write_node(buf, &n.value);
+    buf.push(']');
+    if n.optional {
+        buf.push('?');
+    }
     if !n.type_parameters.is_empty() {
         buf.push('<');
         write_comma_separated(buf, &n.type_parameters);

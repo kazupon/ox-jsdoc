@@ -2,7 +2,7 @@
 // @license MIT
 //
 
-//! Node kinds (62 in total) and category checks.
+//! Node kinds (64 in total) and category checks.
 //!
 //! See `design/007-binary-ast/ast-nodes.md#kind-number-space` for the full
 //! number-space layout. Quick summary:
@@ -13,8 +13,8 @@
 //! 0x10 - 0x3F  Comment AST headroom   (reserved)
 //! 0x40 - 0x7E  Globally reserved      (reserved)
 //! 0x7F         NodeList               (1)
-//! 0x80 - 0xAC  TypeNode               (45 used)
-//! 0xAD - 0xFF  TypeNode headroom      (reserved)
+//! 0x80 - 0xAE  TypeNode               (47 used)
+//! 0xAF - 0xFF  TypeNode headroom      (reserved)
 //! ```
 //!
 //! Categories are designed so that hot-path checks compile to a single
@@ -26,7 +26,7 @@
 
 use core::fmt;
 
-/// All 62 node kinds defined by the Binary AST format.
+/// All 64 node kinds defined by the Binary AST format.
 ///
 /// Discriminants are stable across releases (per the protocol-compatibility
 /// rules in `ast-nodes.md`); deleted variants are kept as comments rather
@@ -82,7 +82,7 @@ pub enum Kind {
     /// no longer emit nodes of this Kind.
     NodeList = 0x7F,
 
-    // -- TypeNode (45 kinds, 0x80 - 0xAC) ---------------------------------
+    // -- TypeNode (47 kinds, 0x80 - 0xAE) ---------------------------------
     /// `TypeName` (basic identifier type).
     TypeName = 0x80,
     /// `TypeNumber` (numeric literal type).
@@ -173,6 +173,11 @@ pub enum Kind {
     TypeParameterList = 0xAB,
     /// `TypeReadonlyProperty`.
     TypeReadonlyProperty = 0xAC,
+    /// `TypeComputedProperty` (the `[k]` key of a `TypeObjectField`).
+    TypeComputedProperty = 0xAD,
+    /// `TypeComputedMethod` (the `[k]<T>(a: A): R` key of a
+    /// `TypeObjectField`).
+    TypeComputedMethod = 0xAE,
 }
 
 /// First reserved Kind discriminant in the global-reserved range
@@ -182,8 +187,8 @@ pub const FIRST_RESERVED_KIND: u8 = 0x40;
 pub const LAST_RESERVED_KIND: u8 = 0x7E;
 /// First TypeNode Kind discriminant (`0x80`); the upper-bit cluster.
 pub const FIRST_TYPE_NODE_KIND: u8 = 0x80;
-/// Highest TypeNode Kind discriminant currently in use (`0xAC`).
-pub const LAST_TYPE_NODE_KIND_IN_USE: u8 = 0xAC;
+/// Highest TypeNode Kind discriminant currently in use (`0xAE`).
+pub const LAST_TYPE_NODE_KIND_IN_USE: u8 = 0xAE;
 /// First Comment AST Kind discriminant (`0x01`).
 pub const FIRST_COMMENT_AST_KIND: u8 = 0x01;
 /// Last Comment AST Kind discriminant currently in use (`0x0F`).
@@ -275,6 +280,8 @@ impl Kind {
             0xAA => Ok(Kind::TypeIndexedAccessIndex),
             0xAB => Ok(Kind::TypeParameterList),
             0xAC => Ok(Kind::TypeReadonlyProperty),
+            0xAD => Ok(Kind::TypeComputedProperty),
+            0xAE => Ok(Kind::TypeComputedMethod),
             other => Err(UnknownKind(other)),
         }
     }
@@ -345,11 +352,11 @@ mod tests {
     use super::*;
 
     /// Total number of defined Kind values: 1 sentinel + 15 comment AST +
-    /// 1 NodeList + 45 TypeNode = 62.
-    const EXPECTED_KNOWN_KINDS: usize = 62;
+    /// 1 NodeList + 47 TypeNode = 64.
+    const EXPECTED_KNOWN_KINDS: usize = 64;
 
     #[test]
-    fn from_u8_recognizes_all_62_known_discriminants() {
+    fn from_u8_recognizes_all_64_known_discriminants() {
         let mut count = 0usize;
         for byte in 0u8..=u8::MAX {
             if Kind::from_u8(byte).is_ok() {
@@ -444,9 +451,6 @@ mod tests {
         assert_eq!(Kind::JsdocText.as_u8(), LAST_COMMENT_AST_KIND_IN_USE);
         assert_eq!(Kind::NodeList.as_u8(), NODE_LIST_KIND);
         assert_eq!(Kind::TypeName.as_u8(), FIRST_TYPE_NODE_KIND);
-        assert_eq!(
-            Kind::TypeReadonlyProperty.as_u8(),
-            LAST_TYPE_NODE_KIND_IN_USE
-        );
+        assert_eq!(Kind::TypeComputedMethod.as_u8(), LAST_TYPE_NODE_KIND_IN_USE);
     }
 }

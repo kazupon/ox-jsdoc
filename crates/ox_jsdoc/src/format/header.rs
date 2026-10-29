@@ -62,7 +62,11 @@ pub const ROOT_COUNT_FIELD: usize = 36;
 /// Major version supported by this implementation.
 pub const SUPPORTED_MAJOR: u8 = 1;
 /// Minor version supported by this implementation.
-pub const SUPPORTED_MINOR: u8 = 0;
+///
+/// - `0`: the first version
+/// - `1`: adds the `TypeComputedProperty` (`0xAD`) and `TypeComputedMethod`
+///   (`0xAE`) kinds
+pub const SUPPORTED_MINOR: u8 = 1;
 
 /// Bit shift for extracting the major version from byte 0.
 pub const MAJOR_SHIFT: u8 = 4;
@@ -216,10 +220,10 @@ mod tests {
     }
 
     #[test]
-    fn supported_version_byte_is_0x10() {
-        assert_eq!(SUPPORTED_VERSION_BYTE, 0x10);
+    fn supported_version_byte_is_0x11() {
+        assert_eq!(SUPPORTED_VERSION_BYTE, 0x11);
         assert_eq!(major(SUPPORTED_VERSION_BYTE), 1);
-        assert_eq!(minor(SUPPORTED_VERSION_BYTE), 0);
+        assert_eq!(minor(SUPPORTED_VERSION_BYTE), 1);
     }
 
     #[test]

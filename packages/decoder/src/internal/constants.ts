@@ -26,7 +26,12 @@ export const SOURCE_TEXT_LENGTH_FIELD = 32
 export const ROOT_COUNT_FIELD = 36
 
 export const SUPPORTED_MAJOR = 1
-export const SUPPORTED_MINOR = 0
+/**
+ * - `0`: the first version
+ * - `1`: adds the `TypeComputedProperty` (`0xAD`) and `TypeComputedMethod`
+ *   (`0xAE`) kinds
+ */
+export const SUPPORTED_MINOR = 1
 export const MAJOR_SHIFT = 4
 export const MINOR_MASK = 0x0f
 

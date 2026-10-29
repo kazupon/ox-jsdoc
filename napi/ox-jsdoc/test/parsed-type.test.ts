@@ -537,3 +537,107 @@ describe('stringified types keep their form', () => {
     })
   })
 })
+
+// Computed keys used to lose their brackets: `{[k]: T}` came back as
+// `{k: T}`, and `{[k](): T}` as `{k: function(): T}`. The expected shapes
+// follow jsdoc-type-pratt-parser 9.4.0.
+describe('computed keys of object types', () => {
+  /** The first field of the parsed type of `@type {type}`, without ranges. */
+  const firstField = (type: string): Record<string, unknown> => {
+    const tag = parse(`/** @type {${type}} */`, { parseTypes: true, typeParseMode: 'typescript' })
+      .ast!.tags[0] as unknown as { parsedType: { toJSON(): unknown } | null }
+    const json = JSON.stringify(tag.parsedType?.toJSON() ?? null, (key, value) =>
+      key === 'range' ? undefined : value
+    )
+    return (JSON.parse(json) as { elements: Record<string, unknown>[] }).elements[0]
+  }
+
+  it('keeps a computed property as the key of an object field', () => {
+    expect(firstField('{readonly [k]?: string}')).toEqual({
+      type: 'TypeObjectField',
+      optional: true,
+      readonly: true,
+      quote: 0,
+      key: { type: 'TypeComputedProperty', value: { type: 'TypeName', value: 'k' } },
+      right: { type: 'TypeName', value: 'string' }
+    })
+  })
+
+  it('keeps a computed method as the key of an object field', () => {
+    expect(firstField('{[k]?<T>(a: T, b): R}')).toEqual({
+      type: 'TypeObjectField',
+      optional: false,
+      readonly: false,
+      quote: 0,
+      key: {
+        type: 'TypeComputedMethod',
+        optional: true,
+        value: { type: 'TypeName', value: 'k' },
+        parameters: {
+          type: 'TypeParameterList',
+          elements: [
+            {
+              type: 'TypeKeyValue',
+              optional: false,
+              variadic: false,
+              key: 'a',
+              right: { type: 'TypeName', value: 'T' }
+            },
+            { type: 'TypeName', value: 'b' }
+          ]
+        },
+        returnType: { type: 'TypeName', value: 'R' },
+        typeParameters: {
+          type: 'TypeParameterList',
+          elements: [{ type: 'TypeTypeParameter', elements: [{ type: 'TypeName', value: 'T' }] }]
+        }
+      },
+      right: null
+    })
+    expect(firstField('{[k](): R}').key).toEqual({
+      type: 'TypeComputedMethod',
+      optional: false,
+      value: { type: 'TypeName', value: 'k' },
+      parameters: null,
+      returnType: { type: 'TypeName', value: 'R' },
+      typeParameters: null
+    })
+  })
+
+  it('reads strings and numbers as computed keys', () => {
+    expect(firstField('{["a"]: T}').key).toEqual({
+      type: 'TypeComputedProperty',
+      value: { type: 'TypeStringValue', value: '"a"', quote: 2 }
+    })
+    expect(firstField('{[1](): T}').key).toMatchObject({
+      type: 'TypeComputedMethod',
+      value: { type: 'TypeNumber', value: '1' }
+    })
+  })
+
+  it('stringifies computed keys with their brackets', () => {
+    for (const type of [
+      '{[someType]: string}',
+      '{readonly [someType]?: string}',
+      '{[someType]?<T>(a: T, b: number[]): AnotherType}',
+      "{['a'](): T}"
+    ]) {
+      expect(parseType(type, 'typescript')).toBe(type)
+    }
+  })
+
+  it('rejects a readonly computed method', () => {
+    expect(parseType('{readonly [k](): T}', 'typescript')).toBeNull()
+    expect(parseTypeCheck('{readonly [k](): T}', 'typescript')).toBe(false)
+  })
+
+  it('has visitor keys for the parts of computed keys', () => {
+    expect(jsdocVisitorKeys.TypeComputedProperty).toEqual(['value'])
+    expect(jsdocVisitorKeys.TypeComputedMethod).toEqual([
+      'value',
+      'parameters',
+      'returnType',
+      'typeParameters'
+    ])
+  })
+})
