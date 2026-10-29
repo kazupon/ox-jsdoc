@@ -236,4 +236,29 @@ class Foo { }
     expect(tag.name).to.equal('b');
     expect(tag.description).to.equal('Description `/**`.');
   });
+
+  it('keeps the tags after non-ASCII text', function () {
+    // `@returns` used to come out as a second `@param`.
+    const parsed = parseComment({
+      type: 'Block',
+      value: '*\n * 日本語の説明です。\n * @param a 引数\n * @returns 戻り値\n '
+    });
+
+    expect(parsed.tags.map((tag) => {
+      return [tag.tag, tag.name];
+    })).to.deep.equal([['param', 'a'], ['returns', '']]);
+    expect(parsed.tags[1].source[0].tokens.tag).to.equal('@returns');
+  });
+
+  it('keeps every tag after many lines of non-ASCII text', function () {
+    const parsed = parseComment({
+      type: 'Block',
+      value: '*\n * 一行目の説明。\n * 二行目の説明。\n * 三行目の説明。\n' +
+        ' * @param a 引数\n * @param b 引数\n * @throws {Error} 例外\n * @returns 戻り値\n '
+    });
+
+    expect(parsed.tags.map((tag) => {
+      return tag.tag;
+    })).to.deep.equal(['param', 'param', 'throws', 'returns']);
+  });
 });

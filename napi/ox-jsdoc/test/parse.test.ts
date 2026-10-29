@@ -219,3 +219,59 @@ describe('parseBatch (binary NAPI binding)', () => {
     expect(perItem).toBeLessThan(singleBytes)
   })
 })
+
+// The compat source lines used to be located in UTF-16 units and matched
+// against the UTF-8 byte ranges of the tags. After non-ASCII text, a tag got
+// the lines of the next tag, and a tag whose first line was not a tag line was
+// dropped.
+describe('compat toJSON() after non-ASCII text', () => {
+  const tagLines = (sourceText: string) => {
+    const result = parse(sourceText, {
+      compatMode: true,
+      emptyStringForNull: true,
+      preserveWhitespace: true
+    })
+    const json = result.ast!.toJSON() as {
+      tags: Array<{ tag: string; source: Array<{ number: number; tokens: { tag: string } }> }>
+    }
+    return json.tags.map(tag => [
+      tag.tag,
+      tag.source.map(line => line.number),
+      tag.source[0]?.tokens.tag
+    ])
+  }
+
+  it.each([
+    ['ASCII', '/**\n * Desc.\n * @param a arg\n * @returns value\n */'],
+    ['Japanese', '/**\n * 日本語の説明です。\n * @param a 引数\n * @returns 戻り値\n */'],
+    ['emoji', '/**\n * Party 🎉🎉🎉 time.\n * @param a arg\n * @returns value\n */'],
+    ['accented Latin', '/**\n * Größe und Maße.\n * @param a arg\n * @returns value\n */'],
+    ['CRLF', '/**\r\n * 日本語の説明です。\r\n * @param a 引数\r\n * @returns 戻り値\r\n */']
+  ])('gives each tag its own lines (%s)', (_, sourceText) => {
+    expect(tagLines(sourceText)).toEqual([
+      ['param', [2], '@param'],
+      ['returns', [3, 4], '@returns']
+    ])
+  })
+
+  it('keeps every tag after many lines of non-ASCII text', () => {
+    const sourceText =
+      '/**\n * 一行目の説明。\n * 二行目の説明。\n * 三行目の説明。\n' +
+      ' * @param a 引数\n * @param b 引数\n * @throws {Error} 例外\n * @returns 戻り値\n */'
+    expect(tagLines(sourceText)).toEqual([
+      ['param', [4], '@param'],
+      ['param', [5], '@param'],
+      ['throws', [6], '@throws'],
+      ['returns', [7, 8], '@returns']
+    ])
+  })
+
+  it('keeps a tag with a multi-line type after non-ASCII text', () => {
+    const sourceText =
+      '/**\n * 説明。\n * @param {{\n *   a: string\n * }} options オプション\n * @returns 戻り値\n */'
+    expect(tagLines(sourceText)).toEqual([
+      ['param', [2, 3, 4], '@param'],
+      ['returns', [5, 6], '@returns']
+    ])
+  })
+})
