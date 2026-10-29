@@ -516,7 +516,7 @@ version = "0.0.19"
 dependencies = [
  "criterion2",
  "memchr",
- "oxc_allocator 0.135.0",
+ "oxc_allocator 0.155.0",
  "oxc_jsdoc",
  "oxc_span 0.135.0",
  "rustc-hash",
@@ -530,7 +530,7 @@ version = "0.0.0"
 dependencies = [
  "criterion2",
  "ox_jsdoc_origin",
- "oxc_allocator 0.135.0",
+ "oxc_allocator 0.155.0",
  "oxc_ast 0.135.0",
  "oxc_jsdoc",
  "oxc_parser",
@@ -551,7 +551,7 @@ dependencies = [
 name = "ox_jsdoc_origin"
 version = "0.0.0"
 dependencies = [
- "oxc_allocator 0.135.0",
+ "oxc_allocator 0.155.0",
  "oxc_diagnostics 0.155.0",
  "oxc_span 0.135.0",
  "serde",
@@ -566,7 +566,7 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "ox_jsdoc_origin",
- "oxc_allocator 0.135.0",
+ "oxc_allocator 0.155.0",
 ]
 
 [[package]]
@@ -575,7 +575,7 @@ version = "0.0.0"
 dependencies = [
  "js-sys",
  "ox_jsdoc_origin",
- "oxc_allocator 0.135.0",
+ "oxc_allocator 0.155.0",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]
