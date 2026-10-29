@@ -343,6 +343,13 @@ describe('non-ASCII names and unknown characters', () => {
     expect(parseType('`é', 'typescript')).toBeNull()
   })
 
+  it('rejects template literal interpolations that are not one whole type', () => {
+    expect(parseType('`x${foo%bar}`', 'typescript')).toBeNull()
+    expect(parseType('`x${foo bar}`', 'typescript')).toBeNull()
+    expect(parseTypeCheck('`x${foo`', 'typescript')).toBe(false)
+    expect(parseTypeCheck('`x${foo}`', 'typescript')).toBe(true)
+  })
+
   it('skips non-ASCII whitespace', () => {
     expect(parseType('Array< string>', 'typescript')).toBe('Array<string>')
   })
