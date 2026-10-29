@@ -441,13 +441,11 @@ describe('tags whose body spans several lines', () => {
 })
 
 // A comment with CRLF line ends gives the strings of the same comment with LF
-// line ends (once the `\r`s are removed, `lineEnd` included), and ranges one
-// byte later for each line break before them.
+// line ends, and ranges one byte later for each line break before them. Only
+// the strings copied from the source, `lineEnd` and `descriptionRaw`, keep
+// the `\r`s.
 describe('comments with CRLF line ends', () => {
   const asLf = (json: unknown, lf: string): unknown => {
-    if (typeof json === 'string') {
-      return json.replaceAll('\r', '')
-    }
     if (json === null || typeof json !== 'object') {
       return json
     }
@@ -456,6 +454,9 @@ describe('comments with CRLF line ends', () => {
     }
     return Object.fromEntries(
       Object.entries(json).map(([key, value]) => {
+        if (key === 'lineEnd' || key === 'descriptionRaw') {
+          return [key, typeof value === 'string' ? value.replaceAll('\r', '') : value]
+        }
         if (key !== 'range') {
           return [key, asLf(value, lf)]
         }
