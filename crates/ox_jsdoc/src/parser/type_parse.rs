@@ -45,7 +45,11 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
     ) -> Option<Box<TypeNodeData<'a>>> {
         let mut left = self.parse_prefix_type(lexer, mode, disallow_conditional)?;
         loop {
-            if *disallow_conditional && lexer.current.kind == TokenKind::Question {
+            // In the `extends` clause of a conditional type, `?` belongs to
+            // that conditional type, and `extends` cannot start another one.
+            if *disallow_conditional
+                && matches!(lexer.current.kind, TokenKind::Question | TokenKind::Extends)
+            {
                 break;
             }
             let infix_prec = self.cur_infix_precedence(lexer, mode);
@@ -105,10 +109,8 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             TokenKind::LParen => {
                 self.parse_parenthesis_or_function(lexer, mode, disallow_conditional)
             }
-            TokenKind::LBracket if mode.is_typescript() => {
-                self.parse_tuple(lexer, mode, disallow_conditional)
-            }
-            TokenKind::LBrace => self.parse_object_type(lexer, mode, disallow_conditional),
+            TokenKind::LBracket if mode.is_typescript() => self.parse_tuple(lexer, mode),
+            TokenKind::LBrace => self.parse_object_type(lexer, mode),
             TokenKind::Function => self.parse_function_type(lexer, mode, disallow_conditional),
             TokenKind::Typeof if mode.is_typescript() || mode.is_closure() => {
                 self.parse_typeof(lexer, mode, disallow_conditional)
@@ -130,7 +132,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             TokenKind::Number => self.parse_number_literal(lexer),
             TokenKind::StringValue => self.parse_string_literal(lexer),
             TokenKind::TemplateLiteral if mode.is_typescript() => {
-                self.parse_template_literal(lexer, mode, disallow_conditional)
+                self.parse_template_literal(lexer, mode)
             }
             TokenKind::Module => {
                 self.parse_special_name_path_or_name(lexer, mode, SpecialPathType::Module)
@@ -190,13 +192,11 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             TokenKind::Amp if mode.is_typescript() => {
                 self.parse_intersection(lexer, mode, disallow_conditional, left)
             }
-            TokenKind::Lt => self.parse_generic(lexer, mode, disallow_conditional, left),
+            TokenKind::Lt => self.parse_generic(lexer, mode, left),
             TokenKind::Dot if lexer.next.kind == TokenKind::Lt => {
-                self.parse_generic(lexer, mode, disallow_conditional, left)
+                self.parse_generic(lexer, mode, left)
             }
-            TokenKind::LBracket => {
-                self.parse_array_brackets_or_indexed(lexer, mode, disallow_conditional, left)
-            }
+            TokenKind::LBracket => self.parse_array_brackets_or_indexed(lexer, mode, left),
             TokenKind::Dot | TokenKind::Hash | TokenKind::Tilde => {
                 self.parse_name_path(lexer, mode, left)
             }
@@ -212,7 +212,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             }
             TokenKind::Ellipsis if mode.is_jsdoc() => self.parse_variadic_suffix(lexer, left),
             TokenKind::LParen if mode.is_jsdoc() || mode.is_closure() => {
-                self.parse_symbol(lexer, mode, disallow_conditional, left)
+                self.parse_symbol(lexer, mode, left)
             }
             _ => Some(left),
         }
@@ -410,7 +410,9 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             }
         }
         lexer.bump();
-        let element = self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::All)?;
+        // Conditional types are allowed inside the parentheses, also in the
+        // `extends` clause of a conditional type.
+        let element = self.parse_type_pratt(lexer, mode, &mut false, Precedence::All)?;
         if !self.expect(lexer, TokenKind::RParen) {
             return None;
         }
@@ -432,7 +434,8 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         let mut parameters = Vec::new();
         if lexer.current.kind != TokenKind::RParen {
             loop {
-                let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
+                // Conditional types are allowed in the parameter list.
+                let param = self.parse_key_value_or_type(lexer, mode, &mut false)?;
                 parameters.push(param);
                 if !self.eat(lexer, TokenKind::Comma) {
                     break;
@@ -556,8 +559,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         &mut self,
         lexer: &mut Lexer<'a>,
         mode: ParseMode,
-        disallow_conditional: &mut bool,
     ) -> Option<Box<TypeNodeData<'a>>> {
+        // Conditional types are allowed inside the brackets, also in the
+        // `extends` clause of a conditional type.
+        let disallow_conditional = &mut false;
         let start = lexer.current.start;
         lexer.bump();
         let mut elements = Vec::new();
@@ -588,8 +593,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         &mut self,
         lexer: &mut Lexer<'a>,
         mode: ParseMode,
-        disallow_conditional: &mut bool,
     ) -> Option<Box<TypeNodeData<'a>>> {
+        // Conditional types are allowed inside the brackets, also in the
+        // `extends` clause of a conditional type.
+        let disallow_conditional = &mut false;
         let start = lexer.current.start;
         lexer.bump();
         let mut elements = Vec::new();
@@ -1070,7 +1077,8 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 constructor = true;
             }
             loop {
-                let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
+                // Conditional types are allowed in the parameter list.
+                let param = self.parse_key_value_or_type(lexer, mode, &mut false)?;
                 parameters.push(param);
                 if !self.eat(lexer, TokenKind::Comma) {
                     break;
@@ -1112,7 +1120,8 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         let mut parameters = Vec::new();
         if lexer.current.kind != TokenKind::RParen {
             loop {
-                let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
+                // Conditional types are allowed in the parameter list.
+                let param = self.parse_key_value_or_type(lexer, mode, &mut false)?;
                 parameters.push(param);
                 if !self.eat(lexer, TokenKind::Comma) {
                     break;
@@ -1353,8 +1362,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         &mut self,
         lexer: &mut Lexer<'a>,
         mode: ParseMode,
-        disallow_conditional: &mut bool,
     ) -> Option<Box<TypeNodeData<'a>>> {
+        // Conditional types are allowed inside the brackets, also in the
+        // `extends` clause of a conditional type.
+        let disallow_conditional = &mut false;
         let token = lexer.current;
         let text = lexer.token_text(token);
         lexer.bump();
@@ -1543,9 +1554,11 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         &mut self,
         lexer: &mut Lexer<'a>,
         mode: ParseMode,
-        disallow_conditional: &mut bool,
         left: Box<TypeNodeData<'a>>,
     ) -> Option<Box<TypeNodeData<'a>>> {
+        // Conditional types are allowed inside the brackets, also in the
+        // `extends` clause of a conditional type.
+        let disallow_conditional = &mut false;
         let start = left.span().start;
         let dot = self.eat(lexer, TokenKind::Dot);
         lexer.bump();
@@ -1580,9 +1593,11 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         &mut self,
         lexer: &mut Lexer<'a>,
         mode: ParseMode,
-        disallow_conditional: &mut bool,
         left: Box<TypeNodeData<'a>>,
     ) -> Option<Box<TypeNodeData<'a>>> {
+        // Conditional types are allowed inside the brackets, also in the
+        // `extends` clause of a conditional type.
+        let disallow_conditional = &mut false;
         let start = left.span().start;
         lexer.bump();
         if lexer.current.kind == TokenKind::RBracket {
@@ -1783,6 +1798,9 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         })))
     }
 
+    /// Parse `left extends X ? Y : Z`. Only reached while conditional types
+    /// are allowed: in the `extends` clause, the Pratt loop stops at
+    /// `extends` instead of calling this.
     fn parse_conditional(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -1790,9 +1808,6 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         disallow_conditional: &mut bool,
         left: Box<TypeNodeData<'a>>,
     ) -> Option<Box<TypeNodeData<'a>>> {
-        if *disallow_conditional {
-            return Some(left);
-        }
         let start = left.span().start;
         lexer.bump();
         let mut nested_disallow = true;
@@ -1834,9 +1849,11 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         &mut self,
         lexer: &mut Lexer<'a>,
         mode: ParseMode,
-        disallow_conditional: &mut bool,
         left: Box<TypeNodeData<'a>>,
     ) -> Option<Box<TypeNodeData<'a>>> {
+        // Conditional types are allowed inside the brackets, also in the
+        // `extends` clause of a conditional type.
+        let disallow_conditional = &mut false;
         let start = left.span().start;
         let value = match left.as_ref() {
             TypeNodeData::Name(name) => name.value,
