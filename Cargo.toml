@@ -7,12 +7,12 @@ exclude = ["refers/*", "napi/ox-jsdoc-binary", "wasm/ox-jsdoc-binary"]
 
 [workspace.package]
 edition = "2024"
-rust-version = "1.94.0"
+rust-version = "1.97.0"
 license = "MIT"
 
 [workspace.dependencies]
-oxc_allocator = "=0.135.0"
-oxc_ast = "=0.135.0"
+oxc_allocator = "=0.155.0"
+oxc_ast = "=0.155.0"
 oxc_diagnostics = "=0.155.0"
-oxc_parser = "=0.135.0"
-oxc_span = "=0.135.0"
+oxc_parser = "=0.155.0"
+oxc_span = "=0.155.0"

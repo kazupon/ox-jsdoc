@@ -265,7 +265,7 @@ fn parse_with_writer<'arena>(
     // mirror into the Rust-side `arena_diagnostics` vec. `diag.message()`
     // is a `&'static str` from the parser's static message table, so it
     // borrows directly into the Diagnostic struct without an `alloc_str`.
-    let mut arena_diagnostics: ArenaVec<'arena, Diagnostic> = ArenaVec::new_in(arena);
+    let mut arena_diagnostics: ArenaVec<'arena, Diagnostic> = ArenaVec::new_in(&arena);
     for diag in parsed.diagnostics() {
         let message = diag.message();
         writer.push_diagnostic(0, message);
@@ -484,7 +484,7 @@ fn parse_batch_with_writer<'arena>(
         ..options
     };
 
-    let mut arena_diagnostics: ArenaVec<'arena, BatchDiagnostic> = ArenaVec::new_in(arena);
+    let mut arena_diagnostics: ArenaVec<'arena, BatchDiagnostic> = ArenaVec::new_in(&arena);
 
     for (index, item) in items.iter().enumerate() {
         let root_index = index as u32;
@@ -518,7 +518,7 @@ fn parse_batch_with_writer<'arena>(
         .expect("BinaryWriter::finish_into_arena_reusing() always produces a header-valid buffer");
     let source_file_ref: &'arena LazySourceFile<'arena> = arena.alloc(source_file_owned);
 
-    let mut lazy_roots: ArenaVec<'arena, Option<LazyJsdocBlock<'arena>>> = ArenaVec::new_in(arena);
+    let mut lazy_roots: ArenaVec<'arena, Option<LazyJsdocBlock<'arena>>> = ArenaVec::new_in(&arena);
     for root in source_file_ref.asts() {
         lazy_roots.push(root);
     }

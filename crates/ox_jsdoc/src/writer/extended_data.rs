@@ -65,7 +65,7 @@ impl<'arena> ExtendedDataBuilder<'arena> {
     #[must_use]
     pub fn new(arena: &'arena Allocator) -> Self {
         ExtendedDataBuilder {
-            buffer: ArenaVec::new_in(arena),
+            buffer: ArenaVec::new_in(&arena),
         }
     }
 

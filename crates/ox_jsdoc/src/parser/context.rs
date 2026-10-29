@@ -707,7 +707,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         ArenaVec<'arena, TagData<'arena, 'a>>,
         Vec<(u32, Box<TypeNodeData<'a>>)>,
     ) {
-        let mut tags = ArenaVec::with_capacity_in(sections.len(), self.arena);
+        let mut tags = ArenaVec::with_capacity_in(sections.len(), &self.arena);
         // Side table: stays empty when parse_types is off (the default), so
         // emit-loop's lookup branch is a single `peek().is_none()` predict.
         let mut parsed_types: Vec<(u32, Box<TypeNodeData<'a>>)> = Vec::new();
@@ -773,9 +773,9 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 false,
                 None,
                 None,
-                ArenaVec::new_in(self.arena),
-                ArenaVec::new_in(self.arena),
-                InlineTagsVec::new_in(self.arena),
+                ArenaVec::new_in(&self.arena),
+                ArenaVec::new_in(&self.arena),
+                InlineTagsVec::new_in(&self.arena),
                 None,
                 None,
             )
@@ -854,7 +854,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             None
         };
 
-        let mut type_lines: ArenaVec<'arena, TypeLineData<'a>> = ArenaVec::new_in(self.arena);
+        let mut type_lines: ArenaVec<'arena, TypeLineData<'a>> = ArenaVec::new_in(&self.arena);
         if let Some(ts) = type_source {
             type_lines.push(TypeLineData {
                 span: ts.span,
@@ -942,7 +942,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         margins: &[scanner::MarginInfo<'a>],
     ) -> ParsedDescription<'arena, 'a> {
         let mut description_lines: ArenaVec<'arena, DescriptionLineData<'a>> =
-            ArenaVec::new_in(self.arena);
+            ArenaVec::new_in(&self.arena);
         for (line, margin) in lines.iter().zip(margins.iter()) {
             if margin.is_content_empty {
                 continue;
@@ -960,7 +960,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             return ParsedDescription {
                 text: None,
                 lines: description_lines,
-                inline_tags: InlineTagsVec::new_in(self.arena),
+                inline_tags: InlineTagsVec::new_in(&self.arena),
             };
         };
         let mut description = self.parse_description_text(normalized.text, &normalized, 0);
@@ -982,8 +982,8 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         let source_span = |start: usize, end: usize| {
             normalized.source_span(text_start + start as u32, text_start + end as u32)
         };
-        let lines: ArenaVec<'arena, DescriptionLineData<'a>> = ArenaVec::new_in(self.arena);
-        let mut inline_tags = InlineTagsVec::new_in(self.arena);
+        let lines: ArenaVec<'arena, DescriptionLineData<'a>> = ArenaVec::new_in(&self.arena);
+        let mut inline_tags = InlineTagsVec::new_in(&self.arena);
 
         if text
             .bytes()

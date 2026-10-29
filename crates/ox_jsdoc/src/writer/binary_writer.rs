@@ -128,7 +128,7 @@ impl<'arena> BinaryWriter<'arena> {
     /// without writing any roots yields a valid empty Binary AST buffer.
     #[must_use]
     pub fn new(arena: &'arena Allocator) -> Self {
-        let mut nodes_buffer = ArenaVec::new_in(arena);
+        let mut nodes_buffer = ArenaVec::new_in(&arena);
         // Pre-write the all-zero sentinel `node[0]` so real nodes start at
         // index 1 and `parent_index = 0` / `next_sibling = 0` mean
         // "no link" without a special case.
@@ -139,8 +139,8 @@ impl<'arena> BinaryWriter<'arena> {
 
         BinaryWriter {
             header,
-            root_index_buffer: ArenaVec::new_in(arena),
-            diagnostics: ArenaVec::new_in(arena),
+            root_index_buffer: ArenaVec::new_in(&arena),
+            diagnostics: ArenaVec::new_in(&arena),
             nodes_buffer,
             strings: StringTableBuilder::new(arena),
             extended: ExtendedDataBuilder::new(arena),
@@ -148,7 +148,7 @@ impl<'arena> BinaryWriter<'arena> {
             current_source_data_offset: 0,
             current_source_length: 0,
             current_source_ptr: 0,
-            next_sibling_patch: ArenaVec::new_in(arena),
+            next_sibling_patch: ArenaVec::new_in(&arena),
             preserve_whitespace_span: false,
             arena,
         }
@@ -913,7 +913,7 @@ impl<'arena> BinaryWriter<'arena> {
     pub fn finish_into_arena_reusing(&mut self) -> &'arena [u8] {
         let layout = self.prepare_finish_layout();
         let arena = self.arena;
-        let mut out: ArenaVec<'arena, u8> = ArenaVec::with_capacity_in(layout.total_size, arena);
+        let mut out: ArenaVec<'arena, u8> = ArenaVec::with_capacity_in(layout.total_size, &arena);
         out.resize(layout.total_size, 0);
         write_finish_layout(self, &layout, &mut out);
         out.into_arena_slice()
