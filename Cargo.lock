@@ -531,7 +531,7 @@ dependencies = [
  "criterion2",
  "ox_jsdoc_origin",
  "oxc_allocator 0.135.0",
- "oxc_ast 0.135.0",
+ "oxc_ast 0.155.0",
  "oxc_jsdoc",
  "oxc_parser",
  "oxc_span 0.135.0",
