@@ -525,8 +525,11 @@ fn accepts_trailing_separators() {
     ] {
         assert_parsed(input, mode, expected);
     }
-    // Accepted. The stringified form drops `new`, which is a separate bug.
-    assert_accepted("new (a: string, ) => Foo", Typescript);
+    assert_parsed(
+        "new (a: string, ) => Foo",
+        Typescript,
+        "new (a: string) => Foo",
+    );
 }
 
 // The type parser used to drop parts of these types (#009).
@@ -607,4 +610,49 @@ fn accepts_symbol_as_a_name_in_typescript_mode() {
     ] {
         assert_parsed(input, Typescript, input);
     }
+}
+
+// The string of a type used to lose the backticks of template literals, the
+// brackets and quotes of `foo["bar"]`, and the form of constructors (#009).
+
+#[test]
+fn stringifies_template_literals_with_backticks() {
+    for input in [
+        "`a${b}`",
+        "`${a}-${b}`",
+        "``",
+        "`a\\`b`",
+        "`a${b}c${d | e}`",
+    ] {
+        assert_parsed(input, Typescript, input);
+    }
+}
+
+#[test]
+fn stringifies_bracket_properties_with_brackets_and_quotes() {
+    for mode in [Jsdoc, Closure, Typescript] {
+        assert_parsed("foo[\"text\"]", mode, "foo[\"text\"]");
+        assert_parsed("Foo['bar']", mode, "Foo['bar']");
+    }
+    for input in [
+        "obj[\"a\"][\"b\"]",
+        "Foo[K]",
+        "Foo[0]",
+        "Foo[\"a\"][K]",
+        "import('x').Options['y']",
+    ] {
+        assert_parsed(input, Typescript, input);
+    }
+    // A quoted property after a dot keeps its quotes too.
+    assert_parsed("Foo.\"bar\"", Jsdoc, "Foo.\"bar\"");
+}
+
+#[test]
+fn stringifies_constructors_as_written() {
+    assert_parsed(
+        "new(number, string): SomeType",
+        Typescript,
+        "new(number, string): SomeType",
+    );
+    assert_parsed("new () => SomeType", Typescript, "new () => SomeType");
 }
