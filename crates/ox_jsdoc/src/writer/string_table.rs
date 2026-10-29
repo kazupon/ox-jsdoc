@@ -348,10 +348,10 @@ impl<'arena> StringTableBuilder<'arena> {
     /// before consulting the map.
     #[must_use]
     pub fn new(arena: &'arena Allocator) -> Self {
-        let mut offsets_buffer = ArenaVec::new_in(arena);
+        let mut offsets_buffer = ArenaVec::new_in(&arena);
         offsets_buffer.extend_from_slice(prelude_offsets());
 
-        let mut data_buffer = ArenaVec::new_in(arena);
+        let mut data_buffer = ArenaVec::new_in(&arena);
         data_buffer.extend_from_slice(prelude_data());
 
         StringTableBuilder {

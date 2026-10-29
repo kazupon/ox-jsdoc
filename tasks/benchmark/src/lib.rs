@@ -99,14 +99,13 @@ fn extract_jsdoc_blocks_from_oxc_parser(path: &Path, source_text: &str) -> Vec<S
         .program
         .comments
         .iter()
-        .copied()
         .filter(|comment| comment.is_jsdoc())
         .filter_map(|comment| comment_source_text(source_text, comment))
         .map(str::to_string)
         .collect()
 }
 
-fn comment_source_text(source_text: &str, comment: Comment) -> Option<&str> {
+fn comment_source_text<'a>(source_text: &'a str, comment: &Comment) -> Option<&'a str> {
     let start = usize::try_from(comment.span.start).ok()?;
     let end = usize::try_from(comment.span.end).ok()?;
     source_text.get(start..end)

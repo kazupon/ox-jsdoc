@@ -14,6 +14,9 @@
 //! accessed node; full vs sparse should differ by ~10x in line with the
 //! design KPI for sparse-access patterns.
 
+// `criterion_group!` defines a `pub fn` without documentation.
+#![allow(missing_docs)]
+
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use ox_jsdoc::decoder::nodes::LazyNode;
 use ox_jsdoc::decoder::source_file::LazySourceFile;

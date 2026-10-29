@@ -251,7 +251,7 @@ impl<'a> ParserContext<'a> {
                 has_preterminal_description,
                 has_preterminal_tag_description,
             },
-            self.allocator,
+            &self.allocator,
         );
 
         ParseOutput {
@@ -371,7 +371,7 @@ impl<'a> ParserContext<'a> {
     }
 
     fn parse_tag_sections(&mut self, sections: &[TagSection<'a>]) -> ArenaVec<'a, JsdocTag<'a>> {
-        let mut tags = ArenaVec::new_in(self.allocator);
+        let mut tags = ArenaVec::new_in(&self.allocator);
         for section in sections {
             tags.push(self.parse_jsdoc_tag(section));
         }
@@ -433,8 +433,8 @@ impl<'a> ParserContext<'a> {
                 parsed_body.description.lines,
                 parsed_body.description.inline_tags,
                 Some(ArenaBox::new_in(
-                    JsdocTagBody::Generic(ArenaBox::new_in(parsed_body.body, self.allocator)),
-                    self.allocator,
+                    JsdocTagBody::Generic(ArenaBox::new_in(parsed_body.body, &self.allocator)),
+                    &self.allocator,
                 )),
                 Some(parsed_body.raw_body),
             )
@@ -446,9 +446,9 @@ impl<'a> ParserContext<'a> {
                 None,
                 None,
                 None,
-                ArenaVec::new_in(self.allocator),
-                ArenaVec::new_in(self.allocator),
-                ArenaVec::new_in(self.allocator),
+                ArenaVec::new_in(&self.allocator),
+                ArenaVec::new_in(&self.allocator),
+                ArenaVec::new_in(&self.allocator),
                 None,
                 None,
             )
@@ -459,7 +459,7 @@ impl<'a> ParserContext<'a> {
             raw_type.and_then(|ts| {
                 let mode = self.options.type_parse_mode;
                 self.parse_type_expression(ts.raw, ts.span.start + 1, mode)
-                    .map(|node| ArenaBox::new_in(JsdocType::Parsed(node), self.allocator))
+                    .map(|node| ArenaBox::new_in(JsdocType::Parsed(node), &self.allocator))
             })
         } else {
             None
@@ -521,7 +521,7 @@ impl<'a> ParserContext<'a> {
             None
         };
 
-        let mut type_lines = ArenaVec::new_in(self.allocator);
+        let mut type_lines = ArenaVec::new_in(&self.allocator);
         if let Some(type_source) = type_source {
             type_lines.push(JsdocTypeLine {
                 span: type_source.span,
@@ -592,7 +592,7 @@ impl<'a> ParserContext<'a> {
         lines: &[scanner::LogicalLine<'a>],
         margins: &[scanner::MarginInfo<'a>],
     ) -> ParsedDescription<'a> {
-        let mut description_lines = ArenaVec::new_in(self.allocator);
+        let mut description_lines = ArenaVec::new_in(&self.allocator);
         for (line, margin) in lines.iter().zip(margins.iter()) {
             if margin.is_content_empty {
                 continue;
@@ -610,7 +610,7 @@ impl<'a> ParserContext<'a> {
             return ParsedDescription {
                 text: None,
                 lines: description_lines,
-                inline_tags: ArenaVec::new_in(self.allocator),
+                inline_tags: ArenaVec::new_in(&self.allocator),
             };
         };
         let mut description = self.parse_description_text(normalized.text, normalized.span);
@@ -621,8 +621,8 @@ impl<'a> ParserContext<'a> {
     /// Parse inline tags (`{@link ...}` etc.) from description text and wrap
     /// the result in a `ParsedDescription`.
     fn parse_description_text(&mut self, text: &'a str, span: Span) -> ParsedDescription<'a> {
-        let mut lines = ArenaVec::new_in(self.allocator);
-        let mut inline_tags = ArenaVec::new_in(self.allocator);
+        let mut lines = ArenaVec::new_in(&self.allocator);
+        let mut inline_tags = ArenaVec::new_in(&self.allocator);
 
         if text
             .bytes()

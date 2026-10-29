@@ -116,7 +116,7 @@ impl<'a> ParserContext<'a> {
                     TypeNode::Null(TypeNull {
                         span: Span::new(token.start, token.end),
                     }),
-                    self.allocator,
+                    &self.allocator,
                 ))
             }
 
@@ -128,7 +128,7 @@ impl<'a> ParserContext<'a> {
                     TypeNode::Undefined(TypeUndefined {
                         span: Span::new(token.start, token.end),
                     }),
-                    self.allocator,
+                    &self.allocator,
                 ))
             }
 
@@ -140,7 +140,7 @@ impl<'a> ParserContext<'a> {
                     TypeNode::Any(TypeAny {
                         span: Span::new(token.start, token.end),
                     }),
-                    self.allocator,
+                    &self.allocator,
                 ))
             }
 
@@ -387,7 +387,7 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(token.start, token.end),
                 value: text,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -415,7 +415,7 @@ impl<'a> ParserContext<'a> {
                     TypeNode::Unknown(TypeUnknown {
                         span: Span::new(start, start + 1),
                     }),
-                    self.allocator,
+                    &self.allocator,
                 ));
             }
             _ => {}
@@ -430,7 +430,7 @@ impl<'a> ParserContext<'a> {
                 element,
                 position: ModifierPosition::Prefix,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -452,7 +452,7 @@ impl<'a> ParserContext<'a> {
                 element,
                 position: ModifierPosition::Prefix,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -474,7 +474,7 @@ impl<'a> ParserContext<'a> {
                 element,
                 position: ModifierPosition::Prefix,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -500,7 +500,7 @@ impl<'a> ParserContext<'a> {
                     position: None,
                     square_brackets: false,
                 }),
-                self.allocator,
+                &self.allocator,
             ));
         }
 
@@ -520,7 +520,7 @@ impl<'a> ParserContext<'a> {
                     position: Some(VariadicPosition::Prefix),
                     square_brackets: true,
                 }),
-                self.allocator,
+                &self.allocator,
             ));
         }
 
@@ -534,7 +534,7 @@ impl<'a> ParserContext<'a> {
                 position: Some(VariadicPosition::Prefix),
                 square_brackets: false,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -568,7 +568,7 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(start, end),
                 element,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -582,7 +582,7 @@ impl<'a> ParserContext<'a> {
     ) -> Option<ArenaBox<'a, TypeNode<'a>>> {
         lexer.bump(); // consume `(`
 
-        let mut parameters = ArenaVec::new_in(self.allocator);
+        let mut parameters = ArenaVec::new_in(&self.allocator);
 
         // Parse parameter list (with trailing comma support)
         if lexer.current.kind != TokenKind::RParen {
@@ -618,12 +618,12 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(start, end),
                 parameters,
                 return_type: Some(return_type),
-                type_parameters: ArenaVec::new_in(self.allocator),
+                type_parameters: ArenaVec::new_in(&self.allocator),
                 constructor: false,
                 arrow: true,
                 parenthesis: true,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -683,7 +683,7 @@ impl<'a> ParserContext<'a> {
                         optional: false,
                         variadic: true,
                     }),
-                    self.allocator,
+                    &self.allocator,
                 ));
             }
 
@@ -697,7 +697,7 @@ impl<'a> ParserContext<'a> {
                     position: Some(VariadicPosition::Prefix),
                     square_brackets: false,
                 }),
-                self.allocator,
+                &self.allocator,
             ));
         }
 
@@ -735,7 +735,7 @@ impl<'a> ParserContext<'a> {
                 optional,
                 variadic: false,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -749,7 +749,7 @@ impl<'a> ParserContext<'a> {
         let start = lexer.current.start;
         lexer.bump(); // consume `[`
 
-        let mut elements = ArenaVec::new_in(self.allocator);
+        let mut elements = ArenaVec::new_in(&self.allocator);
 
         if lexer.current.kind != TokenKind::RBracket {
             loop {
@@ -776,7 +776,7 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(start, end),
                 elements,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -790,7 +790,7 @@ impl<'a> ParserContext<'a> {
         let start = lexer.current.start;
         lexer.bump(); // consume `{`
 
-        let mut elements = ArenaVec::new_in(self.allocator);
+        let mut elements = ArenaVec::new_in(&self.allocator);
         let mut separator = None;
 
         if lexer.current.kind != TokenKind::RBrace {
@@ -821,7 +821,7 @@ impl<'a> ParserContext<'a> {
                 elements,
                 separator,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -916,7 +916,7 @@ impl<'a> ParserContext<'a> {
                         left,
                         right,
                     }),
-                    self.allocator,
+                    &self.allocator,
                 ));
             }
             // No colon — the parsed type is just a value-less field
@@ -929,11 +929,11 @@ impl<'a> ParserContext<'a> {
                             span: Span::new(start, start),
                             value: "",
                         }),
-                        self.allocator,
+                        &self.allocator,
                     ),
                     right: left,
                 }),
-                self.allocator,
+                &self.allocator,
             ));
         }
 
@@ -962,7 +962,7 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(key_token.start, key_token.end),
                 value: key_text,
             }),
-            self.allocator,
+            &self.allocator,
         );
 
         let optional = self.eat(lexer, TokenKind::Question);
@@ -984,7 +984,7 @@ impl<'a> ParserContext<'a> {
                 readonly,
                 quote,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -995,7 +995,7 @@ impl<'a> ParserContext<'a> {
         mode: ParseMode,
         disallow_conditional: &mut bool,
     ) -> ArenaVec<'a, ArenaBox<'a, TypeNode<'a>>> {
-        let mut type_params = ArenaVec::new_in(self.allocator);
+        let mut type_params = ArenaVec::new_in(&self.allocator);
         if lexer.current.kind != TokenKind::Lt {
             return type_params;
         }
@@ -1012,7 +1012,7 @@ impl<'a> ParserContext<'a> {
                     span: Span::new(name_token.start, name_token.end),
                     value: name_text,
                 }),
-                self.allocator,
+                &self.allocator,
             );
 
             let constraint = if lexer.current.kind == TokenKind::Extends {
@@ -1044,7 +1044,7 @@ impl<'a> ParserContext<'a> {
                     constraint,
                     default_value,
                 }),
-                self.allocator,
+                &self.allocator,
             ));
 
             if !self.eat(lexer, TokenKind::Comma) {
@@ -1065,7 +1065,7 @@ impl<'a> ParserContext<'a> {
     ) -> Option<ArenaBox<'a, TypeNode<'a>>> {
         lexer.bump(); // consume `(`
 
-        let mut parameters = ArenaVec::new_in(self.allocator);
+        let mut parameters = ArenaVec::new_in(&self.allocator);
         if lexer.current.kind != TokenKind::RParen {
             loop {
                 let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
@@ -1087,9 +1087,9 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(start, end),
                 parameters,
                 return_type,
-                type_parameters: ArenaVec::new_in(self.allocator),
+                type_parameters: ArenaVec::new_in(&self.allocator),
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1104,7 +1104,7 @@ impl<'a> ParserContext<'a> {
         let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional);
 
         self.expect(lexer, TokenKind::LParen);
-        let mut parameters = ArenaVec::new_in(self.allocator);
+        let mut parameters = ArenaVec::new_in(&self.allocator);
         if lexer.current.kind != TokenKind::RParen {
             loop {
                 let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
@@ -1128,7 +1128,7 @@ impl<'a> ParserContext<'a> {
                 return_type,
                 type_parameters,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1145,7 +1145,7 @@ impl<'a> ParserContext<'a> {
         let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional);
 
         self.expect(lexer, TokenKind::LParen);
-        let mut parameters = ArenaVec::new_in(self.allocator);
+        let mut parameters = ArenaVec::new_in(&self.allocator);
         if lexer.current.kind != TokenKind::RParen {
             loop {
                 let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
@@ -1169,7 +1169,7 @@ impl<'a> ParserContext<'a> {
                 return_type,
                 type_parameters,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1186,7 +1186,7 @@ impl<'a> ParserContext<'a> {
         let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional);
 
         self.expect(lexer, TokenKind::LParen);
-        let mut parameters = ArenaVec::new_in(self.allocator);
+        let mut parameters = ArenaVec::new_in(&self.allocator);
         if lexer.current.kind != TokenKind::RParen {
             loop {
                 let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
@@ -1212,7 +1212,7 @@ impl<'a> ParserContext<'a> {
                 type_parameters,
                 quote,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1248,7 +1248,7 @@ impl<'a> ParserContext<'a> {
                     key,
                     right: value,
                 }),
-                self.allocator,
+                &self.allocator,
             ));
         }
 
@@ -1268,7 +1268,7 @@ impl<'a> ParserContext<'a> {
                     key,
                     right: value,
                 }),
-                self.allocator,
+                &self.allocator,
             ));
         }
 
@@ -1281,7 +1281,7 @@ impl<'a> ParserContext<'a> {
         if lexer.current.kind == TokenKind::LParen || lexer.current.kind == TokenKind::Lt {
             let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional);
             self.expect(lexer, TokenKind::LParen);
-            let mut parameters = ArenaVec::new_in(self.allocator);
+            let mut parameters = ArenaVec::new_in(&self.allocator);
             if lexer.current.kind != TokenKind::RParen {
                 loop {
                     let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
@@ -1306,7 +1306,7 @@ impl<'a> ParserContext<'a> {
                     span: Span::new(key_token.start, key_token.end),
                     value: key,
                 }),
-                self.allocator,
+                &self.allocator,
             );
 
             return Some(ArenaBox::new_in(
@@ -1323,13 +1323,13 @@ impl<'a> ParserContext<'a> {
                             arrow: false,
                             parenthesis: true,
                         }),
-                        self.allocator,
+                        &self.allocator,
                     )),
                     optional,
                     readonly,
                     quote: None,
                 }),
-                self.allocator,
+                &self.allocator,
             ));
         }
 
@@ -1344,7 +1344,7 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(key_token.start, key_token.end),
                 value: key,
             }),
-            self.allocator,
+            &self.allocator,
         );
 
         Some(ArenaBox::new_in(
@@ -1356,7 +1356,7 @@ impl<'a> ParserContext<'a> {
                 readonly,
                 quote: None,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1376,14 +1376,14 @@ impl<'a> ParserContext<'a> {
                 return Some(ArenaBox::new_in(
                     TypeNode::Function(TypeFunction {
                         span: Span::new(start, start + 8),
-                        parameters: ArenaVec::new_in(self.allocator),
+                        parameters: ArenaVec::new_in(&self.allocator),
                         return_type: None,
-                        type_parameters: ArenaVec::new_in(self.allocator),
+                        type_parameters: ArenaVec::new_in(&self.allocator),
                         constructor: false,
                         arrow: false,
                         parenthesis: false,
                     }),
-                    self.allocator,
+                    &self.allocator,
                 ));
             }
             // Name `function` as identifier in other modes
@@ -1392,13 +1392,13 @@ impl<'a> ParserContext<'a> {
                     span: Span::new(start, start + 8),
                     value: "function",
                 }),
-                self.allocator,
+                &self.allocator,
             ));
         }
 
         lexer.bump(); // consume `(`
 
-        let mut parameters = ArenaVec::new_in(self.allocator);
+        let mut parameters = ArenaVec::new_in(&self.allocator);
         let mut constructor = false;
 
         if lexer.current.kind != TokenKind::RParen {
@@ -1439,12 +1439,12 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(start, end),
                 parameters,
                 return_type,
-                type_parameters: ArenaVec::new_in(self.allocator),
+                type_parameters: ArenaVec::new_in(&self.allocator),
                 constructor,
                 arrow: false,
                 parenthesis: true,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1460,7 +1460,7 @@ impl<'a> ParserContext<'a> {
 
         lexer.bump(); // consume `(`
 
-        let mut parameters = ArenaVec::new_in(self.allocator);
+        let mut parameters = ArenaVec::new_in(&self.allocator);
         if lexer.current.kind != TokenKind::RParen {
             loop {
                 let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
@@ -1507,12 +1507,12 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(start, end),
                 parameters,
                 return_type,
-                type_parameters: ArenaVec::new_in(self.allocator),
+                type_parameters: ArenaVec::new_in(&self.allocator),
                 constructor: true,
                 arrow,
                 parenthesis: true,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1533,7 +1533,7 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(start, end),
                 element,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1554,7 +1554,7 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(start, end),
                 element,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1575,7 +1575,7 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(start, end),
                 element,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1606,7 +1606,7 @@ impl<'a> ParserContext<'a> {
                     QuoteStyle::Single
                 },
             }),
-            self.allocator,
+            &self.allocator,
         );
         lexer.bump();
         if !self.expect(lexer, TokenKind::RParen) {
@@ -1619,7 +1619,7 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(start, end),
                 element,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1639,7 +1639,7 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(name_token.start, name_token.end),
                 value: name_text,
             }),
-            self.allocator,
+            &self.allocator,
         );
         let end = name_token.end;
         Some(ArenaBox::new_in(
@@ -1647,7 +1647,7 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(start, end),
                 element,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1680,7 +1680,7 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(name_token.start, name_token.end),
                 value: name_text,
             }),
-            self.allocator,
+            &self.allocator,
         );
 
         if lexer.current.kind == TokenKind::Is {
@@ -1694,7 +1694,7 @@ impl<'a> ParserContext<'a> {
                     left,
                     right,
                 }),
-                self.allocator,
+                &self.allocator,
             ))
         } else {
             let end = name_token.end;
@@ -1703,7 +1703,7 @@ impl<'a> ParserContext<'a> {
                     span: Span::new(start, end),
                     element: left,
                 }),
-                self.allocator,
+                &self.allocator,
             ))
         }
     }
@@ -1719,7 +1719,7 @@ impl<'a> ParserContext<'a> {
                 TypeNode::UniqueSymbol(TypeUniqueSymbol {
                     span: Span::new(start, end),
                 }),
-                self.allocator,
+                &self.allocator,
             ))
         } else {
             // Just the identifier `unique`
@@ -1728,7 +1728,7 @@ impl<'a> ParserContext<'a> {
                     span: Span::new(start, start + 6),
                     value: "unique",
                 }),
-                self.allocator,
+                &self.allocator,
             ))
         }
     }
@@ -1746,7 +1746,7 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(token.start, token.end),
                 value: text,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1769,7 +1769,7 @@ impl<'a> ParserContext<'a> {
                 value: text,
                 quote,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1784,8 +1784,8 @@ impl<'a> ParserContext<'a> {
         let text = lexer.token_text(token);
         lexer.bump();
 
-        let mut literals = ArenaVec::new_in(self.allocator);
-        let mut interpolations = ArenaVec::new_in(self.allocator);
+        let mut literals = ArenaVec::new_in(&self.allocator);
+        let mut interpolations = ArenaVec::new_in(&self.allocator);
 
         // Strip backticks
         let inner = if text.len() >= 2 {
@@ -1854,7 +1854,7 @@ impl<'a> ParserContext<'a> {
                 literals,
                 interpolations,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1915,7 +1915,7 @@ impl<'a> ParserContext<'a> {
                     special_type,
                     quote,
                 }),
-                self.allocator,
+                &self.allocator,
             ));
         }
 
@@ -1948,7 +1948,7 @@ impl<'a> ParserContext<'a> {
         let start = self.node_start(&left);
         lexer.bump(); // consume `|`
 
-        let mut elements = ArenaVec::with_capacity_in(4, self.allocator);
+        let mut elements = ArenaVec::with_capacity_in(4, &self.allocator);
         elements.push(left);
 
         loop {
@@ -1966,7 +1966,7 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(start, end),
                 elements,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -1981,7 +1981,7 @@ impl<'a> ParserContext<'a> {
         let start = self.node_start(&left);
         lexer.bump(); // consume `&`
 
-        let mut elements = ArenaVec::with_capacity_in(4, self.allocator);
+        let mut elements = ArenaVec::with_capacity_in(4, &self.allocator);
         elements.push(left);
 
         loop {
@@ -1999,7 +1999,7 @@ impl<'a> ParserContext<'a> {
                 span: Span::new(start, end),
                 elements,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -2015,7 +2015,7 @@ impl<'a> ParserContext<'a> {
         let dot = self.eat(lexer, TokenKind::Dot);
         lexer.bump(); // consume `<`
 
-        let mut elements = ArenaVec::with_capacity_in(4, self.allocator);
+        let mut elements = ArenaVec::with_capacity_in(4, &self.allocator);
 
         loop {
             let element = self.parse_type_pratt(
@@ -2045,7 +2045,7 @@ impl<'a> ParserContext<'a> {
                 brackets: GenericBrackets::Angle,
                 dot,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -2064,7 +2064,7 @@ impl<'a> ParserContext<'a> {
         if lexer.current.kind == TokenKind::RBracket {
             lexer.bump(); // consume `]`
             let end = lexer.current.start;
-            let elements = ArenaVec::new_in(self.allocator);
+            let elements = ArenaVec::new_in(&self.allocator);
             return Some(ArenaBox::new_in(
                 TypeNode::Generic(TypeGeneric {
                     span: Span::new(start, end),
@@ -2073,7 +2073,7 @@ impl<'a> ParserContext<'a> {
                     brackets: GenericBrackets::Square,
                     dot: false,
                 }),
-                self.allocator,
+                &self.allocator,
             ));
         }
 
@@ -2101,7 +2101,7 @@ impl<'a> ParserContext<'a> {
                     value: unquoted,
                     quote,
                 }),
-                self.allocator,
+                &self.allocator,
             );
             return Some(ArenaBox::new_in(
                 TypeNode::NamePath(TypeNamePath {
@@ -2110,7 +2110,7 @@ impl<'a> ParserContext<'a> {
                     right,
                     path_type: NamePathType::PropertyBrackets,
                 }),
-                self.allocator,
+                &self.allocator,
             ));
         }
 
@@ -2127,7 +2127,7 @@ impl<'a> ParserContext<'a> {
                     span: Span::new(start, end),
                     right: index,
                 }),
-                self.allocator,
+                &self.allocator,
             );
             return Some(ArenaBox::new_in(
                 TypeNode::NamePath(TypeNamePath {
@@ -2136,7 +2136,7 @@ impl<'a> ParserContext<'a> {
                     right,
                     path_type: NamePathType::PropertyBrackets,
                 }),
-                self.allocator,
+                &self.allocator,
             ));
         }
 
@@ -2149,11 +2149,11 @@ impl<'a> ParserContext<'a> {
             TypeNode::Generic(TypeGeneric {
                 span: Span::new(start, end),
                 left,
-                elements: ArenaVec::new_in(self.allocator),
+                elements: ArenaVec::new_in(&self.allocator),
                 brackets: GenericBrackets::Square,
                 dot: false,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -2197,7 +2197,7 @@ impl<'a> ParserContext<'a> {
                 value: right_text,
                 quote,
             }),
-            self.allocator,
+            &self.allocator,
         );
 
         let end = right_token.end;
@@ -2208,7 +2208,7 @@ impl<'a> ParserContext<'a> {
                 right,
                 path_type,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -2227,7 +2227,7 @@ impl<'a> ParserContext<'a> {
                 element: left,
                 position: ModifierPosition::Suffix,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -2246,7 +2246,7 @@ impl<'a> ParserContext<'a> {
                 element: left,
                 position: ModifierPosition::Suffix,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -2265,7 +2265,7 @@ impl<'a> ParserContext<'a> {
                 element: left,
                 position: ModifierPosition::Suffix,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -2284,19 +2284,19 @@ impl<'a> ParserContext<'a> {
         let end = self.node_end(&return_type);
 
         // Convert the left side (should be Parenthesis or ParameterList) to parameters
-        let parameters = ArenaVec::new_in(self.allocator);
+        let parameters = ArenaVec::new_in(&self.allocator);
 
         Some(ArenaBox::new_in(
             TypeNode::Function(TypeFunction {
                 span: Span::new(start, end),
                 parameters,
                 return_type: Some(return_type),
-                type_parameters: ArenaVec::new_in(self.allocator),
+                type_parameters: ArenaVec::new_in(&self.allocator),
                 constructor: false,
                 arrow: true,
                 parenthesis: true,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -2318,7 +2318,7 @@ impl<'a> ParserContext<'a> {
                 left,
                 right,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -2358,7 +2358,7 @@ impl<'a> ParserContext<'a> {
                 true_type,
                 false_type,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -2378,7 +2378,7 @@ impl<'a> ParserContext<'a> {
                 position: Some(VariadicPosition::Suffix),
                 square_brackets: false,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
@@ -2421,7 +2421,7 @@ impl<'a> ParserContext<'a> {
                 value,
                 element,
             }),
-            self.allocator,
+            &self.allocator,
         ))
     }
 
