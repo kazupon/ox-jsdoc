@@ -33,11 +33,14 @@ export interface ParseResult {
   ast: RemoteJsdocBlock | null
   /** Parser diagnostics. */
   diagnostics: Diagnostic[]
-  /** Underlying `RemoteSourceFile` (held alive so `ast` getters keep working). */
+  /**
+   * Underlying `RemoteSourceFile`. It reads a copy of the Binary AST in JS
+   * memory, which lives as long as `ast` or `sourceFile` is referenced.
+   */
   sourceFile: RemoteSourceFile
   /**
-   * Release the wasm-side bytes. After calling, accessing `ast` /
-   * `sourceFile` is undefined behaviour.
+   * Does nothing: the wasm-side bytes are freed before `parse()` returns.
+   * Kept so that existing calls keep working.
    */
   free(): void
 }
@@ -79,11 +82,15 @@ export interface BatchParseResult {
   asts: Array<RemoteJsdocBlock | null>
   /** All diagnostics produced during the batch. */
   diagnostics: BatchDiagnostic[]
-  /** Underlying `RemoteSourceFile` (held alive so node getters keep working). */
+  /**
+   * Underlying `RemoteSourceFile`, shared by every AST of the batch. It reads
+   * a copy of the Binary AST in JS memory, which lives as long as any of
+   * them is referenced.
+   */
   sourceFile: RemoteSourceFile
   /**
-   * Release the wasm-side bytes. After calling, accessing `asts` /
-   * `sourceFile` is undefined behaviour.
+   * Does nothing: the wasm-side bytes are freed before `parseBatch()`
+   * returns. Kept so that existing calls keep working.
    */
   free(): void
 }
