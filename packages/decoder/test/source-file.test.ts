@@ -6,7 +6,11 @@ import {
   RemoteSourceFile,
   RemoteTypeName
 } from '../src/index.js'
-import type { RemoteTypeTemplateLiteral } from '../src/index.js'
+import type {
+  RemoteTypeComputedMethod,
+  RemoteTypeComputedProperty,
+  RemoteTypeTemplateLiteral
+} from '../src/index.js'
 import { FixtureBuilder } from './fixture-builder.ts'
 
 interface RemoteSourceFileInstance {
@@ -422,5 +426,44 @@ describe('RemoteTypeTemplateLiteral.interpolations', () => {
     new DataView(b.nodes[children[0]!]!.buffer).setUint32(20, children[0]!, true)
     const sf = new RemoteSourceFileCtor(b.build())
     expect(names(sf)).toEqual(['b'])
+  })
+})
+
+describe('RemoteTypeComputedProperty / RemoteTypeComputedMethod', () => {
+  const nameOf = (node: unknown) => (node as RemoteTypeNameNode).value
+
+  it('reads the value of a computed property', () => {
+    // `[k]`: a TypeComputedProperty (Kind 0xAD) with a TypeName child.
+    const b = new FixtureBuilder()
+    const node = b.emitChildrenNode({ parentIndex: 0, kind: 0xad, bitmask: 0b1 })
+    b.emitStringNode({ parentIndex: node, kind: 0x80, value: 'k' })
+    b.pushRoot({ nodeIndex: node })
+    const sf = new RemoteSourceFileCtor(b.build())
+    const key = sf.asts[0] as RemoteTypeComputedProperty
+    expect(key.type).toBe('TypeComputedProperty')
+    expect(nameOf(key.value)).toBe('k')
+  })
+
+  it('reads the parts of a computed method from its children bitmask', () => {
+    // `[k]?(): R`: a TypeComputedMethod (Kind 0xAE) with the value and the
+    // return type, but no parameters or type parameters.
+    const b = new FixtureBuilder()
+    const node = b.emitChildrenNode({
+      parentIndex: 0,
+      kind: 0xae,
+      commonData: 0b1,
+      bitmask: 0b0101
+    })
+    b.emitStringNode({ parentIndex: node, kind: 0x80, value: 'k' })
+    b.emitStringNode({ parentIndex: node, kind: 0x80, value: 'R' })
+    b.pushRoot({ nodeIndex: node })
+    const sf = new RemoteSourceFileCtor(b.build())
+    const key = sf.asts[0] as RemoteTypeComputedMethod
+    expect(key.type).toBe('TypeComputedMethod')
+    expect(key.optional).toBe(true)
+    expect(nameOf(key.value)).toBe('k')
+    expect(key.parameters).toBeNull()
+    expect(nameOf(key.returnType)).toBe('R')
+    expect(key.typeParameters).toBeNull()
   })
 })

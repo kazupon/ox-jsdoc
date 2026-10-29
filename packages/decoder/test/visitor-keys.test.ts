@@ -32,7 +32,7 @@ describe('jsdocVisitorKeys', () => {
     }
   })
 
-  it('covers every TypeNode kind (45)', () => {
+  it('covers every TypeNode kind (47)', () => {
     const expected = [
       'TypeName',
       'TypeNumber',
@@ -78,13 +78,27 @@ describe('jsdocVisitorKeys', () => {
       'TypeMethodSignature',
       'TypeIndexedAccessIndex',
       'TypeParameterList',
-      'TypeReadonlyProperty'
+      'TypeReadonlyProperty',
+      'TypeComputedProperty',
+      'TypeComputedMethod'
     ]
-    expect(expected).toHaveLength(45)
+    expect(expected).toHaveLength(47)
     for (const kind of expected) {
       expect(visitorKeys).toHaveProperty(kind)
       expect(Array.isArray(visitorKeys[kind])).toBe(true)
     }
+  })
+
+  it('walks the parts of computed keys', () => {
+    expect(jsdocVisitorKeys.TypeComputedProperty).toEqual(['value'])
+    // In the order of the other function-like kinds (TypeFunction etc.),
+    // after the key itself.
+    expect(jsdocVisitorKeys.TypeComputedMethod).toEqual([
+      'value',
+      'parameters',
+      'returnType',
+      'typeParameters'
+    ])
   })
 
   it('matches the jsdoccomment-canonical shape on the 5 user-facing kinds', () => {
