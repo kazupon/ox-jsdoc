@@ -234,3 +234,60 @@ fn keeps_accepting_names_and_paths() {
         assert_parsed(input, mode, input);
     }
 }
+
+// Nested `extends` in the `extends` clause of a conditional type used to make
+// the parser loop forever, also for valid conditional types inside brackets.
+
+#[test]
+fn rejects_nested_extends_without_looping() {
+    for input in [
+        "A extends B extends C ? D : E",
+        // A constraint on `infer` is not supported, as in
+        // jsdoc-type-pratt-parser.
+        "T extends infer U extends string ? U : never",
+        "T extends [infer U extends string] ? U : never",
+        "T extends (infer U extends string) ? U : never",
+    ] {
+        assert_rejected(input, Typescript);
+    }
+}
+
+#[test]
+fn accepts_conditional_types_inside_brackets_in_an_extends_clause() {
+    for input in [
+        "A extends (B extends C ? D : E) ? F : G",
+        "A extends Foo<B extends C ? D : E> ? F : G",
+        "A extends [B extends C ? D : E] ? F : G",
+        "A extends {a: B extends C ? D : E} ? F : G",
+        "A extends (x: B extends C ? D : E) => void ? F : G",
+        "A extends B[C extends D ? E : F] ? G : H",
+    ] {
+        assert_parsed(input, Typescript, input);
+    }
+}
+
+#[test]
+fn keeps_accepting_conditional_types() {
+    for input in [
+        "A extends B ? C : D",
+        "A extends B ? C extends D ? 1 : 2 : 3",
+        "A extends B ? C : D extends E ? F : G",
+        "A extends B ? C | D : E",
+        "Foo<A extends B ? C : D>",
+        "(A extends B ? C : D)[]",
+        "A extends B[] ? 1 : 2",
+        "A extends Foo<B> ? 1 : 2",
+        "A extends keyof B ? 1 : 2",
+        "A extends (infer U) ? U : never",
+        // The return type is outside the parameter list, so `?` ends the
+        // `extends` clause.
+        "A extends () => void ? F : G",
+        "A extends (x: string) => void ? F : G",
+        // jsdoc-type-pratt-parser rejects these two, but they are valid
+        // TypeScript.
+        "A extends B | C ? D : E",
+        "A extends B & C ? D : E",
+    ] {
+        assert_parsed(input, Typescript, input);
+    }
+}

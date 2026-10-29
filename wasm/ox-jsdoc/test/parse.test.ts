@@ -139,6 +139,14 @@ describe('parseType / parseTypeCheck (binary WASM binding)', () => {
     expect(parseType('string%x', 'jsdoc')).toBeNull()
   })
 
+  it('parseType handles nested conditional types', () => {
+    // Nested `extends` used to make the parser loop forever.
+    expect(parseType('A extends B extends C ? D : E', 'typescript')).toBeNull()
+    expect(parseType('A extends (B extends C ? D : E) ? F : G', 'typescript')).toBe(
+      'A extends (B extends C ? D : E) ? F : G'
+    )
+  })
+
   it('defaults to jsdoc mode when mode is omitted', () => {
     expect(parseTypeCheck('Array.<string>')).toBe(true)
   })

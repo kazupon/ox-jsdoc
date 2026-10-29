@@ -354,3 +354,24 @@ describe('non-ASCII names and unknown characters', () => {
     expect(parseType('Array< string>', 'typescript')).toBe('Array<string>')
   })
 })
+
+// Nested `extends` used to make the parser loop forever, also for valid
+// conditional types inside brackets. The expected results follow
+// jsdoc-type-pratt-parser 9.4.0.
+describe('nested conditional types', () => {
+  it('rejects nested extends', () => {
+    expect(parseType('A extends B extends C ? D : E', 'typescript')).toBeNull()
+    expect(parseTypeCheck('T extends infer U extends string ? U : never', 'typescript')).toBe(false)
+  })
+
+  it('accepts conditional types inside brackets in an extends clause', () => {
+    for (const source of [
+      'A extends (B extends C ? D : E) ? F : G',
+      'A extends Foo<B extends C ? D : E> ? F : G',
+      'A extends [B extends C ? D : E] ? F : G',
+      'A extends {a: B extends C ? D : E} ? F : G'
+    ]) {
+      expect(parseType(source, 'typescript')).toBe(source)
+    }
+  })
+})

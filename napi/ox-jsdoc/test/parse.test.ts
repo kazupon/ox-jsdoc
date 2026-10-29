@@ -84,6 +84,32 @@ describe('parse (binary NAPI binding)', () => {
     })
   })
 
+  it('parses conditional types inside brackets when parseTypes is enabled', () => {
+    // Used to make parse() loop forever.
+    const result = parse('/** @type {A extends (B extends C ? D : E) ? F : G} */', {
+      parseTypes: true,
+      typeParseMode: 'typescript'
+    })
+    expect(result.diagnostics).toEqual([])
+    const tag = result.ast!.tags[0] as RemoteJsdocTag
+    expect(tag.parsedType?.toJSON()).toMatchObject({
+      type: 'TypeConditional',
+      checkType: { type: 'TypeName', value: 'A' },
+      extendsType: {
+        type: 'TypeParenthesis',
+        element: {
+          type: 'TypeConditional',
+          checkType: { value: 'B' },
+          extendsType: { value: 'C' },
+          trueType: { value: 'D' },
+          falseType: { value: 'E' }
+        }
+      },
+      trueType: { value: 'F' },
+      falseType: { value: 'G' }
+    })
+  })
+
   it('matches oxc_jsdoc tag splitting for indented code blocks', () => {
     const source =
       '/**\n * @deprecated\n *     @myDecorator\n *     class Foo {}\n * @type {string}\n */'
