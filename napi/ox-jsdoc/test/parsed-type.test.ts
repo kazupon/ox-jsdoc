@@ -392,3 +392,27 @@ describe('missing brackets, parentheses and colons', () => {
     expect(parseType('A extends B C : D', 'typescript')).toBe('A extends B ? C : D')
   })
 })
+
+// Punctuation where a name or key is expected used to be taken as the name,
+// and valid types with a trailing separator were rejected. The expected
+// results follow jsdoc-type-pratt-parser 9.4.0.
+describe('names, keys and trailing separators', () => {
+  it('rejects punctuation where a name or key is expected', () => {
+    expect(parseType('Foo.(', 'jsdoc')).toBeNull()
+    expect(parseType('{): string}', 'typescript')).toBeNull()
+    expect(parseType('{,}', 'typescript')).toBeNull()
+    expect(parseType('T extends infer ( ? 1 : 2', 'typescript')).toBeNull()
+    expect(parseType('module:(', 'jsdoc')).toBeNull()
+  })
+
+  it('accepts an empty module: value before a closing token', () => {
+    expect(parseType('(module:)', 'jsdoc')).toBe('(module:)')
+    expect(parseType('Array<module:>', 'jsdoc')).toBe('Array<module:>')
+  })
+
+  it('accepts trailing separators', () => {
+    expect(parseType('{a: string, }', 'typescript')).toBe('{a: string}')
+    expect(parseType('{a: string; }', 'typescript')).toBe('{a: string}')
+    expect(parseType('{(a: string, ): void}', 'typescript')).toBe('{(a: string): void}')
+  })
+})
