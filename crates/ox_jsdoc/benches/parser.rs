@@ -8,6 +8,9 @@
 //! so we can spot which one dominates and where future optimisation work
 //! should focus. Run with `cargo bench --bench parser`.
 
+// `criterion_group!` defines a `pub fn` without documentation.
+#![allow(missing_docs)]
+
 use std::fs;
 use std::path::PathBuf;
 

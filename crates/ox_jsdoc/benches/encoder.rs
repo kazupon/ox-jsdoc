@@ -9,6 +9,9 @@
 //! child) using the `write_*` helpers directly. End-to-end parser timings
 //! live in `parser.rs`; this bench isolates the writer's per-node cost.
 
+// `criterion_group!` defines a `pub fn` without documentation.
+#![allow(missing_docs)]
+
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use ox_jsdoc::writer::BinaryWriter;
 use ox_jsdoc::writer::nodes::comment_ast::{
