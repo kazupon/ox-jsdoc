@@ -19,6 +19,12 @@
       "enabled": false
     },
     {
+      "description": "The oxc crates share types such as `Span` and `Allocator`, so they must move together",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["oxc_*"],
+      "groupName": "oxc crates"
+    },
+    {
       "description": "vize releases several times a day; update it once a week",
       "matchPackageNames": ["vize"],
       "schedule": ["* 0-3 * * 1"]
