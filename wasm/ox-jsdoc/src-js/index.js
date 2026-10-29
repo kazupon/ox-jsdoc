@@ -139,17 +139,48 @@ export function initWasm(input) {
 }
 
 /**
+ * Copy the Binary AST of `handle` out of wasm memory, read its diagnostics
+ * and free it.
+ *
+ * The bytes live in wasm memory and belong to the wasm-bindgen handle. A
+ * view into them would go stale: growing the memory (any later call may)
+ * detaches its `ArrayBuffer`, and the bytes are freed by `handle.free()` or
+ * once the handle is collected (the glue registers it with a
+ * `FinalizationRegistry`). The copy lives in JS memory for as long as the
+ * AST does, like the `Buffer` of the NAPI binding, and starts at offset 0,
+ * which meets the 4-byte alignment that the decoder needs.
+ *
+ * @param {{ bufferPtr(): number, bufferLen(): number, diagnostics(): any[], free(): void }} handle
+ * @returns {{ sourceFile: RemoteSourceFile, diagnostics: unknown[] }}
+ */
+function takeResult(handle) {
+  try {
+    const ptr = handle.bufferPtr()
+    const memory = /** @type {WebAssembly.Memory} */ (wasmMemory)
+    const bytes = memory.buffer.slice(ptr, ptr + handle.bufferLen())
+    return { sourceFile: new RemoteSourceFile(bytes), diagnostics: handle.diagnostics() }
+  } finally {
+    handle.free()
+  }
+}
+
+/**
+ * The `free()` of a result. The wasm-side bytes are freed before `parse()`
+ * and `parseBatch()` return, so there is nothing left to release; it is kept
+ * so that existing calls keep working.
+ */
+const free = () => {}
+
+/**
  * Parse a complete `/** ... *​/` JSDoc block comment.
  *
- * The Rust side returns a handle whose bytes live inside `wasm.memory.buffer`.
- * The wrapper wraps those bytes as a `Uint8Array` view (no copy) and feeds
- * them into `@ox-jsdoc/decoder`'s `RemoteSourceFile`. Subsequent lazy-getter
- * reads pull from wasm memory directly.
+ * The Rust side writes the Binary AST into wasm memory. The wrapper copies it
+ * into a JS `ArrayBuffer` for `@ox-jsdoc/decoder`'s `RemoteSourceFile`, and
+ * frees the wasm-side bytes before returning. So the AST stays readable for
+ * as long as it is referenced, whatever later calls do to wasm memory.
  *
- * **Lifecycle**: the returned object's `free()` releases the wasm-side
- * bytes. After `free()`, accessing `ast` / `sourceFile` is undefined
- * behaviour. Callers that need the bytes to outlive `free()` should call
- * `toPlainObject(ast)` first to materialize the lazy tree.
+ * **Lifecycle**: nothing to release. The returned object's `free()` does
+ * nothing; it is kept for compatibility.
  *
  * @param {string} sourceText
  * @param {{
@@ -181,17 +212,15 @@ export function parse(sourceText, options) {
     options?.baseOffset ?? null
   )
 
-  const view = new Uint8Array(wasmMemory.buffer, handle.bufferPtr(), handle.bufferLen())
-  const sourceFile = new RemoteSourceFile(view)
-  const diagnostics = /** @type {Array<{ message: string }>} */ (
-    /** @type {unknown} */ (handle.diagnostics())
-  )
+  const result = takeResult(handle)
+  const sourceFile = result.sourceFile
+  const diagnostics = /** @type {Array<{ message: string }>} */ (result.diagnostics)
   const root = sourceFile.asts[0] ?? null
   return {
     ast: /** @type {import('@ox-jsdoc/decoder').RemoteJsdocBlock | null} */ (root),
     diagnostics,
     sourceFile,
-    free: () => handle.free()
+    free
   }
 }
 
@@ -199,6 +228,10 @@ export function parse(sourceText, options) {
  * Parse N JSDoc block comments at once into a single shared binary-AST
  * buffer. Common strings (`*`, `*​/`, tag names) are interned once across
  * all comments.
+ *
+ * As with {@link parse}, the buffer is copied out of wasm memory, so the ASTs
+ * stay readable for as long as they are referenced, and `free()` does
+ * nothing.
  *
  * @param {Array<{ sourceText: string, baseOffset?: number }>} items
  * @param {{
@@ -296,10 +329,10 @@ export function parseBatch(items, options) {
     options?.preserveWhitespace ?? null
   )
 
-  const view = new Uint8Array(wasmMemory.buffer, handle.bufferPtr(), handle.bufferLen())
-  const sourceFile = new RemoteSourceFile(view)
+  const result = takeResult(handle)
+  const sourceFile = result.sourceFile
   const diagnostics = /** @type {Array<{ message: string, rootIndex: number }>} */ (
-    /** @type {unknown} */ (handle.diagnostics())
+    result.diagnostics
   )
   const asts = /** @type {Array<import('@ox-jsdoc/decoder').RemoteJsdocBlock | null>} */ (
     sourceFile.asts
@@ -313,7 +346,7 @@ export function parseBatch(items, options) {
       blocks,
       diagnostics,
       sourceFile,
-      free: () => handle.free()
+      free
     }
   }
 
@@ -321,7 +354,7 @@ export function parseBatch(items, options) {
     asts,
     diagnostics,
     sourceFile,
-    free: () => handle.free()
+    free
   }
 }
 
