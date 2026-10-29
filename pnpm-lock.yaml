@@ -266,8 +266,8 @@ importers:
         specifier: ^10.0.0
         version: 10.1.0
       decamelize:
-        specifier: ^6.0.1
-        version: 6.0.1
+        specifier: ^7.0.0
+        version: 7.0.0
       eslint:
         specifier: 9.39.4
         version: 9.39.4(jiti@2.6.1)
@@ -5426,9 +5426,9 @@ packages:
     resolution: {integrity: sha512-9iE1PgSik9HeIIw2JO94IidnE3eBoQrFJ3w7sFuzSX4DpmZ3v5sZpUiV5Swcf6mQEF+Y0ru8Neo+p+nyh2J+hQ==}
     engines: {node: '>=10'}
 
-  decamelize@6.0.1:
-    resolution: {integrity: sha512-G7Cqgaelq68XHJNGlZ7lrNQyhZGsFqpwtGFexqUv4IQdjKoSYF7ipZ9UuTJZUSQXFj/XaoBLuEVIVqr8EJngEQ==}
-    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+  decamelize@7.0.0:
+    resolution: {integrity: sha512-uT/0KzZIx9u4b5vW3HLWtSYwjLTuY2QFVY3xNmfXXUmTqnfgzfT8DEA2gY93go5sXEjnbqP66KcURdVxm0rDXA==}
+    engines: {node: '>=22'}
 
   decompress-response@6.0.0:
     resolution: {integrity: sha512-aW35yZM6Bb/4oJlZncMH2LCoZtJXTRxES17vE3hoRiowU2kWHaJKFkSBDnDR+cm9J+9QhXmREyIfv0pji9ejCQ==}
@@ -13192,7 +13192,7 @@ snapshots:
 
   decamelize@4.0.0: {}
 
-  decamelize@6.0.1: {}
+  decamelize@7.0.0: {}
 
   decompress-response@6.0.0:
     dependencies:
