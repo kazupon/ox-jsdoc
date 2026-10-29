@@ -556,8 +556,35 @@ function applyTagTokens(tokens) {
 	tokens.postName = parsedName.postName;
 	tokens.description = parsedName.rest;
 }
+/**
+* The number of bytes that `text` takes in UTF-8. Node ranges are UTF-8 byte
+* offsets, so line offsets must be counted in bytes too, not in the UTF-16
+* units of `String#length`.
+*/
+function utf8ByteLength(text) {
+	let bytes = text.length;
+	for (let i = 0; i < text.length; i++) {
+		const code = text.charCodeAt(i);
+		if (code < 128) continue;
+		if (code < 2048) bytes += 1;
+		else if (code >= 55296 && code <= 56319 && isLowSurrogate(text.charCodeAt(i + 1))) {
+			bytes += 2;
+			i++;
+		} else bytes += 2;
+	}
+	return bytes;
+}
+function asciiByteLength(text) {
+	return text.length;
+}
+function isLowSurrogate(code) {
+	return code >= 56320 && code <= 57343;
+}
+/** Any character outside ASCII, including the astral ones. */
+const NON_ASCII = /[\u0080-\u{10ffff}]/u;
 function splitPhysicalLines(sourceText, baseOffset) {
 	const lines = [];
+	const byteLength = NON_ASCII.test(sourceText) ? utf8ByteLength : asciiByteLength;
 	let offset = 0;
 	for (const match of sourceText.matchAll(/.*(?:\r\n|\n|\r|$)/gu)) {
 		const raw = match[0];
@@ -571,13 +598,14 @@ function splitPhysicalLines(sourceText, baseOffset) {
 			lineEnd = raw.at(-1) ?? "";
 			source = raw.slice(0, -1);
 		}
+		const sourceBytes = byteLength(source);
 		lines.push({
 			source,
 			lineEnd,
 			startOffset: baseOffset + offset,
-			endOffset: baseOffset + offset + source.length
+			endOffset: baseOffset + offset + sourceBytes
 		});
-		offset += raw.length;
+		offset += sourceBytes + lineEnd.length;
 	}
 	return lines;
 }

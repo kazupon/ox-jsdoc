@@ -152,7 +152,9 @@ interface LineTokens {
 interface PhysicalLine {
   source: string
   lineEnd: string
+  /** UTF-8 byte offset, in the same unit as `range` (start of the line). */
   startOffset: number
+  /** UTF-8 byte offset of the end of the line, without the line ending. */
   endOffset: number
 }
 
@@ -390,8 +392,48 @@ function applyTagTokens(tokens: LineTokens): void {
   tokens.description = parsedName.rest
 }
 
+/**
+ * The number of bytes that `text` takes in UTF-8. Node ranges are UTF-8 byte
+ * offsets, so line offsets must be counted in bytes too, not in the UTF-16
+ * units of `String#length`.
+ */
+function utf8ByteLength(text: string): number {
+  let bytes = text.length
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i)
+    if (code < 0x80) {
+      continue
+    }
+    if (code < 0x800) {
+      bytes += 1
+    } else if (code >= 0xd800 && code <= 0xdbff && isLowSurrogate(text.charCodeAt(i + 1))) {
+      // A surrogate pair: 2 UTF-16 units, 4 bytes.
+      bytes += 2
+      i++
+    } else {
+      // 3 bytes, also for a lone surrogate (encoded as U+FFFD).
+      bytes += 2
+    }
+  }
+  return bytes
+}
+
+function asciiByteLength(text: string): number {
+  return text.length
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff
+}
+
+/** Any character outside ASCII, including the astral ones. */
+const NON_ASCII = /[\u0080-\u{10ffff}]/u
+
 function splitPhysicalLines(sourceText: string, baseOffset: number): PhysicalLine[] {
   const lines: PhysicalLine[] = []
+  // UTF-8 bytes from `baseOffset` (see `utf8ByteLength`). Most comments are
+  // ASCII only, where the length is already the byte count.
+  const byteLength = NON_ASCII.test(sourceText) ? utf8ByteLength : asciiByteLength
   let offset = 0
   const pattern = /.*(?:\r\n|\n|\r|$)/gu
   for (const match of sourceText.matchAll(pattern)) {
@@ -408,13 +450,14 @@ function splitPhysicalLines(sourceText: string, baseOffset: number): PhysicalLin
       lineEnd = raw.at(-1) ?? ''
       source = raw.slice(0, -1)
     }
+    const sourceBytes = byteLength(source)
     lines.push({
       source,
       lineEnd,
       startOffset: baseOffset + offset,
-      endOffset: baseOffset + offset + source.length
+      endOffset: baseOffset + offset + sourceBytes
     })
-    offset += raw.length
+    offset += sourceBytes + lineEnd.length
   }
   return lines
 }
