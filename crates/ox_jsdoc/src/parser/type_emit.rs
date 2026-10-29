@@ -349,15 +349,15 @@ pub fn emit_type_node(
             parent
         }
         TypeNodeData::IndexSignature(n) => {
-            // Span covers `[key: K]: V`; key is just the leading identifier
-            // → length-mismatch fallback.
+            // Span covers `[key: K]` (the key of an ObjectField); key is
+            // just the identifier inside → length-mismatch fallback.
             let key = writer.intern_source_or_string(n.key, n.span);
             let parent = write_type_index_signature(writer, n.span, parent_index, key).as_u32();
             emit_type_node(writer, &n.right, parent);
             parent
         }
         TypeNodeData::MappedType(n) => {
-            // Same parent-spanning shape as IndexSignature.
+            // Span covers `[K in T]`, as for IndexSignature.
             let key = writer.intern_source_or_string(n.key, n.span);
             let parent = write_type_mapped_type(writer, n.span, parent_index, key).as_u32();
             emit_type_node(writer, &n.right, parent);
