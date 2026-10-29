@@ -611,11 +611,15 @@ function stripTypeBraces(type: string): string {
   return type.replace(/^\{/u, '').replace(/\}$/u, '')
 }
 
-function compactDescriptionFromEntries(entries: PublicSourceEntry[]): string {
-  return entries
-    .filter(entry => entry.tokens.tag === '')
-    .map(entry => entry.tokens.description)
-    .map(description => description.replace(/^\s*/u, ''))
+/**
+ * A block description in comment-parser's `compact` spacing, as in
+ * `parseComment().description`: each line trimmed, the empty ones dropped,
+ * the rest joined with a space.
+ */
+function compactDescription(description: string): string {
+  return description
+    .split('\n')
+    .map(line => line.trim())
     .filter(Boolean)
     .join(' ')
 }
@@ -956,9 +960,12 @@ export class RemoteJsdocBlock implements LazyNode, SourceLikeNode {
     }
     if (internal.sourceFile.compatMode) {
       const source = buildBlockSource(this)
-      const sourceDescription = compactDescriptionFromEntries(source)
-      if (sourceDescription) {
-        json.description = sourceDescription
+      // comment-parser's block description, from the parsed one: it ends
+      // before the first tag and keeps the lines of fences. (The lines of
+      // `source` would also take the continuation lines of tags.)
+      const description = this.description
+      if (description !== null) {
+        json.description = compactDescription(description)
       }
       // Match jsdoccomment's optional-field serialization: omit absent
       // line indices (Rust serializer uses `skip_serializing_if = "Option::is_none"`).
