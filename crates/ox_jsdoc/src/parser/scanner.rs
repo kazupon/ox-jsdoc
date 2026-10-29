@@ -217,4 +217,22 @@ mod tests {
         assert_eq!(result.lines[1].content_start, 107);
         assert_eq!(result.margins[1].delimiter, "*");
     }
+
+    #[test]
+    fn leaves_the_cr_of_crlf_line_ends_out_of_the_content() {
+        let source = "/**\r\n * Find a user.\r\n *\r\n * @param {string} id\r\n */";
+        let result = logical_lines(source, 0);
+        let contents: Vec<_> = result.lines.iter().map(|line| line.content).collect();
+        assert_eq!(contents, ["", "Find a user.", "", "@param {string} id", ""]);
+        let empty: Vec<_> = result
+            .lines
+            .iter()
+            .map(|line| line.is_content_empty)
+            .collect();
+        assert_eq!(empty, [true, false, true, false, true]);
+        let line_ends: Vec<_> = result.margins.iter().map(|m| m.line_end).collect();
+        assert_eq!(line_ends, ["\r\n", "\r\n", "\r\n", "\r\n", ""]);
+        let user = source.find("user.").unwrap() as u32;
+        assert_eq!(result.lines[1].content_end(), user + 5);
+    }
 }
