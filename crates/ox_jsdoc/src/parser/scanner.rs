@@ -154,12 +154,20 @@ pub fn logical_lines(source_text: &str, base_offset: u32) -> ScanResult<'_> {
         let post_delimiter = &raw_line[post_delim_start..pos];
 
         let content_start = pos;
-        let content = &raw_line[content_start..];
+        let mut content = &raw_line[content_start..];
 
-        let is_content_empty = content.bytes().all(|b| b == b' ' || b == b'\t');
+        let mut is_content_empty = content.bytes().all(|b| b == b' ' || b == b'\t');
 
         let line_end_str = if line_end < body_len {
             if line_end > 0 && body_bytes[line_end - 1] == b'\r' {
+                // Leave the `\r` out of the content, as `line_end` records
+                // it: otherwise it would count as text (a ` *` line would not
+                // be blank) and reach the ranges that end at the end of the
+                // content. The margin never takes the `\r`, so the content
+                // ends with it. The blank check is done again here: doing it
+                // once, after this block, measured slower on LF lines.
+                content = content.strip_suffix('\r').unwrap_or(content);
+                is_content_empty = content.bytes().all(|b| b == b' ' || b == b'\t');
                 "\r\n"
             } else {
                 "\n"
