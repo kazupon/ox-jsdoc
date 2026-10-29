@@ -2629,12 +2629,27 @@ function decodeKindToClass(kind) {
 *
 * Per js-decoder.md, all per-instance state lives in a single `#internal`
 * object (V8 hidden-class friendly), and this is the only class that
-* actually allocates caches (stringCache, nodeCache).
+* actually allocates caches (stringCache, rangeCache, nodeCache).
 *
 * @author kazuya kawaguchi (a.k.a. kazupon)
 * @license MIT
 */
 const utf8Decoder = new TextDecoder("utf-8");
+/**
+* Key of `rangeCache` for a string read by `(offset, length)` from String
+* Data.
+*
+* Both parts are needed: strings of different lengths often start at the
+* same offset (`""` and `" "` at the head of the common strings, the name and
+* the raw body of a tag). A string shorter than 256 bytes (every inline one)
+* gets `offset * 256 + length`, a small integer for V8 while the offset is
+* below 2^22 (4 MB of String Data), which keeps `Map` lookups fast. A longer
+* one gets a negative key (`length` is a u16 and `offset` a u32, so it stays
+* exact). The two ranges do not overlap.
+*/
+function rangeCacheKey(offset, length) {
+	return length < 256 ? offset * 256 + length : -(offset * 65536 + length) - 1;
+}
 /**
 * Root of the lazy decoder. Construct one per Binary AST buffer.
 *
@@ -2688,6 +2703,7 @@ var RemoteSourceFile = class {
 			sourceTextLength: uint32View[8],
 			rootCount: uint32View[9],
 			stringCache: /* @__PURE__ */ new Map(),
+			rangeCache: /* @__PURE__ */ new Map(),
 			nodeCache: new Array(nodeCount),
 			$asts: void 0
 		};
@@ -2755,19 +2771,18 @@ var RemoteSourceFile = class {
 	* (`offset === STRING_FIELD_NONE_OFFSET`). Used by Extended Data string
 	* slots which embed `(offset, length)` directly.
 	*
-	* Cache key uses a high-bit-set form of `offset` so it never collides
-	* with `getString(idx)` cache entries (string-leaf path uses small
-	* indices, ED path uses byte offsets — both fit in u32 and overlap).
+	* Cached by the `(offset, length)` pair: strings of different lengths
+	* often start at the same offset.
 	*/
 	getStringByField(offset, length) {
 		if (offset === 4294967295) return null;
-		const cacheKey = -(offset + 1);
-		const cached = this.#internal.stringCache.get(cacheKey);
+		const cacheKey = rangeCacheKey(offset, length);
+		const cached = this.#internal.rangeCache.get(cacheKey);
 		if (cached !== void 0) return cached;
 		const { view, stringDataOffset } = this.#internal;
 		const bytes = new Uint8Array(view.buffer, view.byteOffset + stringDataOffset + offset, length);
 		const str = utf8Decoder.decode(bytes);
-		this.#internal.stringCache.set(cacheKey, str);
+		this.#internal.rangeCache.set(cacheKey, str);
 		return str;
 	}
 	/**
@@ -2775,18 +2790,17 @@ var RemoteSourceFile = class {
 	* string. Always returns a real `&str` (never `null`) — encoders only
 	* emit `TypeTag::StringInline` for present, non-empty short strings.
 	*
-	* Reuses the same cache-key disambiguation as `getStringByField` (offset
-	* is tagged with the sign bit) so inline-path lookups never collide with
-	* String-Offsets-table lookups.
+	* Cached by the `(offset, length)` pair, like `getStringByField`: both
+	* point into String Data, so the same pair is the same string.
 	*/
 	getStringByOffsetAndLength(offset, length) {
-		const cacheKey = -(offset + 1);
-		const cached = this.#internal.stringCache.get(cacheKey);
+		const cacheKey = rangeCacheKey(offset, length);
+		const cached = this.#internal.rangeCache.get(cacheKey);
 		if (cached !== void 0) return cached;
 		const { view, stringDataOffset } = this.#internal;
 		const bytes = new Uint8Array(view.buffer, view.byteOffset + stringDataOffset + offset, length);
 		const str = utf8Decoder.decode(bytes);
-		this.#internal.stringCache.set(cacheKey, str);
+		this.#internal.rangeCache.set(cacheKey, str);
 		return str;
 	}
 	/**

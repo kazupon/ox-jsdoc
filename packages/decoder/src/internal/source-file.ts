@@ -7,7 +7,7 @@
  *
  * Per js-decoder.md, all per-instance state lives in a single `#internal`
  * object (V8 hidden-class friendly), and this is the only class that
- * actually allocates caches (stringCache, nodeCache).
+ * actually allocates caches (stringCache, rangeCache, nodeCache).
  *
  * @author kazuya kawaguchi (a.k.a. kazupon)
  * @license MIT
@@ -45,6 +45,22 @@ import type { LazyNode, RemoteSourceFileLike } from './types.ts'
 const utf8Decoder = new TextDecoder('utf-8')
 
 /**
+ * Key of `rangeCache` for a string read by `(offset, length)` from String
+ * Data.
+ *
+ * Both parts are needed: strings of different lengths often start at the
+ * same offset (`""` and `" "` at the head of the common strings, the name and
+ * the raw body of a tag). A string shorter than 256 bytes (every inline one)
+ * gets `offset * 256 + length`, a small integer for V8 while the offset is
+ * below 2^22 (4 MB of String Data), which keeps `Map` lookups fast. A longer
+ * one gets a negative key (`length` is a u16 and `offset` a u32, so it stays
+ * exact). The two ranges do not overlap.
+ */
+function rangeCacheKey(offset: number, length: number): number {
+  return length < 0x100 ? offset * 0x100 + length : -(offset * 0x1_0000 + length) - 1
+}
+
+/**
  * Construction options for {@link RemoteSourceFile}.
  */
 export interface RemoteSourceFileOptions {
@@ -77,7 +93,10 @@ interface SourceFileInternal {
   nodeCount: number
   sourceTextLength: number
   rootCount: number
+  /** Strings read by String Offsets index (`getString`). */
   stringCache: Map<number, string>
+  /** Strings read by `(offset, length)` (see `rangeCacheKey`). */
+  rangeCache: Map<number, string>
   nodeCache: Array<LazyNode | null | undefined>
   $asts: ReadonlyArray<LazyNode | null> | undefined
 }
@@ -160,6 +179,7 @@ export class RemoteSourceFile implements RemoteSourceFileLike {
       sourceTextLength: uint32View[SOURCE_TEXT_LENGTH_FIELD >>> 2]!,
       rootCount: uint32View[ROOT_COUNT_FIELD >>> 2]!,
       stringCache: new Map(),
+      rangeCache: new Map(),
       // V8 hot path: `new Array(n)` keeps the cache as a HOLEY array which
       // is what `nodeCache[i] = ...` assignments expect. `Array.from({length: n})`
       // pre-fills with `undefined` and forces a packed shape that costs us
@@ -243,25 +263,22 @@ export class RemoteSourceFile implements RemoteSourceFileLike {
    * (`offset === STRING_FIELD_NONE_OFFSET`). Used by Extended Data string
    * slots which embed `(offset, length)` directly.
    *
-   * Cache key uses a high-bit-set form of `offset` so it never collides
-   * with `getString(idx)` cache entries (string-leaf path uses small
-   * indices, ED path uses byte offsets — both fit in u32 and overlap).
+   * Cached by the `(offset, length)` pair: strings of different lengths
+   * often start at the same offset.
    */
   getStringByField(offset: number, length: number): string | null {
     if (offset === STRING_FIELD_NONE_OFFSET) {
       return null
     }
-    // Cache key disambiguation: ED-path keys are tagged with a sentinel
-    // bit so they never collide with index-path keys.
-    const cacheKey = -(offset + 1)
-    const cached = this.#internal.stringCache.get(cacheKey)
+    const cacheKey = rangeCacheKey(offset, length)
+    const cached = this.#internal.rangeCache.get(cacheKey)
     if (cached !== undefined) {
       return cached
     }
     const { view, stringDataOffset } = this.#internal
     const bytes = new Uint8Array(view.buffer, view.byteOffset + stringDataOffset + offset, length)
     const str = utf8Decoder.decode(bytes)
-    this.#internal.stringCache.set(cacheKey, str)
+    this.#internal.rangeCache.set(cacheKey, str)
     return str
   }
 
@@ -270,20 +287,19 @@ export class RemoteSourceFile implements RemoteSourceFileLike {
    * string. Always returns a real `&str` (never `null`) — encoders only
    * emit `TypeTag::StringInline` for present, non-empty short strings.
    *
-   * Reuses the same cache-key disambiguation as `getStringByField` (offset
-   * is tagged with the sign bit) so inline-path lookups never collide with
-   * String-Offsets-table lookups.
+   * Cached by the `(offset, length)` pair, like `getStringByField`: both
+   * point into String Data, so the same pair is the same string.
    */
   getStringByOffsetAndLength(offset: number, length: number): string {
-    const cacheKey = -(offset + 1)
-    const cached = this.#internal.stringCache.get(cacheKey)
+    const cacheKey = rangeCacheKey(offset, length)
+    const cached = this.#internal.rangeCache.get(cacheKey)
     if (cached !== undefined) {
       return cached
     }
     const { view, stringDataOffset } = this.#internal
     const bytes = new Uint8Array(view.buffer, view.byteOffset + stringDataOffset + offset, length)
     const str = utf8Decoder.decode(bytes)
-    this.#internal.stringCache.set(cacheKey, str)
+    this.#internal.rangeCache.set(cacheKey, str)
     return str
   }
 

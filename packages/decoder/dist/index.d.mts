@@ -152,9 +152,8 @@ export declare class RemoteSourceFile implements RemoteSourceFileLike {
    * (`offset === STRING_FIELD_NONE_OFFSET`). Used by Extended Data string
    * slots which embed `(offset, length)` directly.
    *
-   * Cache key uses a high-bit-set form of `offset` so it never collides
-   * with `getString(idx)` cache entries (string-leaf path uses small
-   * indices, ED path uses byte offsets — both fit in u32 and overlap).
+   * Cached by the `(offset, length)` pair: strings of different lengths
+   * often start at the same offset.
    */
   getStringByField(offset: number, length: number): string | null;
   /**
@@ -162,9 +161,8 @@ export declare class RemoteSourceFile implements RemoteSourceFileLike {
    * string. Always returns a real `&str` (never `null`) — encoders only
    * emit `TypeTag::StringInline` for present, non-empty short strings.
    *
-   * Reuses the same cache-key disambiguation as `getStringByField` (offset
-   * is tagged with the sign bit) so inline-path lookups never collide with
-   * String-Offsets-table lookups.
+   * Cached by the `(offset, length)` pair, like `getStringByField`: both
+   * point into String Data, so the same pair is the same string.
    */
   getStringByOffsetAndLength(offset: number, length: number): string;
   /**
