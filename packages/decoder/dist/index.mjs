@@ -1712,7 +1712,7 @@ var RemoteNodeListNode = class {
 };
 // src/internal/nodes/type-nodes.ts
 /**
-* Lazy classes for the 45 TypeNode kinds (`0x80 - 0xAC`).
+* Lazy classes for the 47 TypeNode kinds (`0x80 - 0xAE`).
 *
 * Mirrors `crates/ox_jsdoc/src/decoder/nodes/type_node.rs`.
 *
@@ -1720,7 +1720,7 @@ var RemoteNodeListNode = class {
 *
 * - **Pattern 1 — String only** (5 kinds): payload lives in the 30-bit
 *   String slot, optionally with quote/special-type flags in Common Data.
-* - **Pattern 2 — Children only** (29 kinds): Children-type Node Data
+* - **Pattern 2 — Children only** (31 kinds): Children-type Node Data
 *   carries the bitmask; child accessors use the Children-type helpers.
 * - **Pattern 3 — Mixed** (6 kinds): Extended type with a key/name string
 *   plus zero or one child node.
@@ -2302,6 +2302,93 @@ function defineSignature(typeName) {
 }
 var RemoteTypeCallSignature = class extends defineSignature("TypeCallSignature") {};
 var RemoteTypeConstructorSignature = class extends defineSignature("TypeConstructorSignature") {};
+/** `TypeComputedProperty` — the `[k]` key of a `TypeObjectField`. */
+var RemoteTypeComputedProperty = class {
+	type = "TypeComputedProperty";
+	_internal;
+	constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
+		this._internal = {
+			view,
+			byteIndex,
+			index,
+			rootIndex,
+			parent,
+			sourceFile
+		};
+	}
+	get range() {
+		return absoluteRange(this._internal);
+	}
+	get parent() {
+		return this._internal.parent;
+	}
+	/** The type inside the brackets. */
+	get value() {
+		return childNodeAtVisitorIndexChildren(this._internal, 0);
+	}
+	toJSON() {
+		return {
+			type: this.type,
+			range: [...this.range],
+			value: this.value?.toJSON() ?? null
+		};
+	}
+	[inspectSymbol]() {
+		return inspectPayload(this.toJSON(), "TypeComputedProperty");
+	}
+};
+/** `TypeComputedMethod` — the `[k]<T>(a: A): R` key of a `TypeObjectField`. */
+var RemoteTypeComputedMethod = class {
+	type = "TypeComputedMethod";
+	_internal;
+	constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
+		this._internal = {
+			view,
+			byteIndex,
+			index,
+			rootIndex,
+			parent,
+			sourceFile
+		};
+	}
+	get range() {
+		return absoluteRange(this._internal);
+	}
+	get parent() {
+		return this._internal.parent;
+	}
+	/** Whether `?` follows the brackets (`[k]?(): R`). */
+	get optional() {
+		return (commonData(this._internal) & 1) !== 0;
+	}
+	/** The type inside the brackets. */
+	get value() {
+		return childNodeAtVisitorIndexChildren(this._internal, 0);
+	}
+	get parameters() {
+		return childNodeAtVisitorIndexChildren(this._internal, 1);
+	}
+	get returnType() {
+		return childNodeAtVisitorIndexChildren(this._internal, 2);
+	}
+	get typeParameters() {
+		return childNodeAtVisitorIndexChildren(this._internal, 3);
+	}
+	toJSON() {
+		return {
+			type: this.type,
+			range: [...this.range],
+			optional: this.optional,
+			value: this.value?.toJSON() ?? null,
+			parameters: this.parameters?.toJSON() ?? null,
+			returnType: this.returnType?.toJSON() ?? null,
+			typeParameters: this.typeParameters?.toJSON() ?? null
+		};
+	}
+	[inspectSymbol]() {
+		return inspectPayload(this.toJSON(), "TypeComputedMethod");
+	}
+};
 /** `TypeKeyValue` — key string in Extended Data + first child as `right`. */
 var RemoteTypeKeyValue = class {
 	type = "TypeKeyValue";
@@ -2564,7 +2651,7 @@ var RemoteTypeUniqueSymbol = class extends definePureLeaf("TypeUniqueSymbol") {}
 *
 * Mirrors the Rust `Kind::from_u8` mapping. Phase 4 will code-generate
 * this file from a single schema. Until then, every Kind discriminant
-* (0x01-0x0F, 0x7F, 0x80-0xAC) is wired by hand.
+* (0x01-0x0F, 0x7F, 0x80-0xAE) is wired by hand.
 *
 * @author kazuya kawaguchi (a.k.a. kazupon)
 * @license MIT
@@ -2635,6 +2722,8 @@ KIND_TABLE[169] = RemoteTypeMethodSignature;
 KIND_TABLE[170] = RemoteTypeIndexedAccessIndex;
 KIND_TABLE[171] = RemoteTypeParameterList;
 KIND_TABLE[172] = RemoteTypeReadonlyProperty;
+KIND_TABLE[173] = RemoteTypeComputedProperty;
+KIND_TABLE[174] = RemoteTypeComputedMethod;
 /**
 * Look up the lazy class for a given Kind byte.
 */
@@ -2917,7 +3006,7 @@ var RemoteSourceFile = class {
 * @license MIT
 */
 /**
-* Visitor keys for every Remote* node kind (60 = 15 Comment AST + 45 TypeNode).
+* Visitor keys for every Remote* node kind (62 = 15 Comment AST + 47 TypeNode).
 *
 * Each entry maps a node `type` name to the **traversable child property
 * names** in canonical visit order. Mirrors the jsdoccomment / ESLint
@@ -3030,7 +3119,14 @@ const jsdocVisitorKeys = Object.freeze({
 		"typeParameters"
 	],
 	TypeTemplateLiteral: ["interpolations"],
-	TypeSymbol: ["element"]
+	TypeSymbol: ["element"],
+	TypeComputedProperty: ["value"],
+	TypeComputedMethod: [
+		"value",
+		"parameters",
+		"returnType",
+		"typeParameters"
+	]
 });
 /**
 * Recursively convert a Remote* lazy node into a plain JSON object.
@@ -3045,4 +3141,4 @@ function toPlainObject(node) {
 	if (typeof candidate.toJSON === "function") return candidate.toJSON();
 	return node;
 }
-export { EMPTY_NODE_LIST, RemoteJsdocBlock, RemoteJsdocBorrowsTagBody, RemoteJsdocDescriptionLine, RemoteJsdocGenericTagBody, RemoteJsdocIdentifier, RemoteJsdocInlineTag, RemoteJsdocNamepathSource, RemoteJsdocParameterName, RemoteJsdocRawTagBody, RemoteJsdocTag, RemoteJsdocTagName, RemoteJsdocTagNameValue, RemoteJsdocText, RemoteJsdocTypeLine, RemoteJsdocTypeSource, RemoteNodeList, RemoteNodeListNode, RemoteSourceFile, RemoteTypeAny, RemoteTypeAsserts, RemoteTypeAssertsPlain, RemoteTypeCallSignature, RemoteTypeConditional, RemoteTypeConstructorSignature, RemoteTypeFunction, RemoteTypeGeneric, RemoteTypeImport, RemoteTypeIndexSignature, RemoteTypeIndexedAccessIndex, RemoteTypeInfer, RemoteTypeIntersection, RemoteTypeJsdocObjectField, RemoteTypeKeyOf, RemoteTypeKeyValue, RemoteTypeMappedType, RemoteTypeMethodSignature, RemoteTypeName, RemoteTypeNamePath, RemoteTypeNotNullable, RemoteTypeNull, RemoteTypeNullable, RemoteTypeNumber, RemoteTypeObject, RemoteTypeObjectField, RemoteTypeOptional, RemoteTypeParameterList, RemoteTypeParenthesis, RemoteTypePredicate, RemoteTypeProperty, RemoteTypeReadonlyArray, RemoteTypeReadonlyProperty, RemoteTypeSpecialNamePath, RemoteTypeStringValue, RemoteTypeSymbol, RemoteTypeTemplateLiteral, RemoteTypeTuple, RemoteTypeTypeOf, RemoteTypeTypeParameter, RemoteTypeUndefined, RemoteTypeUnion, RemoteTypeUniqueSymbol, RemoteTypeUnknown, RemoteTypeVariadic, jsdocVisitorKeys, toPlainObject };
+export { EMPTY_NODE_LIST, RemoteJsdocBlock, RemoteJsdocBorrowsTagBody, RemoteJsdocDescriptionLine, RemoteJsdocGenericTagBody, RemoteJsdocIdentifier, RemoteJsdocInlineTag, RemoteJsdocNamepathSource, RemoteJsdocParameterName, RemoteJsdocRawTagBody, RemoteJsdocTag, RemoteJsdocTagName, RemoteJsdocTagNameValue, RemoteJsdocText, RemoteJsdocTypeLine, RemoteJsdocTypeSource, RemoteNodeList, RemoteNodeListNode, RemoteSourceFile, RemoteTypeAny, RemoteTypeAsserts, RemoteTypeAssertsPlain, RemoteTypeCallSignature, RemoteTypeComputedMethod, RemoteTypeComputedProperty, RemoteTypeConditional, RemoteTypeConstructorSignature, RemoteTypeFunction, RemoteTypeGeneric, RemoteTypeImport, RemoteTypeIndexSignature, RemoteTypeIndexedAccessIndex, RemoteTypeInfer, RemoteTypeIntersection, RemoteTypeJsdocObjectField, RemoteTypeKeyOf, RemoteTypeKeyValue, RemoteTypeMappedType, RemoteTypeMethodSignature, RemoteTypeName, RemoteTypeNamePath, RemoteTypeNotNullable, RemoteTypeNull, RemoteTypeNullable, RemoteTypeNumber, RemoteTypeObject, RemoteTypeObjectField, RemoteTypeOptional, RemoteTypeParameterList, RemoteTypeParenthesis, RemoteTypePredicate, RemoteTypeProperty, RemoteTypeReadonlyArray, RemoteTypeReadonlyProperty, RemoteTypeSpecialNamePath, RemoteTypeStringValue, RemoteTypeSymbol, RemoteTypeTemplateLiteral, RemoteTypeTuple, RemoteTypeTypeOf, RemoteTypeTypeParameter, RemoteTypeUndefined, RemoteTypeUnion, RemoteTypeUniqueSymbol, RemoteTypeUnknown, RemoteTypeVariadic, jsdocVisitorKeys, toPlainObject };

@@ -31,12 +31,14 @@ export {
 } from './internal/nodes/jsdoc.ts'
 export type { JsdocCommentInput } from './internal/nodes/jsdoc.ts'
 
-// TypeNode classes (45).
+// TypeNode classes (47).
 export {
   RemoteTypeAny,
   RemoteTypeAsserts,
   RemoteTypeAssertsPlain,
   RemoteTypeCallSignature,
+  RemoteTypeComputedMethod,
+  RemoteTypeComputedProperty,
   RemoteTypeConditional,
   RemoteTypeConstructorSignature,
   RemoteTypeFunction,
@@ -83,7 +85,7 @@ export {
 export { RemoteNodeListNode } from './internal/nodes/node-list-node.ts'
 
 /**
- * Visitor keys for every Remote* node kind (60 = 15 Comment AST + 45 TypeNode).
+ * Visitor keys for every Remote* node kind (62 = 15 Comment AST + 47 TypeNode).
  *
  * Each entry maps a node `type` name to the **traversable child property
  * names** in canonical visit order. Mirrors the jsdoccomment / ESLint
@@ -169,7 +171,7 @@ export const jsdocVisitorKeys = Object.freeze({
   TypeAsserts: ['left', 'right'],
   TypeNamePath: ['left', 'right'],
 
-  // TypeNode — mixed shapes (13)
+  // TypeNode — mixed shapes (15)
   TypeGeneric: ['left', 'elements'],
   TypeFunction: ['parameters', 'returnType', 'typeParameters'],
   TypeConditional: ['checkType', 'extendsType', 'trueType', 'falseType'],
@@ -182,7 +184,10 @@ export const jsdocVisitorKeys = Object.freeze({
   TypeCallSignature: ['parameters', 'returnType', 'typeParameters'],
   TypeConstructorSignature: ['parameters', 'returnType', 'typeParameters'],
   TypeTemplateLiteral: ['interpolations'],
-  TypeSymbol: ['element']
+  TypeSymbol: ['element'],
+  TypeComputedProperty: ['value'],
+  // In the order of the other function-like kinds, after the key itself.
+  TypeComputedMethod: ['value', 'parameters', 'returnType', 'typeParameters']
 })
 
 /**

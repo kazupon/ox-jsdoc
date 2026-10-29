@@ -68,8 +68,8 @@ impl<'a> LazySourceFile<'a> {
     /// and [`DecodeError::IncompatibleMajor`] when the buffer's major version
     /// disagrees with [`crate::format::header::SUPPORTED_MAJOR`]. Decoders
     /// silently accept buffers with a newer minor version (forward
-    /// compatibility) — Phase 1.1a is the first version, so the only valid
-    /// value is `0`.
+    /// compatibility). A newer minor version may add node kinds, which this
+    /// decoder does not know.
     pub fn new(bytes: &'a [u8]) -> Result<Self, DecodeError> {
         if bytes.len() < HEADER_SIZE {
             return Err(DecodeError::TooShort {

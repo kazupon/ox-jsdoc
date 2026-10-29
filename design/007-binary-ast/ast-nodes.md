@@ -1,6 +1,6 @@
 # AST Nodes (Catalog of target nodes)
 
-ox-jsdoc has two AST families — **comment AST (15 kinds)** and **TypeNode AST (45 kinds)** — for a total of 60 kinds, plus 1 structural special node (`Sentinel`) and 1 reserved-only discriminant (`NodeList`, kept for legacy buffer compatibility but **never emitted by the encoder** — variable-length child lists are now expressed via inline `(head_index, count)` metadata in the parent's Extended Data block), handling **62 discriminants in total** within a single Kind space (u8, 0x00-0xFF).
+ox-jsdoc has two AST families — **comment AST (15 kinds)** and **TypeNode AST (47 kinds)** — for a total of 62 kinds, plus 1 structural special node (`Sentinel`) and 1 reserved-only discriminant (`NodeList`, kept for legacy buffer compatibility but **never emitted by the encoder** — variable-length child lists are now expressed via inline `(head_index, count)` metadata in the parent's Extended Data block), handling **64 discriminants in total** within a single Kind space (u8, 0x00-0xFF).
 
 ## Design overview
 
@@ -54,7 +54,7 @@ Notes: the Rust enums `JsdocTagBody` (Generic|Borrows|Raw) and `JsdocTagValue` (
 
 ## TypeNode AST (`crates/ox_jsdoc/src/type_parser/ast.rs`)
 
-The 45 `TypeNode` variants are each treated as an independent Kind:
+The 47 `TypeNode` variants are each treated as an independent Kind:
 
 ```text
 Basic (7):       Name, Number, StringValue, Null, Undefined, Any, Unknown
@@ -64,9 +64,10 @@ Modifier (4):    Nullable, NotNullable, Optional, Variadic
 TS-specific (11): Conditional, Infer, KeyOf, TypeOf, Import, Predicate,
                   Asserts, AssertsPlain, ReadonlyArray, TemplateLiteral, UniqueSymbol
 JSDoc/Closure (1): Symbol
-Supplementary (11): ObjectField, JsdocObjectField, KeyValue, Property,
+Supplementary (13): ObjectField, JsdocObjectField, KeyValue, Property,
                     IndexSignature, MappedType, TypeParameter, CallSignature,
-                    ConstructorSignature, MethodSignature, IndexedAccessIndex
+                    ConstructorSignature, MethodSignature, IndexedAccessIndex,
+                    ComputedProperty, ComputedMethod
 Intermediate (2):  ParameterList, ReadonlyProperty
 ```
 
@@ -84,20 +85,20 @@ Small enums attached to TypeNodes (storable in 6-bit common data):
 
 ## Kind number space
 
-60 kinds + Sentinel + 1 reserved-only `NodeList` discriminant = 62 discriminants. We partition `u8` (0-255) as follows so that **the hot-path TypeNode check completes in a single instruction**:
+62 kinds + Sentinel + 1 reserved-only `NodeList` discriminant = 64 discriminants. We partition `u8` (0-255) as follows so that **the hot-path TypeNode check completes in a single instruction**:
 
 ```text
 0x00         Sentinel               (1)
 0x01 - 0x3F  Comment AST            (63 slots: 15 kinds + 48 spare)
 0x40 - 0x7E  Globally reserved      (63 slots, for new categories)
 0x7F         NodeList               (1, reserved-only boundary slot — never emitted)
-0x80 - 0xFF  TypeNode               (128 slots: 45 kinds + 83 spare)
+0x80 - 0xFF  TypeNode               (128 slots: 47 kinds + 81 spare)
 ```
 
 Design decisions:
 
 - **Place TypeNode in 0x80-0xFF (upper bit set)**: the hot-path TypeNode check becomes a single MSB test (`(kind & 0x80) != 0`), compiling to a single instruction such as x86 `TEST AL, 0x80` / ARM `TST W0, #0x80`
-- **TypeNode 83 spare slots**: leaves **more than double** the growth room for TypeScript spec additions (`satisfies`, `using`, decorator metadata, etc.) and jsdoc-type-pratt-parser extensions
+- **TypeNode 81 spare slots**: leaves **more than double** the growth room for TypeScript spec additions (`satisfies`, `using`, decorator metadata, etc.) and jsdoc-type-pratt-parser extensions
 - **Comment AST 48 spare slots**: leaves room for Markdown extensions (headings, lists, tables, etc.), Diagnostic-related additions, multi-comment containers, and so on
 - **Reserve 0x7F as the NodeList slot — kept for legacy buffer compatibility but never emitted**: variable-length child lists are stored as inline `(head_index, count)` metadata at known per-Kind byte offsets in the parent's Extended Data block (NodeList-wrapper-elimination format change). The discriminant is reserved on the boundary between globally reserved and TypeNode (also clear in debug)
 
@@ -169,7 +170,7 @@ enum TypeNode {
 
 - Changing an assigned number is **strictly forbidden** (CI checks the diff)
 - Removed node kinds are kept as gaps (e.g. `// reserved 0x05 (former JsdocXxx)`)
-- New additions are assigned to the spare slots at the end of the category (e.g., new comment AST starts at 0x10, new TypeNode starts at 0xAD)
+- New additions are assigned to the spare slots at the end of the category (e.g., new comment AST starts at 0x10, new TypeNode starts at 0xAF; `TypeComputedProperty` 0xAD and `TypeComputedMethod` 0xAE were the first additions, in protocol Minor 1)
 - Same proven policy as protobuf and tsgo
 
 ### Code generation for the dispatch table (Phase 4)

@@ -719,6 +719,35 @@ declare const RemoteTypeCallSignature_base: LazyNodeConstructor;
 export declare class RemoteTypeCallSignature extends RemoteTypeCallSignature_base {}
 declare const RemoteTypeConstructorSignature_base: LazyNodeConstructor;
 export declare class RemoteTypeConstructorSignature extends RemoteTypeConstructorSignature_base {}
+/** `TypeComputedProperty` — the `[k]` key of a `TypeObjectField`. */
+export declare class RemoteTypeComputedProperty implements LazyNode {
+  readonly type = "TypeComputedProperty";
+  readonly _internal: RemoteInternal;
+  constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
+  get range(): readonly [number, number];
+  get parent(): LazyNode | null;
+  /** The type inside the brackets. */
+  get value(): LazyNode | null;
+  toJSON(): RemoteJsonObject;
+  [inspectSymbol](): object;
+}
+/** `TypeComputedMethod` — the `[k]<T>(a: A): R` key of a `TypeObjectField`. */
+export declare class RemoteTypeComputedMethod implements LazyNode {
+  readonly type = "TypeComputedMethod";
+  readonly _internal: RemoteInternal;
+  constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
+  get range(): readonly [number, number];
+  get parent(): LazyNode | null;
+  /** Whether `?` follows the brackets (`[k]?(): R`). */
+  get optional(): boolean;
+  /** The type inside the brackets. */
+  get value(): LazyNode | null;
+  get parameters(): LazyNode | null;
+  get returnType(): LazyNode | null;
+  get typeParameters(): LazyNode | null;
+  toJSON(): RemoteJsonObject;
+  [inspectSymbol](): object;
+}
 /** `TypeKeyValue` — key string in Extended Data + first child as `right`. */
 export declare class RemoteTypeKeyValue implements LazyNode {
   readonly type = "TypeKeyValue";
@@ -809,7 +838,7 @@ export declare class RemoteNodeListNode implements LazyNode {
   [inspectSymbol](): object;
 }
 /**
- * Visitor keys for every Remote* node kind (60 = 15 Comment AST + 45 TypeNode).
+ * Visitor keys for every Remote* node kind (62 = 15 Comment AST + 47 TypeNode).
  *
  * Each entry maps a node `type` name to the **traversable child property
  * names** in canonical visit order. Mirrors the jsdoccomment / ESLint
@@ -889,6 +918,8 @@ export declare const jsdocVisitorKeys: Readonly<{
   TypeConstructorSignature: string[];
   TypeTemplateLiteral: string[];
   TypeSymbol: string[];
+  TypeComputedProperty: string[];
+  TypeComputedMethod: string[];
 }>;
 /**
  * Recursively convert a Remote* lazy node into a plain JSON object.

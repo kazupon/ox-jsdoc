@@ -33,7 +33,8 @@ use super::nodes::comment_ast::{
     LazyJsdocText, LazyJsdocTypeLine, LazyJsdocTypeSource,
 };
 use super::nodes::type_node::{
-    LazyTypeAny, LazyTypeAsserts, LazyTypeAssertsPlain, LazyTypeCallSignature, LazyTypeConditional,
+    LazyTypeAny, LazyTypeAsserts, LazyTypeAssertsPlain, LazyTypeCallSignature,
+    LazyTypeComputedMethod, LazyTypeComputedProperty, LazyTypeConditional,
     LazyTypeConstructorSignature, LazyTypeFunction, LazyTypeGeneric, LazyTypeImport,
     LazyTypeIndexSignature, LazyTypeIndexedAccessIndex, LazyTypeInfer, LazyTypeIntersection,
     LazyTypeJsdocObjectField, LazyTypeKeyOf, LazyTypeKeyValue, LazyTypeMappedType,
@@ -188,6 +189,8 @@ pub trait LazyJsdocVisitor<'a> {
             LazyTypeNode::TypeParameter(n) => self.visit_type_type_parameter(n),
             LazyTypeNode::ParameterList(n) => self.visit_type_parameter_list(n),
             LazyTypeNode::ReadonlyProperty(n) => self.visit_type_readonly_property(n),
+            LazyTypeNode::ComputedProperty(n) => self.visit_type_computed_property(n),
+            LazyTypeNode::ComputedMethod(n) => self.visit_type_computed_method(n),
             LazyTypeNode::KeyValue(n) => self.visit_type_key_value(n),
             LazyTypeNode::IndexSignature(n) => self.visit_type_index_signature(n),
             LazyTypeNode::MappedType(n) => self.visit_type_mapped_type(n),
@@ -586,6 +589,38 @@ pub trait LazyJsdocVisitor<'a> {
     fn visit_type_readonly_property_default(&mut self, node: LazyTypeReadonlyProperty<'a>) {
         if let Some(el) = node.element() {
             self.visit_type_node(el);
+        }
+    }
+
+    /// Visit a `TypeComputedProperty`. Default: walk `value`.
+    fn visit_type_computed_property(&mut self, node: LazyTypeComputedProperty<'a>) {
+        self.visit_type_computed_property_default(node);
+    }
+    /// Default `TypeComputedProperty` traversal.
+    fn visit_type_computed_property_default(&mut self, node: LazyTypeComputedProperty<'a>) {
+        if let Some(value) = node.value() {
+            self.visit_type_node(value);
+        }
+    }
+
+    /// Visit a `TypeComputedMethod`. Default: walk value → parameters →
+    /// return_type → type_parameters.
+    fn visit_type_computed_method(&mut self, node: LazyTypeComputedMethod<'a>) {
+        self.visit_type_computed_method_default(node);
+    }
+    /// Default `TypeComputedMethod` traversal.
+    fn visit_type_computed_method_default(&mut self, node: LazyTypeComputedMethod<'a>) {
+        if let Some(value) = node.value() {
+            self.visit_type_node(value);
+        }
+        if let Some(params) = node.parameters() {
+            self.visit_type_parameter_list(params);
+        }
+        if let Some(ret) = node.return_type() {
+            self.visit_type_node(ret);
+        }
+        if let Some(tp) = node.type_parameters() {
+            self.visit_type_parameter_list(tp);
         }
     }
 

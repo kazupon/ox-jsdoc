@@ -558,6 +558,29 @@ export class RemoteTypeConstructorSignature implements RemoteTypeNode {
   readonly typeParameters: RemoteNode | null
   toJSON(): Record<string, unknown>
 }
+/** The `[k]` key of a `TypeObjectField`. */
+export class RemoteTypeComputedProperty implements RemoteTypeNode {
+  readonly type: 'TypeComputedProperty'
+  readonly range: Range
+  readonly parent: RemoteNode | null
+  /** The type inside the brackets. */
+  readonly value: RemoteNode | null
+  toJSON(): Record<string, unknown>
+}
+/** The `[k]<T>(a: A): R` key of a `TypeObjectField`. */
+export class RemoteTypeComputedMethod implements RemoteTypeNode {
+  readonly type: 'TypeComputedMethod'
+  readonly range: Range
+  readonly parent: RemoteNode | null
+  /** Whether `?` follows the brackets (`[k]?(): R`). */
+  readonly optional: boolean
+  /** The type inside the brackets. */
+  readonly value: RemoteNode | null
+  readonly parameters: RemoteNode | null
+  readonly returnType: RemoteNode | null
+  readonly typeParameters: RemoteNode | null
+  toJSON(): Record<string, unknown>
+}
 export class RemoteTypeTypeParameter implements RemoteTypeNode {
   readonly type: 'TypeTypeParameter'
   readonly range: Range
@@ -676,7 +699,7 @@ export class RemoteNodeListNode implements RemoteNode {
 }
 
 /**
- * Visitor keys for every Remote* node kind (60 = 15 Comment AST + 45
+ * Visitor keys for every Remote* node kind (62 = 15 Comment AST + 47
  * TypeNode). Maps each `type` name to the traversable child property names
  * in canonical visit order; spread directly into ESLint / `estraverse`
  * key maps. See the JS doc-comment in `index.js` for ox-jsdoc-vs-jsdoccomment
