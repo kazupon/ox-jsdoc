@@ -321,3 +321,61 @@ describe('toJSON / Symbol.for("nodejs.util.inspect.custom")', () => {
     expect(payload.constructor.name).toBe('JsdocText')
   })
 })
+
+interface RemoteSourceFileStrings {
+  getStringByField(offset: number, length: number): string | null
+  getStringByOffsetAndLength(offset: number, length: number): string
+}
+
+// These strings used to be cached by their offset only, so the string read
+// first at an offset came back for every other length at that offset.
+describe('RemoteSourceFile strings by offset and length', () => {
+  const build = () => {
+    const b = new FixtureBuilder()
+    b.internString('foo the foo')
+    return new RemoteSourceFileCtor(b.build()) as unknown as RemoteSourceFileStrings
+  }
+
+  it('keeps strings of different lengths at the same offset apart (StringField)', () => {
+    const short = build()
+    expect(short.getStringByField(0, 3)).toBe('foo')
+    expect(short.getStringByField(0, 11)).toBe('foo the foo')
+    expect(short.getStringByField(0, 0)).toBe('')
+
+    const long = build()
+    expect(long.getStringByField(0, 11)).toBe('foo the foo')
+    expect(long.getStringByField(0, 0)).toBe('')
+    expect(long.getStringByField(0, 3)).toBe('foo')
+  })
+
+  it('keeps strings of different lengths at the same offset apart (inline)', () => {
+    const short = build()
+    expect(short.getStringByOffsetAndLength(0, 3)).toBe('foo')
+    expect(short.getStringByOffsetAndLength(0, 11)).toBe('foo the foo')
+
+    const long = build()
+    expect(long.getStringByOffsetAndLength(0, 11)).toBe('foo the foo')
+    expect(long.getStringByOffsetAndLength(0, 3)).toBe('foo')
+  })
+
+  it('keeps long and short strings at the same offset apart', () => {
+    const b = new FixtureBuilder()
+    const text = 'x'.repeat(300)
+    b.internString(text)
+    const sf = new RemoteSourceFileCtor(b.build()) as unknown as RemoteSourceFileStrings
+    expect(sf.getStringByField(0, 300)).toBe(text)
+    expect(sf.getStringByField(0, 256)).toBe(text.slice(0, 256))
+    expect(sf.getStringByField(0, 255)).toBe(text.slice(0, 255))
+    expect(sf.getStringByOffsetAndLength(1, 0)).toBe('')
+    expect(sf.getStringByField(0, 3)).toBe('xxx')
+    expect(sf.getStringByField(0, 300)).toBe(text)
+  })
+
+  it('keeps them apart across the two kinds of reads', () => {
+    const sf = build()
+    expect(sf.getStringByField(0, 3)).toBe('foo')
+    expect(sf.getStringByOffsetAndLength(0, 11)).toBe('foo the foo')
+    expect(sf.getStringByOffsetAndLength(0, 3)).toBe('foo')
+    expect(sf.getStringByField(0, 11)).toBe('foo the foo')
+  })
+})

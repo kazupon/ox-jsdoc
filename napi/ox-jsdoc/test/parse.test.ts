@@ -275,3 +275,89 @@ describe('compat toJSON() after non-ASCII text', () => {
     ])
   })
 })
+
+// The decoder cached strings by their offset only, so a string that starts
+// where another one starts came back as the one read first.
+describe('string getters do not depend on the order of reads', () => {
+  it('reads the name and the raw body of a tag in either order', () => {
+    const source = '/** @param foo the foo */'
+    const forward = parse(source).ast!.tags[0] as RemoteJsdocTag
+    const forwardName = (forward.name as RemoteJsdocTagNameValue).raw
+    expect([forwardName, forward.rawBody]).toEqual(['foo', 'foo the foo'])
+
+    const reverse = parse(source).ast!.tags[0] as RemoteJsdocTag
+    const reverseRawBody = reverse.rawBody
+    expect([(reverse.name as RemoteJsdocTagNameValue).raw, reverseRawBody]).toEqual([
+      'foo',
+      'foo the foo'
+    ])
+  })
+
+  it('reads the compat delimiters in either order', () => {
+    const forward = parse('/** foo */', { compatMode: true }).ast as RemoteJsdocBlock
+    const forwardPostDelimiter = forward.postDelimiter
+    expect([forwardPostDelimiter, forward.initial, forward.lineEnd]).toEqual([' ', '', ''])
+
+    const reverse = parse('/** foo */', { compatMode: true }).ast as RemoteJsdocBlock
+    const reverseLineEnd = reverse.lineEnd
+    const reverseInitial = reverse.initial
+    expect([reverse.postDelimiter, reverseInitial, reverseLineEnd]).toEqual([' ', '', ''])
+  })
+
+  // Every string getter that toJSON() reports, read on a fresh AST each time
+  // (an empty cache, so the value is right), and read in reverse order on one
+  // AST, give the same values.
+  const stringPaths = (
+    node: unknown,
+    json: unknown,
+    path: Array<string | number>,
+    out: Array<Array<string | number>>
+  ) => {
+    if (node === null || node === undefined || json === null || typeof json !== 'object') {
+      return
+    }
+    if (Array.isArray(json)) {
+      json.forEach((child, index) =>
+        stringPaths((node as unknown[])[index], child, [...path, index], out)
+      )
+      return
+    }
+    for (const [key, value] of Object.entries(json)) {
+      if (key === 'source' || key === 'range' || key === 'type') {
+        continue
+      }
+      const child = (node as Record<string, unknown>)[key]
+      if (typeof value === 'string' && typeof child === 'string') {
+        out.push([...path, key])
+      } else if (value !== null && typeof value === 'object') {
+        stringPaths(child, value, [...path, key], out)
+      }
+    }
+  }
+  const read = (node: unknown, path: Array<string | number>) =>
+    path.reduce<unknown>(
+      (current, key) => (current as Record<string | number, unknown>)?.[key],
+      node
+    )
+
+  it.each([
+    ['/** @param foo the foo */', false],
+    ['/** @param foo the foo */', true],
+    ['/**\n * Desc.\n * @see {@link Foo|Bar} desc\n * @returns {string} the value\n */', false],
+    ['/**\n * Desc.\n * @see {@link Foo|Bar} desc\n * @returns {string} the value\n */', true],
+    ['/** @internal */', true]
+  ])('gives the same strings in any order (%j, compatMode: %s)', (source, compatMode) => {
+    const fresh = () => parse(source, { compatMode }).ast!
+    const paths: Array<Array<string | number>> = []
+    stringPaths(fresh(), fresh().toJSON(), [], paths)
+    expect(paths.length).toBeGreaterThan(0)
+
+    const truth = paths.map(path => read(fresh(), path))
+    const ast = fresh()
+    const reversed = [...paths]
+      .reverse()
+      .map(path => read(ast, path))
+      .reverse()
+    expect(reversed).toEqual(truth)
+  })
+})
