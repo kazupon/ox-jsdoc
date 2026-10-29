@@ -26,6 +26,8 @@
 //! used by `TagData`; ongoing work here is about keeping the structural parse
 //! and emit layers aligned with the format and typed-AST behavior.
 
+use std::cell::Cell;
+
 use oxc_allocator::{Allocator, StringBuilder, Vec as ArenaVec};
 use oxc_span::Span;
 
@@ -522,10 +524,61 @@ struct ParsedDescription<'arena, 'a> {
     inline_tags: InlineTagsVec<'arena, 'a>,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct NormalizedText<'a> {
+/// Lines joined by [`ParserContext::normalize_lines`].
+#[derive(Debug)]
+struct NormalizedText<'s, 'a> {
     text: &'a str,
     span: Span,
+    /// The lines that `text` joins, blank lines between them included.
+    lines: &'s [scanner::LogicalLine<'a>],
+    /// The line where [`Self::source_offset`] found the last offset: its
+    /// index in `lines` and where it starts in `text`. The parser asks for
+    /// offsets mostly in order, so the next walk goes on from there.
+    last_line: Cell<(usize, u32)>,
+}
+
+impl NormalizedText<'_, '_> {
+    /// Source offset of the byte `offset` of `text`.
+    ///
+    /// `text` joins the lines without their margins (` * `) and their
+    /// trailing whitespace, with a `\n` between them, so past a line break
+    /// an offset is not `span.start + offset`: find the line that holds it.
+    /// Only the offsets of multi-line text walk the lines: the type, name
+    /// and description of a tag body, and the inline tags.
+    #[inline]
+    fn source_offset(&self, offset: u32) -> u32 {
+        if let [line] = self.lines {
+            return line.content_start + offset;
+        }
+        self.multiline_source_offset(offset)
+    }
+
+    /// [`Self::source_offset`] for text over several lines. Kept out of line
+    /// so that the one-line case stays small where it is inlined.
+    #[inline(never)]
+    fn multiline_source_offset(&self, offset: u32) -> u32 {
+        let (mut index, mut line_start) = self.last_line.get();
+        if offset < line_start {
+            (index, line_start) = (0, 0);
+        }
+        while let Some(line) = self.lines.get(index) {
+            let len = trim_end_fast(line.content).len() as u32;
+            // An offset at the end of a line (at its `\n`) is the end of its
+            // content: an end offset that stops there excludes the margin.
+            if offset <= line_start + len {
+                self.last_line.set((index, line_start));
+                return line.content_start + (offset - line_start);
+            }
+            line_start += len + 1;
+            index += 1;
+        }
+        self.span.end
+    }
+
+    /// Source span of the bytes `start..end` of `text`.
+    fn source_span(&self, start: u32, end: u32) -> Span {
+        Span::new(self.source_offset(start), self.source_offset(end))
+    }
 }
 
 #[inline]
@@ -732,7 +785,8 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         let parsed_type = if self.options.parse_types {
             raw_type.and_then(|ts| {
                 let mode = self.options.type_parse_mode;
-                self.parse_type_expression(ts.raw, ts.span.start + 1, mode)
+                let type_text = self.type_source_text(ts);
+                self.parse_type_expression(type_text, ts.span.start + 1, mode)
             })
         } else {
             None
@@ -773,7 +827,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
 
     fn parse_generic_tag_body(
         &mut self,
-        normalized: NormalizedText<'a>,
+        normalized: NormalizedText<'_, 'a>,
         skip_types: bool,
         skip_names: bool,
     ) -> ParsedTagBody<'arena, 'a> {
@@ -787,7 +841,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             match find_matching_type_end(normalized.text, cursor) {
                 Some(end) => {
                     let raw = &normalized.text[cursor + 1..end];
-                    let span = relative_span(normalized.span, cursor as u32, (end + 1) as u32);
+                    let span = normalized.source_span(cursor as u32, (end + 1) as u32);
                     cursor = end + 1;
                     Some(TypeSourceData { span, raw })
                 }
@@ -826,7 +880,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             let token_end = find_value_end(normalized.text, cursor);
             if token_end > cursor {
                 let token = &normalized.text[cursor..token_end];
-                let span = relative_span(normalized.span, cursor as u32, token_end as u32);
+                let span = normalized.source_span(cursor as u32, token_end as u32);
                 cursor = token_end;
                 Some(parse_tag_value_token(token, span))
             } else {
@@ -848,12 +902,19 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             remainder = "";
         }
 
-        let description_span = relative_span(
-            normalized.span,
-            remainder_start as u32,
-            normalized.text.len() as u32,
-        );
-        let parsed_desc = self.parse_description_text(remainder, description_span);
+        let mut parsed_desc =
+            self.parse_description_text(remainder, &normalized, remainder_start as u32);
+        // A tag has one description line, which holds the whole description.
+        if let Some(text) = parsed_desc.text {
+            let start = remainder_start as u32;
+            parsed_desc.lines.push(DescriptionLineData {
+                span: normalized.source_span(start, start + text.len() as u32),
+                description: text,
+                delimiter: "",
+                post_delimiter: "",
+                initial: "",
+            });
+        }
 
         ParsedTagBody {
             raw_body: normalized.text,
@@ -902,17 +963,26 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 inline_tags: InlineTagsVec::new_in(self.arena),
             };
         };
-        let mut description = self.parse_description_text(normalized.text, normalized.span);
+        let mut description = self.parse_description_text(normalized.text, &normalized, 0);
         description.lines = description_lines;
         description
     }
 
+    /// Parse `text`, the description that starts at `text_start` in
+    /// `normalized.text`, for its inline tags. The caller adds the
+    /// description lines: one for the whole description of a tag, one per
+    /// physical line of a block.
     fn parse_description_text(
         &mut self,
         text: &'a str,
-        span: Span,
+        normalized: &NormalizedText<'_, 'a>,
+        text_start: u32,
     ) -> ParsedDescription<'arena, 'a> {
-        let mut lines: ArenaVec<'arena, DescriptionLineData<'a>> = ArenaVec::new_in(self.arena);
+        // Source span of the bytes `start..end` of `text`.
+        let source_span = |start: usize, end: usize| {
+            normalized.source_span(text_start + start as u32, text_start + end as u32)
+        };
+        let lines: ArenaVec<'arena, DescriptionLineData<'a>> = ArenaVec::new_in(self.arena);
         let mut inline_tags = InlineTagsVec::new_in(self.arena);
 
         if text
@@ -925,14 +995,6 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 inline_tags,
             };
         }
-
-        lines.push(DescriptionLineData {
-            span,
-            description: text,
-            delimiter: "",
-            post_delimiter: "",
-            initial: "",
-        });
 
         // Fast path: most descriptions contain no `{@…}` inline tag at
         // all, but the original `find("{@")` loop still pays a Boyer-Moore
@@ -964,13 +1026,13 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 continue;
             };
 
-            let inline_span = relative_span(span, inline_start as u32, (inline_end + 1) as u32);
+            let inline_span = source_span(inline_start, inline_end + 1);
             let tag_name_start = inline_start + 2;
             let tag_name_end = tag_name_start + tag_name.len();
             let (np_or_url, link_text, format) = parse_inline_tag_body(body);
             inline_tags.push(InlineTagData {
                 span: inline_span,
-                tag_name_span: relative_span(span, tag_name_start as u32, tag_name_end as u32),
+                tag_name_span: source_span(tag_name_start, tag_name_end),
                 tag_name,
                 namepath_or_url: np_or_url,
                 text: link_text,
@@ -987,10 +1049,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         }
     }
 
-    fn normalize_lines(
+    fn normalize_lines<'s>(
         &mut self,
-        lines: &[scanner::LogicalLine<'a>],
-    ) -> Option<NormalizedText<'a>> {
+        lines: &'s [scanner::LogicalLine<'a>],
+    ) -> Option<NormalizedText<'s, 'a>> {
         let first_index = lines.iter().position(|line| !line.is_content_empty)?;
         let last_index = lines.iter().rposition(|line| !line.is_content_empty)?;
         let lines = &lines[first_index..=last_index];
@@ -1002,6 +1064,8 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             return Some(NormalizedText {
                 text: trim_end_fast(lines[0].content),
                 span,
+                lines,
+                last_line: Cell::new((0, 0)),
             });
         }
 
@@ -1038,7 +1102,58 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         Some(NormalizedText {
             text: widened,
             span,
+            lines,
+            last_line: Cell::new((0, 0)),
         })
+    }
+
+    /// The text to parse for the type `ts`: offsets in it, from
+    /// `ts.span.start + 1`, are source offsets, so the spans of the type
+    /// nodes point into the source.
+    ///
+    /// `ts.raw` is the type in the joined text of the tag body. When its span
+    /// is as long as `{`, `ts.raw` and `}`, the joining removed nothing from
+    /// it (a type on one line), so it reads like the source. Otherwise the
+    /// type spans lines and `ts.raw` dropped their margins (` * `): take the
+    /// source between the braces instead, and replace the `*` of each
+    /// margin with a space. The type parser skips whitespace, so it reads
+    /// the same tokens as from `ts.raw`; only a string literal that spans
+    /// lines keeps the spaces of the margins.
+    #[inline]
+    fn type_source_text(&self, ts: TypeSourceData<'a>) -> &'a str {
+        if ts.span.end - ts.span.start == ts.raw.len() as u32 + 2 {
+            return ts.raw;
+        }
+        self.multiline_type_source_text(ts)
+    }
+
+    /// [`Self::type_source_text`] for a type that spans lines. Kept out of
+    /// line so that the path of every other type stays small.
+    #[cold]
+    #[inline(never)]
+    fn multiline_type_source_text(&self, ts: TypeSourceData<'a>) -> &'a str {
+        let start = (ts.span.start - self.base_offset + 1) as usize;
+        let end = (ts.span.end - self.base_offset - 1) as usize;
+        let text = self
+            .arena
+            .alloc_slice_copy(&self.source_text.as_bytes()[start..end]);
+        let mut cursor = 0;
+        while let Some(offset) = memchr::memchr(b'\n', &text[cursor..]) {
+            // The margin of the next line, as `scanner::logical_lines` reads
+            // it: spaces and tabs, then an optional `*`.
+            cursor += offset + 1;
+            while matches!(text.get(cursor), Some(b' ' | b'\t')) {
+                cursor += 1;
+            }
+            if let Some(byte @ b'*') = text.get_mut(cursor) {
+                *byte = b' ';
+            }
+        }
+        // SAFETY: `text` is a copy of `str` bytes with some ASCII `*` turned
+        // into ASCII spaces, so it is still UTF-8. As in `normalize_lines`,
+        // the arena outlives every borrow of the parsed data, so the bytes
+        // stay valid for each read.
+        unsafe { std::mem::transmute::<&str, &'a str>(std::str::from_utf8_unchecked(text)) }
     }
 }
 
@@ -1271,15 +1386,6 @@ fn tag_value_name<'a>(
         ),
         None => (None, false, None),
     }
-}
-
-fn relative_span(base: Span, relative_start: u32, relative_end: u32) -> Span {
-    let start = base.start.saturating_add(relative_start);
-    let end = base.start.saturating_add(relative_end);
-    Span::new(
-        start.min(base.end),
-        end.min(base.end).max(start.min(base.end)),
-    )
 }
 
 // ---------------------------------------------------------------------------

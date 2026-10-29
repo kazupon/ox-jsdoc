@@ -408,4 +408,34 @@ describe('tags whose body spans several lines', () => {
       typeNames('/**\n * @param {{\n *   a: Array<string>,\n *   b: number\n * }} x\n */')
     ).toEqual(oneLine)
   })
+
+  // The range of the first `needle` in an ASCII `source`.
+  const at = (source: string, needle: string) => {
+    const start = source.indexOf(needle)
+    return [start, start + needle.length]
+  }
+
+  it('gives the source ranges of the nodes after a multi-line type', () => {
+    const source = '/**\n * @param {{\n *   a: string\n * }} options desc\n */'
+    const tag = parse(source).ast!.tags[0] as RemoteJsdocTag
+    expect([...(tag.rawType as RemoteJsdocTypeSource).range]).toEqual([
+      source.indexOf('{{'),
+      source.indexOf('}}') + 2
+    ])
+    expect([...(tag.name as RemoteJsdocTagNameValue).range]).toEqual(at(source, 'options'))
+    expect(tag.descriptionLines.map(line => [...line.range])).toEqual([at(source, 'desc')])
+  })
+
+  it('gives the source ranges of inline tags after a line break', () => {
+    const source =
+      '/**\n * Summary {@link Foo}\n * more {@link Bar} text\n * @param foo the foo\n *   see {@link Baz} here\n */'
+    const ast = parse(source).ast!
+    expect(ast.inlineTags.map(tag => [...tag.range])).toEqual([
+      at(source, '{@link Foo}'),
+      at(source, '{@link Bar}')
+    ])
+    expect((ast.tags[0] as RemoteJsdocTag).inlineTags.map(tag => [...tag.range])).toEqual([
+      at(source, '{@link Baz}')
+    ])
+  })
 })
