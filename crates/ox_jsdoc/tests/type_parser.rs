@@ -171,7 +171,7 @@ fn rejects_unterminated_strings_and_template_literals() {
         ("\"é", Typescript),
         ("'é", Jsdoc),
         ("`é", Typescript),
-        // It used to come out as `module:"fo"`.
+        // It used to lose its last character and come out as a closed string.
         ("module:\"foo", Jsdoc),
     ] {
         assert_rejected(input, mode);
