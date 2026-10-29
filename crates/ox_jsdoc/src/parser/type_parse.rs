@@ -258,13 +258,29 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         }
     }
 
-    /// The current token, to be used as a name or a key. A character that no
-    /// rule accepts (`Unknown`) or the end of the type text cannot be one:
-    /// report it and leave it unconsumed, so the whole type fails to parse.
+    /// The current token, to be used as a name ([`TokenKind::is_name`]).
+    /// Anything else is reported and left unconsumed, so the whole type
+    /// fails to parse.
     #[inline]
     fn expect_name_token(&mut self, lexer: &Lexer<'a>) -> Option<Token> {
+        self.expect_token_if(lexer, TokenKind::is_name)
+    }
+
+    /// The current token, to be used as a key ([`TokenKind::is_key`]).
+    /// Anything else is reported and left unconsumed.
+    #[inline]
+    fn expect_key_token(&mut self, lexer: &Lexer<'a>) -> Option<Token> {
+        self.expect_token_if(lexer, TokenKind::is_key)
+    }
+
+    #[inline]
+    fn expect_token_if(
+        &mut self,
+        lexer: &Lexer<'a>,
+        accept: fn(TokenKind) -> bool,
+    ) -> Option<Token> {
         let token = lexer.current;
-        if matches!(token.kind, TokenKind::Unknown | TokenKind::EOF) {
+        if !accept(token.kind) {
             self.type_diag(TypeDiagnosticKind::ExpectedToken);
             return None;
         }
@@ -719,7 +735,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 },
             )));
         }
-        let key_token = self.expect_name_token(lexer)?;
+        let key_token = self.expect_key_token(lexer)?;
         let key_text = lexer.token_text(key_token);
         lexer.bump();
         if (lexer.current.kind == TokenKind::LParen || lexer.current.kind == TokenKind::Lt)
@@ -771,9 +787,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         lexer.bump();
         loop {
             let tp_start = lexer.current.start;
-            let Some(name_token) = self.expect_name_token(lexer) else {
-                break;
-            };
+            let name_token = self.expect_name_token(lexer)?;
             let name_text = lexer.token_text(name_token);
             lexer.bump();
             let name = Box::new(TypeNodeData::Name(TypeName {
@@ -979,10 +993,15 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         readonly: bool,
     ) -> Option<Box<TypeNodeData<'a>>> {
         lexer.bump();
-        let key_token = self.expect_name_token(lexer)?;
+        let key_token = self.expect_key_token(lexer)?;
         let key = lexer.token_text(key_token);
         lexer.bump();
         if lexer.current.kind == TokenKind::In {
+            // The key of a mapped type is a name, not a number or a string.
+            if !key_token.kind.is_name() {
+                self.type_diag(TypeDiagnosticKind::ExpectedToken);
+                return None;
+            }
             lexer.bump();
             let _right =
                 self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::All)?;
@@ -1498,7 +1517,30 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         let start = lexer.current.start;
         if lexer.next.kind == TokenKind::Colon {
             lexer.bump();
+            let colon_end = lexer.current.end;
             lexer.bump();
+            // As in jsdoc-type-pratt-parser, the value starts with an
+            // identifier, a string or one of `/`, `@`, `#` and `~`. Otherwise
+            // it is empty, and the token is left to the next rule: `module:`
+            // and `(module:)` are valid, `module:(` and `module:null` are not.
+            if !matches!(
+                lexer.current.kind,
+                TokenKind::Identifier
+                    | TokenKind::StringValue
+                    | TokenKind::Slash
+                    | TokenKind::At
+                    | TokenKind::Hash
+                    | TokenKind::Tilde
+            ) {
+                return Some(Box::new(TypeNodeData::SpecialNamePath(
+                    TypeSpecialNamePath {
+                        span: Span::new(start, colon_end),
+                        value: "",
+                        special_type,
+                        quote: None,
+                    },
+                )));
+            }
             let quote = match lexer.current.kind {
                 TokenKind::StringValue => {
                     let text = lexer.token_text(lexer.current);
@@ -1510,12 +1552,6 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 }
                 _ => None,
             };
-            // The value may be empty (`module:`), but not a character that
-            // no rule accepts.
-            if lexer.current.kind == TokenKind::Unknown {
-                self.type_diag(TypeDiagnosticKind::ExpectedToken);
-                return None;
-            }
             let value_start = lexer.current.start;
             let mut value_end = lexer.current.end;
             lexer.bump();
@@ -1741,7 +1777,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             _ => return Some(left),
         };
         lexer.bump();
-        let right_token = self.expect_name_token(lexer)?;
+        let right_token = self.expect_key_token(lexer)?;
         let right_text = lexer.token_text(right_token);
         let quote = match right_token.kind {
             TokenKind::StringValue => {

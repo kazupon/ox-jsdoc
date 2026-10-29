@@ -98,6 +98,23 @@ impl TokenKind {
         )
     }
 
+    /// Whether this token can be a name where one is expected: an identifier
+    /// or a keyword (type parameters, `infer`, mapped type keys).
+    #[inline]
+    #[must_use]
+    pub fn is_name(self) -> bool {
+        self == Self::Identifier || self.is_keyword()
+    }
+
+    /// Whether this token can be a key where one is expected: a name, a
+    /// number or a string (object and index signature keys, the right side
+    /// of a name path).
+    #[inline]
+    #[must_use]
+    pub fn is_key(self) -> bool {
+        self.is_name() || matches!(self, Self::Number | Self::StringValue)
+    }
+
     /// Whether this token can appear as a type name in prefix position.
     #[inline]
     #[must_use]
