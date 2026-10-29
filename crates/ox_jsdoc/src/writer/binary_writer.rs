@@ -578,6 +578,21 @@ impl<'arena> BinaryWriter<'arena> {
         let absolute_end = self
             .current_source_data_offset
             .saturating_add(source_byte_end);
+        self.leaf_payload_at(absolute_start, absolute_end)
+    }
+
+    /// String-leaf payload for a string already in the data buffer, such as
+    /// a [`StringField`] interned for another node: inline when it fits
+    /// `(offset ≤ 4 MB, length ≤ 255)`, otherwise a String Offsets entry.
+    /// Nothing is copied.
+    #[inline]
+    pub(crate) fn leaf_payload_for(&mut self, field: StringField) -> LeafStringPayload {
+        self.leaf_payload_at(field.offset, field.offset + u32::from(field.length))
+    }
+
+    /// Payload for the data-buffer bytes `absolute_start..absolute_end`.
+    #[inline]
+    fn leaf_payload_at(&mut self, absolute_start: u32, absolute_end: u32) -> LeafStringPayload {
         let length = absolute_end - absolute_start;
         if length <= STRING_INLINE_LENGTH_MAX && absolute_start <= STRING_INLINE_OFFSET_MAX {
             LeafStringPayload::Inline {
@@ -599,21 +614,23 @@ impl<'arena> BinaryWriter<'arena> {
     ///    common string (`*`, `*/`, `param`, …), return its predetermined
     ///    index with no state mutation. Same cost as
     ///    [`Self::intern_string`] on a hit.
-    /// 2. **Zero-copy source slice** — when `value.len()` equals the span
-    ///    length and the span fits inside the most recently appended source
-    ///    text, register an offsets-only entry pointing at those source
-    ///    bytes (no `data_buffer` copy, no HashMap probe). Equivalent to
-    ///    [`Self::intern_source_slice`] but autoguarded.
+    /// 2. **Zero-copy source slice** — when `value` is the source text at
+    ///    `span` (see `is_source_at`), register an offsets-only
+    ///    entry pointing at those source bytes (no `data_buffer` copy, no
+    ///    HashMap probe). Equivalent to [`Self::intern_source_slice`] but
+    ///    autoguarded.
     /// 3. **Unique fresh entry** — otherwise (synthesized strings,
-    ///    quote-stripped variants whose lengths differ from the span,
-    ///    parent-spanning aggregates whose span covers more than just
-    ///    `value`), append `value` bytes via [`Self::intern_string_unique`].
+    ///    quote-stripped variants, parent-spanning aggregates whose span
+    ///    covers more than just `value`, the values of a multi-line tag
+    ///    body), append `value` bytes via [`Self::intern_string_unique`].
     ///
-    /// The length-equality check is what makes path 2 safe even when the
-    /// caller doesn't know up-front whether `value` is a true sub-slice of
-    /// the source (e.g. `TypeProperty.value` may have its outer quotes
-    /// stripped while its span still includes them). See
-    /// `.notes/binary-ast-emit-intern-audit.md` for the per-caller analysis.
+    /// Checking where `value` is, not only its length, is what makes path
+    /// 2 safe when the caller doesn't know up-front whether `value` is the
+    /// source at `span`: `TypeProperty.value` may have its outer quotes
+    /// stripped while its span still includes them, and the span of a
+    /// value of a multi-line tag body can cover other source bytes of the
+    /// same length. See `.notes/binary-ast-emit-intern-audit.md` for the
+    /// per-caller analysis.
     ///
     /// `#[inline]` because the per-Kind `parse_*` callers in
     /// `parser/context.rs` invoke this once per emitted string field; cross-
@@ -623,8 +640,7 @@ impl<'arena> BinaryWriter<'arena> {
         if let Some(idx) = lookup_common(value) {
             return common_string_field(idx);
         }
-        let span_len = span.end.saturating_sub(span.start);
-        if span_len as usize == value.len() && span.end <= self.current_source_length {
+        if self.is_source_at(value, span) {
             return self.intern_source_slice(span.start, span.end);
         }
         self.strings.intern_unique(value)
@@ -641,8 +657,7 @@ impl<'arena> BinaryWriter<'arena> {
         if let Some(idx) = lookup_common(value) {
             return StringIndex::from_u32(idx).expect("common index in range");
         }
-        let span_len = span.end.saturating_sub(span.start);
-        if span_len as usize == value.len() && span.end <= self.current_source_length {
+        if self.is_source_at(value, span) {
             return self.intern_source_slice_for_leaf(span.start, span.end);
         }
         self.strings.intern_for_leaf(value)
@@ -674,13 +689,13 @@ impl<'arena> BinaryWriter<'arena> {
                 length: field.length as u8,
             };
         }
-        let span_len = span.end.saturating_sub(span.start);
-        if span_len as usize == value.len() && span.end <= self.current_source_length {
+        if self.is_source_at(value, span) {
             return self.intern_source_slice_for_leaf_payload(span.start, span.end);
         }
-        // Synthesized / quote-stripped value → dedup via HashMap. Inline
-        // when the dedup'd field fits the (offset ≤ 4 MB, length ≤ 255)
-        // window; otherwise fall back to the legacy leaf path.
+        // Synthesized / quote-stripped value, or a value of a multi-line
+        // tag body → dedup via HashMap. Inline when the dedup'd field fits
+        // the (offset ≤ 4 MB, length ≤ 255) window; otherwise fall back to
+        // the legacy leaf path.
         let field = self.strings.intern(value);
         if (value.len() as u32) <= STRING_INLINE_LENGTH_MAX
             && field.offset <= STRING_INLINE_OFFSET_MAX
@@ -692,6 +707,27 @@ impl<'arena> BinaryWriter<'arena> {
         } else {
             LeafStringPayload::Index(self.strings.intern_for_leaf(value))
         }
+    }
+
+    /// Whether `value` is the source text at `span`: a slice of the most
+    /// recently appended source text that starts at `span.start` and is as
+    /// long as `span`. Only then may `value` be referenced in place.
+    ///
+    /// The span alone is not enough. The parser joins the lines of a
+    /// multi-line tag body without their margins (` * `) into a new string,
+    /// so the values read from that string are not in the source, and their
+    /// spans, counted on the joined text, can cover other source bytes of
+    /// the same length. Like [`Self::intern_source_slice_or_string`], this
+    /// only compares the pointers and never dereferences them.
+    #[inline]
+    pub(crate) fn is_source_at(&self, value: &str, span: Span) -> bool {
+        let source_start = self.current_source_ptr;
+        let value_start = value.as_ptr() as usize;
+        source_start != 0
+            && value_start >= source_start
+            && value_start - source_start == span.start as usize
+            && span.end.saturating_sub(span.start) as usize == value.len()
+            && span.end <= self.current_source_length
     }
 
     /// Span-less sibling of [`Self::intern_source_or_string`] for callers that
