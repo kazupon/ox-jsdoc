@@ -621,6 +621,8 @@ export class RemoteTypeTemplateLiteral implements RemoteTypeNode {
   readonly parent: RemoteNode | null
   readonly literalCount: number
   readonly literals: string[]
+  /** The types of the `${…}` parts, between the literal segments. */
+  readonly interpolations: RemoteTypeNode[]
   literal(index: number): string
   toJSON(): Record<string, unknown>
 }

@@ -813,6 +813,13 @@ impl<'a> LazyTypeTemplateLiteral<'a> {
         );
         self.source_file.get_string_by_field(field).unwrap_or("")
     }
+    /// The types of the `${…}` parts, between the literal segments (one
+    /// fewer than the segments). They are the direct children of the node.
+    pub fn interpolations(&self) -> LazyTypeNodeListIter<'a> {
+        let head = first_child(self.source_file, self.node_index).unwrap_or(0);
+        let count = u32::from(self.literal_count().saturating_sub(1));
+        LazyTypeNodeListIter::new(self.source_file, head, count, self.root_index)
+    }
 }
 
 define_lazy_type_node!(

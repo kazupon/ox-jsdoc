@@ -25,6 +25,7 @@ import {
   extOffsetOf,
   extStringLeaf,
   firstChildIndex,
+  readNextSibling,
   stringPayloadOf,
   thisNode
 } from '../helpers.ts'
@@ -883,8 +884,31 @@ export class RemoteTypeTemplateLiteral implements LazyNode {
     }
     return out
   }
+  /**
+   * The types of the `${…}` parts, between the literal segments (one fewer
+   * than the segments). They are the direct children of the node.
+   */
+  get interpolations(): LazyNode[] {
+    const internal = this._internal
+    const out: LazyNode[] = []
+    const parent = thisNode(internal)
+    let child = firstChildIndex(internal.sourceFile, internal.index)
+    while (child !== 0) {
+      const node = internal.sourceFile.getNode(child, parent, internal.rootIndex)
+      if (node !== null) {
+        out.push(node)
+      }
+      child = readNextSibling(internal.sourceFile, child)
+    }
+    return out
+  }
   toJSON(): RemoteJsonObject {
-    return { type: this.type, range: [...this.range], literals: this.literals }
+    return {
+      type: this.type,
+      range: [...this.range],
+      literals: this.literals,
+      interpolations: this.interpolations.map(node => node.toJSON())
+    }
   }
   [inspectSymbol](): object {
     return inspectPayload(this.toJSON(), 'TypeTemplateLiteral')

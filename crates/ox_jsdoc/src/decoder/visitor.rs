@@ -631,9 +631,17 @@ pub trait LazyJsdocVisitor<'a> {
     /// alongside the parser's MethodSignature emission.
     fn visit_type_method_signature(&mut self, _node: LazyTypeMethodSignature<'a>) {}
 
-    /// Visit a `TypeTemplateLiteral` leaf (literals live in Extended Data,
-    /// not as child nodes).
-    fn visit_type_template_literal(&mut self, _node: LazyTypeTemplateLiteral<'a>) {}
+    /// Visit a `TypeTemplateLiteral`. Default: walk the interpolations
+    /// (the literal segments live in Extended Data, not as child nodes).
+    fn visit_type_template_literal(&mut self, node: LazyTypeTemplateLiteral<'a>) {
+        self.visit_type_template_literal_default(node);
+    }
+    /// Default `TypeTemplateLiteral` traversal.
+    fn visit_type_template_literal_default(&mut self, node: LazyTypeTemplateLiteral<'a>) {
+        for interpolation in node.interpolations() {
+            self.visit_type_node(interpolation);
+        }
+    }
 
     /// Visit a `TypeSymbol`. Default: walk `element` when `has_element`.
     fn visit_type_symbol(&mut self, node: LazyTypeSymbol<'a>) {
