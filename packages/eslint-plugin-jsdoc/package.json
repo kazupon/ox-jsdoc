@@ -105,7 +105,7 @@
     "camelcase": "^9.0.0",
     "chai": "^6.2.2",
     "cross-env": "^10.0.0",
-    "decamelize": "^6.0.1",
+    "decamelize": "^7.0.0",
     "eslint": "9.39.4",
     "eslint-config-canonical": "^47.4.2",
     "gitdown": "^4.1.1",
