@@ -633,6 +633,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 } else {
                     break;
                 }
+                // A trailing separator
+                if lexer.current.kind == TokenKind::RBrace {
+                    break;
+                }
             }
         }
         if !self.expect(lexer, TokenKind::RBrace) {
@@ -841,6 +845,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 if !self.eat(lexer, TokenKind::Comma) {
                     break;
                 }
+                // A trailing comma
+                if lexer.current.kind == TokenKind::RParen {
+                    break;
+                }
             }
         }
         if !self.expect(lexer, TokenKind::RParen) {
@@ -877,6 +885,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
                 parameters.push(param);
                 if !self.eat(lexer, TokenKind::Comma) {
+                    break;
+                }
+                // A trailing comma
+                if lexer.current.kind == TokenKind::RParen {
                     break;
                 }
             }
@@ -916,6 +928,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
                 parameters.push(param);
                 if !self.eat(lexer, TokenKind::Comma) {
+                    break;
+                }
+                // A trailing comma
+                if lexer.current.kind == TokenKind::RParen {
                     break;
                 }
             }
@@ -959,6 +975,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
                 parameters.push(param);
                 if !self.eat(lexer, TokenKind::Comma) {
+                    break;
+                }
+                // A trailing comma
+                if lexer.current.kind == TokenKind::RParen {
                     break;
                 }
             }
@@ -1194,6 +1214,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 let param = self.parse_key_value_or_type(lexer, mode, &mut false)?;
                 parameters.push(param);
                 if !self.eat(lexer, TokenKind::Comma) {
+                    break;
+                }
+                // A trailing comma
+                if lexer.current.kind == TokenKind::RParen {
                     break;
                 }
             }
