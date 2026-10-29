@@ -712,8 +712,13 @@ function buildTagSourceFromRoot(tag) {
 function stripTypeBraces(type) {
 	return type.replace(/^\{/u, "").replace(/\}$/u, "");
 }
-function compactDescriptionFromEntries(entries) {
-	return entries.filter((entry) => entry.tokens.tag === "").map((entry) => entry.tokens.description).map((description) => description.replace(/^\s*/u, "")).filter(Boolean).join(" ");
+/**
+* A block description in comment-parser's `compact` spacing, as in
+* `parseComment().description`: each line trimmed, the empty ones dropped,
+* the rest joined with a space.
+*/
+function compactDescription(description) {
+	return description.split("\n").map((line) => line.trim()).filter(Boolean).join(" ");
 }
 /** Read the 6-bit Common Data byte for a node. */
 function commonData$1(internal) {
@@ -947,8 +952,8 @@ var RemoteJsdocBlock = class {
 		};
 		if (internal.sourceFile.compatMode) {
 			const source = buildBlockSource(this);
-			const sourceDescription = compactDescriptionFromEntries(source);
-			if (sourceDescription) json.description = sourceDescription;
+			const description = this.description;
+			if (description !== null) json.description = compactDescription(description);
 			json.endLine = this.endLine;
 			const dsl = this.descriptionStartLine;
 			if (dsl !== null) json.descriptionStartLine = dsl;
