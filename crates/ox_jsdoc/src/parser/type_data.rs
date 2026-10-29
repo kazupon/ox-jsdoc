@@ -4,7 +4,7 @@
 
 //! Intermediate type-expression AST used by the binary parser.
 //!
-//! Mirrors `crates/ox_jsdoc/src/type_parser/ast.rs` (`TypeNode` and its 45
+//! Mirrors `crates/ox_jsdoc/src/type_parser/ast.rs` (`TypeNode` and its 47
 //! variant structs) but uses the std heap rather than an arena so the
 //! binary parser does not need to thread an [`oxc_allocator::Allocator`]
 //! through its Pratt parser. The lifetime `'a` is the source-text borrow.
@@ -133,10 +133,10 @@ impl ParseMode {
 }
 
 // ============================================================================
-// TypeNodeData enum + 45 variant structs (mirrors `TypeNode`).
+// TypeNodeData enum + 47 variant structs (mirrors `TypeNode`).
 // ============================================================================
 
-/// Parsed type expression. Tree of variants matching the binary AST's 45
+/// Parsed type expression. Tree of variants matching the binary AST's 47
 /// TypeNode kinds.
 #[derive(Debug)]
 #[allow(missing_docs)]
@@ -186,6 +186,8 @@ pub enum TypeNodeData<'a> {
     IndexedAccessIndex(TypeIndexedAccessIndex<'a>),
     ParameterList(TypeParameterList<'a>),
     ReadonlyProperty(TypeReadonlyProperty<'a>),
+    ComputedProperty(TypeComputedProperty<'a>),
+    ComputedMethod(TypeComputedMethod<'a>),
 }
 
 impl<'a> TypeNodeData<'a> {
@@ -239,6 +241,8 @@ impl<'a> TypeNodeData<'a> {
             Self::IndexedAccessIndex(n) => n.span,
             Self::ParameterList(n) => n.span,
             Self::ReadonlyProperty(n) => n.span,
+            Self::ComputedProperty(n) => n.span,
+            Self::ComputedMethod(n) => n.span,
         }
     }
 }
@@ -513,6 +517,23 @@ mod structs {
     pub struct TypeReadonlyProperty<'a> {
         pub span: Span,
         pub element: Box<TypeNodeData<'a>>,
+    }
+    /// The `[k]` key of an object field.
+    #[derive(Debug)]
+    pub struct TypeComputedProperty<'a> {
+        pub span: Span,
+        pub value: Box<TypeNodeData<'a>>,
+    }
+    /// The `[k]<T>(a: A): R` key of an object field. `optional` is the `?`
+    /// after the brackets.
+    #[derive(Debug)]
+    pub struct TypeComputedMethod<'a> {
+        pub span: Span,
+        pub value: Box<TypeNodeData<'a>>,
+        pub parameters: Vec<Box<TypeNodeData<'a>>>,
+        pub return_type: Box<TypeNodeData<'a>>,
+        pub type_parameters: Vec<Box<TypeNodeData<'a>>>,
+        pub optional: bool,
     }
 }
 
