@@ -1140,7 +1140,10 @@ const parseComment = (commentOrNode, indent = '') => {
     throw new Error('There were no results for comment parsing')
   }
 
-  return normalizeBlock(ast.toJSON(), diagnostics, sourceText)
+  // The same input as `parseCommentBatch`: the block-level source lines only.
+  // The tags are built from those lines, which is faster than compat-mode
+  // `toJSON()` and gives the same tag names as comment-parser.
+  return normalizeBlock(ast.toJsdocCommentInput(), diagnostics, sourceText)
 }
 
 /**
