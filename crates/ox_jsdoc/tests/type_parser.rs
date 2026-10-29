@@ -528,3 +528,83 @@ fn accepts_trailing_separators() {
     // Accepted. The stringified form drops `new`, which is a separate bug.
     assert_accepted("new (a: string, ) => Foo", Typescript);
 }
+
+// The type parser used to drop parts of these types (#009).
+
+#[test]
+fn keeps_the_key_types_of_index_signatures_and_mapped_types() {
+    // These came back as `{[k: number]}`, `{[K in U]}` and the like: the key
+    // type, the constraint, `readonly` and `?` were dropped.
+    for input in [
+        "{[k: string]: number}",
+        "{[k: string | number]: boolean}",
+        "{readonly [k: string]: number}",
+        "{[K in keyof T]: U}",
+        "{[K in T]?: U}",
+        "{readonly [K in T]?: U}",
+        "{a: string, [k: string]: number}",
+    ] {
+        assert_parsed(input, Typescript, input);
+    }
+    // The key of an index signature has no quotes, as in
+    // jsdoc-type-pratt-parser.
+    assert_parsed(
+        "{[\"a\": string]: number}",
+        Typescript,
+        "{[a: string]: number}",
+    );
+}
+
+#[test]
+fn keeps_new_as_a_parameter_of_function_types() {
+    // `function(new:X)` is a function with a `new` parameter, not a
+    // constructor: it came back as `new function(new: X)`.
+    for mode in [Jsdoc, Closure, Typescript] {
+        assert_parsed("function(new:X)", mode, "function(new: X)");
+        assert_parsed(
+            "function(new:X, string): Y",
+            mode,
+            "function(new: X, string): Y",
+        );
+        assert_parsed("function(new:X, this:Y)", mode, "function(new: X, this: Y)");
+    }
+}
+
+#[test]
+fn rejects_arrows_that_jsdoc_type_pratt_parser_rejects() {
+    // Arrows are TypeScript, and need parentheses. These came back as
+    // `() => b`, without the parameter.
+    for mode in [Jsdoc, Closure] {
+        assert_rejected("(a) => b", mode);
+    }
+    for mode in [Jsdoc, Closure, Typescript] {
+        assert_rejected("a => b", mode);
+    }
+}
+
+#[test]
+fn keeps_accepting_typescript_arrows() {
+    for input in [
+        "() => void",
+        "(a) => b",
+        "(a: string) => void",
+        "(a, b) => c",
+        "x | (() => void)",
+        "Array<() => void>",
+    ] {
+        assert_parsed(input, Typescript, input);
+    }
+}
+
+#[test]
+fn accepts_symbol_as_a_name_in_typescript_mode() {
+    for input in [
+        "symbol",
+        "symbol[]",
+        "{a: symbol}",
+        "symbol | string",
+        "unique symbol",
+    ] {
+        assert_parsed(input, Typescript, input);
+    }
+}
