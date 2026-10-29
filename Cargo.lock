@@ -465,9 +465,9 @@ dependencies = [
 
 [[package]]
 name = "num-bigint"
-version = "0.4.6"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
+checksum = "93e7820bc0a80a0238e650327316f929ba18d5be054b647490a3a6a339f3e7c0"
 dependencies = [
  "num-integer",
  "num-traits",
@@ -743,18 +743,19 @@ dependencies = [
 
 [[package]]
 name = "oxc_ecmascript"
-version = "0.135.0"
+version = "0.155.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eef5f3e346539b48dbda9d0b618021ba6bb781f7a192476e4bf9b18df7ccaab4"
+checksum = "f8c634665e0be5dde95549146734ab4939b8d1b5d2e7cc006d38b9f5d17a58a2"
 dependencies = [
- "cow-utils",
+ "dragonbox_ecma",
+ "itoa",
  "num-bigint",
  "num-traits",
- "oxc_allocator 0.135.0",
- "oxc_ast 0.135.0",
- "oxc_regular_expression 0.135.0",
- "oxc_span 0.135.0",
- "oxc_syntax 0.135.0",
+ "oxc_ast 0.155.0",
+ "oxc_data_structures 0.155.0",
+ "oxc_span 0.155.0",
+ "oxc_str 0.155.0",
+ "oxc_syntax 0.155.0",
 ]
 
 [[package]]
@@ -792,24 +793,24 @@ dependencies = [
 
 [[package]]
 name = "oxc_parser"
-version = "0.135.0"
+version = "0.155.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43cb9af99a1d02989ed53780e3b2b67757226d4501365e65781ae4519be150b6"
+checksum = "635c4e1bb876a9d4ee0e338fa68547a1d75add58637e5c3921fb81ae10a60439"
 dependencies = [
  "bitflags",
  "cow-utils",
  "memchr",
  "num-bigint",
  "num-traits",
- "oxc_allocator 0.135.0",
- "oxc_ast 0.135.0",
- "oxc_data_structures 0.135.0",
- "oxc_diagnostics 0.135.0",
+ "oxc_allocator 0.155.0",
+ "oxc_ast 0.155.0",
+ "oxc_data_structures 0.155.0",
+ "oxc_diagnostics 0.155.0",
  "oxc_ecmascript",
- "oxc_regular_expression 0.135.0",
- "oxc_span 0.135.0",
- "oxc_str 0.135.0",
- "oxc_syntax 0.135.0",
+ "oxc_regular_expression 0.155.0",
+ "oxc_span 0.155.0",
+ "oxc_str 0.155.0",
+ "oxc_syntax 0.155.0",
  "rustc-hash",
  "seq-macro",
 ]
@@ -908,7 +909,6 @@ checksum = "cad8963ea5ad880d3185db2f8a50809e3a10772c2762500518229bca5347be04"
 dependencies = [
  "bitflags",
  "cow-utils",
- "dragonbox_ecma",
  "nonmax",
  "oxc_allocator 0.135.0",
  "oxc_ast_macros 0.135.0",
@@ -928,6 +928,7 @@ checksum = "684d5f6db25b6e3d026582b3926166c80eeda9aac8a879782292c6a33b7d13a0"
 dependencies = [
  "bitflags",
  "cow-utils",
+ "dragonbox_ecma",
  "nonmax",
  "oxc_allocator 0.155.0",
  "oxc_ast_macros 0.155.0",
