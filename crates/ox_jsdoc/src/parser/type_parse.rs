@@ -45,7 +45,11 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
     ) -> Option<Box<TypeNodeData<'a>>> {
         let mut left = self.parse_prefix_type(lexer, mode, disallow_conditional)?;
         loop {
-            if *disallow_conditional && lexer.current.kind == TokenKind::Question {
+            // In the `extends` clause of a conditional type, `?` belongs to
+            // that conditional type, and `extends` cannot start another one.
+            if *disallow_conditional
+                && matches!(lexer.current.kind, TokenKind::Question | TokenKind::Extends)
+            {
                 break;
             }
             let infix_prec = self.cur_infix_precedence(lexer, mode);
@@ -1783,6 +1787,9 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         })))
     }
 
+    /// Parse `left extends X ? Y : Z`. Only reached while conditional types
+    /// are allowed: in the `extends` clause, the Pratt loop stops at
+    /// `extends` instead of calling this.
     fn parse_conditional(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -1790,9 +1797,6 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         disallow_conditional: &mut bool,
         left: Box<TypeNodeData<'a>>,
     ) -> Option<Box<TypeNodeData<'a>>> {
-        if *disallow_conditional {
-            return Some(left);
-        }
         let start = left.span().start;
         lexer.bump();
         let mut nested_disallow = true;
