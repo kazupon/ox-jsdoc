@@ -439,3 +439,44 @@ describe('tags whose body spans several lines', () => {
     ])
   })
 })
+
+// A comment with CRLF line ends gives the strings of the same comment with LF
+// line ends, and ranges one byte later for each line break before them. Only
+// the strings copied from the source, `lineEnd` and `descriptionRaw`, keep
+// the `\r`s.
+describe('comments with CRLF line ends', () => {
+  const asLf = (json: unknown, lf: string): unknown => {
+    if (json === null || typeof json !== 'object') {
+      return json
+    }
+    if (Array.isArray(json)) {
+      return json.map(child => asLf(child, lf))
+    }
+    return Object.fromEntries(
+      Object.entries(json).map(([key, value]) => {
+        if (key === 'lineEnd' || key === 'descriptionRaw') {
+          return [key, typeof value === 'string' ? value.replaceAll('\r', '') : value]
+        }
+        if (key !== 'range') {
+          return [key, asLf(value, lf)]
+        }
+        // From a CRLF offset back to the LF one: minus each `\r` before it.
+        const crlf = lf.replaceAll('\n', '\r\n')
+        const back = (offset: number) => offset - (crlf.slice(0, offset).match(/\r/gu)?.length ?? 0)
+        return [key, (value as number[]).map(back)]
+      })
+    )
+  }
+
+  it.each([
+    '/**\n * text\n */',
+    '/**\n * text\n *\n * more\n * @param {string} a first\n *   second\n */',
+    '/**\n * Summary {@link Foo}\n *\n * @returns {number} the value\n * @see Bar\n */'
+  ])('parses %j like its LF version', lf => {
+    const crlf = lf.replaceAll('\n', '\r\n')
+    for (const options of [{}, { compatMode: true, preserveWhitespace: true }]) {
+      const expected = parse(lf, options).ast!.toJSON()
+      expect(asLf(parse(crlf, options).ast!.toJSON(), lf)).toEqual(expected)
+    }
+  })
+})

@@ -154,12 +154,20 @@ pub fn logical_lines(source_text: &str, base_offset: u32) -> ScanResult<'_> {
         let post_delimiter = &raw_line[post_delim_start..pos];
 
         let content_start = pos;
-        let content = &raw_line[content_start..];
+        let mut content = &raw_line[content_start..];
 
-        let is_content_empty = content.bytes().all(|b| b == b' ' || b == b'\t');
+        let mut is_content_empty = content.bytes().all(|b| b == b' ' || b == b'\t');
 
         let line_end_str = if line_end < body_len {
             if line_end > 0 && body_bytes[line_end - 1] == b'\r' {
+                // Leave the `\r` out of the content, as `line_end` records
+                // it: otherwise it would count as text (a ` *` line would not
+                // be blank) and reach the ranges that end at the end of the
+                // content. The margin never takes the `\r`, so the content
+                // ends with it. The blank check is done again here: doing it
+                // once, after this block, measured slower on LF lines.
+                content = content.strip_suffix('\r').unwrap_or(content);
+                is_content_empty = content.bytes().all(|b| b == b' ' || b == b'\t');
                 "\r\n"
             } else {
                 "\n"
@@ -216,5 +224,23 @@ mod tests {
         assert_eq!(result.lines[1].content, "Find a user.");
         assert_eq!(result.lines[1].content_start, 107);
         assert_eq!(result.margins[1].delimiter, "*");
+    }
+
+    #[test]
+    fn leaves_the_cr_of_crlf_line_ends_out_of_the_content() {
+        let source = "/**\r\n * Find a user.\r\n *\r\n * @param {string} id\r\n */";
+        let result = logical_lines(source, 0);
+        let contents: Vec<_> = result.lines.iter().map(|line| line.content).collect();
+        assert_eq!(contents, ["", "Find a user.", "", "@param {string} id", ""]);
+        let empty: Vec<_> = result
+            .lines
+            .iter()
+            .map(|line| line.is_content_empty)
+            .collect();
+        assert_eq!(empty, [true, false, true, false, true]);
+        let line_ends: Vec<_> = result.margins.iter().map(|m| m.line_end).collect();
+        assert_eq!(line_ends, ["\r\n", "\r\n", "\r\n", "\r\n", ""]);
+        let user = source.find("user.").unwrap() as u32;
+        assert_eq!(result.lines[1].content_end(), user + 5);
     }
 }
