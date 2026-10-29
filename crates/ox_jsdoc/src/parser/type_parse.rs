@@ -1836,9 +1836,16 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             _ => None,
         };
         lexer.bump();
+        // The value has no quotes, as in `foo["bar"]` and in
+        // jsdoc-type-pratt-parser; `quote` keeps them.
+        let value = if quote.is_some() {
+            &right_text[1..right_text.len() - 1]
+        } else {
+            right_text
+        };
         let right = Box::new(TypeNodeData::Property(TypeProperty {
             span: Span::new(right_token.start, right_token.end),
-            value: right_text,
+            value,
             quote,
         }));
         let end = right_token.end;

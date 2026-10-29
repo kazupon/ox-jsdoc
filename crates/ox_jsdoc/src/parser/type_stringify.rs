@@ -9,7 +9,10 @@
 //! but operates on the heap-allocated [`TypeNodeData`] tree produced by the
 //! binary parser instead of the arena-allocated `TypeNode` tree.
 //!
-//! Roundtrip guarantee: `parse(stringify(ast)) == ast`.
+//! The output follows the `stringify` of jsdoc-type-pratt-parser 9.4.0, so
+//! that parsing it again gives the same tree. What the tree does not keep,
+//! such as the line breaks between the fields of an object, does not come
+//! back.
 
 use super::type_data::*;
 
@@ -65,18 +68,15 @@ fn write_node(buf: &mut String, node: &TypeNodeData<'_>) {
         TypeNodeData::ObjectField(n) => write_object_field(buf, n),
         TypeNodeData::JsdocObjectField(n) => write_jsdoc_object_field(buf, n),
         TypeNodeData::KeyValue(n) => write_key_value(buf, n),
-        TypeNodeData::Property(n) => buf.push_str(n.value),
+        TypeNodeData::Property(n) => write_quoted(buf, n.value, n.quote),
         TypeNodeData::IndexSignature(n) => write_index_signature(buf, n),
         TypeNodeData::MappedType(n) => write_mapped_type(buf, n),
         TypeNodeData::TypeParameter(n) => write_type_parameter(buf, n),
         TypeNodeData::CallSignature(n) => write_call_signature(buf, n),
         TypeNodeData::ConstructorSignature(n) => write_constructor_signature(buf, n),
         TypeNodeData::MethodSignature(n) => write_method_signature(buf, n),
-        TypeNodeData::IndexedAccessIndex(n) => {
-            buf.push('[');
-            write_node(buf, &n.right);
-            buf.push(']');
-        }
+        // The brackets come from the `property-brackets` name path.
+        TypeNodeData::IndexedAccessIndex(n) => write_node(buf, &n.right),
 
         TypeNodeData::ParameterList(n) => write_comma_separated(buf, &n.elements),
         TypeNodeData::ReadonlyProperty(n) => {
@@ -124,6 +124,15 @@ fn write_generic(buf: &mut String, n: &TypeGeneric<'_>) {
 
 fn write_function(buf: &mut String, n: &TypeFunction<'_>) {
     if n.arrow {
+        // `new (…) => …` for a constructor, as in jsdoc-type-pratt-parser.
+        if n.constructor {
+            buf.push_str("new ");
+        }
+        if !n.type_parameters.is_empty() {
+            buf.push('<');
+            write_comma_separated(buf, &n.type_parameters);
+            buf.push('>');
+        }
         buf.push('(');
         write_comma_separated(buf, &n.parameters);
         buf.push_str(") => ");
@@ -131,10 +140,8 @@ fn write_function(buf: &mut String, n: &TypeFunction<'_>) {
             write_node(buf, ret);
         }
     } else {
-        if n.constructor {
-            buf.push_str("new ");
-        }
-        buf.push_str("function");
+        // `new(…)` for a constructor, `function(…)` otherwise.
+        buf.push_str(if n.constructor { "new" } else { "function" });
         if n.parenthesis {
             buf.push('(');
             write_comma_separated(buf, &n.parameters);
@@ -180,9 +187,30 @@ fn write_name_path(buf: &mut String, n: &TypeNamePath<'_>) {
         NamePathType::Property => buf.push('.'),
         NamePathType::Instance => buf.push('#'),
         NamePathType::Inner => buf.push('~'),
-        NamePathType::PropertyBrackets => {} // handled by IndexedAccessIndex
+        NamePathType::PropertyBrackets => {
+            // `foo["bar"]`, `Foo[K]`
+            buf.push('[');
+            write_node(buf, &n.right);
+            buf.push(']');
+            return;
+        }
     }
     write_node(buf, &n.right);
+}
+
+/// `value` in the given quotes, or as it is without them.
+fn write_quoted(buf: &mut String, value: &str, quote: Option<QuoteStyle>) {
+    let Some(quote) = quote else {
+        buf.push_str(value);
+        return;
+    };
+    let ch = match quote {
+        QuoteStyle::Single => '\'',
+        QuoteStyle::Double => '"',
+    };
+    buf.push(ch);
+    buf.push_str(value);
+    buf.push(ch);
 }
 
 fn write_special_name_path(buf: &mut String, n: &TypeSpecialNamePath<'_>) {
@@ -324,6 +352,8 @@ fn write_readonly_array(buf: &mut String, n: &TypeReadonlyArray<'_>) {
 }
 
 fn write_template_literal(buf: &mut String, n: &TypeTemplateLiteral<'_>) {
+    // The literals are the source text, escapes (`\``, `\${`) included.
+    buf.push('`');
     for (i, literal) in n.literals.iter().enumerate() {
         buf.push_str(literal);
         if i < n.interpolations.len() {
@@ -332,6 +362,7 @@ fn write_template_literal(buf: &mut String, n: &TypeTemplateLiteral<'_>) {
             buf.push('}');
         }
     }
+    buf.push('`');
 }
 
 fn write_symbol(buf: &mut String, n: &TypeSymbol<'_>) {

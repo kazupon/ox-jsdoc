@@ -507,3 +507,33 @@ describe('parsed types keep every part of the type', () => {
     expect(parseType('{a: symbol}', 'typescript')).toBe('{a: symbol}')
   })
 })
+
+// The string of a type used to lose parts of its form (#009).
+describe('stringified types keep their form', () => {
+  it('keeps the backticks of template literals', () => {
+    expect(parseType('`a${b}`', 'typescript')).toBe('`a${b}`')
+    expect(parseType('``', 'typescript')).toBe('``')
+  })
+
+  it('keeps the brackets and quotes of bracket properties', () => {
+    expect(parseType('Foo["bar"]', 'jsdoc')).toBe('Foo["bar"]')
+    expect(parseType("Foo['bar']", 'typescript')).toBe("Foo['bar']")
+    expect(parseType('Foo["a"][K]', 'typescript')).toBe('Foo["a"][K]')
+  })
+
+  it('keeps the form of constructors', () => {
+    expect(parseType('new(number, string): SomeType', 'typescript')).toBe(
+      'new(number, string): SomeType'
+    )
+    expect(parseType('new () => SomeType', 'typescript')).toBe('new () => SomeType')
+  })
+
+  it('gives the value of a quoted property without its quotes', () => {
+    const tag = parse('/** @type {Foo."bar"} */', { parseTypes: true, typeParseMode: 'jsdoc' }).ast!
+      .tags[0] as unknown as { parsedType: { toJSON(): Record<string, unknown> } }
+    expect(tag.parsedType.toJSON()).toMatchObject({
+      type: 'TypeNamePath',
+      right: { type: 'TypeProperty', value: 'bar' }
+    })
+  })
+})
