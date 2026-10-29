@@ -1155,6 +1155,58 @@ mod tests {
         assert_eq!(sf.node_count, 1);
     }
 
+    /// A writer with `source` appended, and the data offsets where the
+    /// source starts and ends.
+    fn writer_with_source<'a>(
+        arena: &'a Allocator,
+        source: &'a str,
+    ) -> (BinaryWriter<'a>, u32, u32) {
+        let mut writer = BinaryWriter::new(arena);
+        let start = writer.append_source_text(source);
+        (writer, start, start + source.len() as u32)
+    }
+
+    #[test]
+    fn intern_source_or_string_references_only_the_value_at_its_span() {
+        let arena = Allocator::default();
+        let source = "/** @param foo bar */";
+        let (mut writer, start, end) = writer_with_source(&arena, source);
+        let foo = &source[11..14];
+
+        // `foo` at its own span: referenced in place.
+        let field = writer.intern_source_or_string(foo, Span::new(11, 14));
+        assert_eq!(field.offset, start + 11);
+        // The same `&str` with the span of `bar`: copied, not `bar`.
+        let field = writer.intern_source_or_string(foo, Span::new(15, 18));
+        assert!(field.offset >= end, "{field:?}");
+        // A value outside the source with a span of the same length, such
+        // as a line of a multi-line tag body joined without its margin:
+        // copied.
+        let joined = String::from("foo");
+        let field = writer.intern_source_or_string(&joined, Span::new(11, 14));
+        assert!(field.offset >= end, "{field:?}");
+    }
+
+    #[test]
+    fn intern_source_or_string_for_leaf_payload_references_only_the_value_at_its_span() {
+        let arena = Allocator::default();
+        let source = "/** @param foo bar */";
+        let (mut writer, start, end) = writer_with_source(&arena, source);
+        let foo = &source[11..14];
+        let offset = |payload: LeafStringPayload| match payload {
+            LeafStringPayload::Inline { offset, .. } => offset,
+            LeafStringPayload::Index(_) => panic!("a short string is inline"),
+        };
+
+        let payload = writer.intern_source_or_string_for_leaf_payload(foo, Span::new(11, 14));
+        assert_eq!(offset(payload), start + 11);
+        let payload = writer.intern_source_or_string_for_leaf_payload(foo, Span::new(15, 18));
+        assert!(offset(payload) >= end);
+        let joined = String::from("foo");
+        let payload = writer.intern_source_or_string_for_leaf_payload(&joined, Span::new(11, 14));
+        assert!(offset(payload) >= end);
+    }
+
     fn read_u32_at(buf: &[u8], offset: usize) -> u32 {
         u32::from_le_bytes(buf[offset..offset + 4].try_into().unwrap())
     }
