@@ -34,8 +34,30 @@ describe('parse (binary NAPI binding)', () => {
     expect(result.ast!.description).toContain('{@link Foo}')
     expect(result.ast!.inlineTags.length).toBe(1)
     const inline = result.ast!.inlineTags[0] as RemoteJsdocInlineTag
+    expect(inline.tag).toBe('link')
     expect(inline.format).toBe('plain')
     expect(inline.namepathOrURL).toBe('Foo')
+  })
+
+  // The names of inline tags were not written to the Binary AST, so
+  // `{@link}`, `{@linkcode}` and `{@linkplain}` could not be told apart.
+  it('keeps the names of inline tags', () => {
+    const source =
+      '/**\n * See {@linkcode Foo} and {@linkplain Bar|the bar}.\n * @param a {@tutorial x}\n */'
+    const ast = parse(source).ast!
+    const names = (tags: readonly unknown[]) => tags.map(t => (t as RemoteJsdocInlineTag).tag)
+    expect(names(ast.inlineTags)).toEqual(['linkcode', 'linkplain'])
+    expect(names((ast.tags[0] as RemoteJsdocTag).inlineTags)).toEqual(['tutorial'])
+    expect(ast.inlineTags[0].toJSON()).toMatchObject({ tag: 'linkcode', namepathOrURL: 'Foo' })
+
+    const compat = parse(source, { compatMode: true }).ast!
+    expect(compat.toJSON()).toMatchObject({
+      inlineTags: [
+        { tag: 'linkcode', namepathOrURL: 'Foo', text: null, format: 'plain' },
+        { tag: 'linkplain', namepathOrURL: 'Bar', text: 'the bar', format: 'pipe' }
+      ],
+      tags: [{ inlineTags: [{ tag: 'tutorial', namepathOrURL: 'x', format: 'plain' }] }]
+    })
   })
 
   it('parses multiple tags', () => {

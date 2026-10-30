@@ -42,6 +42,14 @@ export const FIXTURES: ReadonlyArray<Fixture> = [
     source: '/**\n * See {@link Foo} for details\n */'
   },
   {
+    name: 'inline tags with other names and texts',
+    source: '/**\n * See {@linkcode Foo}, {@linkplain Bar|the bar} and {@link Baz the baz}\n */'
+  },
+  {
+    name: 'inline tags in a tag description',
+    source: '/**\n * @param {string} id See {@tutorial ids} and {@link Foo}\n */'
+  },
+  {
     name: 'no description, single tag',
     source: '/** @returns void */'
   },
