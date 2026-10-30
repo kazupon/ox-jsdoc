@@ -426,13 +426,23 @@ impl<'arena> BinaryWriter<'arena> {
         self.strings.intern(value)
     }
 
-    /// [`Self::intern_string`] for strings that stay alive and unchanged
-    /// until the writer is reset (the parser's slices of the source text
-    /// and arena strings); it skips the bytes check of the recent-call
-    /// cache.
+    /// [`Self::intern_string`] for the emitters: a hit of the recent-call
+    /// cache compares only the address and the length. The strings they pass
+    /// do not change while they may be cached: during a parse, they are
+    /// slices of the source texts of the parse, arena strings and string
+    /// literals, and the public emitters, which take caller data, start
+    /// with [`Self::forget_recent_strings`] (the data is borrowed for the
+    /// rest of the call).
     #[inline]
     pub(crate) fn intern_string_stable(&mut self, value: &str) -> StringField {
         self.strings.intern_stable(value)
+    }
+
+    /// Empty the recent-string cache, so that no string cached before can
+    /// be taken by address alone.
+    #[inline]
+    pub(crate) fn forget_recent_strings(&mut self) {
+        self.strings.forget_recent();
     }
 
     /// Intern a string and return its [`StringIndex`] (String Offsets table
@@ -483,6 +493,10 @@ impl<'arena> BinaryWriter<'arena> {
     /// to zero-copy intern source-derived strings (description text,
     /// tag names, raw type sources) without re-copying their bytes into
     /// the data buffer.
+    ///
+    /// The text must not change while it is the current one (until the
+    /// next call): the writer finds slices of it by their addresses, and
+    /// records them as the bytes appended here.
     pub fn append_source_text(&mut self, value: &str) -> u32 {
         let offset = self.strings.append_source_text(value);
         self.source_text_length = self.source_text_length.saturating_add(value.len() as u32);

@@ -1509,7 +1509,23 @@ fn trim_fast(s: &str) -> &str {
 /// Write a parsed JSDoc block into `writer` and return the assigned root
 /// node index. The caller is responsible for adding a corresponding entry
 /// to the Root index array via [`BinaryWriter::push_root`].
+///
+/// The strings of `parsed` may have changed since an earlier call (a caller
+/// can reuse the source text), so this first empties the writer's
+/// recent-string cache. The parser uses [`emit_parsed_block`] for its own
+/// blocks.
 pub fn emit_block<'arena>(
+    writer: &mut BinaryWriter<'arena>,
+    parsed: &ParsedBlock<'_, '_>,
+) -> Option<u32> {
+    writer.forget_recent_strings();
+    emit_parsed_block(writer, parsed)
+}
+
+/// [`emit_block`] for the parser's own blocks, whose strings (slices of the
+/// source texts of the parse, arena strings and string literals) do not
+/// change during the parse.
+pub(crate) fn emit_parsed_block<'arena>(
     writer: &mut BinaryWriter<'arena>,
     parsed: &ParsedBlock<'_, '_>,
 ) -> Option<u32> {
@@ -1910,7 +1926,7 @@ fn emit_tag(
         let _ = write_jsdoc_tag_name_value(writer, name.span, tag_parent, raw_idx);
     }
     if let Some(pt) = parsed_type {
-        super::type_emit::emit_type_node(writer, pt, tag_parent);
+        super::type_emit::emit_parsed_type_node(writer, pt, tag_parent);
     }
 
     if let Some(body) = tag.body.as_ref() {

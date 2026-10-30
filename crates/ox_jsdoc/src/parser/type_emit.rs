@@ -24,7 +24,22 @@ use crate::writer::{BinaryWriter, ExtOffset, NodeIndex};
 use super::type_data::*;
 
 /// Emit a TypeNodeData node into `writer` and return the assigned NodeIndex.
+///
+/// The strings of `node` may have changed since an earlier call (a caller
+/// can reuse a `String`), so this first empties the writer's recent-string
+/// cache. The parser uses [`emit_parsed_type_node`] for its own nodes.
 pub fn emit_type_node(
+    writer: &mut BinaryWriter<'_>,
+    node: &TypeNodeData<'_>,
+    parent_index: u32,
+) -> u32 {
+    writer.forget_recent_strings();
+    emit_parsed_type_node(writer, node, parent_index)
+}
+
+/// [`emit_type_node`] for the parser's own nodes, whose strings do not
+/// change during a parse.
+pub(crate) fn emit_parsed_type_node(
     writer: &mut BinaryWriter<'_>,
     node: &TypeNodeData<'_>,
     parent_index: u32,
@@ -134,7 +149,7 @@ pub fn emit_type_node(
                 n.dot,
             );
             let parent = idx.as_u32();
-            emit_type_node(writer, &n.left, parent);
+            emit_parsed_type_node(writer, &n.left, parent);
             if !n.elements.is_empty() {
                 emit_node_list_into_parent(writer, ext, parent, &n.elements);
             }
@@ -236,11 +251,11 @@ pub fn emit_type_node(
             let parent =
                 write_type_computed_method(writer, n.span, parent_index, n.optional, bitmask)
                     .as_u32();
-            emit_type_node(writer, &n.value, parent);
+            emit_parsed_type_node(writer, &n.value, parent);
             if !n.parameters.is_empty() {
                 emit_parameter_list(writer, n.span, parent, &n.parameters);
             }
-            emit_type_node(writer, &n.return_type, parent);
+            emit_parsed_type_node(writer, &n.return_type, parent);
             if !n.type_parameters.is_empty() {
                 emit_parameter_list(writer, n.span, parent, &n.type_parameters);
             }
@@ -287,7 +302,7 @@ pub fn emit_type_node(
             )
             .as_u32();
             if let Some(el) = n.element.as_ref() {
-                emit_type_node(writer, el, parent);
+                emit_parsed_type_node(writer, el, parent);
             }
             parent
         }
@@ -295,10 +310,10 @@ pub fn emit_type_node(
         TypeNodeData::Conditional(n) => {
             let bitmask = 0b1111;
             let parent = write_type_conditional(writer, n.span, parent_index, bitmask).as_u32();
-            emit_type_node(writer, &n.checks_type, parent);
-            emit_type_node(writer, &n.extends_type, parent);
-            emit_type_node(writer, &n.true_type, parent);
-            emit_type_node(writer, &n.false_type, parent);
+            emit_parsed_type_node(writer, &n.checks_type, parent);
+            emit_parsed_type_node(writer, &n.extends_type, parent);
+            emit_parsed_type_node(writer, &n.true_type, parent);
+            emit_parsed_type_node(writer, &n.false_type, parent);
             parent
         }
 
@@ -328,8 +343,8 @@ pub fn emit_type_node(
             };
             let bitmask = 0b11;
             let parent = write_type_name_path(writer, n.span, parent_index, pt, bitmask).as_u32();
-            emit_type_node(writer, &n.left, parent);
-            emit_type_node(writer, &n.right, parent);
+            emit_parsed_type_node(writer, &n.left, parent);
+            emit_parsed_type_node(writer, &n.right, parent);
             parent
         }
 
@@ -348,9 +363,9 @@ pub fn emit_type_node(
                 bitmask,
             )
             .as_u32();
-            emit_type_node(writer, &n.key, parent);
+            emit_parsed_type_node(writer, &n.key, parent);
             if let Some(r) = n.right.as_ref() {
-                emit_type_node(writer, r, parent);
+                emit_parsed_type_node(writer, r, parent);
             }
             parent
         }
@@ -358,8 +373,8 @@ pub fn emit_type_node(
             let bitmask = 0b11;
             let parent =
                 write_type_jsdoc_object_field(writer, n.span, parent_index, bitmask).as_u32();
-            emit_type_node(writer, &n.left, parent);
-            emit_type_node(writer, &n.right, parent);
+            emit_parsed_type_node(writer, &n.left, parent);
+            emit_parsed_type_node(writer, &n.right, parent);
             parent
         }
 
@@ -372,7 +387,7 @@ pub fn emit_type_node(
                 write_type_key_value(writer, n.span, parent_index, n.optional, n.variadic, key)
                     .as_u32();
             if let Some(r) = n.right.as_ref() {
-                emit_type_node(writer, r, parent);
+                emit_parsed_type_node(writer, r, parent);
             }
             parent
         }
@@ -381,14 +396,14 @@ pub fn emit_type_node(
             // just the identifier inside → length-mismatch fallback.
             let key = writer.intern_source_or_string(n.key, n.span);
             let parent = write_type_index_signature(writer, n.span, parent_index, key).as_u32();
-            emit_type_node(writer, &n.right, parent);
+            emit_parsed_type_node(writer, &n.right, parent);
             parent
         }
         TypeNodeData::MappedType(n) => {
             // Span covers `[K in T]`, as for IndexSignature.
             let key = writer.intern_source_or_string(n.key, n.span);
             let parent = write_type_mapped_type(writer, n.span, parent_index, key).as_u32();
-            emit_type_node(writer, &n.right, parent);
+            emit_parsed_type_node(writer, &n.right, parent);
             parent
         }
         TypeNodeData::MethodSignature(n) => {
@@ -414,11 +429,11 @@ pub fn emit_type_node(
             // will fill in the rest at Phase 4" note in
             // `crates/ox_jsdoc/src/decoder/visitor.rs`.
             for p in &n.parameters {
-                emit_type_node(writer, p, parent);
+                emit_parsed_type_node(writer, p, parent);
             }
-            emit_type_node(writer, &n.return_type, parent);
+            emit_parsed_type_node(writer, &n.return_type, parent);
             for tp in &n.type_parameters {
-                emit_type_node(writer, tp, parent);
+                emit_parsed_type_node(writer, tp, parent);
             }
             parent
         }
@@ -431,7 +446,7 @@ pub fn emit_type_node(
             let parent =
                 write_type_template_literal(writer, n.span, parent_index, &interned).as_u32();
             for interp in &n.interpolations {
-                emit_type_node(writer, interp, parent);
+                emit_parsed_type_node(writer, interp, parent);
             }
             parent
         }
@@ -443,7 +458,7 @@ pub fn emit_type_node(
                 write_type_symbol(writer, n.span, parent_index, n.element.is_some(), value)
                     .as_u32();
             if let Some(el) = n.element.as_ref() {
-                emit_type_node(writer, el, parent);
+                emit_parsed_type_node(writer, el, parent);
             }
             parent
         }
@@ -473,7 +488,7 @@ fn emit_node_list_into_parent(
 ) {
     let mut list = writer.begin_node_list_at(parent_ext, TYPE_LIST_PARENT_SLOT);
     for el in elements {
-        let child_idx = emit_type_node(writer, el, parent_index);
+        let child_idx = emit_parsed_type_node(writer, el, parent_index);
         writer.record_list_child(&mut list, child_idx);
     }
     writer.finalize_node_list(list);
@@ -487,7 +502,7 @@ fn emit_borrowed_node_list_into_parent(
 ) {
     let mut list = writer.begin_node_list_at(parent_ext, TYPE_LIST_PARENT_SLOT);
     for el in elements {
-        let child_idx = emit_type_node(writer, el, parent_index);
+        let child_idx = emit_parsed_type_node(writer, el, parent_index);
         writer.record_list_child(&mut list, child_idx);
     }
     writer.finalize_node_list(list);
@@ -540,7 +555,7 @@ where
     F: FnOnce(&mut BinaryWriter<'_>, oxc_span::Span, u32, u32) -> u32,
 {
     let parent = write_parent(writer, span, parent_index, 0b1);
-    emit_type_node(writer, child, parent);
+    emit_parsed_type_node(writer, child, parent);
     parent
 }
 
@@ -560,7 +575,7 @@ where
         ModifierPosition::Suffix => 1,
     };
     let parent = write_parent(writer, span, parent_index, pos, 0b1);
-    emit_type_node(writer, child, parent);
+    emit_parsed_type_node(writer, child, parent);
     parent
 }
 
@@ -576,8 +591,8 @@ where
     F: FnOnce(&mut BinaryWriter<'_>, oxc_span::Span, u32, u32) -> u32,
 {
     let parent = write_parent(writer, span, parent_index, 0b11);
-    emit_type_node(writer, left, parent);
-    emit_type_node(writer, right, parent);
+    emit_parsed_type_node(writer, left, parent);
+    emit_parsed_type_node(writer, right, parent);
     parent
 }
 
@@ -609,7 +624,7 @@ where
         emit_parameter_list(writer, span, parent, parameters);
     }
     if let Some(rt) = return_type {
-        emit_type_node(writer, rt, parent);
+        emit_parsed_type_node(writer, rt, parent);
     }
     if !type_parameters.is_empty() {
         emit_parameter_list(writer, span, parent, type_parameters);

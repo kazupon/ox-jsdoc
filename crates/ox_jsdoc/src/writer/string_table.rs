@@ -336,7 +336,7 @@ pub struct StringTableBuilder<'arena> {
     /// pass another string in the same memory (a reused `String`, or a new
     /// one where a dropped one was), so [`Self::intern`] also compares the
     /// bytes on a hit; [`Self::intern_stable`] is for strings that cannot
-    /// change before the builder is reset.
+    /// change while they may be cached.
     last_key_ptr: *const u8,
     last_key_len: usize,
     last_entry: DedupEntry,
@@ -389,10 +389,9 @@ impl<'arena> StringTableBuilder<'arena> {
         self.intern_inner::<true>(value)
     }
 
-    /// [`Self::intern`] for strings that stay alive and unchanged until the
-    /// builder is reset, such as the parser's slices of the source text and
-    /// arena strings: a hit of the recent-call cache compares only the
-    /// address and the length.
+    /// [`Self::intern`] for a string that cannot change while it may be in
+    /// the recent-call cache, such as the parser's strings during a parse:
+    /// a hit compares only the address and the length.
     pub(crate) fn intern_stable(&mut self, value: &str) -> StringField {
         self.intern_inner::<false>(value)
     }
@@ -538,6 +537,16 @@ impl<'arena> StringTableBuilder<'arena> {
         offset
     }
 
+    /// Empty the 1-slot recent-call cache.
+    pub(crate) fn forget_recent(&mut self) {
+        self.last_key_ptr = core::ptr::null();
+        self.last_key_len = 0;
+        self.last_entry = DedupEntry {
+            field: StringField::NONE,
+            index: None,
+        };
+    }
+
     /// Truncate the builder back to its post-[`Self::new`] state without
     /// freeing arena memory. The arena-backed `offsets_buffer` /
     /// `data_buffer` keep their capacity, so subsequent
@@ -561,12 +570,7 @@ impl<'arena> StringTableBuilder<'arena> {
         // Wipe dedup but keep the HashMap's bucket allocation (FxHashMap's
         // `clear` retains capacity).
         self.dedup.clear();
-        self.last_key_ptr = core::ptr::null();
-        self.last_key_len = 0;
-        self.last_entry = DedupEntry {
-            field: StringField::NONE,
-            index: None,
-        };
+        self.forget_recent();
     }
 
     /// Number of strings registered in the offsets table so far.

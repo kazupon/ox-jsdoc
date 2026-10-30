@@ -257,7 +257,7 @@ fn parse_with_writer<'arena>(
     let root_node_index = if parsed.is_failure() {
         0
     } else {
-        context::emit_block(writer, &parsed).unwrap_or(0)
+        context::emit_parsed_block(writer, &parsed).unwrap_or(0)
     };
     writer.push_root(root_node_index, source_offset, options.base_offset);
 
@@ -332,7 +332,7 @@ pub fn parse_to_bytes(source: &str, options: ParseOptions) -> ParseBytesResult {
     let root_node_index = if parsed.is_failure() {
         0
     } else {
-        context::emit_block(&mut writer, &parsed).unwrap_or(0)
+        context::emit_parsed_block(&mut writer, &parsed).unwrap_or(0)
     };
     writer.push_root(root_node_index, source_offset, options.base_offset);
 
@@ -497,7 +497,7 @@ fn parse_batch_with_writer<'arena>(
         let root_node_index = if parsed.is_failure() {
             0
         } else {
-            context::emit_block(writer, &parsed).unwrap_or(0)
+            context::emit_parsed_block(writer, &parsed).unwrap_or(0)
         };
         writer.push_root(root_node_index, source_offset_in_data, item.base_offset);
 
@@ -600,7 +600,7 @@ pub fn parse_batch_to_bytes(
         let root_node_index = if parsed.is_failure() {
             0
         } else {
-            context::emit_block(&mut writer, &parsed).unwrap_or(0)
+            context::emit_parsed_block(&mut writer, &parsed).unwrap_or(0)
         };
         writer.push_root(root_node_index, source_offset_in_data, item.base_offset);
 
