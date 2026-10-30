@@ -519,7 +519,7 @@ export declare class RemoteJsdocInlineTag implements LazyNode {
   get range(): readonly [number, number];
   get parent(): LazyNode | null;
   /** The name without `@` (`linkcode` for `{@linkcode Foo}`). `null` for a
-   * buffer of protocol minor version 0, which has no name field. */
+   * buffer of protocol minor version 0 or 1, which has no name field. */
   get tag(): string | null;
   /** Inline tag format string. In compat mode the `'unknown'` variant is
    * mapped to `'plain'` to mirror jsdoccomment's behavior. */

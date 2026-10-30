@@ -501,16 +501,18 @@ describe('RemoteJsdocInlineTag.tag', () => {
     return new RemoteSourceFileCtor(buffer).asts[0] as RemoteJsdocInlineTag
   }
 
-  it('reads the name in a buffer of minor version 1', () => {
-    const inline = build(0x11)
+  it('reads the name in a buffer of minor version 2', () => {
+    const inline = build(0x12)
     expect(inline.tag).toBe('link')
     expect(inline.namepathOrURL).toBe('Foo')
     expect(inline.toJSON()).toMatchObject({ tag: 'link', namepathOrURL: 'Foo' })
   })
 
-  it('gives no name in a buffer of minor version 0, which has no name field', () => {
-    const inline = build(0x10)
-    expect(inline.tag).toBeNull()
-    expect(inline.namepathOrURL).toBe('Foo')
+  it('gives no name in a buffer of minor version 0 or 1, which has no name field', () => {
+    for (const version of [0x10, 0x11]) {
+      const inline = build(version)
+      expect(inline.tag).toBeNull()
+      expect(inline.namepathOrURL).toBe('Foo')
+    }
   })
 })

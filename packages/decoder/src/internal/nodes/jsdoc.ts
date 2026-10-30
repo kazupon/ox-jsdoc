@@ -1740,11 +1740,11 @@ export class RemoteJsdocTypeLine implements LazyNode {
 // ===========================================================================
 // 0x08 RemoteJsdocInlineTag
 //
-// Extended Data layout (24 bytes; 18 bytes before protocol minor 1):
+// Extended Data layout (24 bytes; 18 bytes before protocol minor 2):
 //   byte 0-5    : namepath_or_url (StringField, NONE if absent)
 //   byte 6-11   : text             (StringField, NONE if absent)
 //   byte 12-17  : raw_body         (StringField, NONE if absent)
-//   byte 18-23  : tag              (StringField, the name; minor 1 and later)
+//   byte 18-23  : tag              (StringField, the name; minor 2 and later)
 // ===========================================================================
 
 interface JsdocInlineTagCache {
@@ -1796,7 +1796,7 @@ export class RemoteJsdocInlineTag implements LazyNode {
   }
 
   /** The name without `@` (`linkcode` for `{@linkcode Foo}`). `null` for a
-   * buffer of protocol minor version 0, which has no name field. */
+   * buffer of protocol minor version 0 or 1, which has no name field. */
   get tag(): string | null {
     const internal = this.#internal
     const cached = internal.$tag

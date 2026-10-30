@@ -517,7 +517,7 @@ impl<'a> LazyJsdocInlineTag<'a> {
         resolve_string_field_slot(self.source_file, ext, 2 * STRING_FIELD_SIZE)
     }
     /// The name without `@` (`linkcode` for `{@linkcode Foo}`). `None` for a
-    /// buffer of protocol minor version 0, which has no name field.
+    /// buffer of protocol minor version 0 or 1, which has no name field.
     pub fn tag(&self) -> Option<&'a str> {
         if minor(self.source_file.bytes()[VERSION_OFFSET]) < INLINE_TAG_NAME_MINOR {
             return None;

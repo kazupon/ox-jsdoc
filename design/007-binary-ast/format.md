@@ -142,7 +142,7 @@ Examples: 0x10 = Major 1, Minor 0 (initial release)
 
 **Minor 1** (`0x11`): adds the `TypeComputedProperty` (`0xAD`) and `TypeComputedMethod` (`0xAE`) kinds. A decoder for Minor 0 does not know them: the JS decoder throws `unknown Kind`, and the Rust decoder gives `None` for those nodes
 
-Minor 1 also appends the `tag` field (the name) to the Extended Data of `JsdocInlineTag` (bytes 18-23). A decoder for Minor 1 reads that field only in a buffer of Minor 1 or later, because a Minor 0 record ends after 18 bytes; a decoder for Minor 0 does not read it
+**Minor 2** (`0x12`): appends the `tag` field (the name) to the Extended Data of `JsdocInlineTag` (bytes 18-23). A decoder for Minor 2 reads that field only in a buffer of Minor 2 or later, because a Minor 0 or 1 record ends after 18 bytes; an older decoder does not read it
 
 **Implementation example (Rust)**:
 
@@ -876,7 +876,7 @@ Nodes that hold Extended Data within the comment AST (the 6 TypeNode Extended Da
 | --- | --- | --- |
 | `JsdocBlock` | 68 / 76 bytes (90 / 98 bytes in compat) | Basic portion: Children bitmask (u8) + reserved (u8, alignment) + `description` `StringField` (6) + 7 delimiters (`StringField`×7 = 42) + 3 list metadata slots (3 × 6 = 18 bytes for `descriptionLines` / `tags` / `inlineTags`) = **68 bytes**. In `compat_mode`, the following is appended **after** the basic portion: reserved 2 bytes (u32 alignment) + `end_line` (u32) + `description_start_line` (u32, `0xFFFFFFFF` for None) + `description_end_line` (u32, ditto) + `last_description_line` (u32, ditto) + `has_preterminal_description` (u8) + `has_preterminal_tag_description` (u8, `0xFF` for None) + reserved 2 bytes (trailing alignment) = **22 bytes** added. With `preserve_whitespace`, an 8-byte `description_raw_span` is appended at the final tail and Common Data bit0 is set |
 | `JsdocTag` | 38 / 46 bytes (80 / 88 bytes in compat) | Basic portion: Children bitmask (u8) + reserved (u8) + `default_value` `StringField` (6) + `description` `StringField` (6) + `raw_body` `StringField` (6) + 3 list metadata slots (3 × 6 = 18 bytes for `typeLines` / `descriptionLines` / `inlineTags`) = **38 bytes**. `tag` (JsdocTagName), `raw_type` (JsdocTypeSource), `name` (JsdocTagNameValue), `parsed_type` (TypeNode), and `body` (JsdocTagBody) are **placed as child nodes** (since they are span-bearing structs). `optional` is stored in Common Data bit0. In compat, 7 delimiters (`StringField`×7 = 42 bytes) are appended after. With `preserve_whitespace`, an 8-byte `description_raw_span` is appended at the final tail and Common Data bit1 is set |
-| `JsdocInlineTag` | 24 bytes | `namepath_or_url` `StringField` (6) + `text` `StringField` (6) + `raw_body` `StringField` (6) + `tag` `StringField` (6) = **24 bytes**. `tag` is the name without `@` (`link`, `linkcode`, `tutorial`, …), always present. It came in protocol Minor 1: a Minor 0 record ends after `raw_body` (18 bytes), and decoders give no name for it. Each Optional uses `StringField::NONE` as the absent marker |
+| `JsdocInlineTag` | 24 bytes | `namepath_or_url` `StringField` (6) + `text` `StringField` (6) + `raw_body` `StringField` (6) + `tag` `StringField` (6) = **24 bytes**. `tag` is the name without `@` (`link`, `linkcode`, `tutorial`, …), always present. It came in protocol Minor 2: a Minor 0 or 1 record ends after `raw_body` (18 bytes), and decoders give no name for it. Each Optional uses `StringField::NONE` as the absent marker |
 | `JsdocParameterName` | 12 bytes | `path` `StringField` (6, required) + `default_value` `StringField` (6, `StringField::NONE` = None). `optional` is stored in Common Data bit0 |
 | `JsdocGenericTagBody` | 8 bytes | Children bitmask (u8, bit0=typeSource, bit1=value) + reserved (u8, alignment) + `description` `StringField` (6, `StringField::NONE` = None) = **8 bytes**. `type_source` (JsdocTypeSource) and `value` (JsdocTagValue) are **placed as child nodes** (since they are span-bearing structs). `separator` is stored in Common Data bit0 (has_dash_separator) |
 | `JsdocDescriptionLine` | 24 bytes (compat only) | `description` `StringField` (6, required) + 3 delimiters (`delimiter`, `post_delimiter`, `initial`) `StringField`×3 = 4 × `StringField` = **24 bytes**. **No Extended Data outside compat** (Node Data is set to String type 0b01 and `description` is stored directly in the 30-bit string index). In compat, Node Data switches to Extended type 0b10 and the 4 string fields including `description` move to Extended Data |
@@ -2055,7 +2055,7 @@ Decoders read `(head, count)` from the slot and walk `next_sibling` exactly `cou
 | 0x05 | `JsdocTagNameValue` | String ‖ StringInline | (unused) | - |
 | 0x06 | `JsdocTypeSource` | String ‖ StringInline | (unused) | - |
 | 0x07 | `JsdocTypeLine` | String ‖ StringInline / Extended (compat) | (unused) | 0 / 24 bytes |
-| 0x08 | `JsdocInlineTag` | Extended | bits[0:2]=format | 24 bytes (18 bytes in Minor 0) |
+| 0x08 | `JsdocInlineTag` | Extended | bits[0:2]=format | 24 bytes (18 bytes before Minor 2) |
 | 0x09 | `JsdocGenericTagBody` | Extended | bit0=has_dash_separator | 8 bytes |
 | 0x0A | `JsdocBorrowsTagBody` | Children | (unused) | - (reserved, see note) |
 | 0x0B | `JsdocRawTagBody` | String ‖ StringInline | (unused) | - (reserved, see note) |

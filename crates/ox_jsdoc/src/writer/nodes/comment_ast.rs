@@ -525,7 +525,7 @@ const JSDOC_INLINE_TAG_SIZE: usize = 4 * STRING_FIELD_SIZE;
 ///
 /// Common Data: `bits[0:2] = format`. Extended Data: 24 bytes
 /// (4 × StringField for `namepath_or_url`, `text`, `raw_body` and `tag`,
-/// the name without `@`). `tag` came in protocol minor version 1; a minor 0
+/// the name without `@`). `tag` came in protocol minor version 2; an older
 /// record ends after `raw_body`.
 pub fn write_jsdoc_inline_tag(
     writer: &mut BinaryWriter<'_>,

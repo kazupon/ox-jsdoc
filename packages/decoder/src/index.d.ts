@@ -234,7 +234,7 @@ export class RemoteJsdocInlineTag implements RemoteNode {
   readonly parent: RemoteNode | null
   /**
    * The name without `@` (`linkcode` for `{@linkcode Foo}`). `null` for a
-   * buffer of protocol minor version 0, which has no name field.
+   * buffer of protocol minor version 0 or 1, which has no name field.
    */
   readonly tag: string | null
   readonly format: 'plain' | 'pipe' | 'space' | 'prefix' | 'unknown'

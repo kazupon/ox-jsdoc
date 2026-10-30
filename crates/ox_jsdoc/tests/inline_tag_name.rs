@@ -71,16 +71,18 @@ fn keeps_the_names_of_inline_tags() {
 }
 
 #[test]
-fn gives_no_name_for_a_buffer_of_minor_version_0() {
-    // Minor 0 buffers have no name field after the other fields, so the
-    // decoder must not read it.
+fn gives_no_name_for_a_buffer_before_minor_version_2() {
+    // Minor 0 and 1 buffers have no name field after the other fields, so
+    // the decoder must not read it.
     let arena = Allocator::default();
     let result = parse(&arena, "/** See {@link Foo} */", ParseOptions::default());
-    let mut bytes = result.binary_bytes.to_vec();
-    bytes[0] = 0x10;
-    let source_file = LazySourceFile::new(&bytes).expect("header");
-    let block = source_file.asts().next().flatten().expect("parsed");
-    let inline = block.inline_tags().next().expect("inline tag");
-    assert_eq!(inline.tag(), None);
-    assert_eq!(inline.namepath_or_url(), Some("Foo"));
+    for version in [0x10, 0x11] {
+        let mut bytes = result.binary_bytes.to_vec();
+        bytes[0] = version;
+        let source_file = LazySourceFile::new(&bytes).expect("header");
+        let block = source_file.asts().next().flatten().expect("parsed");
+        let inline = block.inline_tags().next().expect("inline tag");
+        assert_eq!(inline.tag(), None, "version {version:#x}");
+        assert_eq!(inline.namepath_or_url(), Some("Foo"));
+    }
 }

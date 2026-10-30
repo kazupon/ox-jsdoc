@@ -33,7 +33,7 @@ The current binary implementation emits comment nodes from `crates/ox_jsdoc/src/
 | 5 | `JsdocTagNameValue` | `raw` |  |
 | 6 | `JsdocTypeSource` | `raw` | Text inside `{...}` |
 | 7 | `JsdocTypeLine` | `raw_type`, delimiter group (3: `delimiter`, `post_delimiter`, `initial`) |  |
-| 8 | `JsdocInlineTag` | `tag`, `namepath_or_url?`, `text?`, `format`, `raw_body?` | `tag` since protocol Minor 1 |
+| 8 | `JsdocInlineTag` | `tag`, `namepath_or_url?`, `text?`, `format`, `raw_body?` | `tag` since protocol Minor 2 |
 | 9 | `JsdocGenericTagBody` | `type_source?`, `value?`, `separator?`, `description?` |  |
 | 10 | `JsdocBorrowsTagBody` | `source`, `target` | Reserved (see note) |
 | 11 | `JsdocRawTagBody` | `raw` | Reserved (see note) |
