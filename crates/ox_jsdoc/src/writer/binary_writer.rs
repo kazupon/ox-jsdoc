@@ -426,6 +426,15 @@ impl<'arena> BinaryWriter<'arena> {
         self.strings.intern(value)
     }
 
+    /// [`Self::intern_string`] for strings that stay alive and unchanged
+    /// until the writer is reset (the parser's slices of the source text
+    /// and arena strings); it skips the bytes check of the recent-call
+    /// cache.
+    #[inline]
+    pub(crate) fn intern_string_stable(&mut self, value: &str) -> StringField {
+        self.strings.intern_stable(value)
+    }
+
     /// Intern a string and return its [`StringIndex`] (String Offsets table
     /// path). Used by string-leaf Kinds (`emit_string_node`) where the
     /// 30-bit index packed into Node Data is cheaper than a 6-byte ED

@@ -423,8 +423,11 @@ pub fn emit_type_node(
             parent
         }
         TypeNodeData::TemplateLiteral(n) => {
-            let interned: Vec<crate::writer::StringField> =
-                n.literals.iter().map(|s| writer.intern_string(s)).collect();
+            let interned: Vec<crate::writer::StringField> = n
+                .literals
+                .iter()
+                .map(|s| writer.intern_string_stable(s))
+                .collect();
             let parent =
                 write_type_template_literal(writer, n.span, parent_index, &interned).as_u32();
             for interp in &n.interpolations {

@@ -1520,7 +1520,7 @@ pub fn emit_block<'arena>(
 }
 
 fn opt_string(writer: &mut BinaryWriter<'_>, value: Option<&str>) -> Option<StringField> {
-    value.map(|s| writer.intern_string(s))
+    value.map(|s| writer.intern_string_stable(s))
 }
 
 /// `Option<&str>` variant of [`BinaryWriter::intern_source_slice_or_string`]
@@ -1583,7 +1583,7 @@ fn description_raw_span_from_tag(
 }
 
 fn intern(writer: &mut BinaryWriter<'_>, value: &str) -> StringField {
-    writer.intern_string(value)
+    writer.intern_string_stable(value)
 }
 
 /// Hot-path resolver for the source-preserving line-end strings
@@ -1599,7 +1599,7 @@ fn intern_line_end(writer: &mut BinaryWriter<'_>, value: &str) -> StringField {
         "" => common_string_field(COMMON_EMPTY),
         "\n" => common_string_field(COMMON_LF),
         "\r\n" => common_string_field(COMMON_CRLF),
-        other => writer.intern_string(other),
+        other => writer.intern_string_stable(other),
     }
 }
 

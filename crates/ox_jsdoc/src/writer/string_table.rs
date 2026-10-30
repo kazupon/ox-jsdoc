@@ -332,8 +332,11 @@ pub struct StringTableBuilder<'arena> {
     /// (e.g. `intern("")` for empty source slots, or `intern("param")` /
     /// `intern("returns")` repeatedly across a batch).
     ///
-    /// The pointer is only ever compared (never dereferenced) and its
-    /// underlying allocation outlives the builder by virtue of the arena.
+    /// The pointer is only ever compared (never dereferenced). A caller may
+    /// pass another string in the same memory (a reused `String`, or a new
+    /// one where a dropped one was), so [`Self::intern`] also compares the
+    /// bytes on a hit; [`Self::intern_stable`] is for strings that cannot
+    /// change before the builder is reset.
     last_key_ptr: *const u8,
     last_key_len: usize,
     last_entry: DedupEntry,
@@ -379,11 +382,26 @@ impl<'arena> StringTableBuilder<'arena> {
     /// Slow path: regular HashMap dedup; on miss, append to `data_buffer`
     /// only (no `offsets_buffer` write) and cache the resulting
     /// StringField for future hits.
+    ///
+    /// Works for any caller: a hit of the 1-slot recent-call cache also
+    /// compares the bytes.
     pub fn intern(&mut self, value: &str) -> StringField {
+        self.intern_inner::<true>(value)
+    }
+
+    /// [`Self::intern`] for strings that stay alive and unchanged until the
+    /// builder is reset, such as the parser's slices of the source text and
+    /// arena strings: a hit of the recent-call cache compares only the
+    /// address and the length.
+    pub(crate) fn intern_stable(&mut self, value: &str) -> StringField {
+        self.intern_inner::<false>(value)
+    }
+
+    #[inline(always)]
+    fn intern_inner<const CHECK_BYTES: bool>(&mut self, value: &str) -> StringField {
         // 1-slot recent-call cache: skip lookup_common + HashMap probe
-        // when the caller passes the same `&str` (same backing allocation
-        // and length) twice in a row.
-        if value.as_ptr() == self.last_key_ptr && value.len() == self.last_key_len {
+        // when the caller passes the same string twice in a row.
+        if self.is_recent::<CHECK_BYTES>(value) {
             return self.last_entry.field;
         }
         if let Some(idx) = lookup_common(value) {
@@ -411,11 +429,14 @@ impl<'arena> StringTableBuilder<'arena> {
     ///
     /// Slow path: HashMap dedup. On hit, allocates a StringIndex lazily
     /// (so ED-only strings never pay the `offsets_buffer` write).
+    ///
+    /// Works for any caller: a hit of the 1-slot recent-call cache also
+    /// compares the bytes.
     pub fn intern_for_leaf(&mut self, value: &str) -> StringIndex {
         // 1-slot recent-call cache hit: only valid if the cached entry
         // already has an `index` allocated (recent path may have stored
         // a StringField-only entry).
-        if value.as_ptr() == self.last_key_ptr && value.len() == self.last_key_len {
+        if self.is_recent::<true>(value) {
             if let Some(idx) = self.last_entry.index {
                 return idx;
             }
@@ -569,6 +590,25 @@ impl<'arena> StringTableBuilder<'arena> {
         self.last_key_ptr = value.as_ptr();
         self.last_key_len = value.len();
         self.last_entry = entry;
+    }
+
+    /// Whether `value` is the string of the recent-call cache: the same
+    /// address and length (cheap to compare), and, with `CHECK_BYTES`, the
+    /// same bytes.
+    #[inline(always)]
+    fn is_recent<const CHECK_BYTES: bool>(&self, value: &str) -> bool {
+        if value.as_ptr() != self.last_key_ptr || value.len() != self.last_key_len {
+            return false;
+        }
+        if !CHECK_BYTES {
+            return true;
+        }
+        let field = self.last_entry.field;
+        if field.is_none() {
+            return false;
+        }
+        let start = field.offset as usize;
+        self.data_buffer.get(start..start + field.length as usize) == Some(value.as_bytes())
     }
 
     /// Internal: append `value` to `data_buffer` and return the resulting
