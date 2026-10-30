@@ -65,8 +65,12 @@ pub const SUPPORTED_MAJOR: u8 = 1;
 ///
 /// - `0`: the first version
 /// - `1`: adds the `TypeComputedProperty` (`0xAD`) and `TypeComputedMethod`
-///   (`0xAE`) kinds
+///   (`0xAE`) kinds, and the `tag` field (the name) of `JsdocInlineTag`
 pub const SUPPORTED_MINOR: u8 = 1;
+
+/// First minor version whose `JsdocInlineTag` Extended Data has the `tag`
+/// field (bytes 18-23). Older buffers end the record after 18 bytes.
+pub const INLINE_TAG_NAME_MINOR: u8 = 1;
 
 /// Bit shift for extracting the major version from byte 0.
 pub const MAJOR_SHIFT: u8 = 4;

@@ -121,7 +121,6 @@ struct DescriptionLineData<'a> {
 #[derive(Debug, Clone, Copy)]
 struct InlineTagData<'a> {
     span: Span,
-    tag_name_span: Span,
     tag_name: &'a str,
     namepath_or_url: Option<&'a str>,
     text: Option<&'a str>,
@@ -1027,12 +1026,9 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             };
 
             let inline_span = source_span(inline_start, inline_end + 1);
-            let tag_name_start = inline_start + 2;
-            let tag_name_end = tag_name_start + tag_name.len();
             let (np_or_url, link_text, format) = parse_inline_tag_body(body);
             inline_tags.push(InlineTagData {
                 span: inline_span,
-                tag_name_span: source_span(tag_name_start, tag_name_end),
                 tag_name,
                 namepath_or_url: np_or_url,
                 text: link_text,
@@ -2039,6 +2035,7 @@ fn emit_inline_tag(
     let np_idx = opt_source_string(writer, inline.namepath_or_url);
     let text_idx = opt_source_string(writer, inline.text);
     let raw_idx = opt_source_string(writer, inline.raw_body);
+    let tag_idx = writer.intern_source_slice_or_string(inline.tag_name);
     let format = inline.format as u8;
     let idx = write_jsdoc_inline_tag(
         writer,
@@ -2048,13 +2045,8 @@ fn emit_inline_tag(
         np_idx,
         text_idx,
         raw_idx,
+        tag_idx,
     );
-    // Note: the inline tag's `tag` child (JsdocTagName) is referenced by the
-    // jsdoccomment AST shape but the binary writer's JsdocInlineTag does not
-    // currently include a child slot for it. This matches the Rust lazy
-    // decoder's surface.
-    let _ = inline.tag_name_span;
-    let _ = inline.tag_name;
     idx.as_u32()
 }
 

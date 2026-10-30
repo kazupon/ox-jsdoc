@@ -518,13 +518,15 @@ pub fn write_jsdoc_type_line_compat(
 // 0x08 JsdocInlineTag (Extended)
 // ---------------------------------------------------------------------------
 
-/// Extended Data size for [`JsdocInlineTag`]: 3 × StringField = 18 bytes.
-const JSDOC_INLINE_TAG_SIZE: usize = 3 * STRING_FIELD_SIZE;
+/// Extended Data size for [`JsdocInlineTag`]: 4 × StringField = 24 bytes.
+const JSDOC_INLINE_TAG_SIZE: usize = 4 * STRING_FIELD_SIZE;
 
 /// Write a `JsdocInlineTag` (Kind `0x08`, Extended type).
 ///
-/// Common Data: `bits[0:2] = format`. Extended Data: 18 bytes
-/// (3 × StringField for `namepath_or_url`, `text`, `raw_body`).
+/// Common Data: `bits[0:2] = format`. Extended Data: 24 bytes
+/// (4 × StringField for `namepath_or_url`, `text`, `raw_body` and `tag`,
+/// the name without `@`). `tag` came in protocol minor version 1; a minor 0
+/// record ends after `raw_body`.
 pub fn write_jsdoc_inline_tag(
     writer: &mut BinaryWriter<'_>,
     span: Span,
@@ -533,11 +535,13 @@ pub fn write_jsdoc_inline_tag(
     namepath_or_url: Option<StringField>,
     text: Option<StringField>,
     raw_body: Option<StringField>,
+    tag: StringField,
 ) -> NodeIndex {
     let (off, dst) = writer.extended.reserve_mut(JSDOC_INLINE_TAG_SIZE);
     write_opt_string_field(dst, 0, namepath_or_url);
     write_opt_string_field(dst, 6, text);
     write_opt_string_field(dst, 12, raw_body);
+    write_string_field(dst, 18, tag);
     writer.emit_extended_node(
         parent_index,
         Kind::JsdocInlineTag,

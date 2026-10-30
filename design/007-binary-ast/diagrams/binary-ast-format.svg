@@ -109,7 +109,7 @@
   <g transform="translate(55, 600)">
     <rect width="170" height="36" rx="3" fill="#e8a838" opacity="0.85"/><text x="85" y="15" text-anchor="middle" fill="#fff" font-size="9">JsdocBlock (68 / 90 bytes)</text><text x="85" y="28" text-anchor="middle" fill="#ddd" font-size="8">bitmask + 8 StrField + 3 list meta</text>
     <rect x="175" width="160" height="36" rx="3" fill="#e8a838" opacity="0.7"/><text x="255" y="15" text-anchor="middle" fill="#fff" font-size="9">JsdocTag (38 / 80 bytes)</text><text x="255" y="28" text-anchor="middle" fill="#ddd" font-size="7">bitmask + 3 StrField + 3 list meta</text>
-    <rect x="340" width="155" height="36" rx="3" fill="#e8a838" opacity="0.85"/><text x="417" y="15" text-anchor="middle" fill="#fff" font-size="9">JsdocInlineTag (18 bytes)</text><text x="417" y="28" text-anchor="middle" fill="#ddd" font-size="8">3 × StringField</text>
+    <rect x="340" width="155" height="36" rx="3" fill="#e8a838" opacity="0.85"/><text x="417" y="15" text-anchor="middle" fill="#fff" font-size="9">JsdocInlineTag (24 bytes)</text><text x="417" y="28" text-anchor="middle" fill="#ddd" font-size="8">4 × StringField</text>
     <rect x="500" width="135" height="36" rx="3" fill="#e8a838" opacity="0.7"/><text x="567" y="15" text-anchor="middle" fill="#fff" font-size="9">TypeNode mixed (6+6N B)</text><text x="567" y="28" text-anchor="middle" fill="#ddd" font-size="8">6 variants pattern</text>
     <rect x="640" width="140" height="36" rx="3" fill="#e8a838" opacity="0.85"/><text x="710" y="15" text-anchor="middle" fill="#fff" font-size="9">JsdocParamName (12 B)</text><text x="710" y="28" text-anchor="middle" fill="#ddd" font-size="8">path + default_value StrField</text>
   </g>

@@ -33,7 +33,7 @@ The current binary implementation emits comment nodes from `crates/ox_jsdoc/src/
 | 5 | `JsdocTagNameValue` | `raw` |  |
 | 6 | `JsdocTypeSource` | `raw` | Text inside `{...}` |
 | 7 | `JsdocTypeLine` | `raw_type`, delimiter group (3: `delimiter`, `post_delimiter`, `initial`) |  |
-| 8 | `JsdocInlineTag` | `namepath_or_url?`, `text?`, `format`, `raw_body?` | `tag` is reserved (see note) |
+| 8 | `JsdocInlineTag` | `tag`, `namepath_or_url?`, `text?`, `format`, `raw_body?` | `tag` since protocol Minor 1 |
 | 9 | `JsdocGenericTagBody` | `type_source?`, `value?`, `separator?`, `description?` |  |
 | 10 | `JsdocBorrowsTagBody` | `source`, `target` | Reserved (see note) |
 | 11 | `JsdocRawTagBody` | `raw` | Reserved (see note) |
@@ -46,7 +46,6 @@ Notes: the Rust enums `JsdocTagBody` (Generic|Borrows|Raw) and `JsdocTagValue` (
 
 **Reserved Kinds (currently never emitted by the parser):**
 
-- **`JsdocInlineTag.tag`** — the inline-tag name (`link`, `tutorial`, …) is parsed but **not preserved in the binary AST**. The Kind 0x04 (`JsdocTagName`) record that the spec previously placed as a child of `JsdocInlineTag` is intentionally dropped during emit. Consumers that need the inline-tag name should derive it from the source `range` rather than the AST.
 - **`JsdocBorrowsTagBody` (Kind 0x0A)** — the typed AST defines a `JsdocTagBody::Borrows` variant for `@borrows source as target`, but no parser path currently produces it; `@borrows` bodies are emitted as `JsdocGenericTagBody`. Kind 0x0A and the `RemoteJsdocBorrowsTagBody` decoder class are kept reserved for a future `@borrows` specialization.
 - **`JsdocRawTagBody` (Kind 0x0B)** — same status: `JsdocTagBody::Raw` is defined but never produced. Reserved for future specialization.
 
