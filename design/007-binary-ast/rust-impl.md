@@ -141,6 +141,8 @@ The **decoder entry point** that manages Header / Root array / String table. It 
 #[derive(Copy, Clone)]
 pub struct LazySourceFile<'a> {
     bytes: &'a [u8],
+    // The String Data section as UTF-8 (checked once in new())
+    string_data: &'a str,
     // Offsets read from the Header (Header parsing runs only once in new())
     pub compat_mode: bool,
     pub root_array_offset: u32,
@@ -154,24 +156,23 @@ pub struct LazySourceFile<'a> {
 }
 
 impl<'a> LazySourceFile<'a> {
+    /// Check the Header (length, Major), the section layout (in the writer's
+    /// order, inside the buffer, the roots and the nodes fit) and that the
+    /// String Data section is UTF-8.
     pub fn new(bytes: &'a [u8]) -> Result<Self, DecodeError> {
-        if bytes.len() < 40 { return Err(DecodeError::TooShort); }
-        // Read the 40-byte Header at once
-        let version = bytes[0];
-        let flags   = bytes[1];
-        Ok(LazySourceFile {
-            bytes,
-            compat_mode:          (flags & 0x01) != 0,
-            root_array_offset:    read_u32(bytes, 4),
-            string_offsets_offset: read_u32(bytes, 8),
-            string_data_offset:   read_u32(bytes, 12),
-            extended_data_offset: read_u32(bytes, 16),
-            diagnostics_offset:   read_u32(bytes, 20),
-            nodes_offset:         read_u32(bytes, 24),
-            node_count:           read_u32(bytes, 28),
-            // sourceTextLength is optional
-            root_count:           read_u32(bytes, 36),
-        })
+        let (mut file, string_data) = Self::read_header(bytes)?;
+        file.string_data = std::str::from_utf8(string_data)
+            .map_err(|e| DecodeError::InvalidStringData { valid_up_to: e.valid_up_to() })?;
+        Ok(file)
+    }
+
+    /// The same without the UTF-8 check, for a buffer that this crate's
+    /// writer wrote (it builds String Data from `&str` values only).
+    /// `parse()` / `parse_batch()` use it.
+    pub unsafe fn new_unchecked(bytes: &'a [u8]) -> Result<Self, DecodeError> {
+        let (mut file, string_data) = Self::read_header(bytes)?;
+        file.string_data = unsafe { std::str::from_utf8_unchecked(string_data) };
+        Ok(file)
     }
 
     /// String Offsets[idx] -> String Data slice (zero-copy &str reconstruction).
@@ -182,23 +183,19 @@ impl<'a> LazySourceFile<'a> {
     #[inline]
     pub fn get_string(&self, idx: u32) -> Option<&'a str> {
         if idx == 0x3FFF_FFFF { return None; }
-        let so = (self.string_offsets_offset + idx * 8) as usize;
+        let so = self.string_offsets_offset as usize + idx as usize * 8;
         let start = read_u32(self.bytes, so) as usize;
         let end   = read_u32(self.bytes, so + 4) as usize;
-        let sd = self.string_data_offset as usize;
-        // Zero-copy slice as UTF-8 (encoder guarantees valid UTF-8)
-        Some(unsafe { std::str::from_utf8_unchecked(&self.bytes[sd + start .. sd + end]) })
+        // A range past the section or in the middle of a character gives None
+        self.string_data.get(start..end)
     }
 
     /// Resolve a Path B-leaf inline `(offset, length)` pair into the
-    /// underlying string. Always returns a real `&str` — encoders only emit
-    /// `TypeTag::StringInline` for present, in-range short strings.
+    /// underlying string (`""` for a range that `get` rejects).
     #[inline]
     pub fn get_inline_string(&self, offset: u32, length: u8) -> &'a str {
-        let sd = self.string_data_offset as usize;
-        let start = sd + offset as usize;
-        let end = start + length as usize;
-        unsafe { std::str::from_utf8_unchecked(&self.bytes[start..end]) }
+        let start = offset as usize;
+        self.string_data.get(start..start + length as usize).unwrap_or("")
     }
 
     /// `StringField` -> String Data slice (zero-copy &str reconstruction).
@@ -209,10 +206,8 @@ impl<'a> LazySourceFile<'a> {
     #[inline]
     pub fn get_string_by_field(&self, field: StringField) -> Option<&'a str> {
         if field.is_none() { return None; }
-        let sd = self.string_data_offset as usize;
-        let start = sd + field.offset as usize;
-        let end   = start + field.length as usize;
-        Some(unsafe { std::str::from_utf8_unchecked(&self.bytes[start..end]) })
+        let start = field.offset as usize;
+        self.string_data.get(start..start + field.length as usize)
     }
 
     /// base_offset of the i-th entry of the root array
