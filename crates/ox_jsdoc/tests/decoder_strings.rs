@@ -9,10 +9,12 @@
 use ox_jsdoc::decoder::nodes::type_node::LazyTypeNode;
 use ox_jsdoc::decoder::source_file::LazySourceFile;
 use ox_jsdoc::format::string_field::StringField;
-use ox_jsdoc::parser::type_data::ParseMode;
+use ox_jsdoc::parser::type_data::{ParseMode, TypeNodeData, TypeTemplateLiteral};
+use ox_jsdoc::parser::type_emit::emit_type_node;
 use ox_jsdoc::parser::{ParseOptions, parse};
 use ox_jsdoc::writer::BinaryWriter;
 use oxc_allocator::Allocator;
+use oxc_span::Span;
 
 /// `é` and `ü` are two bytes each, so some offsets cut a character in half.
 const SOURCE: &str = "/** é and ü */";
@@ -146,4 +148,53 @@ fn interns_new_contents_of_the_same_buffer_as_another_string() {
     assert_eq!(source_file.get_string_by_field(second), Some("xw"));
     assert_eq!(source_file.get_string(first_index.as_u32()), Some("vu"));
     assert_eq!(source_file.get_string(second_index.as_u32()), Some("ts"));
+}
+
+/// A template literal type with one literal.
+fn template_literal(text: &str) -> TypeNodeData<'_> {
+    TypeNodeData::TemplateLiteral(TypeTemplateLiteral {
+        span: Span::new(0, 0),
+        literals: vec![text],
+        interpolations: Vec::new(),
+    })
+}
+
+/// The literal of the template literal type that `emit_type_node` wrote at
+/// `index` in `bytes`.
+fn literal_at(bytes: &[u8], index: u32) -> String {
+    let source_file = LazySourceFile::new(bytes).expect("header");
+    match LazyTypeNode::from_index(&source_file, index, 0) {
+        Some(LazyTypeNode::TemplateLiteral(literal)) => literal.literal(0).to_owned(),
+        other => panic!("not a template literal: {other:?}"),
+    }
+}
+
+#[test]
+fn emits_new_contents_of_a_string_that_the_public_interner_saw() {
+    // A public intern, then the same `String` with other contents to an
+    // emitter, which takes strings from the parser and from any caller.
+    let arena = Allocator::default();
+    let mut writer = BinaryWriter::new(&arena);
+    let mut s = String::from("foo");
+    let _ = writer.intern_string(&s);
+    s.make_ascii_uppercase();
+    let index = emit_type_node(&mut writer, &template_literal(&s), 0);
+    assert_eq!(literal_at(&writer.finish(), index), "FOO");
+}
+
+#[test]
+fn emits_new_contents_of_a_source_text_registered_again() {
+    // The same memory registered as the source text twice, with other
+    // contents the second time.
+    let arena = Allocator::default();
+    let mut writer = BinaryWriter::new(&arena);
+    let mut s = String::from("foo");
+    writer.append_source_text(&s);
+    let first = emit_type_node(&mut writer, &template_literal(&s), 0);
+    s.make_ascii_uppercase();
+    writer.append_source_text(&s);
+    let second = emit_type_node(&mut writer, &template_literal(&s), 0);
+    let bytes = writer.finish();
+    assert_eq!(literal_at(&bytes, first), "foo");
+    assert_eq!(literal_at(&bytes, second), "FOO");
 }
