@@ -85,12 +85,6 @@ export const KNOWN_DIFFERENCES: ReadonlySet<string> = new Set([
   'JsdocBlock.tags[*].typeLines[*].delimiter',
   'JsdocBlock.tags[*].typeLines[*].postDelimiter',
   'JsdocBlock.tags[*].typeLines[*].initial',
-  // jsdoccomment exposes `tag` (the inline-tag name) on JsdocInlineTag.
-  // The binary writer does not currently serialize the inline tag's name
-  // (see emit_inline_tag in context.rs). Tracked as a binary-format
-  // extension item.
-  'JsdocBlock.inlineTags[*].tag',
-  'JsdocBlock.tags[*].inlineTags[*].tag',
   // Phase 6 v1: source[] reconstruction is a skeleton. Per-line
   // start/postDelimiter/initial values fall through to "" because the
   // underlying writer fields are also "" (KNOWN_DIFFERENCES above

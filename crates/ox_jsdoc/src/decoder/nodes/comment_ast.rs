@@ -12,6 +12,7 @@
 
 use std::borrow::Cow;
 
+use crate::format::header::{INLINE_TAG_NAME_MINOR, VERSION_OFFSET, minor};
 use crate::format::kind::Kind;
 use crate::format::node_record::{KIND_OFFSET, NODE_RECORD_SIZE};
 use crate::format::string_field::STRING_FIELD_SIZE;
@@ -514,6 +515,15 @@ impl<'a> LazyJsdocInlineTag<'a> {
     pub fn raw_body(&self) -> Option<&'a str> {
         let ext = ext_offset(self.source_file, self.node_index) as usize;
         resolve_string_field_slot(self.source_file, ext, 2 * STRING_FIELD_SIZE)
+    }
+    /// The name without `@` (`linkcode` for `{@linkcode Foo}`). `None` for a
+    /// buffer of protocol minor version 0 or 1, which has no name field.
+    pub fn tag(&self) -> Option<&'a str> {
+        if minor(self.source_file.bytes()[VERSION_OFFSET]) < INLINE_TAG_NAME_MINOR {
+            return None;
+        }
+        let ext = ext_offset(self.source_file, self.node_index) as usize;
+        resolve_string_field_slot(self.source_file, ext, 3 * STRING_FIELD_SIZE)
     }
 }
 

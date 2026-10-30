@@ -13,13 +13,16 @@
 import {
   COMMON_DATA_MASK,
   COMMON_DATA_OFFSET,
+  INLINE_TAG_NAME_MINOR,
   JSDOC_BLOCK_BASIC_SIZE as JSDOC_BLOCK_BASIC_SIZE_CONST,
   JSDOC_BLOCK_COMPAT_SIZE as JSDOC_BLOCK_COMPAT_SIZE_CONST,
   JSDOC_BLOCK_HAS_DESCRIPTION_RAW_SPAN_BIT,
   JSDOC_TAG_BASIC_SIZE as JSDOC_TAG_BASIC_SIZE_CONST,
   JSDOC_TAG_COMPAT_SIZE as JSDOC_TAG_COMPAT_SIZE_CONST,
   JSDOC_TAG_HAS_DESCRIPTION_RAW_SPAN_BIT,
-  STRING_FIELD_SIZE
+  MINOR_MASK,
+  STRING_FIELD_SIZE,
+  VERSION_OFFSET
 } from '../constants.ts'
 import {
   absoluteRange,
@@ -1737,14 +1740,16 @@ export class RemoteJsdocTypeLine implements LazyNode {
 // ===========================================================================
 // 0x08 RemoteJsdocInlineTag
 //
-// Extended Data layout (18 bytes):
+// Extended Data layout (24 bytes; 18 bytes before protocol minor 2):
 //   byte 0-5    : namepath_or_url (StringField, NONE if absent)
 //   byte 6-11   : text             (StringField, NONE if absent)
 //   byte 12-17  : raw_body         (StringField, NONE if absent)
+//   byte 18-23  : tag              (StringField, the name; minor 2 and later)
 // ===========================================================================
 
 interface JsdocInlineTagCache {
   $range: readonly [number, number] | undefined
+  $tag: string | null | undefined
   $namepathOrURL: string | null | undefined
   $text: string | null | undefined
   $rawBody: string | null | undefined
@@ -1773,6 +1778,7 @@ export class RemoteJsdocInlineTag implements LazyNode {
       parent,
       sourceFile,
       $range: undefined,
+      $tag: undefined,
       $namepathOrURL: undefined,
       $text: undefined,
       $rawBody: undefined
@@ -1789,6 +1795,18 @@ export class RemoteJsdocInlineTag implements LazyNode {
     return this.#internal.parent
   }
 
+  /** The name without `@` (`linkcode` for `{@linkcode Foo}`). `null` for a
+   * buffer of protocol minor version 0 or 1, which has no name field. */
+  get tag(): string | null {
+    const internal = this.#internal
+    const cached = internal.$tag
+    if (cached !== undefined) {
+      return cached
+    }
+    const minor = internal.view.getUint8(VERSION_OFFSET) & MINOR_MASK
+    return (internal.$tag =
+      minor < INLINE_TAG_NAME_MINOR ? null : extStringField(internal, 3 * STRING_FIELD_SIZE))
+  }
   /** Inline tag format string. In compat mode the `'unknown'` variant is
    * mapped to `'plain'` to mirror jsdoccomment's behavior. */
   get format(): InlineTagFormat {
@@ -1828,13 +1846,10 @@ export class RemoteJsdocInlineTag implements LazyNode {
     const internal = this.#internal
     const compat = internal.sourceFile.compatMode
     const nullToEmpty = internal.sourceFile.emptyStringForNull
-    // NOTE(jsdoccomment): `JsdocInlineTag` exposes a `tag` field (the inline
-    // tag name without `@`, e.g. "link"). The binary writer does not currently
-    // serialize this value (`emit_inline_tag` discards `inline.tag_name`), so
-    // we cannot reproduce it here. Track as a future binary-format extension.
     const json: RemoteJsonObject = {
       type: this.type,
       range: [...this.range],
+      tag: nullToEmpty ? (this.tag ?? '') : this.tag,
       format: this.format,
       namepathOrURL: nullToEmpty ? (this.namepathOrURL ?? '') : this.namepathOrURL,
       text: nullToEmpty ? (this.text ?? '') : this.text

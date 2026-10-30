@@ -1468,6 +1468,7 @@ var RemoteJsdocInlineTag = class {
 			parent,
 			sourceFile,
 			$range: void 0,
+			$tag: void 0,
 			$namepathOrURL: void 0,
 			$text: void 0,
 			$rawBody: void 0
@@ -1479,6 +1480,14 @@ var RemoteJsdocInlineTag = class {
 	}
 	get parent() {
 		return this.#internal.parent;
+	}
+	/** The name without `@` (`linkcode` for `{@linkcode Foo}`). `null` for a
+	* buffer of protocol minor version 0 or 1, which has no name field. */
+	get tag() {
+		const internal = this.#internal;
+		const cached = internal.$tag;
+		if (cached !== void 0) return cached;
+		return internal.$tag = (internal.view.getUint8(0) & 15) < 2 ? null : extStringField(internal, 18);
 	}
 	/** Inline tag format string. In compat mode the `'unknown'` variant is
 	* mapped to `'plain'` to mirror jsdoccomment's behavior. */
@@ -1515,6 +1524,7 @@ var RemoteJsdocInlineTag = class {
 		const json = {
 			type: this.type,
 			range: [...this.range],
+			tag: nullToEmpty ? this.tag ?? "" : this.tag,
 			format: this.format,
 			namepathOrURL: nullToEmpty ? this.namepathOrURL ?? "" : this.namepathOrURL,
 			text: nullToEmpty ? this.text ?? "" : this.text

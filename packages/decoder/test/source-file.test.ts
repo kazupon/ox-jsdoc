@@ -7,6 +7,7 @@ import {
   RemoteTypeName
 } from '../src/index.js'
 import type {
+  RemoteJsdocInlineTag,
   RemoteTypeComputedMethod,
   RemoteTypeComputedProperty,
   RemoteTypeTemplateLiteral
@@ -465,5 +466,53 @@ describe('RemoteTypeComputedProperty / RemoteTypeComputedMethod', () => {
     expect(key.parameters).toBeNull()
     expect(nameOf(key.returnType)).toBe('R')
     expect(key.typeParameters).toBeNull()
+  })
+})
+
+describe('RemoteJsdocInlineTag.tag', () => {
+  /**
+   * A buffer whose root is the `JsdocInlineTag` (Kind 0x08) of `{@link Foo}`,
+   * with the name field after the other three, and the given version byte.
+   */
+  const build = (version: number) => {
+    const b = new FixtureBuilder()
+    const bytes = new Uint8Array(24)
+    const view = new DataView(bytes.buffer)
+    const field = (at: number, value: string | null) => {
+      if (value === null) {
+        view.setUint32(at, 0xffff_ffff, true)
+        view.setUint16(at + 4, 0, true)
+        return
+      }
+      const [start, end] = b.stringOffsets[b.internString(value)]!
+      view.setUint32(at, start, true)
+      view.setUint16(at + 4, end - start, true)
+    }
+    field(0, 'Foo')
+    field(6, null)
+    field(12, null)
+    field(18, 'link')
+    const ext = b.reserveExtended(bytes.length)
+    b.writeExtended(ext, bytes)
+    const node = b.emitExtendedNode({ parentIndex: 0, kind: 0x08, extOffset: ext })
+    b.pushRoot({ nodeIndex: node })
+    const buffer = b.build()
+    buffer[0] = version
+    return new RemoteSourceFileCtor(buffer).asts[0] as RemoteJsdocInlineTag
+  }
+
+  it('reads the name in a buffer of minor version 2', () => {
+    const inline = build(0x12)
+    expect(inline.tag).toBe('link')
+    expect(inline.namepathOrURL).toBe('Foo')
+    expect(inline.toJSON()).toMatchObject({ tag: 'link', namepathOrURL: 'Foo' })
+  })
+
+  it('gives no name in a buffer of minor version 0 or 1, which has no name field', () => {
+    for (const version of [0x10, 0x11]) {
+      const inline = build(version)
+      expect(inline.tag).toBeNull()
+      expect(inline.namepathOrURL).toBe('Foo')
+    }
   })
 })
