@@ -33,6 +33,11 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             self.type_diag(TypeDiagnosticKind::EarlyEndOfParse);
             return None;
         }
+        // As in jsdoc-type-pratt-parser, the whole type is no reserved word.
+        if is_reserved_word_type(&result) {
+            self.type_diag(TypeDiagnosticKind::ReservedWord);
+            return None;
+        }
         Some(result)
     }
 
@@ -1893,6 +1898,14 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 break;
             }
         }
+        // As in jsdoc-type-pratt-parser, no member is a reserved word.
+        if elements
+            .iter()
+            .any(|element| is_reserved_word_type(element))
+        {
+            self.type_diag(TypeDiagnosticKind::ReservedWord);
+            return None;
+        }
         let end = elements.last().unwrap().span().end;
         Some(Box::new(TypeNodeData::Union(TypeUnion {
             span: Span::new(start, end),
@@ -1918,6 +1931,14 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             if !self.eat(lexer, TokenKind::Amp) {
                 break;
             }
+        }
+        // As in jsdoc-type-pratt-parser, no member is a reserved word.
+        if elements
+            .iter()
+            .any(|element| is_reserved_word_type(element))
+        {
+            self.type_diag(TypeDiagnosticKind::ReservedWord);
+            return None;
         }
         let end = elements.last().unwrap().span().end;
         Some(Box::new(TypeNodeData::Intersection(TypeIntersection {
@@ -2274,6 +2295,77 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             element,
         })))
     }
+}
+
+/// Whether `node` is a JS reserved word as a name, also in parentheses, which
+/// jsdoc-type-pratt-parser does not take as the whole type or as a member of
+/// `|` / `&` (`assertResultIsNotReservedWord`). The `function` of jsdoc
+/// without parentheses is the name `function` there.
+fn is_reserved_word_type(node: &TypeNodeData<'_>) -> bool {
+    let mut node = node;
+    while let TypeNodeData::Parenthesis(parenthesis) = node {
+        node = &parenthesis.element;
+    }
+    match node {
+        TypeNodeData::Name(name) => is_reserved_word(name.value),
+        TypeNodeData::Function(function) => !function.parenthesis,
+        _ => false,
+    }
+}
+
+/// The JS reserved words that jsdoc-type-pratt-parser rejects as a type
+/// when eslint-plugin-jsdoc calls it: `reservedWords` (always, in strict
+/// mode, and in modules), `futureReservedWords` (always and in strict mode)
+/// and `strictModeNonIdentifiers` of its `lexer/Token.ts`. `null`, `true`,
+/// `false` and `void` are types, and `this` is one with `classContext:
+/// true`, which eslint-plugin-jsdoc passes.
+fn is_reserved_word(name: &str) -> bool {
+    matches!(
+        name,
+        "break"
+            | "case"
+            | "catch"
+            | "class"
+            | "const"
+            | "continue"
+            | "debugger"
+            | "default"
+            | "delete"
+            | "do"
+            | "else"
+            | "export"
+            | "extends"
+            | "finally"
+            | "for"
+            | "function"
+            | "if"
+            | "import"
+            | "in"
+            | "instanceof"
+            | "new"
+            | "return"
+            | "super"
+            | "switch"
+            | "throw"
+            | "try"
+            | "typeof"
+            | "var"
+            | "while"
+            | "with"
+            | "let"
+            | "static"
+            | "yield"
+            | "await"
+            | "enum"
+            | "implements"
+            | "interface"
+            | "package"
+            | "private"
+            | "protected"
+            | "public"
+            | "arguments"
+            | "eval"
+    )
 }
 
 /// The precedence of the return type of a call, constructor, method or

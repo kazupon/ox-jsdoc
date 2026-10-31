@@ -70,6 +70,9 @@ pub enum TypeDiagnosticKind {
     InvalidTypeExpression,
     /// Unexpected token after a complete type expression.
     EarlyEndOfParse,
+    /// A JS reserved word (`continue`, `function`) as the whole type or as
+    /// a member of `|` / `&`.
+    ReservedWord,
 }
 
 /// Human-readable message text for a type-parser diagnostic.
@@ -85,6 +88,7 @@ pub const fn type_diagnostic_message(kind: TypeDiagnosticKind) -> &'static str {
         TypeDiagnosticKind::UnclosedTemplateLiteral => "template literal type is not closed",
         TypeDiagnosticKind::InvalidTypeExpression => "invalid type expression",
         TypeDiagnosticKind::EarlyEndOfParse => "unexpected token after type expression",
+        TypeDiagnosticKind::ReservedWord => "reserved word used as a type",
     }
 }
 
