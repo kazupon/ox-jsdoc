@@ -22,7 +22,7 @@
     "@ox-jsdoc/wasm": "workspace:*",
     "@typescript-eslint/parser": "^8.46.0",
     "comment-parser": "^1.4.1",
-    "eslint": "^9.39.4",
+    "eslint": "^10.0.0",
     "eslint-plugin-jsdoc": "^65.0.0",
     "jsdoc-type-pratt-parser": "^4.1.0",
     "mitata": "^1.0.34",
