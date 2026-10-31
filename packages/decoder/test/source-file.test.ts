@@ -8,9 +8,12 @@ import {
 } from '../src/index.js'
 import type {
   RemoteJsdocInlineTag,
+  RemoteTypeBigInt,
   RemoteTypeComputedMethod,
   RemoteTypeComputedProperty,
-  RemoteTypeTemplateLiteral
+  RemoteTypeMethodSignature,
+  RemoteTypeTemplateLiteral,
+  RemoteTypeTypeParameter
 } from '../src/index.js'
 import { FixtureBuilder } from './fixture-builder.ts'
 
@@ -466,6 +469,97 @@ describe('RemoteTypeComputedProperty / RemoteTypeComputedMethod', () => {
     expect(key.parameters).toBeNull()
     expect(nameOf(key.returnType)).toBe('R')
     expect(key.typeParameters).toBeNull()
+  })
+})
+
+describe('RemoteTypeBigInt', () => {
+  it('reads the digits of a BigInt literal type', () => {
+    // `-1n`: a TypeBigInt (Kind 0xAF) with the digits, without the `n`.
+    const b = new FixtureBuilder()
+    const node = b.emitStringNode({ parentIndex: 0, kind: 0xaf, value: '-1' })
+    b.pushRoot({ nodeIndex: node })
+    const bigint = new RemoteSourceFileCtor(b.build()).asts[0] as RemoteTypeBigInt
+    expect(bigint.type).toBe('TypeBigInt')
+    expect((bigint as unknown as RemoteTypeNameNode).value).toBe('-1')
+    expect(bigint.toJSON()).toMatchObject({ type: 'TypeBigInt', value: '-1' })
+  })
+})
+
+describe('RemoteTypeMethodSignature.optional', () => {
+  /** `a(): R` or `a?(): R`: a TypeMethodSignature (Kind 0xA9) with its name. */
+  const build = (commonData: number) => {
+    const b = new FixtureBuilder()
+    const bytes = new Uint8Array(6)
+    const view = new DataView(bytes.buffer)
+    const [start, end] = b.stringOffsets[b.internString('a')]!
+    view.setUint32(0, start, true)
+    view.setUint16(4, end - start, true)
+    const ext = b.reserveExtended(bytes.length)
+    b.writeExtended(ext, bytes)
+    const node = b.emitExtendedNode({ parentIndex: 0, kind: 0xa9, commonData, extOffset: ext })
+    b.emitStringNode({ parentIndex: node, kind: 0x80, value: 'R' })
+    b.pushRoot({ nodeIndex: node })
+    return new RemoteSourceFileCtor(b.build()).asts[0] as RemoteTypeMethodSignature
+  }
+
+  it('reads bit4 of the Common Data', () => {
+    const method = build(0b1_0000)
+    expect(method.name).toBe('a')
+    expect(method.optional).toBe(true)
+    expect(method.toJSON()).toMatchObject({ name: 'a', optional: true })
+    expect(build(0).optional).toBe(false)
+  })
+})
+
+describe('RemoteTypeTypeParameter', () => {
+  const nameOf = (node: unknown) => (node as RemoteTypeNameNode | null)?.value ?? null
+
+  /**
+   * `<T = string>` or `<T extends string>`: a TypeTypeParameter (Kind 0xA6)
+   * whose elements are the names `T` and `string`, with the given Common Data
+   * and version byte.
+   */
+  const build = (commonData: number, version: number) => {
+    const b = new FixtureBuilder()
+    const ext = b.reserveExtended(6)
+    const node = b.emitExtendedNode({ parentIndex: 0, kind: 0xa6, commonData, extOffset: ext })
+    const head = b.emitStringNode({ parentIndex: node, kind: 0x80, value: 'T' })
+    b.emitStringNode({ parentIndex: node, kind: 0x80, value: 'string' })
+    const bytes = new Uint8Array(6)
+    const view = new DataView(bytes.buffer)
+    view.setUint32(0, head, true)
+    view.setUint16(4, 2, true)
+    b.writeExtended(ext, bytes)
+    b.pushRoot({ nodeIndex: node })
+    const buffer = b.build()
+    buffer[0] = version
+    return new RemoteSourceFileCtor(buffer).asts[0] as RemoteTypeTypeParameter
+  }
+
+  it('tells a default from a constraint by the Common Data of minor version 3', () => {
+    // bit1 = a default
+    const withDefault = build(0b10, 0x13)
+    expect(withDefault.hasConstraint).toBe(false)
+    expect(withDefault.hasDefault).toBe(true)
+    expect(nameOf(withDefault.name)).toBe('T')
+    expect(withDefault.constraint).toBeNull()
+    expect(nameOf(withDefault.defaultValue)).toBe('string')
+    expect(withDefault.toJSON()).toMatchObject({ hasConstraint: false, hasDefault: true })
+    // bit0 = a constraint
+    const withConstraint = build(0b01, 0x13)
+    expect(withConstraint.hasConstraint).toBe(true)
+    expect(withConstraint.hasDefault).toBe(false)
+    expect(nameOf(withConstraint.constraint)).toBe('string')
+    expect(withConstraint.defaultValue).toBeNull()
+  })
+
+  it('reads the elements of an older buffer by their order', () => {
+    // Minor 2 has no flags; the second element was read as the constraint.
+    const parameter = build(0, 0x12)
+    expect(parameter.hasConstraint).toBe(true)
+    expect(parameter.hasDefault).toBe(false)
+    expect(nameOf(parameter.constraint)).toBe('string')
+    expect(parameter.defaultValue).toBeNull()
   })
 })
 

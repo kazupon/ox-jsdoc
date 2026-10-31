@@ -32,7 +32,7 @@ describe('jsdocVisitorKeys', () => {
     }
   })
 
-  it('covers every TypeNode kind (47)', () => {
+  it('covers every TypeNode kind (48)', () => {
     const expected = [
       'TypeName',
       'TypeNumber',
@@ -80,13 +80,18 @@ describe('jsdocVisitorKeys', () => {
       'TypeParameterList',
       'TypeReadonlyProperty',
       'TypeComputedProperty',
-      'TypeComputedMethod'
+      'TypeComputedMethod',
+      'TypeBigInt'
     ]
-    expect(expected).toHaveLength(47)
+    expect(expected).toHaveLength(48)
     for (const kind of expected) {
       expect(visitorKeys).toHaveProperty(kind)
       expect(Array.isArray(visitorKeys[kind])).toBe(true)
     }
+  })
+
+  it('has no children for a BigInt literal type', () => {
+    expect(jsdocVisitorKeys.TypeBigInt).toEqual([])
   })
 
   it('walks the parts of computed keys', () => {

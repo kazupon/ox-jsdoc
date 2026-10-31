@@ -589,7 +589,14 @@ describe('computed keys of object types', () => {
         returnType: { type: 'TypeName', value: 'R' },
         typeParameters: {
           type: 'TypeParameterList',
-          elements: [{ type: 'TypeTypeParameter', elements: [{ type: 'TypeName', value: 'T' }] }]
+          elements: [
+            {
+              type: 'TypeTypeParameter',
+              elements: [{ type: 'TypeName', value: 'T' }],
+              hasConstraint: false,
+              hasDefault: false
+            }
+          ]
         }
       },
       right: null
@@ -639,5 +646,63 @@ describe('computed keys of object types', () => {
       'returnType',
       'typeParameters'
     ])
+  })
+})
+
+// Minor 3 of the Binary AST: optional methods, BigInt literal types and the
+// constraint or default of a type parameter, as jsdoc-type-pratt-parser 9.4.0
+// reads them.
+describe('Binary AST minor 3', () => {
+  /** The parsed type of `@type {type}`, without ranges. */
+  const parsedType = (type: string, mode: Mode = 'typescript'): Record<string, unknown> => {
+    const tag = parse(`/** @type {${type}} */`, { parseTypes: true, typeParseMode: mode }).ast!
+      .tags[0] as unknown as { parsedType: { toJSON(): unknown } | null }
+    const json = JSON.stringify(tag.parsedType?.toJSON() ?? null, (key, value) =>
+      key === 'range' ? undefined : value
+    )
+    return JSON.parse(json) as Record<string, unknown>
+  }
+  const firstElement = (type: string) =>
+    (parsedType(type) as { elements: Record<string, unknown>[] }).elements[0]
+
+  it('keeps the optional flag of a method', () => {
+    expect(firstElement('{a?(): void}')).toEqual({
+      type: 'TypeMethodSignature',
+      quote: 0,
+      hasParameters: false,
+      hasTypeParameters: false,
+      optional: true,
+      name: 'a'
+    })
+    expect(firstElement('{a(): void}')).toMatchObject({ optional: false })
+    expect(parseType('{"a"?<T>(x: T): void}', 'typescript')).toBe('{"a"?<T>(x: T): void}')
+  })
+
+  it('keeps BigInt literal types', () => {
+    for (const mode of ['jsdoc', 'closure', 'typescript'] as const) {
+      expect(parsedType('-007n', mode)).toEqual({ type: 'TypeBigInt', value: '-007' })
+      expect(parseType('-007n', mode)).toBe('-7n')
+    }
+    expect(parseTypeCheck('{1n: T}', 'typescript')).toBe(false)
+    expect(jsdocVisitorKeys.TypeBigInt).toEqual([])
+  })
+
+  it('tells the constraint of a type parameter from its default', () => {
+    const typeParameter = (type: string) =>
+      (firstElement(type) as { typeParameters: { elements: Record<string, unknown>[] } })
+        .typeParameters.elements[0]
+    expect(typeParameter('{<T = string>(x: T): T}')).toEqual({
+      type: 'TypeTypeParameter',
+      elements: [
+        { type: 'TypeName', value: 'T' },
+        { type: 'TypeName', value: 'string' }
+      ],
+      hasConstraint: false,
+      hasDefault: true
+    })
+    expect(typeParameter('{<T extends string>(x: T): T}')).toMatchObject({
+      hasConstraint: true,
+      hasDefault: false
+    })
   })
 })
