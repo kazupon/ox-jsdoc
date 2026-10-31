@@ -658,7 +658,12 @@ mod tests {
 
     #[test]
     fn stringify_bare_function() {
-        assert_eq!(roundtrip("function", ParseMode::Jsdoc), "function");
+        // Not as the whole type, which is a reserved word there, as in
+        // jsdoc-type-pratt-parser.
+        assert_eq!(
+            roundtrip("Array<function>", ParseMode::Jsdoc),
+            "Array<function>"
+        );
     }
 
     #[test]
