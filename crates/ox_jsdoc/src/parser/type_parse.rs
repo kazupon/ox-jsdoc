@@ -139,7 +139,8 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             TokenKind::Unique if mode.is_typescript() => self.parse_unique_symbol(lexer),
             TokenKind::Number => self.parse_number_literal(lexer),
             TokenKind::BigInt => self.parse_bigint_literal(lexer),
-            TokenKind::StringValue => self.parse_string_literal(lexer),
+            // closure has no string types, as in jsdoc-type-pratt-parser.
+            TokenKind::StringValue if !mode.is_closure() => self.parse_string_literal(lexer),
             TokenKind::TemplateLiteral if mode.is_typescript() => {
                 self.parse_template_literal(lexer, mode)
             }
@@ -744,9 +745,15 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         disallow_conditional: &mut bool,
     ) -> Option<Box<TypeNodeData<'a>>> {
         let start = lexer.current.start;
+        // jsdoc and closure have no `readonly` and fewer keyword keys, as in
+        // jsdoc-type-pratt-parser (`{readonly: T}`, `{event: T}` in jsdoc,
+        // `{null: T}` in closure).
+        if !mode.is_typescript() && !object_key_allowed(lexer.current.kind, lexer.next.kind, mode) {
+            self.type_diag(TypeDiagnosticKind::NoParsletFound);
+            return None;
+        }
         // In typescript, `readonly?` is a key, as in jsdoc-type-pratt-parser
-        // (`{readonly?: boolean}`). It does not read `readonly` as a key in
-        // the other modes, so they keep the modifier.
+        // (`{readonly?: boolean}`).
         let readonly = lexer.current.kind == TokenKind::Readonly
             && lexer.next.kind != TokenKind::Colon
             && lexer.next.kind != TokenKind::Comma
@@ -756,7 +763,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         if readonly {
             lexer.bump();
         }
-        if lexer.current.kind == TokenKind::LBracket {
+        // `[…]` keys and signatures are typescript's, as in
+        // jsdoc-type-pratt-parser; jsdoc reads a `(` key as a parenthesized
+        // type below (`{(string): number}`).
+        if lexer.current.kind == TokenKind::LBracket && mode.is_typescript() {
             return self.parse_index_signature_or_mapped(
                 lexer,
                 mode,
@@ -765,7 +775,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 readonly,
             );
         }
-        if lexer.current.kind == TokenKind::LParen && !readonly {
+        if lexer.current.kind == TokenKind::LParen && !readonly && mode.is_typescript() {
             return self.parse_call_signature(lexer, mode, disallow_conditional, start);
         }
         if lexer.current.kind == TokenKind::New
@@ -775,7 +785,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         {
             return self.parse_constructor_signature(lexer, mode, disallow_conditional, start);
         }
-        if lexer.current.kind == TokenKind::Lt && !readonly {
+        if lexer.current.kind == TokenKind::Lt && !readonly && mode.is_typescript() {
             return self.parse_call_signature_with_type_params(
                 lexer,
                 mode,
@@ -817,6 +827,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                     },
                 )));
             }
+            // Without a `:`, the field is a key, as in jsdoc-type-pratt-parser
+            // (`{?a}`, not `{a=}` or `{(string)}`).
+            if !is_key_without_value(&left) {
+                self.type_diag(TypeDiagnosticKind::InvalidTypeExpression);
+                return None;
+            }
             let end = left.span().end;
             return Some(Box::new(TypeNodeData::JsdocObjectField(
                 TypeJsdocObjectField {
@@ -847,6 +863,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             );
         }
         let optional = self.eat(lexer, TokenKind::Question);
+        // closure takes `?` only after a key without a value (`{a?}`), as
+        // jsdoc-type-pratt-parser does.
+        if optional && mode.is_closure() && lexer.current.kind == TokenKind::Colon {
+            self.type_diag(TypeDiagnosticKind::InvalidTypeExpression);
+            return None;
+        }
         // `a?(): R` is an optional method in typescript, as in
         // jsdoc-type-pratt-parser, for a name or a string (not a number).
         if optional
@@ -874,6 +896,15 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         } else {
             None
         };
+        // In jsdoc, `null` and `undefined` are keys only with a value, as in
+        // jsdoc-type-pratt-parser (`{null: T}`, not `{null}`).
+        if right.is_none()
+            && mode.is_jsdoc()
+            && matches!(key_token.kind, TokenKind::Null | TokenKind::Undefined)
+        {
+            self.type_diag(TypeDiagnosticKind::InvalidTypeExpression);
+            return None;
+        }
         let end = right.as_ref().map_or(key_token.end, |r| r.span().end);
         Some(Box::new(TypeNodeData::ObjectField(TypeObjectField {
             span: Span::new(start, end),
@@ -1391,6 +1422,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                     arrow: false,
                     parenthesis: false,
                 })));
+            }
+            // closure takes `function` only with its parameters, as
+            // jsdoc-type-pratt-parser does.
+            if mode.is_closure() {
+                self.type_diag(TypeDiagnosticKind::ExpectedToken);
+                return None;
             }
             return Some(Box::new(TypeNodeData::Name(TypeName {
                 span: Span::new(start, start + 8),
@@ -1997,6 +2034,11 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         let start = left.span().start;
         lexer.bump();
         if lexer.current.kind == TokenKind::RBracket {
+            // closure has no arrays, as in jsdoc-type-pratt-parser.
+            if mode.is_closure() {
+                self.type_diag(TypeDiagnosticKind::NoParsletFound);
+                return None;
+            }
             lexer.bump();
             let end = lexer.current.start;
             return Some(Box::new(TypeNodeData::Generic(TypeGeneric {
@@ -2008,6 +2050,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             })));
         }
         if lexer.current.kind == TokenKind::StringValue {
+            // jsdoc and closure take `["…"]` only after a name, as
+            // jsdoc-type-pratt-parser does (`Foo["a"]`, not `Foo.bar["a"]`).
+            if !mode.is_typescript() && !matches!(left.as_ref(), TypeNodeData::Name(_)) {
+                self.type_diag(TypeDiagnosticKind::InvalidTypeExpression);
+                return None;
+            }
             let prop_token = lexer.current;
             let prop_text = lexer.token_text(prop_token);
             let quote = if prop_text.starts_with('"') {
@@ -2318,6 +2366,41 @@ fn function_parameter_names_allowed(parameters: &[Box<TypeNodeData<'_>>], mode: 
         }
         _ => true,
     })
+}
+
+/// Whether a field of an object type can start with `kind` (followed by
+/// `next`) in jsdoc or closure, as in jsdoc-type-pratt-parser: the keywords
+/// of typescript are no keys there, `event:` and `external:` start a name
+/// path in jsdoc (`{event: T}`, not `{event}`), and `null`, `undefined` and
+/// `function` are no keys in closure.
+fn object_key_allowed(kind: TokenKind, next: TokenKind, mode: ParseMode) -> bool {
+    match kind {
+        TokenKind::Readonly
+        | TokenKind::Extends
+        | TokenKind::Import
+        | TokenKind::Infer
+        | TokenKind::Is
+        | TokenKind::Asserts => false,
+        TokenKind::Event | TokenKind::External => !(mode.is_jsdoc() && next == TokenKind::Colon),
+        TokenKind::Null | TokenKind::Undefined | TokenKind::Function => !mode.is_closure(),
+        _ => true,
+    }
+}
+
+/// Whether a jsdoc object field without a `:` is a key that
+/// jsdoc-type-pratt-parser takes there: a name, a number or a string, also
+/// with a `?` (`{?a}`), and not another type (`{a=}`, `{Array<T>}`).
+fn is_key_without_value(node: &TypeNodeData<'_>) -> bool {
+    let node = match node {
+        TypeNodeData::Nullable(nullable) => nullable.element.as_ref(),
+        _ => node,
+    };
+    match node {
+        TypeNodeData::Name(_) | TypeNodeData::Number(_) | TypeNodeData::StringValue(_) => true,
+        // The `function` of jsdoc without parentheses is a name there.
+        TypeNodeData::Function(function) => !function.parenthesis,
+        _ => false,
+    }
 }
 
 /// Whether the parameters of an arrow function are names or named, as
