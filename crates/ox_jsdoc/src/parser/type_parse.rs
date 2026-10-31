@@ -2447,52 +2447,35 @@ fn is_reserved_word_type(node: &TypeNodeData<'_>) -> bool {
 /// `false` and `void` are types, and `this` is one with `classContext:
 /// true`, which eslint-plugin-jsdoc passes.
 fn is_reserved_word(name: &str) -> bool {
-    matches!(
-        name,
-        "break"
-            | "case"
-            | "catch"
-            | "class"
-            | "const"
-            | "continue"
-            | "debugger"
-            | "default"
-            | "delete"
-            | "do"
-            | "else"
-            | "export"
-            | "extends"
-            | "finally"
-            | "for"
-            | "function"
-            | "if"
-            | "import"
-            | "in"
-            | "instanceof"
-            | "new"
-            | "return"
-            | "super"
-            | "switch"
-            | "throw"
-            | "try"
-            | "typeof"
-            | "var"
-            | "while"
-            | "with"
-            | "let"
-            | "static"
-            | "yield"
-            | "await"
-            | "enum"
-            | "implements"
-            | "interface"
-            | "package"
-            | "private"
-            | "protected"
-            | "public"
-            | "arguments"
-            | "eval"
-    )
+    // Every word is 2 to 10 lowercase ASCII letters. Looking at the first
+    // letter first leaves at most a few words to compare the name with, and
+    // none for most type names (`number`, `object`, `Array`).
+    let bytes = name.as_bytes();
+    if bytes.len() < 2 || bytes.len() > 10 {
+        return false;
+    }
+    match bytes[0] {
+        b'a' => matches!(name, "arguments" | "await"),
+        b'b' => name == "break",
+        b'c' => matches!(name, "case" | "catch" | "class" | "const" | "continue"),
+        b'd' => matches!(name, "debugger" | "default" | "delete" | "do"),
+        b'e' => matches!(name, "else" | "enum" | "eval" | "export" | "extends"),
+        b'f' => matches!(name, "finally" | "for" | "function"),
+        b'i' => matches!(
+            name,
+            "if" | "implements" | "import" | "in" | "instanceof" | "interface"
+        ),
+        b'l' => name == "let",
+        b'n' => name == "new",
+        b'p' => matches!(name, "package" | "private" | "protected" | "public"),
+        b'r' => name == "return",
+        b's' => matches!(name, "static" | "super" | "switch"),
+        b't' => matches!(name, "throw" | "try" | "typeof"),
+        b'v' => name == "var",
+        b'w' => matches!(name, "while" | "with"),
+        b'y' => name == "yield",
+        _ => false,
+    }
 }
 
 /// The precedence of the return type of a call, constructor, method or
