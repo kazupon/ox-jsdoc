@@ -488,9 +488,10 @@ fn parse_batch_with_writer<'arena>(
 
     let mut arena_diagnostics: ArenaVec<'arena, BatchDiagnostic> = ArenaVec::new_in(&arena);
 
+    let mut source_offset_in_data = append_source_texts(writer, items);
     for (index, item) in items.iter().enumerate() {
         let root_index = index as u32;
-        let source_offset_in_data = writer.append_source_text(item.source_text);
+        writer.select_source_text(item.source_text, source_offset_in_data);
 
         let parsed = context::parse_block_into_data(arena, item.source_text, 0, parser_options);
 
@@ -500,6 +501,7 @@ fn parse_batch_with_writer<'arena>(
             context::emit_parsed_block(writer, &parsed).unwrap_or(0)
         };
         writer.push_root(root_node_index, source_offset_in_data, item.base_offset);
+        source_offset_in_data += item.source_text.len() as u32;
 
         for diag in parsed.diagnostics() {
             let message = diag.message();
@@ -561,6 +563,25 @@ pub fn parse_type_check(type_text: &str, mode: type_data::ParseMode) -> bool {
     ctx.parse_type_expression(type_text, 0, mode).is_some()
 }
 
+/// Append the source texts of a batch to `writer`, one after the other, and
+/// return the offset of the first one in String Data (0 for an empty batch).
+///
+/// They sit together, before the strings that their comments add, as
+/// `format.md` ("String Data section") says, so that a decoder can tell
+/// where each one ends: at the start of the next one, and the last one at
+/// the start of the first one plus the total length.
+fn append_source_texts(
+    writer: &mut crate::writer::BinaryWriter<'_>,
+    items: &[BatchItem<'_>],
+) -> u32 {
+    let mut first = None;
+    for item in items {
+        let offset = writer.append_source_text(item.source_text);
+        first.get_or_insert(offset);
+    }
+    first.unwrap_or(0)
+}
+
 /// Bytes-only sibling of [`parse_batch`].
 ///
 /// Skips the arena copy used by [`parse_batch`] for `binary_bytes`; binding
@@ -591,9 +612,10 @@ pub fn parse_batch_to_bytes(
 
     let mut diagnostics: Vec<OwnedBatchDiagnostic> = Vec::new();
 
+    let mut source_offset_in_data = append_source_texts(&mut writer, items);
     for (index, item) in items.iter().enumerate() {
         let root_index = index as u32;
-        let source_offset_in_data = writer.append_source_text(item.source_text);
+        writer.select_source_text(item.source_text, source_offset_in_data);
 
         let parsed = context::parse_block_into_data(&arena, item.source_text, 0, parser_options);
 
@@ -603,6 +625,7 @@ pub fn parse_batch_to_bytes(
             context::emit_parsed_block(&mut writer, &parsed).unwrap_or(0)
         };
         writer.push_root(root_node_index, source_offset_in_data, item.base_offset);
+        source_offset_in_data += item.source_text.len() as u32;
 
         for diag in parsed.diagnostics() {
             writer.push_diagnostic(root_index, diag.message());

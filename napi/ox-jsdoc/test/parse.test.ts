@@ -203,6 +203,35 @@ describe('parseBatch (binary NAPI binding)', () => {
     expect(failureDiag!.message).toContain('not a JSDoc block')
   })
 
+  it('returns the source text of each root, also of the last and of a failed one', () => {
+    // Tags with types and names, a failed item and non-ASCII text: each one
+    // adds strings that are not slices of its source text.
+    const sources = [
+      '/** @param {string} alpha The first. */',
+      'not a comment',
+      '/** 日本語の説明 */',
+      '/** @returns {number} beta */',
+      '/** c */'
+    ]
+    for (const options of [
+      {},
+      { compatMode: true, preserveWhitespace: true },
+      { parseTypes: true }
+    ]) {
+      const result = parseBatch(
+        sources.map(sourceText => ({ sourceText })),
+        options
+      )
+      expect(sources.map((_, index) => result.sourceFile.getRootSourceText(index))).toEqual(sources)
+    }
+  })
+
+  it('returns the source text of a single comment', () => {
+    const sourceText = '/**\n * @param {string} id The id.\n */'
+    expect(parse(sourceText).sourceFile.getRootSourceText(0)).toBe(sourceText)
+    expect(parseBatch([{ sourceText }]).sourceFile.getRootSourceText(0)).toBe(sourceText)
+  })
+
   it('respects per-item baseOffset for absolute range computation', () => {
     const result = parseBatch([
       { sourceText: '/** a */', baseOffset: 1000 },
