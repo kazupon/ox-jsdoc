@@ -37,7 +37,11 @@ fn assert_strings(modes: &[ParseMode], cases: &[(&str, &str)]) {
 fn assert_rejected(modes: &[ParseMode], inputs: &[&str]) {
     for &mode in modes {
         for &input in inputs {
-            assert_eq!(parse_type_expression(input, mode), None, "{input:?} ({mode:?})");
+            assert_eq!(
+                parse_type_expression(input, mode),
+                None,
+                "{input:?} ({mode:?})"
+            );
         }
     }
 }
@@ -63,13 +67,25 @@ fn reads_variadic_types_in_square_brackets_as_parameters() {
     assert_strings(
         &[JSDOC],
         &[
-            ("function(string, ...[number]): number", "function(string, ...number): number"),
+            (
+                "function(string, ...[number]): number",
+                "function(string, ...number): number",
+            ),
             ("function(...[null])", "function(...null)"),
             ("function(...[*])", "function(...*)"),
-            ("function(new:Array, ...[*]): Array", "function(new: Array, ...*): Array"),
-            ("function(...[number]): boolean", "function(...number): boolean"),
+            (
+                "function(new:Array, ...[*]): Array",
+                "function(new: Array, ...*): Array",
+            ),
+            (
+                "function(...[number]): boolean",
+                "function(...number): boolean",
+            ),
             ("function(...[number]=)", "function(...number=)"),
-            ("function(...[number]|string)", "function(...number | string)"),
+            (
+                "function(...[number]|string)",
+                "function(...number | string)",
+            ),
             ("function(...[number[]])", "function(...number[])"),
         ],
     );
@@ -92,7 +108,10 @@ fn prints_variadic_types_without_their_square_brackets() {
 
 #[test]
 fn rejects_a_union_in_the_square_brackets_of_a_variadic_type() {
-    assert_rejected(&[JSDOC], &["...[number|string]", "function(...[number|string])"]);
+    assert_rejected(
+        &[JSDOC],
+        &["...[number|string]", "function(...[number|string])"],
+    );
 }
 
 #[test]
@@ -110,7 +129,10 @@ fn reads_event_name_paths_on_the_right_of_a_name_path() {
         &[JSDOC, CLOSURE],
         &[
             // A `-` in a name is for the loose names of jsdoc and closure.
-            ("module:some-module.event:some-event", "module:some-module.event:some-event"),
+            (
+                "module:some-module.event:some-event",
+                "module:some-module.event:some-event",
+            ),
             (
                 "module:some-module#some-where.event:some-event",
                 "module:some-module#some-where.event:some-event",
@@ -216,7 +238,10 @@ fn rejects_type_parameters_without_an_arrow_function() {
 
 #[test]
 fn reads_readonly_as_an_optional_key_in_typescript() {
-    assert_strings(&[TYPESCRIPT], &[("{readonly?: boolean}", "{readonly?: boolean}")]);
+    assert_strings(
+        &[TYPESCRIPT],
+        &[("{readonly?: boolean}", "{readonly?: boolean}")],
+    );
     // jsdoc-type-pratt-parser does not read `readonly` as a key in these.
     assert_rejected(&[JSDOC, CLOSURE], &["{readonly?: boolean}"]);
 }

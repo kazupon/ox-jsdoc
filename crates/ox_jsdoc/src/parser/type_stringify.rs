@@ -10,9 +10,10 @@
 //! binary parser instead of the arena-allocated `TypeNode` tree.
 //!
 //! The output follows the `stringify` of jsdoc-type-pratt-parser 9.4.0, so
-//! that parsing it again gives the same tree. What the tree does not keep,
-//! such as the line breaks between the fields of an object, does not come
-//! back.
+//! that parsing it again gives the same tree, except for what it does not
+//! print either (the square brackets of `...[T]`). What the tree does not
+//! keep, such as the line breaks between the fields of an object, does not
+//! come back.
 
 use super::type_data::*;
 
@@ -279,16 +280,12 @@ fn write_optional(buf: &mut String, n: &TypeOptional<'_>) {
 
 fn write_variadic(buf: &mut String, n: &TypeVariadic<'_>) {
     match n.position {
+        // Without the square brackets of `...[T]` (jsdoc), as in
+        // jsdoc-type-pratt-parser; the tree keeps them (`square_brackets`).
         Some(VariadicPosition::Prefix) => {
             buf.push_str("...");
-            if n.square_brackets {
-                buf.push('[');
-            }
             if let Some(ref element) = n.element {
                 write_node(buf, element);
-            }
-            if n.square_brackets {
-                buf.push(']');
             }
         }
         Some(VariadicPosition::Suffix) => {

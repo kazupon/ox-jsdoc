@@ -102,14 +102,17 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             }
             TokenKind::Question => self.parse_nullable_prefix(lexer, mode, disallow_conditional),
             TokenKind::Bang => self.parse_not_nullable_prefix(lexer, mode, disallow_conditional),
-            TokenKind::Eq if mode.is_jsdoc() || mode.is_closure() => {
-                self.parse_optional_prefix(lexer, mode, disallow_conditional)
-            }
+            // As in jsdoc-type-pratt-parser, whose base grammar has it in every
+            // mode.
+            TokenKind::Eq => self.parse_optional_prefix(lexer, mode, disallow_conditional),
             TokenKind::Ellipsis => self.parse_variadic_prefix(lexer, mode, disallow_conditional),
             TokenKind::LParen => {
                 self.parse_parenthesis_or_function(lexer, mode, disallow_conditional)
             }
             TokenKind::LBracket if mode.is_typescript() => self.parse_tuple(lexer, mode),
+            TokenKind::Lt if mode.is_typescript() => {
+                self.parse_generic_arrow_function(lexer, mode, disallow_conditional)
+            }
             TokenKind::LBrace => self.parse_object_type(lexer, mode),
             TokenKind::Function => self.parse_function_type(lexer, mode, disallow_conditional),
             TokenKind::Typeof if mode.is_typescript() || mode.is_closure() => {
@@ -389,8 +392,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         }
         if mode.is_jsdoc() && lexer.current.kind == TokenKind::LBracket {
             lexer.bump();
+            // As in jsdoc-type-pratt-parser, the type in the brackets binds
+            // like the one after `...` (no union: `...[number|string]`).
             let element =
-                self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::All)?;
+                self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?;
             if !self.expect(lexer, TokenKind::RBracket) {
                 return None;
             }
@@ -439,6 +444,38 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             span: Span::new(start, end),
             element,
         })))
+    }
+
+    /// `<T, U extends V = W>(x: T) => U` (typescript): type parameters, then
+    /// an arrow function (`new (…) => …` too), as in jsdoc-type-pratt-parser.
+    /// Anything else after the type parameters is rejected, where
+    /// jsdoc-type-pratt-parser drops them (`<T>string` is `string` there).
+    /// Kept out of line, as a rare form, so that `parse_prefix_type` stays
+    /// small.
+    #[cold]
+    #[inline(never)]
+    fn parse_generic_arrow_function(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        mode: ParseMode,
+        disallow_conditional: &mut bool,
+    ) -> Option<Box<TypeNodeData<'a>>> {
+        let start = lexer.current.start;
+        let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional)?;
+        // As jsdoc-type-pratt-parser reads it (`Precedence.SYMBOL`).
+        let mut function =
+            self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Symbol)?;
+        let TypeNodeData::Function(f) = function.as_mut() else {
+            self.type_diag(TypeDiagnosticKind::InvalidTypeExpression);
+            return None;
+        };
+        if !f.arrow {
+            self.type_diag(TypeDiagnosticKind::InvalidTypeExpression);
+            return None;
+        }
+        f.span = Span::new(start, f.span.end);
+        f.type_parameters = type_parameters;
+        Some(function)
     }
 
     fn try_parse_arrow_function_prefix(
@@ -510,6 +547,16 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 });
         }
         if lexer.current.kind == TokenKind::Ellipsis {
+            // `...[T]` (jsdoc) is the variadic type of the type rules, which
+            // also reads what follows it (`...[T]=`, `...[T]|U`).
+            if mode.is_jsdoc() && lexer.next.kind == TokenKind::LBracket {
+                return self.parse_type_pratt(
+                    lexer,
+                    mode,
+                    disallow_conditional,
+                    Precedence::ParameterList,
+                );
+            }
             let start = lexer.current.start;
             lexer.bump();
             if (lexer.current.kind == TokenKind::Identifier || lexer.current.kind.is_keyword())
@@ -655,11 +702,15 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         disallow_conditional: &mut bool,
     ) -> Option<Box<TypeNodeData<'a>>> {
         let start = lexer.current.start;
+        // In typescript, `readonly?` is a key, as in jsdoc-type-pratt-parser
+        // (`{readonly?: boolean}`). It does not read `readonly` as a key in
+        // the other modes, so they keep the modifier.
         let readonly = lexer.current.kind == TokenKind::Readonly
             && lexer.next.kind != TokenKind::Colon
             && lexer.next.kind != TokenKind::Comma
             && lexer.next.kind != TokenKind::Semicolon
-            && lexer.next.kind != TokenKind::RBrace;
+            && lexer.next.kind != TokenKind::RBrace
+            && !(mode.is_typescript() && lexer.next.kind == TokenKind::Question);
         if readonly {
             lexer.bump();
         }
@@ -854,8 +905,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         // jsdoc-type-pratt-parser does not require the `:` before the
         // return type.
         self.eat(lexer, TokenKind::Colon);
-        let return_type =
-            self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?;
+        let return_type = self.parse_type_pratt(
+            lexer,
+            mode,
+            disallow_conditional,
+            signature_return_precedence(mode),
+        )?;
         let end = return_type.span().end;
         Some(Box::new(TypeNodeData::CallSignature(TypeCallSignature {
             span: Span::new(start, end),
@@ -896,8 +951,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         // jsdoc-type-pratt-parser does not require the `:` before the
         // return type.
         self.eat(lexer, TokenKind::Colon);
-        let return_type =
-            self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?;
+        let return_type = self.parse_type_pratt(
+            lexer,
+            mode,
+            disallow_conditional,
+            signature_return_precedence(mode),
+        )?;
         let end = return_type.span().end;
         Some(Box::new(TypeNodeData::CallSignature(TypeCallSignature {
             span: Span::new(start, end),
@@ -939,8 +998,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         // jsdoc-type-pratt-parser does not require the `:` before the
         // return type.
         self.eat(lexer, TokenKind::Colon);
-        let return_type =
-            self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?;
+        let return_type = self.parse_type_pratt(
+            lexer,
+            mode,
+            disallow_conditional,
+            signature_return_precedence(mode),
+        )?;
         let end = return_type.span().end;
         Some(Box::new(TypeNodeData::ConstructorSignature(
             TypeConstructorSignature {
@@ -986,8 +1049,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         // jsdoc-type-pratt-parser does not require the `:` before the
         // return type.
         self.eat(lexer, TokenKind::Colon);
-        let return_type =
-            self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?;
+        let return_type = self.parse_type_pratt(
+            lexer,
+            mode,
+            disallow_conditional,
+            signature_return_precedence(mode),
+        )?;
         let end = return_type.span().end;
         Some(Box::new(TypeNodeData::MethodSignature(
             TypeMethodSignature {
@@ -1014,6 +1081,19 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         // right is the type of the values (a computed method has none).
         let bracket_start = lexer.current.start;
         lexer.bump();
+        if matches!(lexer.current.kind, TokenKind::Question | TokenKind::Eq) {
+            // A computed key that starts with `?` or `=` (`[?a]`, `[=a?]`).
+            let value = self.parse_computed_key_value(lexer, Precedence::Object)?;
+            return self.parse_computed_key_field(
+                lexer,
+                mode,
+                disallow_conditional,
+                start,
+                readonly,
+                bracket_start,
+                value,
+            );
+        }
         let key_token = self.expect_key_token(lexer)?;
         let key = lexer.token_text(key_token);
         lexer.bump();
@@ -1085,12 +1165,114 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             })));
         }
         // A computed key, which jsdoc-type-pratt-parser keeps as the key of
-        // the object field.
+        // the object field, with the `?` and `=` after it (`[a?]`).
+        let value = Box::new(computed_key_value(key_token, key));
+        let value = self.parse_computed_key_suffixes(lexer, value, Precedence::Object);
+        self.parse_computed_key_field(
+            lexer,
+            mode,
+            disallow_conditional,
+            start,
+            readonly,
+            bracket_start,
+            value,
+        )
+    }
+
+    /// The value of a computed key that starts with `?` or `=` (`[?a]`,
+    /// `[=a?]`). jsdoc-type-pratt-parser reads the key with the rules of an
+    /// object field, which have `?` (nullable) and `=` (optional) before and
+    /// after a key token.
+    fn parse_computed_key_value(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        min_precedence: Precedence,
+    ) -> Option<Box<TypeNodeData<'a>>> {
+        let start = lexer.current.start;
+        let value = match lexer.current.kind {
+            TokenKind::Question => {
+                lexer.bump();
+                let element = self.parse_computed_key_value(lexer, Precedence::Nullable)?;
+                let end = element.span().end;
+                Box::new(TypeNodeData::Nullable(TypeNullable {
+                    span: Span::new(start, end),
+                    element,
+                    position: ModifierPosition::Prefix,
+                }))
+            }
+            TokenKind::Eq => {
+                lexer.bump();
+                let element = self.parse_computed_key_value(lexer, Precedence::Optional)?;
+                let end = element.span().end;
+                Box::new(TypeNodeData::Optional(TypeOptional {
+                    span: Span::new(start, end),
+                    element,
+                    position: ModifierPosition::Prefix,
+                }))
+            }
+            _ => {
+                let token = self.expect_key_token(lexer)?;
+                let text = lexer.token_text(token);
+                lexer.bump();
+                Box::new(computed_key_value(token, text))
+            }
+        };
+        Some(self.parse_computed_key_suffixes(lexer, value, min_precedence))
+    }
+
+    /// The `?` and `=` after the value of a computed key (`[a?]`, `[a?=]`)
+    /// that bind tighter than `min_precedence`.
+    fn parse_computed_key_suffixes(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        mut value: Box<TypeNodeData<'a>>,
+        min_precedence: Precedence,
+    ) -> Box<TypeNodeData<'a>> {
+        loop {
+            let (nullable, precedence) = match lexer.current.kind {
+                TokenKind::Question => (true, Precedence::Nullable),
+                TokenKind::Eq => (false, Precedence::Optional),
+                _ => return value,
+            };
+            if precedence <= min_precedence {
+                return value;
+            }
+            let span = Span::new(value.span().start, lexer.current.end);
+            lexer.bump();
+            value = Box::new(if nullable {
+                TypeNodeData::Nullable(TypeNullable {
+                    span,
+                    element: value,
+                    position: ModifierPosition::Suffix,
+                })
+            } else {
+                TypeNodeData::Optional(TypeOptional {
+                    span,
+                    element: value,
+                    position: ModifierPosition::Suffix,
+                })
+            });
+        }
+    }
+
+    /// The rest of an object field with a computed key, after the value of
+    /// the key: the `]`, then a method (`[k]<T>(a: A): R`) or the type of
+    /// the values (`[k]?: T`).
+    #[allow(clippy::too_many_arguments)]
+    fn parse_computed_key_field(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        mode: ParseMode,
+        disallow_conditional: &mut bool,
+        start: u32,
+        readonly: bool,
+        bracket_start: u32,
+        value: Box<TypeNodeData<'a>>,
+    ) -> Option<Box<TypeNodeData<'a>>> {
         let bracket_end = lexer.current.end;
         if !self.expect(lexer, TokenKind::RBracket) {
             return None;
         }
-        let value = Box::new(computed_key_value(key_token, key));
         let optional = self.eat(lexer, TokenKind::Question);
         if lexer.current.kind == TokenKind::LParen || lexer.current.kind == TokenKind::Lt {
             // jsdoc-type-pratt-parser: "Computed method may not be readonly"
@@ -1121,8 +1303,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             // jsdoc-type-pratt-parser does not require the `:` before the
             // return type.
             self.eat(lexer, TokenKind::Colon);
-            let return_type =
-                self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?;
+            let return_type = self.parse_type_pratt(
+                lexer,
+                mode,
+                disallow_conditional,
+                signature_return_precedence(mode),
+            )?;
             let end = return_type.span().end;
             // The `?` belongs to the method, not to the field, and the field
             // has no right.
@@ -1565,71 +1751,58 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         mode: ParseMode,
         special_type: SpecialPathType,
     ) -> Option<Box<TypeNodeData<'a>>> {
+        if lexer.next.kind != TokenKind::Colon {
+            return self.parse_name(lexer, mode);
+        }
         let start = lexer.current.start;
-        if lexer.next.kind == TokenKind::Colon {
+        lexer.bump();
+        let colon_end = lexer.current.end;
+        lexer.bump();
+        // As in jsdoc-type-pratt-parser, the value is a string, or the
+        // identifiers, `@` and `/` that follow (`module:@scope/pkg`). The
+        // `.`, `#` and `~` after it make a name path (`module:foo.bar`), and
+        // any other token is left to the next rule: `module:` and
+        // `(module:)` are valid, `module:(` and `module:null` are not.
+        if lexer.current.kind == TokenKind::StringValue {
+            let token = lexer.current;
+            let text = lexer.token_text(token);
             lexer.bump();
-            let colon_end = lexer.current.end;
-            lexer.bump();
-            // As in jsdoc-type-pratt-parser, the value starts with an
-            // identifier, a string or one of `/`, `@`, `#` and `~`. Otherwise
-            // it is empty, and the token is left to the next rule: `module:`
-            // and `(module:)` are valid, `module:(` and `module:null` are not.
-            if !matches!(
-                lexer.current.kind,
-                TokenKind::Identifier
-                    | TokenKind::StringValue
-                    | TokenKind::Slash
-                    | TokenKind::At
-                    | TokenKind::Hash
-                    | TokenKind::Tilde
-            ) {
-                return Some(Box::new(TypeNodeData::SpecialNamePath(
-                    TypeSpecialNamePath {
-                        span: Span::new(start, colon_end),
-                        value: "",
-                        special_type,
-                        quote: None,
-                    },
-                )));
-            }
-            let quote = match lexer.current.kind {
-                TokenKind::StringValue => {
-                    let text = lexer.token_text(lexer.current);
-                    if text.starts_with('"') {
-                        Some(QuoteStyle::Double)
-                    } else {
-                        Some(QuoteStyle::Single)
-                    }
-                }
-                _ => None,
-            };
-            let value_start = lexer.current.start;
-            let mut value_end = lexer.current.end;
-            lexer.bump();
-            while matches!(
-                lexer.current.kind,
-                TokenKind::Dot | TokenKind::Slash | TokenKind::Identifier
-            ) || lexer.current.kind.is_keyword()
-            {
-                value_end = lexer.current.end;
-                lexer.bump();
-            }
-            let raw_value = self.get_type_source_text(lexer, value_start, value_end);
-            let value = if quote.is_some() && raw_value.len() >= 2 {
-                &raw_value[1..raw_value.len() - 1]
+            let quote = if text.starts_with('"') {
+                QuoteStyle::Double
             } else {
-                raw_value
+                QuoteStyle::Single
             };
             return Some(Box::new(TypeNodeData::SpecialNamePath(
                 TypeSpecialNamePath {
-                    span: Span::new(start, value_end),
-                    value,
+                    span: Span::new(start, token.end),
+                    value: &text[1..text.len() - 1],
                     special_type,
-                    quote,
+                    quote: Some(quote),
                 },
             )));
         }
-        self.parse_name(lexer, mode)
+        let value_start = lexer.current.start;
+        let mut value_end = colon_end;
+        while matches!(
+            lexer.current.kind,
+            TokenKind::Identifier | TokenKind::At | TokenKind::Slash
+        ) {
+            value_end = lexer.current.end;
+            lexer.bump();
+        }
+        let value = if value_end == colon_end {
+            ""
+        } else {
+            self.get_type_source_text(lexer, value_start, value_end)
+        };
+        Some(Box::new(TypeNodeData::SpecialNamePath(
+            TypeSpecialNamePath {
+                span: Span::new(start, value_end),
+                value,
+                special_type,
+                quote: None,
+            },
+        )))
     }
 
     fn get_type_source_text(&self, lexer: &Lexer<'a>, abs_start: u32, abs_end: u32) -> &'a str {
@@ -1817,7 +1990,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
     fn parse_name_path(
         &mut self,
         lexer: &mut Lexer<'a>,
-        _mode: ParseMode,
+        mode: ParseMode,
         left: Box<TypeNodeData<'a>>,
     ) -> Option<Box<TypeNodeData<'a>>> {
         let start = left.span().start;
@@ -1828,6 +2001,9 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             _ => return Some(left),
         };
         lexer.bump();
+        if lexer.current.kind == TokenKind::Event && lexer.next.kind == TokenKind::Colon {
+            return self.parse_event_name_path(lexer, mode, left, path_type);
+        }
         let right_token = self.expect_key_token(lexer)?;
         let right_text = lexer.token_text(right_token);
         let quote = match right_token.kind {
@@ -1854,6 +2030,37 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             quote,
         }));
         let end = right_token.end;
+        Some(Box::new(TypeNodeData::NamePath(TypeNamePath {
+            span: Span::new(start, end),
+            left,
+            right,
+            path_type,
+        })))
+    }
+
+    /// A name path whose right is an event (`module:a.event:b`,
+    /// `Foo#event:bar`), as in jsdoc-type-pratt-parser in every mode. The
+    /// name path cannot go on after it there (`module:a.event:b.c` fails).
+    /// Kept out of line, as a rare form, so that `parse_name_path` stays
+    /// small.
+    #[cold]
+    #[inline(never)]
+    fn parse_event_name_path(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        mode: ParseMode,
+        left: Box<TypeNodeData<'a>>,
+        path_type: NamePathType,
+    ) -> Option<Box<TypeNodeData<'a>>> {
+        let start = left.span().start;
+        let right = self.parse_special_name_path_or_name(lexer, mode, SpecialPathType::Event)?;
+        if matches!(lexer.current.kind, TokenKind::Hash | TokenKind::Tilde)
+            || (lexer.current.kind == TokenKind::Dot && lexer.next.kind != TokenKind::Lt)
+        {
+            self.type_diag(TypeDiagnosticKind::InvalidTypeExpression);
+            return None;
+        }
+        let end = right.span().end;
         Some(Box::new(TypeNodeData::NamePath(TypeNamePath {
             span: Span::new(start, end),
             left,
@@ -2005,6 +2212,20 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             value,
             element,
         })))
+    }
+}
+
+/// The precedence of the return type of a call, constructor, method or
+/// computed method signature. In typescript, the one mode where
+/// jsdoc-type-pratt-parser has signatures, it reads the return type like the
+/// value of an object field, unions too (`{a(): U | V}`). The other modes
+/// keep reading a prefix type.
+#[inline]
+fn signature_return_precedence(mode: ParseMode) -> Precedence {
+    if mode.is_typescript() {
+        Precedence::Object
+    } else {
+        Precedence::Prefix
     }
 }
 
