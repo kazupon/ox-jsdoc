@@ -257,7 +257,7 @@ fn parse_with_writer<'arena>(
     let root_node_index = if parsed.is_failure() {
         0
     } else {
-        context::emit_block(writer, &parsed).unwrap_or(0)
+        context::emit_parsed_block(writer, &parsed).unwrap_or(0)
     };
     writer.push_root(root_node_index, source_offset, options.base_offset);
 
@@ -279,7 +279,9 @@ fn parse_with_writer<'arena>(
     // allocation + the `arena.alloc_slice_copy` that the previous path
     // paid to satisfy the `&'arena [u8]` lifetime needed by `LazySourceFile`.
     let binary_bytes: &'arena [u8] = writer.finish_into_arena_reusing();
-    let source_file_owned = LazySourceFile::new(binary_bytes)
+    // SAFETY: the writer builds String Data from `&str` values only, so it is
+    // UTF-8; skip checking it again.
+    let source_file_owned = unsafe { LazySourceFile::new_unchecked(binary_bytes) }
         .expect("BinaryWriter::finish_into_arena_reusing() always produces a header-valid buffer");
     let source_file_ref: &'arena LazySourceFile<'arena> = arena.alloc(source_file_owned);
 
@@ -330,7 +332,7 @@ pub fn parse_to_bytes(source: &str, options: ParseOptions) -> ParseBytesResult {
     let root_node_index = if parsed.is_failure() {
         0
     } else {
-        context::emit_block(&mut writer, &parsed).unwrap_or(0)
+        context::emit_parsed_block(&mut writer, &parsed).unwrap_or(0)
     };
     writer.push_root(root_node_index, source_offset, options.base_offset);
 
@@ -495,7 +497,7 @@ fn parse_batch_with_writer<'arena>(
         let root_node_index = if parsed.is_failure() {
             0
         } else {
-            context::emit_block(writer, &parsed).unwrap_or(0)
+            context::emit_parsed_block(writer, &parsed).unwrap_or(0)
         };
         writer.push_root(root_node_index, source_offset_in_data, item.base_offset);
 
@@ -514,7 +516,9 @@ fn parse_batch_with_writer<'arena>(
     // rationale behind preferring `finish_into_arena` over `finish` +
     // `alloc_slice_copy`.
     let binary_bytes: &'arena [u8] = writer.finish_into_arena_reusing();
-    let source_file_owned = LazySourceFile::new(binary_bytes)
+    // SAFETY: the writer builds String Data from `&str` values only, so it is
+    // UTF-8; skip checking it again.
+    let source_file_owned = unsafe { LazySourceFile::new_unchecked(binary_bytes) }
         .expect("BinaryWriter::finish_into_arena_reusing() always produces a header-valid buffer");
     let source_file_ref: &'arena LazySourceFile<'arena> = arena.alloc(source_file_owned);
 
@@ -596,7 +600,7 @@ pub fn parse_batch_to_bytes(
         let root_node_index = if parsed.is_failure() {
             0
         } else {
-            context::emit_block(&mut writer, &parsed).unwrap_or(0)
+            context::emit_parsed_block(&mut writer, &parsed).unwrap_or(0)
         };
         writer.push_root(root_node_index, source_offset_in_data, item.base_offset);
 

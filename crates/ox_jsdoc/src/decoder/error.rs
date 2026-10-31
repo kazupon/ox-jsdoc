@@ -10,8 +10,8 @@ use crate::format::kind::UnknownKind;
 
 /// Errors that can occur while decoding a Binary AST byte stream.
 ///
-/// The lazy decoder validates only the Header eagerly; per-node and
-/// per-string failures surface here as decoding proceeds.
+/// The lazy decoder validates the Header, the section layout and the String
+/// Data eagerly; per-node failures surface here as decoding proceeds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecodeError {
     /// The input slice is shorter than the 40-byte Header.
@@ -45,6 +45,18 @@ pub enum DecodeError {
         /// Raw Kind byte that failed to decode.
         kind_byte: u8,
     },
+    /// The Header's section offsets are out of order or past the end of the
+    /// buffer, or the Root Index Array or the nodes do not fit in their
+    /// sections.
+    InvalidSectionLayout {
+        /// The section that does not fit (`"String Data"`, `"Nodes"`, …).
+        section: &'static str,
+    },
+    /// The String Data section is not UTF-8.
+    InvalidStringData {
+        /// Length of the UTF-8 prefix of the section, in bytes.
+        valid_up_to: usize,
+    },
 }
 
 impl fmt::Display for DecodeError {
@@ -69,6 +81,13 @@ impl fmt::Display for DecodeError {
                 node_index,
                 kind_byte,
             } => write!(f, "node[{node_index}] has unknown Kind 0x{kind_byte:02X}"),
+            DecodeError::InvalidSectionLayout { section } => {
+                write!(f, "the {section} section does not fit in the buffer")
+            }
+            DecodeError::InvalidStringData { valid_up_to } => write!(
+                f,
+                "String Data is not UTF-8 after its first {valid_up_to} bytes"
+            ),
         }
     }
 }
@@ -138,5 +157,25 @@ mod tests {
             DecodeError::UnknownKind { kind_byte, .. } => assert_eq!(kind_byte, 0x42),
             _ => panic!("expected UnknownKind variant"),
         }
+    }
+
+    #[test]
+    fn display_invalid_section_layout() {
+        let err = DecodeError::InvalidSectionLayout {
+            section: "String Data",
+        };
+        assert_eq!(
+            err.to_string(),
+            "the String Data section does not fit in the buffer"
+        );
+    }
+
+    #[test]
+    fn display_invalid_string_data() {
+        let err = DecodeError::InvalidStringData { valid_up_to: 143 };
+        assert_eq!(
+            err.to_string(),
+            "String Data is not UTF-8 after its first 143 bytes"
+        );
     }
 }

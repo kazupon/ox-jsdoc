@@ -207,6 +207,14 @@ fn handles_string_table_overflow() {
 }
 ```
 
+`LazySourceFile::new` also checks the section layout and that the String Data section is UTF-8, and the string getters never give a `&str` that is not UTF-8 (`crates/ox_jsdoc/tests/decoder_validation.rs`, `decoder_strings.rs`):
+
+- A buffer whose sections are out of order, past its end, or too small for the roots or the nodes gives `DecodeError::InvalidSectionLayout`
+- A buffer whose String Data is not UTF-8 gives `DecodeError::InvalidStringData`
+- Every offset passed to `slice_source_text`, `get_string_by_field`, `get_inline_string` or `get_string`, in the middle of a character or past the String Data, gives `None` / `""` instead of a `&str` that is not UTF-8
+
+Other reads of a broken buffer (node records, Extended Data offsets) may still panic: the decoder does not check every node up front.
+
 ## 11. Fuzzing (cargo-fuzz)
 
 Pass random byte sequences to the decoder to detect crashes/UB:

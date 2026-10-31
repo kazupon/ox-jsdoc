@@ -860,6 +860,11 @@ impl<'a> LazyTypeTemplateLiteral<'a> {
     }
     /// Get the n-th literal segment (panics when `index >= literal_count`).
     pub fn literal(&self, index: u16) -> &'a str {
+        let count = self.literal_count();
+        assert!(
+            index < count,
+            "template literal segment {index} out of range (count {count})"
+        );
         let ext = ext_offset(self.source_file, self.node_index) as usize;
         let field = read_string_field(
             self.source_file.bytes(),
