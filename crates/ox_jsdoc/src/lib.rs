@@ -10,8 +10,8 @@
 //!
 //! Node positions (Pos / End) are UTF-8 byte offsets relative to the root's
 //! source text, the parser's spans as they are. Hosts that need UTF-16 code
-//! units (JavaScript string indices, ESLint, LSP) convert them with the
-//! original source text.
+//! units (JavaScript string indices, ESLint, LSP clients that use UTF-16
+//! positions) convert them with the original source text.
 //!
 //! The Binary AST replaces the previous JSON serialization path between the
 //! Rust parser and JS bindings. The full design lives under

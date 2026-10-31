@@ -365,7 +365,7 @@ Empty descriptions are represented by **omitting the span entirely** (bit cleare
 
 #### Encoding unit (UTF-8)
 
-`description_raw_span` is **UTF-8 bytes**, _not_ UTF-16 code units, like `Pos` / `End` (see `007-binary-ast/format.md`, "Position units"). Hosts that need UTF-16 code units for ESLint `range` or LSP positions convert them with the source text. The two fields:
+`description_raw_span` is **UTF-8 bytes**, _not_ UTF-16 code units, like `Pos` / `End` (see `007-binary-ast/format.md`, "Position units"). Hosts that need UTF-16 code units, such as ESLint `range` or LSP clients that use UTF-16 positions, convert them with the source text. The two fields:
 
 | Field | Unit | Purpose |
 | --- | --- | --- |
