@@ -11,7 +11,7 @@ The Rust side of the JSDoc parser runs at nanosecond speeds, but transferring th
 3. Lazy node materialization (only accessed nodes become JS objects)
 4. Runs on a single JS decoder across all environments (NAPI / WASM / IPC)
 5. Preserves the ESTree-compatible shape for lint rule authors
-6. Transfers the complete AST including parsedType (TypeNode, 47 kinds) in a single format
+6. Transfers the complete AST including parsedType (TypeNode, 48 kinds) in a single format
 
 ## Design core
 
@@ -37,7 +37,7 @@ Each chapter is split into an independent file. We recommend reading them in ord
 
 2. [AST Nodes (Catalog of target nodes)](./ast-nodes.md)
    - 15 comment AST kinds
-   - 47 TypeNode AST kinds
+   - 48 TypeNode AST kinds
    - Kind number space (single-instruction optimization)
    - Phase 4 dispatch table code generation
 
@@ -130,7 +130,7 @@ Each chapter is split into an independent file. We recommend reading them in ord
 - [JS binding](../003-js-binding/) — JS binding design
 - [WASM binding](../004-wasm/) — WASM binding design
 - [jsdoccomment compatibility](../005-jsdoccomment-compat/README.md) — Background on compat_mode
-- [parsedType](../006-parsed-type/README.md) — Design of the 47 TypeNode kinds
+- [parsedType](../006-parsed-type/README.md) — Design of the TypeNode kinds
 
 ## References
 

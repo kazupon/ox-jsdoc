@@ -60,6 +60,9 @@ pub enum TokenKind {
     StringValue,
     TemplateLiteral,
     Number,
+    /// A BigInt literal (`1n`, `-1n`): digits right before an `n`, as
+    /// jsdoc-type-pratt-parser reads them.
+    BigInt,
     /// A character that no rule accepts, or a string / template literal that
     /// is not closed. The token covers whole characters, and no parse rule
     /// accepts it, so the type expression fails to parse.

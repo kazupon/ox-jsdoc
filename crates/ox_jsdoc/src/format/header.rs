@@ -67,12 +67,21 @@ pub const SUPPORTED_MAJOR: u8 = 1;
 /// - `1`: adds the `TypeComputedProperty` (`0xAD`) and `TypeComputedMethod`
 ///   (`0xAE`) kinds
 /// - `2`: adds the `tag` field (the name) of `JsdocInlineTag`
-pub const SUPPORTED_MINOR: u8 = 2;
+/// - `3`: adds the `TypeBigInt` (`0xAF`) kind, the `optional` bit (bit4) of
+///   `TypeMethodSignature`, and the constraint and default bits (bit0 and
+///   bit1) of `TypeTypeParameter`
+pub const SUPPORTED_MINOR: u8 = 3;
 
 /// First minor version whose `JsdocInlineTag` Extended Data has the `tag`
 /// field (bytes 18-23). Older buffers (minor 0 and 1) end the record after
 /// 18 bytes.
 pub const INLINE_TAG_NAME_MINOR: u8 = 2;
+
+/// First minor version whose `TypeTypeParameter` Common Data tells which of
+/// the constraint (bit0) and the default (bit1) follow the name. Older
+/// buffers (minor 0 to 2) list them in that order without the bits, so a
+/// second element is read as the constraint there.
+pub const TYPE_PARAMETER_FLAGS_MINOR: u8 = 3;
 
 /// Bit shift for extracting the major version from byte 0.
 pub const MAJOR_SHIFT: u8 = 4;
@@ -226,10 +235,10 @@ mod tests {
     }
 
     #[test]
-    fn supported_version_byte_is_0x12() {
-        assert_eq!(SUPPORTED_VERSION_BYTE, 0x12);
+    fn supported_version_byte_is_0x13() {
+        assert_eq!(SUPPORTED_VERSION_BYTE, 0x13);
         assert_eq!(major(SUPPORTED_VERSION_BYTE), 1);
-        assert_eq!(minor(SUPPORTED_VERSION_BYTE), 2);
+        assert_eq!(minor(SUPPORTED_VERSION_BYTE), 3);
     }
 
     #[test]

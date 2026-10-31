@@ -3,7 +3,7 @@
  *
  * Mirrors the Rust `Kind::from_u8` mapping. Phase 4 will code-generate
  * this file from a single schema. Until then, every Kind discriminant
- * (0x01-0x0F, 0x7F, 0x80-0xAE) is wired by hand.
+ * (0x01-0x0F, 0x7F, 0x80-0xAF) is wired by hand.
  *
  * @author kazuya kawaguchi (a.k.a. kazupon)
  * @license MIT
@@ -54,6 +54,7 @@ import {
   RemoteTypeNull,
   RemoteTypeNullable,
   RemoteTypeNumber,
+  RemoteTypeBigInt,
   RemoteTypeObject,
   RemoteTypeObjectField,
   RemoteTypeOptional,
@@ -105,7 +106,7 @@ KIND_TABLE[0x0f] = RemoteJsdocText
 // NodeList wrapper
 KIND_TABLE[0x7f] = RemoteNodeListNode
 
-// TypeNode (0x80 - 0xAE)
+// TypeNode (0x80 - 0xAF)
 KIND_TABLE[0x80] = RemoteTypeName
 KIND_TABLE[0x81] = RemoteTypeNumber
 KIND_TABLE[0x82] = RemoteTypeStringValue
@@ -153,6 +154,7 @@ KIND_TABLE[0xab] = RemoteTypeParameterList
 KIND_TABLE[0xac] = RemoteTypeReadonlyProperty
 KIND_TABLE[0xad] = RemoteTypeComputedProperty
 KIND_TABLE[0xae] = RemoteTypeComputedMethod
+KIND_TABLE[0xaf] = RemoteTypeBigInt
 
 /**
  * Look up the lazy class for a given Kind byte.

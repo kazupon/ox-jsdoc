@@ -325,6 +325,16 @@ impl<'a> Lexer<'a> {
             while pos < bytes.len() && bytes[pos].is_ascii_digit() {
                 pos += 1;
             }
+            // As in jsdoc-type-pratt-parser, digits right before an `n` are
+            // a BigInt (`1n`, `-1n`). `1.5n` stays a number and a name.
+            if bytes.get(pos) == Some(&b'n') {
+                self.offset = pos + 1;
+                return Some(Token::new(
+                    TokenKind::BigInt,
+                    abs_start,
+                    self.base_offset + self.offset as u32,
+                ));
+            }
         }
         if pos < bytes.len() && bytes[pos] == b'.' {
             let next_pos = pos + 1;

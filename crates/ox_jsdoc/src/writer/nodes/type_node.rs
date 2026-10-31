@@ -2,7 +2,7 @@
 // @license MIT
 //
 
-//! `write_*` helpers for the 47 TypeNode kinds (`0x80 - 0xAE`).
+//! `write_*` helpers for the 48 TypeNode kinds (`0x80 - 0xAF`).
 //!
 //! TypeNodes split into 4 patterns (see `format.md` "Node catalog matrix"):
 //!
@@ -57,6 +57,17 @@ pub fn write_type_number(
     value: LeafStringPayload,
 ) -> NodeIndex {
     writer.emit_string_node(parent_index, Kind::TypeNumber, 0, span, value)
+}
+
+/// `TypeBigInt` (Kind `0xAF`, Pattern 1, minor 3): the digits of `1n` as
+/// written, without the `n`.
+pub fn write_type_bigint(
+    writer: &mut BinaryWriter<'_>,
+    span: Span,
+    parent_index: u32,
+    value: LeafStringPayload,
+) -> NodeIndex {
+    writer.emit_string_node(parent_index, Kind::TypeBigInt, 0, span, value)
 }
 
 /// `TypeStringValue` (Kind `0x82`, Pattern 1; Common Data: bits[0:1] = quote 3-state).
@@ -502,13 +513,19 @@ pub fn write_type_constructor_signature(
 }
 
 /// `TypeTypeParameter` (Kind `0xA6`, Pattern 3; ED holds list metadata).
+///
+/// The elements are the name, then the constraint and the default when there
+/// are. Common Data (minor 3): `bit0=has_constraint`, `bit1=has_default`.
 pub fn write_type_type_parameter(
     writer: &mut BinaryWriter<'_>,
     span: Span,
     parent_index: u32,
+    has_constraint: bool,
+    has_default: bool,
 ) -> (NodeIndex, ExtOffset) {
+    let common = (has_constraint as u8) | ((has_default as u8) << 1);
     let (off, _dst) = writer.extended.reserve_mut(TYPE_LIST_PARENT_SIZE);
-    let idx = writer.emit_extended_node(parent_index, Kind::TypeTypeParameter, 0, span, off);
+    let idx = writer.emit_extended_node(parent_index, Kind::TypeTypeParameter, common, span, off);
     (idx, off)
 }
 
@@ -628,7 +645,9 @@ pub fn write_type_mapped_type(
 
 /// `TypeMethodSignature` (Kind `0xA9`, Pattern 3; 6-byte ED = name StringField).
 ///
-/// Common Data: `bits[0:1]=quote`, `bit2=has_parameters`, `bit3=has_type_parameters`.
+/// Common Data: `bits[0:1]=quote`, `bit2=has_parameters`, `bit3=has_type_parameters`,
+/// `bit4=optional` (minor 3, `a?(): R`).
+#[allow(clippy::too_many_arguments)]
 pub fn write_type_method_signature(
     writer: &mut BinaryWriter<'_>,
     span: Span,
@@ -636,10 +655,13 @@ pub fn write_type_method_signature(
     quote: u8,
     has_parameters: bool,
     has_type_parameters: bool,
+    optional: bool,
     name: StringField,
 ) -> NodeIndex {
-    let common =
-        (quote & 0b11) | ((has_parameters as u8) << 2) | ((has_type_parameters as u8) << 3);
+    let common = (quote & 0b11)
+        | ((has_parameters as u8) << 2)
+        | ((has_type_parameters as u8) << 3)
+        | ((optional as u8) << 4);
     let (off, dst) = writer.extended.reserve_mut(STRING_FIELD_SIZE);
     name.write_le(dst);
     writer.emit_extended_node(parent_index, Kind::TypeMethodSignature, common, span, off)

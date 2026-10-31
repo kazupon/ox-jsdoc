@@ -1,5 +1,5 @@
 /**
- * Lazy classes for the 47 TypeNode kinds (`0x80 - 0xAE`).
+ * Lazy classes for the 48 TypeNode kinds (`0x80 - 0xAF`).
  *
  * Mirrors `crates/ox_jsdoc/src/decoder/nodes/type_node.rs`.
  *
@@ -18,7 +18,14 @@
  * @license MIT
  */
 
-import { COMMON_DATA_MASK, COMMON_DATA_OFFSET, STRING_FIELD_SIZE } from '../constants.ts'
+import {
+  COMMON_DATA_MASK,
+  COMMON_DATA_OFFSET,
+  MINOR_MASK,
+  STRING_FIELD_SIZE,
+  TYPE_PARAMETER_FLAGS_MINOR,
+  VERSION_OFFSET
+} from '../constants.ts'
 import {
   absoluteRange,
   childNodeAtVisitorIndexChildren,
@@ -141,6 +148,8 @@ function definePureLeaf(typeName: string): LazyNodeConstructor {
 
 export class RemoteTypeName extends defineStringPattern('TypeName') {}
 export class RemoteTypeNumber extends defineStringPattern('TypeNumber') {}
+/** `TypeBigInt` (minor 3): the digits of `1n` as written, without the `n`. */
+export class RemoteTypeBigInt extends defineStringPattern('TypeBigInt') {}
 export class RemoteTypeStringValue extends defineStringPattern(
   'TypeStringValue',
   (internal, json) => {
@@ -338,7 +347,81 @@ export class RemoteTypeObject implements LazyNode {
 }
 
 export class RemoteTypeTuple extends defineElementsContainer('TypeTuple') {}
-export class RemoteTypeTypeParameter extends defineElementsContainer('TypeTypeParameter') {}
+/**
+ * `TypeTypeParameter` — the name, then the constraint and the default when
+ * there are, as its `elements`. Common Data (minor 3): bit0 = a constraint,
+ * bit1 = a default. A buffer older than minor 3 has no bits; there, a second
+ * element is the constraint and a third the default, in the order of the
+ * writer.
+ */
+export class RemoteTypeTypeParameter implements LazyNode {
+  readonly type = 'TypeTypeParameter'
+  readonly _internal: RemoteInternal
+
+  constructor(
+    view: DataView,
+    byteIndex: number,
+    index: number,
+    rootIndex: number,
+    parent: LazyNode | null,
+    sourceFile: RemoteSourceFileLike
+  ) {
+    this._internal = { view, byteIndex, index, rootIndex, parent, sourceFile }
+  }
+  get range(): readonly [number, number] {
+    return absoluteRange(this._internal)
+  }
+  get parent(): LazyNode | null {
+    return this._internal.parent
+  }
+  get elements(): readonly LazyNode[] {
+    return nodeListAtSlotExtended(this._internal, TYPE_LIST_PARENT_SLOT)
+  }
+  /** Whether a constraint follows the name (`T extends U`). */
+  get hasConstraint(): boolean {
+    return hasTypeParameterFlags(this._internal)
+      ? (commonData(this._internal) & 0b01) !== 0
+      : this.elements.length >= 2
+  }
+  /** Whether a default follows the name or the constraint (`T = U`). */
+  get hasDefault(): boolean {
+    return hasTypeParameterFlags(this._internal)
+      ? (commonData(this._internal) & 0b10) !== 0
+      : this.elements.length >= 3
+  }
+  /** The name (`T`). */
+  get name(): LazyNode | null {
+    return this.elements[0] ?? null
+  }
+  /** The constraint (`U` of `T extends U`). */
+  get constraint(): LazyNode | null {
+    return this.hasConstraint ? (this.elements[1] ?? null) : null
+  }
+  /** The default (`U` of `T = U`). */
+  get defaultValue(): LazyNode | null {
+    if (!this.hasDefault) {
+      return null
+    }
+    return this.elements[this.hasConstraint ? 2 : 1] ?? null
+  }
+  toJSON(): RemoteJsonObject {
+    return {
+      type: this.type,
+      range: [...this.range],
+      elements: this.elements.map(n => n.toJSON()),
+      hasConstraint: this.hasConstraint,
+      hasDefault: this.hasDefault
+    }
+  }
+  [inspectSymbol](): object {
+    return inspectPayload(this.toJSON(), 'TypeTypeParameter')
+  }
+}
+
+/** Whether the buffer has the type parameter flags of minor 3. */
+function hasTypeParameterFlags(internal: RemoteInternal): boolean {
+  return (internal.view.getUint8(VERSION_OFFSET) & MINOR_MASK) >= TYPE_PARAMETER_FLAGS_MINOR
+}
 export class RemoteTypeParameterList extends defineElementsContainer('TypeParameterList') {}
 
 // --- single-child containers (with optional Common Data fields) ---
@@ -916,6 +999,10 @@ export class RemoteTypeMethodSignature implements LazyNode {
   get hasTypeParameters(): boolean {
     return (commonData(this._internal) & 0b1000) !== 0
   }
+  /** `a?(): R` (bit4, minor 3). An older buffer has no optional method. */
+  get optional(): boolean {
+    return (commonData(this._internal) & 0b1_0000) !== 0
+  }
   get name(): string {
     return extStringLeaf(this._internal)
   }
@@ -926,6 +1013,7 @@ export class RemoteTypeMethodSignature implements LazyNode {
       quote: this.quote,
       hasParameters: this.hasParameters,
       hasTypeParameters: this.hasTypeParameters,
+      optional: this.optional,
       name: this.name
     }
   }
