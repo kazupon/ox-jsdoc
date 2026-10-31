@@ -16,7 +16,7 @@
     "jsdoc-linter:parity": "node ./scripts/jsdoc-linter-parity.mjs"
   },
   "dependencies": {
-    "@es-joy/jsdoccomment": "^0.100.0",
+    "@es-joy/jsdoccomment": "^1.0.0",
     "@ox-jsdoc/eslint-plugin-jsdoc": "workspace:*",
     "@ox-jsdoc/wasm-origin": "workspace:*",
     "@ox-jsdoc/wasm": "workspace:*",
