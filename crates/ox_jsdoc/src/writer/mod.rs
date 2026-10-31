@@ -14,9 +14,9 @@
 //! and encoding happen in lockstep.
 //!
 //! Per-Kind emit helpers live in [`nodes`]; the top-level orchestration
-//! (section buffers, header patching, root array, diagnostics, UTF-16
-//! position conversion via [`crate::utf16::Utf16PositionMap`]) lives in
-//! [`BinaryWriter`].
+//! (section buffers, header patching, root array, diagnostics) lives in
+//! [`BinaryWriter`]. Node positions are written as the parser's UTF-8 byte
+//! spans, with no conversion.
 
 mod binary_writer;
 mod extended_data;

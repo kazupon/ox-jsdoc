@@ -25,7 +25,8 @@ export interface ParseOptions {
    *  Mirrors the Rust serializer's `SerializeOptions.empty_string_for_null`
    *  for jsdoccomment parity. Default: false. */
   emptyStringForNull?: boolean
-  /** Original-file absolute byte offset of `sourceText`. Default: 0. */
+  /** Original-file absolute UTF-8 byte offset of `sourceText` (not a
+   *  JavaScript string index; node ranges use the same unit). Default: 0. */
   baseOffset?: number
 }
 
@@ -45,7 +46,8 @@ export interface ParseResult {
 export interface BatchItem {
   /** `/** ... *​/` source text for this comment. */
   sourceText: string
-  /** Original-file absolute byte offset (default 0). */
+  /** Original-file absolute UTF-8 byte offset (not a JavaScript string
+   *  index; node ranges use the same unit). Default: 0. */
   baseOffset?: number
 }
 

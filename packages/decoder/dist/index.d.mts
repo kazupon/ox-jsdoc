@@ -26,6 +26,11 @@ type RemoteJsonArray = ReadonlyArray<RemoteJsonValue>;
  */
 interface LazyNode {
   readonly type: string;
+  /**
+   * `[start, end]` in UTF-8 bytes: the root's `baseOffset` plus the node's
+   * byte offsets in its source text. These are not JavaScript string
+   * indices (UTF-16 code units) once the text has non-ASCII characters.
+   */
   readonly range: readonly [number, number];
   readonly parent: LazyNode | null;
   toJSON(): RemoteJsonObject;

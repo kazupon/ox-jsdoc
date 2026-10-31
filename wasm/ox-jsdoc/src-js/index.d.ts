@@ -20,7 +20,8 @@ export interface ParseOptions {
    *  description. Fully orthogonal to `compatMode`. Default: false.
    *  See `design/008-oxlint-oxfmt-support/README.md` §4.2. */
   preserveWhitespace?: boolean
-  /** Original-file absolute byte offset of `sourceText`. Default: 0. */
+  /** Original-file absolute UTF-8 byte offset of `sourceText` (not a
+   *  JavaScript string index; node ranges use the same unit). Default: 0. */
   baseOffset?: number
 }
 
@@ -45,7 +46,8 @@ export interface ParseResult {
 export interface BatchItem {
   /** `/** ... *​/` source text for this comment. */
   sourceText: string
-  /** Original-file absolute byte offset (default 0). */
+  /** Original-file absolute UTF-8 byte offset (not a JavaScript string
+   *  index; node ranges use the same unit). Default: 0. */
   baseOffset?: number
 }
 

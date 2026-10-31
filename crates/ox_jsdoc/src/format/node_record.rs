@@ -11,8 +11,8 @@
 //! byte  0     : Kind            (u8)
 //! byte  1     : Common Data     (u8, lower 6 bit; upper 2 bit reserved)
 //! byte  2-3   : padding         (u16, zero-fill)
-//! byte  4-7   : Pos             (u32, UTF-16 offset relative to root sourceText)
-//! byte  8-11  : End             (u32, UTF-16 offset relative to root sourceText)
+//! byte  4-7   : Pos             (u32, UTF-8 byte offset relative to root sourceText)
+//! byte  8-11  : End             (u32, UTF-8 byte offset relative to root sourceText)
 //! byte 12-15  : Node Data       (u32, 2-bit type tag + 30-bit payload)
 //! byte 16-19  : parent_index    (u32, 0 = sentinel)
 //! byte 20-23  : next_sibling    (u32, 0 = no sibling)
@@ -33,9 +33,9 @@ pub const KIND_OFFSET: usize = 0;
 pub const COMMON_DATA_OFFSET: usize = 1;
 /// Offset of the 2-byte alignment padding (zero-fill).
 pub const PADDING_OFFSET: usize = 2;
-/// Offset of the `Pos` field (u32, UTF-16 code units).
+/// Offset of the `Pos` field (u32, UTF-8 bytes).
 pub const POS_OFFSET: usize = 4;
-/// Offset of the `End` field (u32, UTF-16 code units).
+/// Offset of the `End` field (u32, UTF-8 bytes).
 pub const END_OFFSET: usize = 8;
 /// Offset of the `Node Data` field (u32, type tag + payload).
 pub const NODE_DATA_OFFSET: usize = 12;

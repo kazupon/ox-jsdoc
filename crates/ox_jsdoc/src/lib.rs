@@ -6,9 +6,12 @@
 //!
 //! This crate hosts the Binary AST format specification ([`format`]), the
 //! parser-integrated binary writer ([`writer`]), the parser entry point
-//! ([`parser`]), the Rust-side lazy decoder ([`decoder`]), and the
-//! UTF-8 → UTF-16 position converter ([`utf16`]) used at emit time to
-//! satisfy the wire-format requirement that Pos/End are UTF-16 code units.
+//! ([`parser`]) and the Rust-side lazy decoder ([`decoder`]).
+//!
+//! Node positions (Pos / End) are UTF-8 byte offsets relative to the root's
+//! source text, the parser's spans as they are. Hosts that need UTF-16 code
+//! units (JavaScript string indices, ESLint, LSP clients that use UTF-16
+//! positions) convert them with the original source text.
 //!
 //! The Binary AST replaces the previous JSON serialization path between the
 //! Rust parser and JS bindings. The full design lives under
