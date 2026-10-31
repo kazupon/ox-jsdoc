@@ -29,6 +29,6 @@
     "vite": "catalog:",
     "vite-plus": "catalog:",
     "vize": "^0.602.0",
-    "void": "^0.28.0"
+    "void": "^1.0.0"
   }
 }
