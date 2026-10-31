@@ -53,10 +53,10 @@ Notes: the Rust enums `JsdocTagBody` (Generic|Borrows|Raw) and `JsdocTagValue` (
 
 ## TypeNode AST (`crates/ox_jsdoc/src/type_parser/ast.rs`)
 
-The 47 `TypeNode` variants are each treated as an independent Kind:
+The 48 `TypeNode` variants are each treated as an independent Kind:
 
 ```text
-Basic (7):       Name, Number, StringValue, Null, Undefined, Any, Unknown
+Basic (8):       Name, Number, BigInt, StringValue, Null, Undefined, Any, Unknown
 Compound (7):    Union, Intersection, Generic, Function, Object, Tuple, Parenthesis
 Name path (2):   NamePath, SpecialNamePath
 Modifier (4):    Nullable, NotNullable, Optional, Variadic

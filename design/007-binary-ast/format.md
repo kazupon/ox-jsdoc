@@ -2023,7 +2023,7 @@ ox-jsdoc is a **parser-only implementation with no semantic analysis**, so flags
 
 ## Node catalog matrix
 
-All 62 variants + 1 sentinel + 1 reserved-only discriminant (`NodeList`, kept for legacy buffer compatibility but **never emitted by the encoder** — child lists are now expressed via inline `(head_index, count)` metadata in the parent's Extended Data block) = **64 discriminants**, listed by Node Data type / Common Data usage / Extended Data size (for use when implementing the decoder).
+All 63 variants + 1 sentinel + 1 reserved-only discriminant (`NodeList`, kept for legacy buffer compatibility but **never emitted by the encoder** — child lists are now expressed via inline `(head_index, count)` metadata in the parent's Extended Data block) = **65 discriminants**, listed by Node Data type / Common Data usage / Extended Data size (for use when implementing the decoder).
 
 For the detailed layout of the Kind number space (0x00 = Sentinel, 0x01-0x0F = comment AST, 0x7F = NodeList (reserved-only, never emitted), 0x80-0xFF = TypeNode), see [ast-nodes.md](./ast-nodes.md#kind-number-space).
 

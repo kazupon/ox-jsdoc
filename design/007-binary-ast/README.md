@@ -55,7 +55,7 @@ Each chapter is split into an independent file. We recommend reading them in ord
    - Nodes section (24 bytes/node, flat array)
    - Node Data bit packing (32 bit, 4 type tags)
    - Common Data (6-bit, small per-kind data)
-   - Node catalog matrix (62 nodes + 1 Sentinel + 1 reserved-only `NodeList` discriminant = 64 entries; `NodeList` is reserved-only and never emitted by the encoder)
+   - Node catalog matrix (63 nodes + 1 Sentinel + 1 reserved-only `NodeList` discriminant = 65 entries; `NodeList` is reserved-only and never emitted by the encoder)
 
    Each section follows the unified structure of "Design overview / Layout / Field details / Implementation sketch / Size and performance / Differences from tsgo", accompanied by SVG diagrams.
 
