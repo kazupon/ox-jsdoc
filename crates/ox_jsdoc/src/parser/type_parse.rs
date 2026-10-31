@@ -512,6 +512,11 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         if lexer.current.kind != TokenKind::Arrow {
             return None;
         }
+        // As in jsdoc-type-pratt-parser, the parameters are names or named
+        // (`(a, b: T) => R`, not `(Array<T>) => R`).
+        if !arrow_function_parameters_allowed(&parameters) {
+            return None;
+        }
         lexer.bump();
         let return_type =
             self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::All)?;
@@ -652,6 +657,18 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         if !self.expect(lexer, TokenKind::RBracket) {
             self.type_diag(TypeDiagnosticKind::UnclosedTuple);
             return None;
+        }
+        // As in jsdoc-type-pratt-parser: no `?` (`[?]`), and every element
+        // is named or none is, as the first one (`[a: T, b: U]`, `[T, U]`).
+        if let Some(first) = elements.first() {
+            let named = matches!(first.as_ref(), TypeNodeData::KeyValue(_));
+            if elements.iter().any(|element| {
+                matches!(element.as_ref(), TypeNodeData::Unknown(_))
+                    || matches!(element.as_ref(), TypeNodeData::KeyValue(_)) != named
+            }) {
+                self.type_diag(TypeDiagnosticKind::InvalidTypeExpression);
+                return None;
+            }
         }
         let end = lexer.current.start;
         Some(Box::new(TypeNodeData::Tuple(TypeTuple {
@@ -921,15 +938,23 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         Some(type_params)
     }
 
-    fn parse_call_signature(
+    /// The parameters of a call, constructor, method or computed method
+    /// signature, from the `(` to the `)`. In typescript, as in
+    /// jsdoc-type-pratt-parser, a single parameter without a name (and
+    /// without a trailing comma) is a parenthesized type there, which is no
+    /// parameter list (`{a(string): T}`, not `{a(x: string): T}`).
+    #[allow(clippy::vec_box)] // the `parameters` of the type nodes
+    fn parse_signature_parameters(
         &mut self,
         lexer: &mut Lexer<'a>,
         mode: ParseMode,
         disallow_conditional: &mut bool,
-        start: u32,
-    ) -> Option<Box<TypeNodeData<'a>>> {
-        lexer.bump();
+    ) -> Option<Vec<Box<TypeNodeData<'a>>>> {
+        if !self.expect(lexer, TokenKind::LParen) {
+            return None;
+        }
         let mut parameters = Vec::new();
+        let mut trailing_comma = false;
         if lexer.current.kind != TokenKind::RParen {
             loop {
                 let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
@@ -939,6 +964,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 }
                 // A trailing comma
                 if lexer.current.kind == TokenKind::RParen {
+                    trailing_comma = true;
                     break;
                 }
             }
@@ -946,6 +972,25 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         if !self.expect(lexer, TokenKind::RParen) {
             return None;
         }
+        if mode.is_typescript()
+            && !trailing_comma
+            && parameters.len() == 1
+            && !matches!(parameters[0].as_ref(), TypeNodeData::KeyValue(_))
+        {
+            self.type_diag(TypeDiagnosticKind::InvalidTypeExpression);
+            return None;
+        }
+        Some(parameters)
+    }
+
+    fn parse_call_signature(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        mode: ParseMode,
+        disallow_conditional: &mut bool,
+        start: u32,
+    ) -> Option<Box<TypeNodeData<'a>>> {
+        let parameters = self.parse_signature_parameters(lexer, mode, disallow_conditional)?;
         // jsdoc-type-pratt-parser does not require the `:` before the
         // return type.
         self.eat(lexer, TokenKind::Colon);
@@ -972,26 +1017,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         start: u32,
     ) -> Option<Box<TypeNodeData<'a>>> {
         let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional)?;
-        if !self.expect(lexer, TokenKind::LParen) {
-            return None;
-        }
-        let mut parameters = Vec::new();
-        if lexer.current.kind != TokenKind::RParen {
-            loop {
-                let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
-                parameters.push(param);
-                if !self.eat(lexer, TokenKind::Comma) {
-                    break;
-                }
-                // A trailing comma
-                if lexer.current.kind == TokenKind::RParen {
-                    break;
-                }
-            }
-        }
-        if !self.expect(lexer, TokenKind::RParen) {
-            return None;
-        }
+        let parameters = self.parse_signature_parameters(lexer, mode, disallow_conditional)?;
         // jsdoc-type-pratt-parser does not require the `:` before the
         // return type.
         self.eat(lexer, TokenKind::Colon);
@@ -1019,26 +1045,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
     ) -> Option<Box<TypeNodeData<'a>>> {
         lexer.bump();
         let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional)?;
-        if !self.expect(lexer, TokenKind::LParen) {
-            return None;
-        }
-        let mut parameters = Vec::new();
-        if lexer.current.kind != TokenKind::RParen {
-            loop {
-                let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
-                parameters.push(param);
-                if !self.eat(lexer, TokenKind::Comma) {
-                    break;
-                }
-                // A trailing comma
-                if lexer.current.kind == TokenKind::RParen {
-                    break;
-                }
-            }
-        }
-        if !self.expect(lexer, TokenKind::RParen) {
-            return None;
-        }
+        let parameters = self.parse_signature_parameters(lexer, mode, disallow_conditional)?;
         // jsdoc-type-pratt-parser does not require the `:` before the
         // return type.
         self.eat(lexer, TokenKind::Colon);
@@ -1071,26 +1078,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         optional: bool,
     ) -> Option<Box<TypeNodeData<'a>>> {
         let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional)?;
-        if !self.expect(lexer, TokenKind::LParen) {
-            return None;
-        }
-        let mut parameters = Vec::new();
-        if lexer.current.kind != TokenKind::RParen {
-            loop {
-                let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
-                parameters.push(param);
-                if !self.eat(lexer, TokenKind::Comma) {
-                    break;
-                }
-                // A trailing comma
-                if lexer.current.kind == TokenKind::RParen {
-                    break;
-                }
-            }
-        }
-        if !self.expect(lexer, TokenKind::RParen) {
-            return None;
-        }
+        let parameters = self.parse_signature_parameters(lexer, mode, disallow_conditional)?;
         // jsdoc-type-pratt-parser does not require the `:` before the
         // return type.
         self.eat(lexer, TokenKind::Colon);
@@ -1336,25 +1324,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 return None;
             }
             let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional)?;
-            if !self.expect(lexer, TokenKind::LParen) {
-                return None;
-            }
-            let mut parameters = Vec::new();
-            if lexer.current.kind != TokenKind::RParen {
-                loop {
-                    let param = self.parse_key_value_or_type(lexer, mode, disallow_conditional)?;
-                    parameters.push(param);
-                    if !self.eat(lexer, TokenKind::Comma) {
-                        break;
-                    }
-                    if lexer.current.kind == TokenKind::RParen {
-                        break;
-                    }
-                }
-            }
-            if !self.expect(lexer, TokenKind::RParen) {
-                return None;
-            }
+            let parameters = self.parse_signature_parameters(lexer, mode, disallow_conditional)?;
             // jsdoc-type-pratt-parser does not require the `:` before the
             // return type.
             self.eat(lexer, TokenKind::Colon);
@@ -1445,6 +1415,10 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         if !self.expect(lexer, TokenKind::RParen) {
             return None;
         }
+        if !function_parameter_names_allowed(&parameters, mode) {
+            self.type_diag(TypeDiagnosticKind::InvalidTypeExpression);
+            return None;
+        }
         let return_type = if self.eat(lexer, TokenKind::Colon) {
             Some(self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?)
         } else {
@@ -1491,6 +1465,18 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             }
         }
         if !self.expect(lexer, TokenKind::RParen) {
+            return None;
+        }
+        // As in jsdoc-type-pratt-parser, `new (…) => …` takes the parameters
+        // of an arrow function, and `new (…): …` those of `function(…)`.
+        let arrow = lexer.current.kind == TokenKind::Arrow;
+        let allowed = if arrow {
+            arrow_function_parameters_allowed(&parameters)
+        } else {
+            function_parameter_names_allowed(&parameters, mode)
+        };
+        if !allowed {
+            self.type_diag(TypeDiagnosticKind::InvalidTypeExpression);
             return None;
         }
         let (return_type, arrow) = if self.eat(lexer, TokenKind::Arrow) {
@@ -1572,8 +1558,21 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
     ) -> Option<Box<TypeNodeData<'a>>> {
         let start = lexer.current.start;
         lexer.bump();
-        let element =
-            self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::Prefix)?;
+        // As in jsdoc-type-pratt-parser, `readonly` takes the rest of the
+        // type, which is an array or a tuple (`readonly string[]`, not
+        // `readonly string[] | null` or `readonly Array<string>`).
+        let element = self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::All)?;
+        if !matches!(
+            element.as_ref(),
+            TypeNodeData::Tuple(_)
+                | TypeNodeData::Generic(TypeGeneric {
+                    brackets: GenericBrackets::Square,
+                    ..
+                })
+        ) {
+            self.type_diag(TypeDiagnosticKind::InvalidTypeExpression);
+            return None;
+        }
         let end = element.span().end;
         Some(Box::new(TypeNodeData::ReadonlyArray(TypeReadonlyArray {
             span: Span::new(start, end),
@@ -2082,6 +2081,15 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             TokenKind::Tilde => NamePathType::Inner,
             _ => return Some(left),
         };
+        // In typescript, `#` and `~` are only in `module:` paths, as in
+        // jsdoc-type-pratt-parser (`module:a#b`, not `Foo#bar`).
+        if mode.is_typescript()
+            && path_type != NamePathType::Property
+            && !starts_with_special_name_path(&left)
+        {
+            self.type_diag(TypeDiagnosticKind::InvalidTypeExpression);
+            return None;
+        }
         lexer.bump();
         if lexer.current.kind == TokenKind::Event && lexer.next.kind == TokenKind::Colon {
             return self.parse_event_name_path(lexer, mode, left, path_type);
@@ -2295,6 +2303,42 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             element,
         })))
     }
+}
+
+/// Whether the named parameters of `function(…)` (and of `new (…): …` in
+/// typescript) have the names that jsdoc-type-pratt-parser allows there:
+/// `this` and `new`, and `args` in typescript. closure has no named rest
+/// parameter (`...this: T`).
+fn function_parameter_names_allowed(parameters: &[Box<TypeNodeData<'_>>], mode: ParseMode) -> bool {
+    parameters.iter().all(|parameter| match parameter.as_ref() {
+        TypeNodeData::KeyValue(key_value) => {
+            let name = key_value.key;
+            (name == "this" || name == "new" || (mode.is_typescript() && name == "args"))
+                && !(mode.is_closure() && key_value.variadic)
+        }
+        _ => true,
+    })
+}
+
+/// Whether the parameters of an arrow function are names or named, as
+/// jsdoc-type-pratt-parser takes them (`assertPlainKeyValueOrNameResult`).
+fn arrow_function_parameters_allowed(parameters: &[Box<TypeNodeData<'_>>]) -> bool {
+    parameters.iter().all(|parameter| {
+        matches!(
+            parameter.as_ref(),
+            TypeNodeData::Name(_) | TypeNodeData::KeyValue(_)
+        )
+    })
+}
+
+/// Whether `node` is a special name path (`module:a`), or a name path on
+/// one (`module:a.b`).
+fn starts_with_special_name_path(node: &TypeNodeData<'_>) -> bool {
+    let mut node = node;
+    while let TypeNodeData::NamePath(path) = node {
+        node = &path.left;
+    }
+    matches!(node, TypeNodeData::SpecialNamePath(_))
 }
 
 /// Whether `node` is a JS reserved word as a name, also in parentheses, which
