@@ -86,11 +86,12 @@ Reasons:
 
 ### Pipeline Composition
 
-Split into 3 stages:
+Split into 4 stages:
 
 | Script | Role |
 | --- | --- |
 | `tasks/benchmark/scripts/jsdoc-linter-setup.mjs` | Auto-generates configs (2 × 5 × 1 = 10) + computes fixture stats → outputs to `.tmp/jsdoc-linter/` |
+| `tasks/benchmark/scripts/jsdoc-linter-diagnostics.mjs` | Runs each command once with JSON output and checks that the patterns do the same work (see [Diagnostics Check](#diagnostics-check)) → outputs `tasks/benchmark/results/jsdoc-linter-diagnostics-<fixture>-<rule-set>.json` |
 | `tasks/benchmark/scripts/jsdoc-linter-hyperfine.sh` | Shell script that calls hyperfine directly (per-fixture × per-rule-set, outputs `.json` / `.md`) |
 | `tasks/benchmark/scripts/jsdoc-linter-report.mjs` | Aggregates `.json` files and generates `tasks/benchmark/results/jsdoc-linter-hyperfine.md` |
 
@@ -98,11 +99,12 @@ Run:
 
 ```sh
 node tasks/benchmark/scripts/jsdoc-linter-setup.mjs && \
+  node tasks/benchmark/scripts/jsdoc-linter-diagnostics.mjs && \
   bash tasks/benchmark/scripts/jsdoc-linter-hyperfine.sh && \
   node tasks/benchmark/scripts/jsdoc-linter-report.mjs
 ```
 
-Or `pnpm --filter @ox-jsdoc/benchmark benchmark:jsdoc-linter`.
+Or `vp run @ox-jsdoc/benchmark#benchmark:jsdoc-linter`. `vp run @ox-jsdoc/benchmark#jsdoc-linter:diagnostics` runs only the first 2 stages.
 
 ### Hyperfine Options
 
@@ -117,7 +119,7 @@ hyperfine \
   ...
 ```
 
-- **`--ignore-failure`**: The target rules emit lint diagnostics against the fixtures, so the exit code is non-zero. Since we only compare execution time, ignore it.
+- **`--ignore-failure`**: The target rules emit lint diagnostics against the fixtures, so the exit code is non-zero. Since we only compare execution time, ignore it. hyperfine therefore cannot tell whether a command did its work; the diagnostics check runs before it for that.
 - **`--warmup 1`**: Reduces first-run variance from CLI startup, JIT, and config loading.
 - **`--runs 10`**: Suppresses stddev in results (with 5 runs, some patterns showed stddev/mean > 10%).
 - **The `cd <fixture> && <cmd>` wrap is required**: hyperfine has no per-command cwd flag, so a shell wrap is needed to evaluate `.` under the fixture. Skipping it makes hyperfine interpret `.` from its own cwd (= the invocation directory), causing the wrong tree to be linted.
@@ -144,7 +146,8 @@ For a fair comparison, **both linters run only the specified rules**:
 
 ```js
 {
-  files: ['**/*.{js,ts}'],
+  // The fixture's glob: '**/*.js' (js) or '**/*.ts' (ts)
+  files: ['**/*.ts'],
   plugins: { jsdoc },
   // The TypeScript fixture must specify a parser (espree cannot read TS syntax)
   languageOptions: { parser: tsParser },  // ts fixture only
@@ -175,15 +178,27 @@ The ESLint CLI command also passes `--no-config-lookup --no-warn-ignored` to avo
     "style": "off",
     "suspicious": "off"
   },
-  "rules": { "jsdoc/empty-tags": "error" }
+  "overrides": [{ "files": ["**/*.ts"], "rules": { "jsdoc/empty-tags": "error" } }]
 }
 ```
 
 Additionally, pass `--disable-nested-config --disable-unicorn-plugin --disable-oxc-plugin --disable-typescript-plugin` on the CLI. `--disable-nested-config` prevents fixture-local config discovery, and the plugin flags prevent Oxlint's default plugin rules from being enabled.
 
+The rules sit in `overrides` with the same glob as ESLint's `files`. Oxlint lints every file that it supports, so with top-level `rules` it would also run them on files that ESLint does not check: the `.ts` file of the `js` fixture, and the 43 `.js` / `.cjs` / `.tsx` files of the `ts` fixture (which include large bundled libraries such as `dompurify.js` and `marked.js`). Oxlint still reads those files; only the rules are limited.
+
 ### Config Generation
 
-Hand-managing multiple configs makes configuration drift likely, so `setup.mjs` generates them under `tasks/benchmark/.tmp/jsdoc-linter/<fixture>/<pattern>/<rule-set>/` (under `.gitignore`, not committed).
+Hand-managing multiple configs makes configuration drift likely, so `setup.mjs` generates them under `tasks/benchmark/.tmp/jsdoc-linter/<fixture>/<pattern>/<rule-set>/` (under `.gitignore`, not committed). The fixtures, rule sets and patterns are defined once in `tasks/benchmark/scripts/lib/jsdoc-linter.mjs`.
+
+### Diagnostics Check
+
+A timing is only meaningful when the commands do the same work. `jsdoc-linter-diagnostics.mjs` runs each command once, with the same flags and from the same directory as `jsdoc-linter-hyperfine.sh`, and with JSON output:
+
+- It counts the diagnostics of the target rules per pattern, the files each linter read, and the other messages (ESLint's own notices, parse errors of broken fixture files).
+- `eslint-jsdoc-upstream`, `eslint-ox-jsdoc-single`, `eslint-ox-jsdoc-batch` and `oxlint-ox-jsdoc-batch` run the same `eslint-plugin-jsdoc` rules, so they must report the same diagnostics (file, line, rule and message). If they do not, it prints the differences and exits with 1, and `benchmark:jsdoc-linter` stops before hyperfine.
+- `oxlint-jsdoc-native` is another implementation of the rules, so its count is reported only.
+
+`jsdoc-linter-report.mjs` adds the counts to the report. The fork once skipped most comments of the files after the first one on Oxlint (an `iterateAllJsdocs` bug, since fixed), and the timings alone could not show it.
 
 ## Benchmark eslint-plugin-jsdoc Fork
 
@@ -266,7 +281,7 @@ The linter benchmark uses `hyperfine` (shell driver), the parser-only benchmark 
 Parser-only scripts are in-process Node.js measurements. They should be run through the package scripts, which use `node --expose-gc`, for example:
 
 ```sh
-pnpm --filter @ox-jsdoc/benchmark benchmark:parse-batch
+vp run @ox-jsdoc/benchmark#benchmark:parse-batch
 ```
 
 `tasks/benchmark/scripts/lib/measure.mjs` wraps `mitata.measure()` with a multi-round aggregation layer. Unless a script passes explicit options, the defaults are:

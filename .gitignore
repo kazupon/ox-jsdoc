@@ -48,4 +48,4 @@ packages/jsdoccomment/.dts/
 tasks/benchmark/.tmp
 tasks/benchmark/results/*
 !tasks/benchmark/results/jsdoc-linter-hyperfine.json
-!tasks/benchmark/results/jsdoc-linter-hyperfine.json.md
+!tasks/benchmark/results/jsdoc-linter-hyperfine.md
