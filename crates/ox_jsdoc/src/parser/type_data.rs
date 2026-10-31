@@ -136,13 +136,14 @@ impl ParseMode {
 // TypeNodeData enum + 47 variant structs (mirrors `TypeNode`).
 // ============================================================================
 
-/// Parsed type expression. Tree of variants matching the binary AST's 47
+/// Parsed type expression. Tree of variants matching the binary AST's 48
 /// TypeNode kinds.
 #[derive(Debug)]
 #[allow(missing_docs)]
 pub enum TypeNodeData<'a> {
     Name(TypeName<'a>),
     Number(TypeNumber<'a>),
+    BigInt(TypeBigInt<'a>),
     StringValue(TypeStringValue<'a>),
     Null(TypeNull),
     Undefined(TypeUndefined),
@@ -198,6 +199,7 @@ impl<'a> TypeNodeData<'a> {
         match self {
             Self::Name(n) => n.span,
             Self::Number(n) => n.span,
+            Self::BigInt(n) => n.span,
             Self::StringValue(n) => n.span,
             Self::Null(n) => n.span,
             Self::Undefined(n) => n.span,
@@ -258,6 +260,13 @@ mod structs {
     }
     #[derive(Debug)]
     pub struct TypeNumber<'a> {
+        pub span: Span,
+        pub value: &'a str,
+    }
+    /// A BigInt literal type (`1n`). `value` is the text as written,
+    /// without the `n` (`-007` for `-007n`).
+    #[derive(Debug)]
+    pub struct TypeBigInt<'a> {
         pub span: Span,
         pub value: &'a str,
     }
@@ -502,6 +511,8 @@ mod structs {
         pub return_type: Box<TypeNodeData<'a>>,
         pub type_parameters: Vec<Box<TypeNodeData<'a>>>,
         pub quote: Option<QuoteStyle>,
+        /// `a?(): R`.
+        pub optional: bool,
     }
     #[derive(Debug)]
     pub struct TypeIndexedAccessIndex<'a> {

@@ -33,7 +33,7 @@ use super::nodes::comment_ast::{
     LazyJsdocText, LazyJsdocTypeLine, LazyJsdocTypeSource,
 };
 use super::nodes::type_node::{
-    LazyTypeAny, LazyTypeAsserts, LazyTypeAssertsPlain, LazyTypeCallSignature,
+    LazyTypeAny, LazyTypeAsserts, LazyTypeAssertsPlain, LazyTypeBigInt, LazyTypeCallSignature,
     LazyTypeComputedMethod, LazyTypeComputedProperty, LazyTypeConditional,
     LazyTypeConstructorSignature, LazyTypeFunction, LazyTypeGeneric, LazyTypeImport,
     LazyTypeIndexSignature, LazyTypeIndexedAccessIndex, LazyTypeInfer, LazyTypeIntersection,
@@ -157,6 +157,7 @@ pub trait LazyJsdocVisitor<'a> {
         match node {
             LazyTypeNode::Name(n) => self.visit_type_name(n),
             LazyTypeNode::Number(n) => self.visit_type_number(n),
+            LazyTypeNode::BigInt(n) => self.visit_type_bigint(n),
             LazyTypeNode::StringValue(n) => self.visit_type_string_value(n),
             LazyTypeNode::Property(n) => self.visit_type_property(n),
             LazyTypeNode::SpecialNamePath(n) => self.visit_type_special_name_path(n),
@@ -213,6 +214,8 @@ pub trait LazyJsdocVisitor<'a> {
     fn visit_type_name(&mut self, _node: LazyTypeName<'a>) {}
     /// Visit a `TypeNumber` leaf.
     fn visit_type_number(&mut self, _node: LazyTypeNumber<'a>) {}
+    /// Visit a `TypeBigInt` leaf.
+    fn visit_type_bigint(&mut self, _node: LazyTypeBigInt<'a>) {}
     /// Visit a `TypeStringValue` leaf.
     fn visit_type_string_value(&mut self, _node: LazyTypeStringValue<'a>) {}
     /// Visit a `TypeProperty` leaf.

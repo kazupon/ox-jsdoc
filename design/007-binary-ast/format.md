@@ -144,6 +144,8 @@ Examples: 0x10 = Major 1, Minor 0 (initial release)
 
 **Minor 2** (`0x12`): appends the `tag` field (the name) to the Extended Data of `JsdocInlineTag` (bytes 18-23). A decoder for Minor 2 reads that field only in a buffer of Minor 2 or later, because a Minor 0 or 1 record ends after 18 bytes; an older decoder does not read it
 
+**Minor 3** (`0x13`): adds the `TypeBigInt` (`0xAF`) kind (`1n`), and gives a meaning to reserved Common Data bits: bit4 of `TypeMethodSignature` is `optional` (`a?(): R`), and bit0 / bit1 of `TypeTypeParameter` tell that a constraint / a default follows the name. A decoder for Minor 2 or older does not know `TypeBigInt` (the JS decoder throws `unknown Kind`, the Rust decoder gives `None`) and does not read the bits. A decoder for Minor 3 reads the bits of `TypeTypeParameter` only in a buffer of Minor 3 or later; in an older buffer, whose bits are 0, it reads the elements by their order (a second element is the constraint, a third the default). The bit of `TypeMethodSignature` needs no such check: an older buffer has no optional method
+
 **Implementation example (Rust)**:
 
 ```rust
@@ -1011,7 +1013,7 @@ In practice this never trips in real workloads: per-file batches in oxlint inter
 The string and child node configurations of TypeNode are classified into the following 3 patterns by variant:
 
 1. **"String only" type** — only `value: &str`, no children → Set the node's own Node Data to **`StringInline` (`0b11`)** when the value fits the inline-leaf encoding (length ≤ 255 byte AND offset ≤ 4 MB-1) — packs `(offset:u22, length:u8)` into the 30-bit payload directly. Falls back to **`String` (`0b01`)** + 30-bit String Offsets index for longer values. No child nodes (saves 24 bytes/node overhead).
-   - Applies to: `TypeName`, `TypeNumber`, `TypeStringValue`, `TypeProperty`, `TypeSpecialNamePath`
+   - Applies to: `TypeName`, `TypeNumber`, `TypeBigInt`, `TypeStringValue`, `TypeProperty`, `TypeSpecialNamePath`
    - Auxiliary information (quote, special_type, etc.) is stored in Common Data
 
 2. **"Children only" type** — no string fields, has fixed-arity child nodes → Set Node Data to **Children type (0b00)** and store a 30-bit bitmask
@@ -1097,7 +1099,8 @@ Common Data (6 bits):
   bits[0:1] = quote (3-state: 0=None / 1=Single / 2=Double)
   bit2 = has_parameters (a TypeParameterList child is emitted when set)
   bit3 = has_type_parameters (ditto)
-  bit4-5 = reserved (0)
+  bit4 = optional (`a?(): R`, Minor 3)
+  bit5 = reserved (0)
 
 Children:
   When bit2 = 1, a TypeParameterList child holding the parameters list
@@ -1165,7 +1168,7 @@ Examples:
 | `TypeKeyValue` | **6 bytes** | 2 bits (optional, variadic) | 0 or 1 (TypeNode) |
 | `TypeIndexSignature` | **6 bytes** | 0 bits | 1 (TypeNode required) |
 | `TypeMappedType` | **6 bytes** | 0 bits | 1 (TypeNode required) |
-| `TypeMethodSignature` | **6 bytes** | 4 bits (quote + has\_\* × 2) | 1-3 (params/return/typeParams) |
+| `TypeMethodSignature` | **6 bytes** | 5 bits (quote + has\_\* × 2 + optional) | 1-3 (params/return/typeParams) |
 | `TypeTemplateLiteral` | **2 + 6N bytes** (variable) | 0 bits | Variable (interpolations as direct children) |
 | `TypeSymbol` | **6 bytes** | 1 bit (has_element) | 0 or 1 (TypeNode) |
 
@@ -1922,9 +1925,9 @@ Classified into 4 patterns by node kind (see the node-kind table for details):
 | A. 1-bit boolean | 1 | `JsdocTag.optional`, `JsdocParameterName.optional` |
 | B. 2-bit enum (3-4 states) | 2 | `TypeStringValue.quote` (None/Single/Double) |
 | C. 3-bit enum (5-8 states) | 3 | `JsdocInlineTag.format` (Plain/Pipe/Space/Prefix/Unknown) |
-| D. Compound field (boolean × N + enum) | 3-4 | `TypeMethodSignature` (2-bit quote + 2 booleans) |
+| D. Compound field (boolean × N + enum) | 3-5 | `TypeMethodSignature` (2-bit quote + 3 booleans) |
 
-The maximum bits used is **4 / 6** (`TypeMethodSignature`, `TypeObjectField`, `TypeSpecialNamePath`). The remaining 2 bits are reserved for future extension.
+The maximum bits used is **5 / 6** (`TypeMethodSignature`). The remaining bits are reserved for future extension.
 
 ### Per-node-kind usage
 
@@ -1941,7 +1944,8 @@ The maximum bits used is **4 / 6** (`TypeMethodSignature`, `TypeObjectField`, `T
 | `TypeFunction` | bit0 = constructor, bit1 = arrow, bit2 = parenthesis |
 | `TypeObject` | bits[0:2] = separator (5 variants + None) |
 | `TypeStringValue` / `TypeProperty` | bits[0:1] = quote (3-state: 0=None / 1=Single / 2=Double). Note: `TypeStringValue.quote` is `QuoteStyle` (Required), so the encoder always writes 1 or 2 (the `0=None` state is unused). `TypeProperty.quote` is `Option<QuoteStyle>`, so all 3 states are valid |
-| `TypeMethodSignature` | bits[0:1] = quote (3-state: 0=None / 1=Single / 2=Double), bit2 = has_parameters (a TypeParameterList child is emitted when set), bit3 = has_type_parameters (ditto) |
+| `TypeMethodSignature` | bits[0:1] = quote (3-state: 0=None / 1=Single / 2=Double), bit2 = has_parameters (a TypeParameterList child is emitted when set), bit3 = has_type_parameters (ditto), bit4 = optional (`a?(): R`, Minor 3) |
+| `TypeTypeParameter` | bit0 = has_constraint, bit1 = has_default (Minor 3; which of the elements after the name are there) |
 | `TypeNamePath` | bits[0:1] = path_type (4 variants) |
 | `TypeSpecialNamePath` | bits[0:1] = special_type (3 variants) + bits[2:3] = quote (3-state) |
 | `TypeObjectField` | bit0 = optional, bit1 = readonly, bits[2:3] = quote (3-state) |
@@ -2019,7 +2023,7 @@ ox-jsdoc is a **parser-only implementation with no semantic analysis**, so flags
 
 ## Node catalog matrix
 
-All 62 variants + 1 sentinel + 1 reserved-only discriminant (`NodeList`, kept for legacy buffer compatibility but **never emitted by the encoder** — child lists are now expressed via inline `(head_index, count)` metadata in the parent's Extended Data block) = **64 discriminants**, listed by Node Data type / Common Data usage / Extended Data size (for use when implementing the decoder).
+All 63 variants + 1 sentinel + 1 reserved-only discriminant (`NodeList`, kept for legacy buffer compatibility but **never emitted by the encoder** — child lists are now expressed via inline `(head_index, count)` metadata in the parent's Extended Data block) = **65 discriminants**, listed by Node Data type / Common Data usage / Extended Data size (for use when implementing the decoder).
 
 For the detailed layout of the Kind number space (0x00 = Sentinel, 0x01-0x0F = comment AST, 0x7F = NodeList (reserved-only, never emitted), 0x80-0xFF = TypeNode), see [ast-nodes.md](./ast-nodes.md#kind-number-space).
 
@@ -2072,11 +2076,11 @@ For `JsdocBlock` and `JsdocTag`, the four Extended Data sizes are ordered as bas
 >
 > - **0x0A `JsdocBorrowsTagBody`** and **0x0B `JsdocRawTagBody`** — the typed AST defines `JsdocTagBody::Borrows` / `JsdocTagBody::Raw` variants (for `@borrows source as target` / opaque tag bodies), but no parser path currently produces them. `@borrows` and friends are emitted as `JsdocGenericTagBody` (Kind 0x09). The discriminants are reserved so a future specialization can be added without renumbering.
 
-### TypeNode (47 kinds)
+### TypeNode (48 kinds)
 
 Classified per "TypeNode string/child configuration is split into 3 patterns by variant" (above):
 
-#### Pattern 1: String only (5 kinds)
+#### Pattern 1: String only (6 kinds)
 
 Node Data type tag is **`TypeTag::String` (0b01) ‖ `TypeTag::StringInline` (0b11)** — the encoder picks per-emit by size (see [Per-node-kind type tag determination rules](#per-node-kind-type-tag-determination-rules)).
 
@@ -2084,6 +2088,7 @@ Node Data type tag is **`TypeTag::String` (0b01) ‖ `TypeTag::StringInline` (0b
 | --- | --- | --- |
 | 0x80 | `TypeName` | (unused) |
 | 0x81 | `TypeNumber` | (unused) |
+| 0xAF | `TypeBigInt` (Minor 3) | (unused). The value is the digits without the `n` (`-007` for `-007n`) |
 | 0x82 | `TypeStringValue` | bits[0:1] = quote (3-state) |
 | 0xA3 | `TypeProperty` | bits[0:1] = quote (3-state) |
 | 0x8F | `TypeSpecialNamePath` | bits[0:1] = special_type (3 variants) + bits[2:3] = quote (3-state) |
@@ -2125,12 +2130,12 @@ The 7 kinds in the first half of the table (Union, Intersection, Generic, Object
 | `TypeGeneric` | bit0=brackets, bit1=dot | 8 bytes (elements list metadata) | 1 left + Variable (elements) |
 | `TypeObject` | bits[0:2] = separator | 8 bytes (elements list metadata) | Variable (elements) |
 | `TypeTuple` | (unused) | 8 bytes (elements list metadata) | Variable (elements) |
-| `TypeTypeParameter` | (unused) | 8 bytes (elements list metadata) | Variable |
+| `TypeTypeParameter` | bit0=has_constraint, bit1=has_default (Minor 3) | 8 bytes (elements list metadata) | 1-3 (name, then constraint and default when there are) |
 | `TypeParameterList` | (unused) | 8 bytes (elements list metadata) | Variable (elements) |
 | `TypeKeyValue` | bit0=optional, bit1=variadic | 6 bytes (key StringField) | 0 or 1 |
 | `TypeIndexSignature` | (unused) | 6 bytes (key StringField) | 1 (right) |
 | `TypeMappedType` | (unused) | 6 bytes (key StringField) | 1 (right) |
-| `TypeMethodSignature` | bits[0:1]=quote, bit2=has_parameters, bit3=has_type_parameters | 6 bytes (name StringField) | 1-3 (parameters?/return/typeParameters?) |
+| `TypeMethodSignature` | bits[0:1]=quote, bit2=has_parameters, bit3=has_type_parameters, bit4=optional (Minor 3) | 6 bytes (name StringField) | 1-3 (parameters?/return/typeParameters?) |
 | `TypeTemplateLiteral` | (unused) | 2+6N bytes (literal count + N × StringField) | Variable (interpolations as direct children) |
 | `TypeSymbol` | bit0=has_element | 6 bytes (value StringField) | 0 or 1 (element) |
 

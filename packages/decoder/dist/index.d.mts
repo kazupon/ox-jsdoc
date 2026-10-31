@@ -586,6 +586,9 @@ declare const RemoteTypeName_base: LazyNodeConstructor;
 export declare class RemoteTypeName extends RemoteTypeName_base {}
 declare const RemoteTypeNumber_base: LazyNodeConstructor;
 export declare class RemoteTypeNumber extends RemoteTypeNumber_base {}
+declare const RemoteTypeBigInt_base: LazyNodeConstructor;
+/** `TypeBigInt` (minor 3): the digits of `1n` as written, without the `n`. */
+export declare class RemoteTypeBigInt extends RemoteTypeBigInt_base {}
 declare const RemoteTypeStringValue_base: LazyNodeConstructor;
 export declare class RemoteTypeStringValue extends RemoteTypeStringValue_base {}
 declare const RemoteTypeProperty_base: LazyNodeConstructor;
@@ -610,8 +613,33 @@ export declare class RemoteTypeObject implements LazyNode {
 }
 declare const RemoteTypeTuple_base: LazyNodeConstructor;
 export declare class RemoteTypeTuple extends RemoteTypeTuple_base {}
-declare const RemoteTypeTypeParameter_base: LazyNodeConstructor;
-export declare class RemoteTypeTypeParameter extends RemoteTypeTypeParameter_base {}
+/**
+ * `TypeTypeParameter` — the name, then the constraint and the default when
+ * there are, as its `elements`. Common Data (minor 3): bit0 = a constraint,
+ * bit1 = a default. A buffer older than minor 3 has no bits; there, a second
+ * element is the constraint and a third the default, in the order of the
+ * writer.
+ */
+export declare class RemoteTypeTypeParameter implements LazyNode {
+  readonly type = "TypeTypeParameter";
+  readonly _internal: RemoteInternal;
+  constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
+  get range(): readonly [number, number];
+  get parent(): LazyNode | null;
+  get elements(): readonly LazyNode[];
+  /** Whether a constraint follows the name (`T extends U`). */
+  get hasConstraint(): boolean;
+  /** Whether a default follows the name or the constraint (`T = U`). */
+  get hasDefault(): boolean;
+  /** The name (`T`). */
+  get name(): LazyNode | null;
+  /** The constraint (`U` of `T extends U`). */
+  get constraint(): LazyNode | null;
+  /** The default (`U` of `T = U`). */
+  get defaultValue(): LazyNode | null;
+  toJSON(): RemoteJsonObject;
+  [inspectSymbol](): object;
+}
 declare const RemoteTypeParameterList_base: LazyNodeConstructor;
 export declare class RemoteTypeParameterList extends RemoteTypeParameterList_base {}
 declare const RemoteTypeParenthesis_base: LazyNodeConstructor;
@@ -779,6 +807,8 @@ export declare class RemoteTypeMethodSignature implements LazyNode {
   get quote(): number;
   get hasParameters(): boolean;
   get hasTypeParameters(): boolean;
+  /** `a?(): R` (bit4, minor 3). An older buffer has no optional method. */
+  get optional(): boolean;
   get name(): string;
   toJSON(): RemoteJsonObject;
   [inspectSymbol](): object;
@@ -841,7 +871,7 @@ export declare class RemoteNodeListNode implements LazyNode {
   [inspectSymbol](): object;
 }
 /**
- * Visitor keys for every Remote* node kind (62 = 15 Comment AST + 47 TypeNode).
+ * Visitor keys for every Remote* node kind (63 = 15 Comment AST + 48 TypeNode).
  *
  * Each entry maps a node `type` name to the **traversable child property
  * names** in canonical visit order. Mirrors the jsdoccomment / ESLint
@@ -878,6 +908,7 @@ export declare const jsdocVisitorKeys: Readonly<{
   JsdocText: never[];
   TypeName: never[];
   TypeNumber: never[];
+  TypeBigInt: never[];
   TypeStringValue: never[];
   TypeProperty: never[];
   TypeSpecialNamePath: never[];

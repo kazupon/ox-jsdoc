@@ -30,6 +30,7 @@ fn write_node(buf: &mut String, node: &TypeNodeData<'_>) {
     match node {
         TypeNodeData::Name(n) => buf.push_str(n.value),
         TypeNodeData::Number(n) => buf.push_str(n.value),
+        TypeNodeData::BigInt(n) => write_bigint(buf, n.value),
         TypeNodeData::StringValue(n) => buf.push_str(n.value),
         TypeNodeData::Null(_) => buf.push_str("null"),
         TypeNodeData::Undefined(_) => buf.push_str("undefined"),
@@ -91,6 +92,25 @@ fn write_node(buf: &mut String, node: &TypeNodeData<'_>) {
         }
         TypeNodeData::ComputedMethod(n) => write_computed_method(buf, n),
     }
+}
+
+/// A BigInt as jsdoc-type-pratt-parser prints it, `BigInt(text).toString()`
+/// and the `n`: without the leading zeros (`007n` is `7n`, `-0n` is `0n`).
+fn write_bigint(buf: &mut String, value: &str) {
+    let (negative, digits) = match value.strip_prefix('-') {
+        Some(digits) => (true, digits),
+        None => (false, value),
+    };
+    let digits = digits.trim_start_matches('0');
+    if digits.is_empty() {
+        buf.push('0');
+    } else {
+        if negative {
+            buf.push('-');
+        }
+        buf.push_str(digits);
+    }
+    buf.push('n');
 }
 
 fn write_union(buf: &mut String, n: &TypeUnion<'_>) {
@@ -466,6 +486,9 @@ fn write_constructor_signature(buf: &mut String, n: &TypeConstructorSignature<'_
 
 fn write_method_signature(buf: &mut String, n: &TypeMethodSignature<'_>) {
     buf.push_str(n.name);
+    if n.optional {
+        buf.push('?');
+    }
     if !n.type_parameters.is_empty() {
         buf.push('<');
         write_comma_separated(buf, &n.type_parameters);

@@ -11,7 +11,7 @@ The Rust side of the JSDoc parser runs at nanosecond speeds, but transferring th
 3. Lazy node materialization (only accessed nodes become JS objects)
 4. Runs on a single JS decoder across all environments (NAPI / WASM / IPC)
 5. Preserves the ESTree-compatible shape for lint rule authors
-6. Transfers the complete AST including parsedType (TypeNode, 47 kinds) in a single format
+6. Transfers the complete AST including parsedType (TypeNode, 48 kinds) in a single format
 
 ## Design core
 
@@ -37,7 +37,7 @@ Each chapter is split into an independent file. We recommend reading them in ord
 
 2. [AST Nodes (Catalog of target nodes)](./ast-nodes.md)
    - 15 comment AST kinds
-   - 47 TypeNode AST kinds
+   - 48 TypeNode AST kinds
    - Kind number space (single-instruction optimization)
    - Phase 4 dispatch table code generation
 
@@ -55,7 +55,7 @@ Each chapter is split into an independent file. We recommend reading them in ord
    - Nodes section (24 bytes/node, flat array)
    - Node Data bit packing (32 bit, 4 type tags)
    - Common Data (6-bit, small per-kind data)
-   - Node catalog matrix (62 nodes + 1 Sentinel + 1 reserved-only `NodeList` discriminant = 64 entries; `NodeList` is reserved-only and never emitted by the encoder)
+   - Node catalog matrix (63 nodes + 1 Sentinel + 1 reserved-only `NodeList` discriminant = 65 entries; `NodeList` is reserved-only and never emitted by the encoder)
 
    Each section follows the unified structure of "Design overview / Layout / Field details / Implementation sketch / Size and performance / Differences from tsgo", accompanied by SVG diagrams.
 
@@ -130,7 +130,7 @@ Each chapter is split into an independent file. We recommend reading them in ord
 - [JS binding](../003-js-binding/) — JS binding design
 - [WASM binding](../004-wasm/) — WASM binding design
 - [jsdoccomment compatibility](../005-jsdoccomment-compat/README.md) — Background on compat_mode
-- [parsedType](../006-parsed-type/README.md) — Design of the 47 TypeNode kinds
+- [parsedType](../006-parsed-type/README.md) — Design of the TypeNode kinds
 
 ## References
 

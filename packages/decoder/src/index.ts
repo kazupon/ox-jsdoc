@@ -31,7 +31,7 @@ export {
 } from './internal/nodes/jsdoc.ts'
 export type { JsdocCommentInput } from './internal/nodes/jsdoc.ts'
 
-// TypeNode classes (47).
+// TypeNode classes (48).
 export {
   RemoteTypeAny,
   RemoteTypeAsserts,
@@ -59,6 +59,7 @@ export {
   RemoteTypeNull,
   RemoteTypeNullable,
   RemoteTypeNumber,
+  RemoteTypeBigInt,
   RemoteTypeObject,
   RemoteTypeObjectField,
   RemoteTypeOptional,
@@ -85,7 +86,7 @@ export {
 export { RemoteNodeListNode } from './internal/nodes/node-list-node.ts'
 
 /**
- * Visitor keys for every Remote* node kind (62 = 15 Comment AST + 47 TypeNode).
+ * Visitor keys for every Remote* node kind (63 = 15 Comment AST + 48 TypeNode).
  *
  * Each entry maps a node `type` name to the **traversable child property
  * names** in canonical visit order. Mirrors the jsdoccomment / ESLint
@@ -131,9 +132,10 @@ export const jsdocVisitorKeys = Object.freeze({
   JsdocIdentifier: [],
   JsdocText: [],
 
-  // TypeNode — leaves (10)
+  // TypeNode — leaves (11)
   TypeName: [],
   TypeNumber: [],
+  TypeBigInt: [],
   TypeStringValue: [],
   TypeProperty: [],
   TypeSpecialNamePath: [],

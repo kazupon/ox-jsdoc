@@ -1,6 +1,6 @@
 # AST Nodes (Catalog of target nodes)
 
-ox-jsdoc has two AST families — **comment AST (15 kinds)** and **TypeNode AST (47 kinds)** — for a total of 62 kinds, plus 1 structural special node (`Sentinel`) and 1 reserved-only discriminant (`NodeList`, kept for legacy buffer compatibility but **never emitted by the encoder** — variable-length child lists are now expressed via inline `(head_index, count)` metadata in the parent's Extended Data block), handling **64 discriminants in total** within a single Kind space (u8, 0x00-0xFF).
+ox-jsdoc has two AST families — **comment AST (15 kinds)** and **TypeNode AST (48 kinds)** — for a total of 63 kinds, plus 1 structural special node (`Sentinel`) and 1 reserved-only discriminant (`NodeList`, kept for legacy buffer compatibility but **never emitted by the encoder** — variable-length child lists are now expressed via inline `(head_index, count)` metadata in the parent's Extended Data block), handling **65 discriminants in total** within a single Kind space (u8, 0x00-0xFF).
 
 ## Design overview
 
@@ -12,7 +12,7 @@ Main design goals:
 - **Cluster TypeNode in MSB-set range (0x80-0xFF)**: the most frequent TypeNode check can run in a **single instruction** with `(kind & 0x80) != 0` (hot path for ESLint plugins / Rust walkers)
 - **Reserve 0x7F as the `NodeList` discriminant — never emitted**: kept on the **boundary** between TypeNode (upper half) and comment AST (lower half) so the slot stays clearly visible in debug output. The encoder no longer emits NodeList wrappers (variable-length lists use inline ED metadata `(head_index, count)` at known per-Kind byte offsets); the discriminant is retained purely for legacy-buffer compatibility
 - **Pin Sentinel to 0x00**: dedicated to `node[0]`, used so that `parent_index = 0` / `next_sibling = 0` mean "no link" (see the format.md Nodes section)
-- **Sufficient growth room**: TypeNode has 83 spare slots / comment AST has 48 spare slots / globally reserved 63 slots (for new categories). Persistence also guaranteed by the protobuf-style fixed numbering policy
+- **Sufficient growth room**: TypeNode has 80 spare slots / comment AST has 48 spare slots / globally reserved 63 slots (for new categories). Persistence also guaranteed by the protobuf-style fixed numbering policy
 - **Expand variant-bearing enums into independent Kinds**: expanding Rust's `JsdocTagBody` (3 variants) / `JsdocTagValue` (4 variants) into separate Kinds minimizes decoder dispatch cost and maintains ESTree compatibility (variant names visible via `node.type`)
 
 Notes:
@@ -53,10 +53,10 @@ Notes: the Rust enums `JsdocTagBody` (Generic|Borrows|Raw) and `JsdocTagValue` (
 
 ## TypeNode AST (`crates/ox_jsdoc/src/type_parser/ast.rs`)
 
-The 47 `TypeNode` variants are each treated as an independent Kind:
+The 48 `TypeNode` variants are each treated as an independent Kind:
 
 ```text
-Basic (7):       Name, Number, StringValue, Null, Undefined, Any, Unknown
+Basic (8):       Name, Number, BigInt, StringValue, Null, Undefined, Any, Unknown
 Compound (7):    Union, Intersection, Generic, Function, Object, Tuple, Parenthesis
 Name path (2):   NamePath, SpecialNamePath
 Modifier (4):    Nullable, NotNullable, Optional, Variadic
@@ -84,20 +84,20 @@ Small enums attached to TypeNodes (storable in 6-bit common data):
 
 ## Kind number space
 
-62 kinds + Sentinel + 1 reserved-only `NodeList` discriminant = 64 discriminants. We partition `u8` (0-255) as follows so that **the hot-path TypeNode check completes in a single instruction**:
+63 kinds + Sentinel + 1 reserved-only `NodeList` discriminant = 65 discriminants. We partition `u8` (0-255) as follows so that **the hot-path TypeNode check completes in a single instruction**:
 
 ```text
 0x00         Sentinel               (1)
 0x01 - 0x3F  Comment AST            (63 slots: 15 kinds + 48 spare)
 0x40 - 0x7E  Globally reserved      (63 slots, for new categories)
 0x7F         NodeList               (1, reserved-only boundary slot — never emitted)
-0x80 - 0xFF  TypeNode               (128 slots: 47 kinds + 81 spare)
+0x80 - 0xFF  TypeNode               (128 slots: 48 kinds + 80 spare)
 ```
 
 Design decisions:
 
 - **Place TypeNode in 0x80-0xFF (upper bit set)**: the hot-path TypeNode check becomes a single MSB test (`(kind & 0x80) != 0`), compiling to a single instruction such as x86 `TEST AL, 0x80` / ARM `TST W0, #0x80`
-- **TypeNode 81 spare slots**: leaves **more than double** the growth room for TypeScript spec additions (`satisfies`, `using`, decorator metadata, etc.) and jsdoc-type-pratt-parser extensions
+- **TypeNode 80 spare slots**: leaves **more than double** the growth room for TypeScript spec additions (`satisfies`, `using`, decorator metadata, etc.) and jsdoc-type-pratt-parser extensions
 - **Comment AST 48 spare slots**: leaves room for Markdown extensions (headings, lists, tables, etc.), Diagnostic-related additions, multi-comment containers, and so on
 - **Reserve 0x7F as the NodeList slot — kept for legacy buffer compatibility but never emitted**: variable-length child lists are stored as inline `(head_index, count)` metadata at known per-Kind byte offsets in the parent's Extended Data block (NodeList-wrapper-elimination format change). The discriminant is reserved on the boundary between globally reserved and TypeNode (also clear in debug)
 
@@ -169,7 +169,7 @@ enum TypeNode {
 
 - Changing an assigned number is **strictly forbidden** (CI checks the diff)
 - Removed node kinds are kept as gaps (e.g. `// reserved 0x05 (former JsdocXxx)`)
-- New additions are assigned to the spare slots at the end of the category (e.g., new comment AST starts at 0x10, new TypeNode starts at 0xAF; `TypeComputedProperty` 0xAD and `TypeComputedMethod` 0xAE were the first additions, in protocol Minor 1)
+- New additions are assigned to the spare slots at the end of the category (e.g., new comment AST starts at 0x10, new TypeNode starts at 0xB0; `TypeComputedProperty` 0xAD and `TypeComputedMethod` 0xAE were the first additions, in protocol Minor 1, and `TypeBigInt` 0xAF came in Minor 3)
 - Same proven policy as protobuf and tsgo
 
 ### Code generation for the dispatch table (Phase 4)

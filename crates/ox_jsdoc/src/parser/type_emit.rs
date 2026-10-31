@@ -18,6 +18,8 @@
 //! - Pattern 3 mixed nodes (`TypeKeyValue` etc.) place the optional child
 //!   directly after the parent without a Children bitmask.
 
+use oxc_span::Span;
+
 use crate::writer::nodes::type_node::*;
 use crate::writer::{BinaryWriter, ExtOffset, NodeIndex};
 
@@ -52,6 +54,13 @@ pub(crate) fn emit_parsed_type_node(
         TypeNodeData::Number(n) => {
             let v = writer.intern_source_or_string_for_leaf_payload(n.value, n.span);
             write_type_number(writer, n.span, parent_index, v).as_u32()
+        }
+        TypeNodeData::BigInt(n) => {
+            // The value is the source before the `n`, so it is still read
+            // from the source.
+            let digits = Span::new(n.span.start, n.span.end - 1);
+            let v = writer.intern_source_or_string_for_leaf_payload(n.value, digits);
+            write_type_bigint(writer, n.span, parent_index, v).as_u32()
         }
         TypeNodeData::StringValue(n) => {
             let v = writer.intern_source_or_string_for_leaf_payload(n.value, n.span);
@@ -101,7 +110,8 @@ pub(crate) fn emit_parsed_type_node(
         }
         TypeNodeData::TypeParameter(n) => {
             // TypeTypeParameter wraps name + optional constraint + optional default
-            // as a single elements list per the lazy decoder shape.
+            // as a single elements list per the lazy decoder shape. Its Common
+            // Data tells which of the two follow the name.
             let mut wrapped: Vec<&TypeNodeData<'_>> = Vec::with_capacity(3);
             wrapped.push(&n.name);
             if let Some(c) = n.constraint.as_ref() {
@@ -111,7 +121,13 @@ pub(crate) fn emit_parsed_type_node(
                 wrapped.push(d);
             }
             emit_borrowed_elements(writer, parent_index, n.span, &wrapped, |w, s, p| {
-                write_type_type_parameter(w, s, p)
+                write_type_type_parameter(
+                    w,
+                    s,
+                    p,
+                    n.constraint.is_some(),
+                    n.default_value.is_some(),
+                )
             })
         }
         TypeNodeData::ParameterList(n) => {
@@ -419,6 +435,7 @@ pub(crate) fn emit_parsed_type_node(
                 quote_to_u8(n.quote),
                 has_params,
                 has_tparams,
+                n.optional,
                 name,
             )
             .as_u32();

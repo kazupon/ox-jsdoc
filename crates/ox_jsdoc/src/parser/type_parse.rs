@@ -133,6 +133,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             }
             TokenKind::Unique if mode.is_typescript() => self.parse_unique_symbol(lexer),
             TokenKind::Number => self.parse_number_literal(lexer),
+            TokenKind::BigInt => self.parse_bigint_literal(lexer),
             TokenKind::StringValue => self.parse_string_literal(lexer),
             TokenKind::TemplateLiteral if mode.is_typescript() => {
                 self.parse_template_literal(lexer, mode)
@@ -801,13 +802,32 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 start,
                 key_text,
                 quote,
+                false,
+            );
+        }
+        let optional = self.eat(lexer, TokenKind::Question);
+        // `a?(): R` is an optional method in typescript, as in
+        // jsdoc-type-pratt-parser, for a name or a string (not a number).
+        if optional
+            && (lexer.current.kind == TokenKind::LParen || lexer.current.kind == TokenKind::Lt)
+            && mode.is_typescript()
+            && !readonly
+            && key_token.kind != TokenKind::Number
+        {
+            return self.parse_method_signature(
+                lexer,
+                mode,
+                disallow_conditional,
+                start,
+                key_text,
+                quote,
+                true,
             );
         }
         let key = Box::new(TypeNodeData::Name(TypeName {
             span: Span::new(key_token.start, key_token.end),
             value: key_text,
         }));
-        let optional = self.eat(lexer, TokenKind::Question);
         let right = if self.eat(lexer, TokenKind::Colon) {
             Some(self.parse_type_pratt(lexer, mode, disallow_conditional, Precedence::KeyValue)?)
         } else {
@@ -1024,6 +1044,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         start: u32,
         name: &'a str,
         quote: Option<QuoteStyle>,
+        optional: bool,
     ) -> Option<Box<TypeNodeData<'a>>> {
         let type_parameters = self.parse_type_parameters(lexer, mode, disallow_conditional)?;
         if !self.expect(lexer, TokenKind::LParen) {
@@ -1064,6 +1085,7 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 return_type,
                 type_parameters,
                 quote,
+                optional,
             },
         )))
     }
@@ -1081,8 +1103,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
         // right is the type of the values (a computed method has none).
         let bracket_start = lexer.current.start;
         lexer.bump();
-        if matches!(lexer.current.kind, TokenKind::Question | TokenKind::Eq) {
-            // A computed key that starts with `?` or `=` (`[?a]`, `[=a?]`).
+        if matches!(
+            lexer.current.kind,
+            TokenKind::Question | TokenKind::Eq | TokenKind::BigInt
+        ) {
+            // A computed key that starts with `?` or `=` (`[?a]`, `[=a?]`), or
+            // a BigInt, which is no other key (`[1n]`).
             let value = self.parse_computed_key_value(lexer, Precedence::Object)?;
             return self.parse_computed_key_field(
                 lexer,
@@ -1211,7 +1237,12 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 }))
             }
             _ => {
-                let token = self.expect_key_token(lexer)?;
+                // A BigInt is a computed key, but no other key (`[1n]`).
+                let token = if lexer.current.kind == TokenKind::BigInt {
+                    lexer.current
+                } else {
+                    self.expect_key_token(lexer)?
+                };
                 let text = lexer.token_text(token);
                 lexer.bump();
                 Box::new(computed_key_value(token, text))
@@ -1641,6 +1672,17 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
                 value: "unique",
             })))
         }
+    }
+
+    /// `1n`: the digits as written, without the `n`.
+    fn parse_bigint_literal(&mut self, lexer: &mut Lexer<'a>) -> Option<Box<TypeNodeData<'a>>> {
+        let token = lexer.current;
+        let text = lexer.token_text(token);
+        lexer.bump();
+        Some(Box::new(TypeNodeData::BigInt(TypeBigInt {
+            span: Span::new(token.start, token.end),
+            value: &text[..text.len() - 1],
+        })))
     }
 
     fn parse_number_literal(&mut self, lexer: &mut Lexer<'a>) -> Option<Box<TypeNodeData<'a>>> {
@@ -2230,8 +2272,8 @@ fn signature_return_precedence(mode: ParseMode) -> Precedence {
 }
 
 /// The key in the brackets of a computed property or method, as a type. As in
-/// jsdoc-type-pratt-parser, a string and a number are themselves, and a name
-/// or a keyword (`null` too) is a name.
+/// jsdoc-type-pratt-parser, a string, a number and a BigInt are themselves,
+/// and a name or a keyword (`null` too) is a name.
 fn computed_key_value<'a>(token: Token, text: &'a str) -> TypeNodeData<'a> {
     let span = Span::new(token.start, token.end);
     match token.kind {
@@ -2245,6 +2287,10 @@ fn computed_key_value<'a>(token: Token, text: &'a str) -> TypeNodeData<'a> {
             },
         }),
         TokenKind::Number => TypeNodeData::Number(TypeNumber { span, value: text }),
+        TokenKind::BigInt => TypeNodeData::BigInt(TypeBigInt {
+            span,
+            value: &text[..text.len() - 1],
+        }),
         _ => TypeNodeData::Name(TypeName { span, value: text }),
     }
 }

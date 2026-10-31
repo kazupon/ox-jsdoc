@@ -1722,7 +1722,7 @@ var RemoteNodeListNode = class {
 };
 // src/internal/nodes/type-nodes.ts
 /**
-* Lazy classes for the 47 TypeNode kinds (`0x80 - 0xAE`).
+* Lazy classes for the 48 TypeNode kinds (`0x80 - 0xAF`).
 *
 * Mirrors `crates/ox_jsdoc/src/decoder/nodes/type_node.rs`.
 *
@@ -1830,6 +1830,8 @@ function definePureLeaf(typeName) {
 }
 var RemoteTypeName = class extends defineStringPattern("TypeName") {};
 var RemoteTypeNumber = class extends defineStringPattern("TypeNumber") {};
+/** `TypeBigInt` (minor 3): the digits of `1n` as written, without the `n`. */
+var RemoteTypeBigInt = class extends defineStringPattern("TypeBigInt") {};
 var RemoteTypeStringValue = class extends defineStringPattern("TypeStringValue", (internal, json) => {
 	json.quote = commonData(internal) & 3;
 }) {};
@@ -1998,7 +2000,73 @@ var RemoteTypeObject = class {
 	}
 };
 var RemoteTypeTuple = class extends defineElementsContainer("TypeTuple") {};
-var RemoteTypeTypeParameter = class extends defineElementsContainer("TypeTypeParameter") {};
+/**
+* `TypeTypeParameter` — the name, then the constraint and the default when
+* there are, as its `elements`. Common Data (minor 3): bit0 = a constraint,
+* bit1 = a default. A buffer older than minor 3 has no bits; there, a second
+* element is the constraint and a third the default, in the order of the
+* writer.
+*/
+var RemoteTypeTypeParameter = class {
+	type = "TypeTypeParameter";
+	_internal;
+	constructor(view, byteIndex, index, rootIndex, parent, sourceFile) {
+		this._internal = {
+			view,
+			byteIndex,
+			index,
+			rootIndex,
+			parent,
+			sourceFile
+		};
+	}
+	get range() {
+		return absoluteRange(this._internal);
+	}
+	get parent() {
+		return this._internal.parent;
+	}
+	get elements() {
+		return nodeListAtSlotExtended(this._internal, TYPE_LIST_PARENT_SLOT);
+	}
+	/** Whether a constraint follows the name (`T extends U`). */
+	get hasConstraint() {
+		return hasTypeParameterFlags(this._internal) ? (commonData(this._internal) & 1) !== 0 : this.elements.length >= 2;
+	}
+	/** Whether a default follows the name or the constraint (`T = U`). */
+	get hasDefault() {
+		return hasTypeParameterFlags(this._internal) ? (commonData(this._internal) & 2) !== 0 : this.elements.length >= 3;
+	}
+	/** The name (`T`). */
+	get name() {
+		return this.elements[0] ?? null;
+	}
+	/** The constraint (`U` of `T extends U`). */
+	get constraint() {
+		return this.hasConstraint ? this.elements[1] ?? null : null;
+	}
+	/** The default (`U` of `T = U`). */
+	get defaultValue() {
+		if (!this.hasDefault) return null;
+		return this.elements[this.hasConstraint ? 2 : 1] ?? null;
+	}
+	toJSON() {
+		return {
+			type: this.type,
+			range: [...this.range],
+			elements: this.elements.map((n) => n.toJSON()),
+			hasConstraint: this.hasConstraint,
+			hasDefault: this.hasDefault
+		};
+	}
+	[inspectSymbol]() {
+		return inspectPayload(this.toJSON(), "TypeTypeParameter");
+	}
+};
+/** Whether the buffer has the type parameter flags of minor 3. */
+function hasTypeParameterFlags(internal) {
+	return (internal.view.getUint8(0) & 15) >= 3;
+}
 var RemoteTypeParameterList = class extends defineElementsContainer("TypeParameterList") {};
 var RemoteTypeParenthesis = class extends defineSingleChildContainer("TypeParenthesis") {};
 var RemoteTypeInfer = class extends defineSingleChildContainer("TypeInfer") {};
@@ -2520,6 +2588,10 @@ var RemoteTypeMethodSignature = class {
 	get hasTypeParameters() {
 		return (commonData(this._internal) & 8) !== 0;
 	}
+	/** `a?(): R` (bit4, minor 3). An older buffer has no optional method. */
+	get optional() {
+		return (commonData(this._internal) & 16) !== 0;
+	}
 	get name() {
 		return extStringLeaf(this._internal);
 	}
@@ -2530,6 +2602,7 @@ var RemoteTypeMethodSignature = class {
 			quote: this.quote,
 			hasParameters: this.hasParameters,
 			hasTypeParameters: this.hasTypeParameters,
+			optional: this.optional,
 			name: this.name
 		};
 	}
@@ -2661,7 +2734,7 @@ var RemoteTypeUniqueSymbol = class extends definePureLeaf("TypeUniqueSymbol") {}
 *
 * Mirrors the Rust `Kind::from_u8` mapping. Phase 4 will code-generate
 * this file from a single schema. Until then, every Kind discriminant
-* (0x01-0x0F, 0x7F, 0x80-0xAE) is wired by hand.
+* (0x01-0x0F, 0x7F, 0x80-0xAF) is wired by hand.
 *
 * @author kazuya kawaguchi (a.k.a. kazupon)
 * @license MIT
@@ -2734,6 +2807,7 @@ KIND_TABLE[171] = RemoteTypeParameterList;
 KIND_TABLE[172] = RemoteTypeReadonlyProperty;
 KIND_TABLE[173] = RemoteTypeComputedProperty;
 KIND_TABLE[174] = RemoteTypeComputedMethod;
+KIND_TABLE[175] = RemoteTypeBigInt;
 /**
 * Look up the lazy class for a given Kind byte.
 */
@@ -3016,7 +3090,7 @@ var RemoteSourceFile = class {
 * @license MIT
 */
 /**
-* Visitor keys for every Remote* node kind (62 = 15 Comment AST + 47 TypeNode).
+* Visitor keys for every Remote* node kind (63 = 15 Comment AST + 48 TypeNode).
 *
 * Each entry maps a node `type` name to the **traversable child property
 * names** in canonical visit order. Mirrors the jsdoccomment / ESLint
@@ -3066,6 +3140,7 @@ const jsdocVisitorKeys = Object.freeze({
 	JsdocText: [],
 	TypeName: [],
 	TypeNumber: [],
+	TypeBigInt: [],
 	TypeStringValue: [],
 	TypeProperty: [],
 	TypeSpecialNamePath: [],
@@ -3151,4 +3226,4 @@ function toPlainObject(node) {
 	if (typeof candidate.toJSON === "function") return candidate.toJSON();
 	return node;
 }
-export { EMPTY_NODE_LIST, RemoteJsdocBlock, RemoteJsdocBorrowsTagBody, RemoteJsdocDescriptionLine, RemoteJsdocGenericTagBody, RemoteJsdocIdentifier, RemoteJsdocInlineTag, RemoteJsdocNamepathSource, RemoteJsdocParameterName, RemoteJsdocRawTagBody, RemoteJsdocTag, RemoteJsdocTagName, RemoteJsdocTagNameValue, RemoteJsdocText, RemoteJsdocTypeLine, RemoteJsdocTypeSource, RemoteNodeList, RemoteNodeListNode, RemoteSourceFile, RemoteTypeAny, RemoteTypeAsserts, RemoteTypeAssertsPlain, RemoteTypeCallSignature, RemoteTypeComputedMethod, RemoteTypeComputedProperty, RemoteTypeConditional, RemoteTypeConstructorSignature, RemoteTypeFunction, RemoteTypeGeneric, RemoteTypeImport, RemoteTypeIndexSignature, RemoteTypeIndexedAccessIndex, RemoteTypeInfer, RemoteTypeIntersection, RemoteTypeJsdocObjectField, RemoteTypeKeyOf, RemoteTypeKeyValue, RemoteTypeMappedType, RemoteTypeMethodSignature, RemoteTypeName, RemoteTypeNamePath, RemoteTypeNotNullable, RemoteTypeNull, RemoteTypeNullable, RemoteTypeNumber, RemoteTypeObject, RemoteTypeObjectField, RemoteTypeOptional, RemoteTypeParameterList, RemoteTypeParenthesis, RemoteTypePredicate, RemoteTypeProperty, RemoteTypeReadonlyArray, RemoteTypeReadonlyProperty, RemoteTypeSpecialNamePath, RemoteTypeStringValue, RemoteTypeSymbol, RemoteTypeTemplateLiteral, RemoteTypeTuple, RemoteTypeTypeOf, RemoteTypeTypeParameter, RemoteTypeUndefined, RemoteTypeUnion, RemoteTypeUniqueSymbol, RemoteTypeUnknown, RemoteTypeVariadic, jsdocVisitorKeys, toPlainObject };
+export { EMPTY_NODE_LIST, RemoteJsdocBlock, RemoteJsdocBorrowsTagBody, RemoteJsdocDescriptionLine, RemoteJsdocGenericTagBody, RemoteJsdocIdentifier, RemoteJsdocInlineTag, RemoteJsdocNamepathSource, RemoteJsdocParameterName, RemoteJsdocRawTagBody, RemoteJsdocTag, RemoteJsdocTagName, RemoteJsdocTagNameValue, RemoteJsdocText, RemoteJsdocTypeLine, RemoteJsdocTypeSource, RemoteNodeList, RemoteNodeListNode, RemoteSourceFile, RemoteTypeAny, RemoteTypeAsserts, RemoteTypeAssertsPlain, RemoteTypeBigInt, RemoteTypeCallSignature, RemoteTypeComputedMethod, RemoteTypeComputedProperty, RemoteTypeConditional, RemoteTypeConstructorSignature, RemoteTypeFunction, RemoteTypeGeneric, RemoteTypeImport, RemoteTypeIndexSignature, RemoteTypeIndexedAccessIndex, RemoteTypeInfer, RemoteTypeIntersection, RemoteTypeJsdocObjectField, RemoteTypeKeyOf, RemoteTypeKeyValue, RemoteTypeMappedType, RemoteTypeMethodSignature, RemoteTypeName, RemoteTypeNamePath, RemoteTypeNotNullable, RemoteTypeNull, RemoteTypeNullable, RemoteTypeNumber, RemoteTypeObject, RemoteTypeObjectField, RemoteTypeOptional, RemoteTypeParameterList, RemoteTypeParenthesis, RemoteTypePredicate, RemoteTypeProperty, RemoteTypeReadonlyArray, RemoteTypeReadonlyProperty, RemoteTypeSpecialNamePath, RemoteTypeStringValue, RemoteTypeSymbol, RemoteTypeTemplateLiteral, RemoteTypeTuple, RemoteTypeTypeOf, RemoteTypeTypeParameter, RemoteTypeUndefined, RemoteTypeUnion, RemoteTypeUniqueSymbol, RemoteTypeUnknown, RemoteTypeVariadic, jsdocVisitorKeys, toPlainObject };

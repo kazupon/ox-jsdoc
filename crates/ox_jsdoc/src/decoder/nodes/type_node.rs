@@ -2,7 +2,7 @@
 // @license MIT
 //
 
-//! Lazy structs for the 47 TypeNode kinds (`0x80 - 0xAE`).
+//! Lazy structs for the 48 TypeNode kinds (`0x80 - 0xAF`).
 //!
 //! Each struct mirrors the comment-AST style in
 //! [`super::comment_ast`]: a `Copy` value type holding
@@ -12,6 +12,7 @@
 //! [`LazyTypeNode`] enum for callers (such as `JsdocTag.parsed_type`) that
 //! receive a TypeNode of unknown variant.
 
+use crate::format::header::{TYPE_PARAMETER_FLAGS_MINOR, VERSION_OFFSET, minor};
 use crate::format::kind::Kind;
 use crate::format::string_field::STRING_FIELD_SIZE;
 use crate::writer::nodes::type_node::TYPE_LIST_PARENT_SLOT;
@@ -91,6 +92,19 @@ define_lazy_type_node!(
 );
 impl<'a> LazyTypeNumber<'a> {
     /// Numeric literal as written in the source.
+    pub fn value(&self) -> &'a str {
+        string_payload(self.source_file, self.node_index).unwrap_or("")
+    }
+}
+
+define_lazy_type_node!(
+    LazyTypeBigInt,
+    Kind::TypeBigInt,
+    "Lazy view of `TypeBigInt` (Kind 0xAF, minor 3)."
+);
+impl<'a> LazyTypeBigInt<'a> {
+    /// The digits as written in the source, without the `n` (`-007` for
+    /// `-007n`).
     pub fn value(&self) -> &'a str {
         string_payload(self.source_file, self.node_index).unwrap_or("")
     }
@@ -735,9 +749,54 @@ define_lazy_type_node!(
     "Lazy view of `TypeTypeParameter` (Kind 0xA6)."
 );
 impl<'a> LazyTypeTypeParameter<'a> {
-    /// Type-parameter children.
+    /// Type-parameter children: the name, then the constraint and the
+    /// default when there are.
     pub fn elements(&self) -> LazyTypeNodeListIter<'a> {
         nodelist_at(self.source_file, self.node_index, self.root_index)
+    }
+    /// Whether a constraint follows the name (`T extends U`). A buffer older
+    /// than minor 3 has no flag; there, a second element is the constraint,
+    /// as the writer put them in that order.
+    pub fn has_constraint(&self) -> bool {
+        if self.has_flags() {
+            (self.common_data() & 0b01) != 0
+        } else {
+            self.elements().count() >= 2
+        }
+    }
+    /// Whether a default follows the name or the constraint (`T = U`). A
+    /// buffer older than minor 3 has no flag; there, only a third element is
+    /// the default.
+    pub fn has_default(&self) -> bool {
+        if self.has_flags() {
+            (self.common_data() & 0b10) != 0
+        } else {
+            self.elements().count() >= 3
+        }
+    }
+    /// The name (`T`).
+    pub fn name(&self) -> Option<LazyTypeNode<'a>> {
+        self.elements().next()
+    }
+    /// The constraint (`U` of `T extends U`).
+    pub fn constraint(&self) -> Option<LazyTypeNode<'a>> {
+        if self.has_constraint() {
+            self.elements().nth(1)
+        } else {
+            None
+        }
+    }
+    /// The default (`U` of `T = U`).
+    pub fn default_value(&self) -> Option<LazyTypeNode<'a>> {
+        if !self.has_default() {
+            return None;
+        }
+        self.elements()
+            .nth(if self.has_constraint() { 2 } else { 1 })
+    }
+    /// Whether the buffer has the flags of minor 3.
+    fn has_flags(&self) -> bool {
+        minor(self.source_file.bytes()[VERSION_OFFSET]) >= TYPE_PARAMETER_FLAGS_MINOR
     }
 }
 
@@ -840,6 +899,12 @@ impl<'a> LazyTypeMethodSignature<'a> {
     #[inline]
     pub fn has_type_parameters(&self) -> bool {
         (self.common_data() & 0b1000) != 0
+    }
+    /// `a?(): R` (bit4, minor 3). A buffer older than minor 3 has no
+    /// optional method, so its bit4 is 0.
+    #[inline]
+    pub fn optional(&self) -> bool {
+        (self.common_data() & 0b1_0000) != 0
     }
     /// Method name string.
     pub fn name(&self) -> &'a str {
@@ -946,6 +1011,7 @@ define_lazy_type_node!(
 pub enum LazyTypeNode<'a> {
     Name(LazyTypeName<'a>),
     Number(LazyTypeNumber<'a>),
+    BigInt(LazyTypeBigInt<'a>),
     StringValue(LazyTypeStringValue<'a>),
     Property(LazyTypeProperty<'a>),
     SpecialNamePath(LazyTypeSpecialNamePath<'a>),
@@ -1067,6 +1133,7 @@ impl<'a> LazyTypeNode<'a> {
             TypeAny => Any(LazyTypeAny<'a>),
             TypeUnknown => Unknown(LazyTypeUnknown<'a>),
             TypeUniqueSymbol => UniqueSymbol(LazyTypeUniqueSymbol<'a>),
+            TypeBigInt => BigInt(LazyTypeBigInt<'a>),
         }
     }
 }

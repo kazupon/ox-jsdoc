@@ -323,6 +323,16 @@ export class RemoteTypeNumber implements RemoteNode {
   toJSON(): Record<string, unknown>
 }
 
+/** A BigInt literal type (`1n`, protocol minor 3). */
+export class RemoteTypeBigInt implements RemoteNode {
+  readonly type: 'TypeBigInt'
+  readonly range: Range
+  readonly parent: RemoteNode | null
+  /** The digits as written, without the `n` (`-007` for `-007n`). */
+  readonly value: string
+  toJSON(): Record<string, unknown>
+}
+
 export class RemoteTypeStringValue implements RemoteNode {
   readonly type: 'TypeStringValue'
   readonly range: Range
@@ -590,7 +600,15 @@ export class RemoteTypeTypeParameter implements RemoteTypeNode {
   readonly type: 'TypeTypeParameter'
   readonly range: Range
   readonly parent: RemoteNode | null
+  /** The name, then the constraint and the default when there are. */
   readonly elements: RemoteNodeList
+  /** Whether a constraint follows the name (`T extends U`). */
+  readonly hasConstraint: boolean
+  /** Whether a default follows the name or the constraint (`T = U`). */
+  readonly hasDefault: boolean
+  readonly name: RemoteNode | null
+  readonly constraint: RemoteNode | null
+  readonly defaultValue: RemoteNode | null
   toJSON(): Record<string, unknown>
 }
 export class RemoteTypeParameterList implements RemoteTypeNode {
@@ -640,6 +658,8 @@ export class RemoteTypeMethodSignature implements RemoteTypeNode {
   readonly quote: number
   readonly hasParameters: boolean
   readonly hasTypeParameters: boolean
+  /** `a?(): R` (protocol minor 3). */
+  readonly optional: boolean
   readonly name: string
   toJSON(): Record<string, unknown>
 }
