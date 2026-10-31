@@ -671,10 +671,29 @@ impl<'arena, 'a> ParserContext<'arena, 'a> {
             loop {
                 let field = self.parse_object_field(lexer, mode, disallow_conditional)?;
                 elements.push(field);
-                if self.eat(lexer, TokenKind::Comma) {
-                    separator = Some(ObjectSeparator::Comma);
+                // As in jsdoc-type-pratt-parser: a line break after a field
+                // separates it from the next one, and takes a `,` or `;` at
+                // the start of the next line with it. A `,` or `;` before a
+                // line break is `CommaAndLinebreak` / `SemicolonAndLinebreak`.
+                // A later separator replaces an earlier one, but a line break
+                // does not replace one.
+                if lexer.line_break_before_current() {
+                    separator.get_or_insert(ObjectSeparator::Linebreak);
+                    if !self.eat(lexer, TokenKind::Comma) {
+                        self.eat(lexer, TokenKind::Semicolon);
+                    }
+                } else if self.eat(lexer, TokenKind::Comma) {
+                    separator = Some(if lexer.line_break_before_current() {
+                        ObjectSeparator::CommaAndLinebreak
+                    } else {
+                        ObjectSeparator::Comma
+                    });
                 } else if self.eat(lexer, TokenKind::Semicolon) {
-                    separator = Some(ObjectSeparator::Semicolon);
+                    separator = Some(if lexer.line_break_before_current() {
+                        ObjectSeparator::SemicolonAndLinebreak
+                    } else {
+                        ObjectSeparator::Semicolon
+                    });
                 } else {
                     break;
                 }

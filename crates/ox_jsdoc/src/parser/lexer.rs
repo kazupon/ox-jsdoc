@@ -93,6 +93,29 @@ impl<'a> Lexer<'a> {
         &self.source[self.offset..]
     }
 
+    /// Whether the whitespace before the current token has a line feed, as
+    /// `startOfLine` of jsdoc-type-pratt-parser (a `\r\n` has one, a lone
+    /// `\r` does not). It looks back from the token when asked, so reading
+    /// a token costs nothing more; only the object rule asks.
+    #[must_use]
+    pub fn line_break_before_current(&self) -> bool {
+        let end = (self.current.start - self.base_offset) as usize;
+        for ch in self.source[..end].chars().rev() {
+            if ch == '\n' {
+                return true;
+            }
+            let whitespace = if ch.is_ascii() {
+                is_ascii_whitespace(ch as u8)
+            } else {
+                is_non_ascii_whitespace(ch)
+            };
+            if !whitespace {
+                return false;
+            }
+        }
+        false
+    }
+
     fn read_token(&mut self) -> Token {
         self.skip_whitespace();
         if self.offset >= self.source.len() {
