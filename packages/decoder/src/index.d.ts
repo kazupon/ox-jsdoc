@@ -9,7 +9,10 @@
  * @license MIT
  */
 
-/** Range tuple `[absolutePosStart, absolutePosEnd]`. */
+/**
+ * Range tuple `[absolutePosStart, absolutePosEnd]`, in UTF-8 bytes (the
+ * root's `baseOffset` plus the node's byte offsets in its source text).
+ */
 export type Range = [number, number]
 
 /** Marker interface implemented by every Remote* lazy class. */

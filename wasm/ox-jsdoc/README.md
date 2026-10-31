@@ -128,6 +128,8 @@ result.free() // release WASM-side bytes
 
 `baseOffset` is the absolute byte offset of `sourceText` in the original source file — used so that `ast.range` etc. report positions relative to the host file rather than the slice. Defaults to `0`.
 
+Positions are UTF-8 byte offsets: `range` is `baseOffset` plus the node's byte offsets in `sourceText`. They equal JavaScript string indices (UTF-16 code units) only while the text is ASCII. When you need string indices, for example for ESLint reports or an editor, pass the byte offset as `baseOffset` (or `0`) and convert the ranges with the source text.
+
 For consumers that want the [`@ox-jsdoc/jsdoccomment`](../../packages/jsdoccomment/) normalizer (`@es-joy/jsdoccomment` compatible shape), pass `output: 'jsdoccomment-input'`:
 
 ```js
@@ -188,7 +190,7 @@ import { jsdocVisitorKeys } from '@ox-jsdoc/wasm'
 | `typeParseMode` | `'jsdoc' \| 'closure' \| 'typescript'` | `'jsdoc'` | Syntax flavor for type expressions when `parseTypes` is on. |
 | `compatMode` | `boolean` | `false` | Enable `@es-joy/jsdoccomment` compat extension fields (`delimiter`, `postDelimiter`, line indices, …). |
 | `preserveWhitespace` | `boolean` | `false` | Emit per-node `description_raw_span` so `descriptionRaw` getter and `descriptionText(true)` work. Adds 8 bytes per `JsdocBlock`/`JsdocTag` with description. |
-| `baseOffset` | `number` | `0` | Absolute byte offset of `sourceText` in the original file (per-item for `parseBatch`). |
+| `baseOffset` | `number` | `0` | Absolute UTF-8 byte offset of `sourceText` in the original file (per-item for `parseBatch`). Not a JavaScript string index. |
 
 ## Why a Binary AST?
 

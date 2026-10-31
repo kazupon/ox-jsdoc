@@ -365,11 +365,11 @@ Empty descriptions are represented by **omitting the span entirely** (bit cleare
 
 #### Encoding unit (UTF-8)
 
-`description_raw_span` is **UTF-8 bytes**, _not_ UTF-16 code units. This differs intentionally from `Pos` / `End` (which are UTF-16 code units, converted at emit time for ESLint / LSP compatibility). The contrast:
+`description_raw_span` is **UTF-8 bytes**, _not_ UTF-16 code units, like `Pos` / `End` (see `007-binary-ast/format.md`, "Position units"). Hosts that need UTF-16 code units for ESLint `range` or LSP positions convert them with the source text. The two fields:
 
 | Field | Unit | Purpose |
 | --- | --- | --- |
-| `Pos` / `End` | UTF-16 cu | ESLint `range`, LSP positions — JS-facing |
+| `Pos` / `End` | UTF-8 b | Node ranges, relative to the root's sourceText — converted by hosts that need UTF-16 |
 | `description_raw_span` | **UTF-8 b** | Decoder slices `String Data` bytes directly — internal helper |
 
 Choosing UTF-8 here keeps the decoder's slice operation a single integer range over the existing UTF-8 String Data section — no `Utf16PositionMap` round-trip at emit or decode. This matches `oxc_jsdoc::JSDocCommentPart::span`, which is also UTF-8 bytes.

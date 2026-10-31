@@ -73,21 +73,22 @@ pub trait LazyNode<'a>: Copy + Clone + Sized {
         self.source_file().bytes()[self.byte_offset() + 1] & COMMON_DATA_MASK
     }
 
-    /// `Pos` field — UTF-16 code unit offset *relative to the root's
+    /// `Pos` field — UTF-8 byte offset *relative to the root's
     /// sourceText*.
     #[inline]
     fn pos(&self) -> u32 {
         read_u32(self.source_file().bytes(), self.byte_offset() + POS_OFFSET)
     }
 
-    /// `End` field (relative to the root's sourceText).
+    /// `End` field — UTF-8 byte offset relative to the root's sourceText.
     #[inline]
     fn end(&self) -> u32 {
         read_u32(self.source_file().bytes(), self.byte_offset() + END_OFFSET)
     }
 
     /// `[absolute_pos, absolute_end]` — `Pos`/`End` plus the root's
-    /// `base_offset`. Use this when feeding ranges into ESLint reports.
+    /// `base_offset`, in UTF-8 bytes. Convert them with the source text for
+    /// APIs that take UTF-16 code units, such as ESLint reports.
     #[inline]
     fn range(&self) -> [u32; 2] {
         let base = self.source_file().get_root_base_offset(self.root_index());
