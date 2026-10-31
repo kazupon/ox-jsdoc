@@ -357,22 +357,28 @@ export class RemoteSourceFile implements RemoteSourceFileLike {
 
   /**
    * Return the complete source text for one root.
+   *
+   * The source texts sit together in String Data, in root order, before the
+   * strings that their comments add (`format.md`, "String Data section"):
+   * one ends where the next one starts, and the last one at the first one's
+   * start plus the total length of all of them (the header's
+   * `sourceTextLength`). Returns `''` when that would go past the buffer.
    */
   getRootSourceText(rootIndex: number): string {
     const sourceOffset = this.getRootSourceOffsetInData(rootIndex)
-    const nextOffset =
+    const endOffset =
       rootIndex + 1 < this.#internal.rootCount
         ? this.getRootSourceOffsetInData(rootIndex + 1)
-        : this.#internal.sourceTextLength
-    if (nextOffset < sourceOffset) {
+        : this.getRootSourceOffsetInData(0) + this.#internal.sourceTextLength
+    if (endOffset < sourceOffset) {
       return ''
     }
     const { view, stringDataOffset } = this.#internal
-    const bytes = new Uint8Array(
-      view.buffer,
-      view.byteOffset + stringDataOffset + sourceOffset,
-      nextOffset - sourceOffset
-    )
+    const start = view.byteOffset + stringDataOffset + sourceOffset
+    if (start + (endOffset - sourceOffset) > view.byteOffset + view.byteLength) {
+      return ''
+    }
+    const bytes = new Uint8Array(view.buffer, start, endOffset - sourceOffset)
     return utf8Decoder.decode(bytes)
   }
 

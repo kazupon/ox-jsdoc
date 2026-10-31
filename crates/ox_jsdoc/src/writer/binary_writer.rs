@@ -78,24 +78,26 @@ pub struct BinaryWriter<'arena> {
     /// `strings.data_buffer.len()` because that buffer also contains
     /// interned strings.
     pub(crate) source_text_length: u32,
-    /// `data_buffer` byte offset where the **most recently appended**
-    /// source text region starts. Used by [`Self::intern_source_slice`] to
+    /// `data_buffer` byte offset where the **current** source text region
+    /// starts: the one most recently appended, or chosen again with
+    /// [`Self::select_source_text`]. Used by [`Self::intern_source_slice`] to
     /// translate a source-relative byte range into the absolute offset
     /// pair that lands in the `String Offsets` section.
     ///
-    /// Updated on every [`Self::append_source_text`] call. The contract
-    /// for `intern_source_slice` callers is that they must intern source
-    /// slices belonging to the **latest** appended source text — which is
-    /// what every `emit_block` call does (parse-then-emit per item in
-    /// `parse_batch_to_bytes`).
+    /// Updated on every [`Self::append_source_text`] and
+    /// [`Self::select_source_text`] call. The contract for
+    /// `intern_source_slice` callers is that they must intern source slices
+    /// belonging to the **current** source text — which is what every
+    /// `emit_block` call does (`parse_batch_to_bytes` appends all the source
+    /// texts first, then selects each one before it parses and emits it).
     pub(crate) current_source_data_offset: u32,
-    /// Byte length of the most recently appended source text. Together
+    /// Byte length of the current source text. Together
     /// with [`Self::current_source_data_offset`] this defines the valid
     /// byte range that [`Self::intern_source_slice`] callers must keep
     /// their span within.
     pub(crate) current_source_length: u32,
-    /// Raw start pointer of the most recently appended source text, stored
-    /// as `usize` to avoid lifetime tracking on the writer.
+    /// Raw start pointer of the current source text, stored as `usize` to
+    /// avoid lifetime tracking on the writer.
     ///
     /// Used by [`Self::intern_source_slice_or_string`] to detect whether a
     /// borrowed `&str` value is a sub-slice of the appended source via
@@ -500,15 +502,25 @@ impl<'arena> BinaryWriter<'arena> {
     pub fn append_source_text(&mut self, value: &str) -> u32 {
         let offset = self.strings.append_source_text(value);
         self.source_text_length = self.source_text_length.saturating_add(value.len() as u32);
+        self.select_source_text(value, offset);
+        offset
+    }
+
+    /// Make an appended source text the current one again, for the
+    /// zero-copy interning of its slices (see [`Self::append_source_text`]).
+    /// `offset` is what [`Self::append_source_text`] returned for `value`.
+    ///
+    /// A batch appends all its source texts first, so that they sit
+    /// together in String Data (`format.md`, "String Data section"), and
+    /// then selects each one before it parses and emits it.
+    pub fn select_source_text(&mut self, value: &str, offset: u32) {
         self.current_source_data_offset = offset;
         self.current_source_length = value.len() as u32;
         // Stash the source's start address as a usize so subsequent
         // `intern_source_slice_or_string` calls can detect borrowed sub-slices
-        // via pointer arithmetic (no dereference). The pointer is valid for
-        // the remainder of the current `parse_*_to_bytes` iteration; we never
-        // store one across iterations.
+        // via pointer arithmetic (no dereference). The text is borrowed for
+        // the whole `parse_*_to_bytes` call.
         self.current_source_ptr = value.as_ptr() as usize;
-        offset
     }
 
     /// Zero-copy intern: register a String Offsets entry that points into

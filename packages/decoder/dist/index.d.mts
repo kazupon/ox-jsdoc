@@ -194,6 +194,12 @@ export declare class RemoteSourceFile implements RemoteSourceFileLike {
   sliceSourceText(rootIndex: number, start: number, end: number): string | null;
   /**
    * Return the complete source text for one root.
+   *
+   * The source texts sit together in String Data, in root order, before the
+   * strings that their comments add (`format.md`, "String Data section"):
+   * one ends where the next one starts, and the last one at the first one's
+   * start plus the total length of all of them (the header's
+   * `sourceTextLength`). Returns `''` when that would go past the buffer.
    */
   getRootSourceText(rootIndex: number): string;
   /**

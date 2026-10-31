@@ -367,7 +367,7 @@ The index of the root node (= the corresponding `JsdocBlock`) within the Nodes s
 
 The **byte offset** that indicates where the corresponding sourceText is stored in the String Data section (relative to the start of the String Data section, in **UTF-8 bytes**).
 
-- The head of the String Data section places each BatchItem's sourceText **concatenated in input order** (see the "String Table" section for details)
+- String Data places each BatchItem's sourceText **concatenated in input order**, right after the common strings at its head (see the "String Table" section for details)
 - Using this field, the source text for root [i] can be obtained from `String Data start + source_offset_in_data`
 - String fields of nodes belonging to the root (tag names, type expressions, etc.) basically reference slices within this sourceText via string indices (zero-copy)
 - Note that the unit is **UTF-8 bytes**, the same unit used by node Pos/End. This is because String Data is stored in UTF-8
@@ -397,13 +397,13 @@ Contents of the Root Index Array (LE u32 representation, size 24 bytes):
 | Offset | u32 value | Meaning |
 | --- | --- | --- |
 | 0-3 | `0x00000001` | `root[0].node_index = 1` (first `JsdocBlock` in Nodes) |
-| 4-7 | `0x00000000` | `root[0].source_offset_in_data = 0` (start of String Data) |
+| 4-7 | `0x0000008B` | `root[0].source_offset_in_data = 139` (after the 139 bytes of common strings at the head of String Data) |
 | 8-11 | `0x00000064` | `root[0].base_offset = 100` |
 | 12-15 | `0x00000005` | `root[1].node_index = 5` (descendants of root[0] are `node[1..4]`, root[1] is `node[5]`) |
-| 16-19 | `0x0000000F` | `root[1].source_offset_in_data = 15` (after the byte length of sourceText[0]) |
+| 16-19 | `0x0000009A` | `root[1].source_offset_in_data = 154` (right after sourceText[0], 15 bytes) |
 | 20-23 | `0x000000C8` | `root[1].base_offset = 200` |
 
-In the String Data section, `"/** @param x */"` (15 bytes) + `"/** @returns y */"` (17 bytes) are concatenated at the head (32 bytes total, followed by unique strings).
+In the String Data section, the common strings (139 bytes) come first, then `"/** @param x */"` (15 bytes) + `"/** @returns y */"` (17 bytes) are concatenated (32 bytes total), followed by the strings that the comments add.
 
 ### Behavior on parse failure
 
@@ -411,8 +411,8 @@ The Root Index Array when `items[1]` fails to parse:
 
 ```text
 roots = [
-  { node_index: 1, source_offset_in_data: 0,  base_offset: 100 },  // i=0 OK (not the sentinel)
-  { node_index: 0, source_offset_in_data: 15, base_offset: 200 },  // i=1 NG (sentinel = 0)
+  { node_index: 1, source_offset_in_data: 139, base_offset: 100 },  // i=0 OK (not the sentinel)
+  { node_index: 0, source_offset_in_data: 154, base_offset: 200 },  // i=1 NG (sentinel = 0)
 ]
 ```
 
@@ -500,7 +500,7 @@ The string table consists of two sections, **String Offsets** and **String Data*
 
 Basic policy:
 
-- Each BatchItem's `sourceText` is **concatenated at the head of the String Data section**
+- Each BatchItem's `sourceText` is **concatenated near the head of the String Data section**, right after the common strings
 - String fields on AST nodes (tag names, type expressions, parameter names, descriptions, etc.) are held as **byte slice references** into the concatenated sourceText (zero-copy)
 - Only strings that do not match a source position (escape-resolved, etc.) are **appended to the tail** of String Data (unique strings region)
 - **String Offsets** points to each string as a `(start: u32, end: u32)` byte range pair
@@ -535,8 +535,10 @@ This design lets most strings simply reference the source buffer, minimizing mem
 
 ![String Data internal layout](./diagrams/string-data-layout.svg)
 
-- Head region: each BatchItem's sourceText is **concatenated in input order** (no delimiter)
-- Tail region: strings that do not match a source position are appended in order (unique strings)
+- Head region:
+  - The common strings: the empty string, whitespace, the delimiters and the most common tag names, which every buffer pre-interns at fixed string indices (139 bytes)
+  - Then each BatchItem's sourceText, **concatenated in input order** (no delimiter). They are contiguous: root i's source text ends where root i+1's starts, and the last one ends at root 0's `source_offset_in_data` plus the Header's total source text length
+- Tail region: strings that do not match a source position are appended in order (unique strings), after all the source texts
 - The whole region is stored as a **UTF-8 byte sequence**
   - Since the Rust-side sourceText is already UTF-8 (`&str`), there is no conversion cost
   - On the JS side, retrieval converts to UTF-16 in a single pass via `TextDecoder('utf-8')`
