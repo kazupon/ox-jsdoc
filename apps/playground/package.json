@@ -9,6 +9,7 @@
     "dev": "vp dev --configLoader runner",
     "build": "vp build --configLoader runner",
     "preview": "vp preview",
+    "test": "vp test run",
     "deploy": "void deploy",
     "vize:check": "vp run vize:lint && vp run vize:_check",
     "vize:_check": "vp exec vize check --tsconfig tsconfig.json src",

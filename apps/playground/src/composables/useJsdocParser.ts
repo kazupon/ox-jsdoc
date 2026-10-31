@@ -17,6 +17,7 @@ import type {
   ParseView,
   SourceRange
 } from '../types/playground'
+import { toUtf16Ranges } from '../utils/utf16Ranges'
 
 const oxJsdocWasmModuleUrl = '/vendor/ox-jsdoc/ox_jsdoc_wasm.js'
 const oxJsdocWasmBinaryUrl = '/vendor/ox-jsdoc/ox_jsdoc_wasm_bg.wasm'
@@ -190,7 +191,7 @@ export function useJsdocParser({ options, source, sourceLanguage }: UseJsdocPars
             range: [comment.baseOffset, comment.baseOffset + comment.sourceText.length],
             baseOffset: comment.baseOffset,
             sourceText: comment.sourceText,
-            ast: ast.toJSON()
+            ast: toUtf16Ranges(ast.toJSON(), comment.sourceText, comment.baseOffset)
           }
         })
         .filter((comment): comment is ParsedJsdocComment => comment !== null)
@@ -243,13 +244,14 @@ export function useJsdocParser({ options, source, sourceLanguage }: UseJsdocPars
     const diagnostics = [...parseResult.diagnostics]
 
     for (const [index, comment] of parseResult.comments.entries()) {
-      const result = parseJsdoc(comment.sourceText, {
-        ...getJsdocParseOptions(),
-        baseOffset: comment.baseOffset
-      })
+      // ox-jsdoc takes and reports UTF-8 byte offsets, and `baseOffset` is a
+      // UTF-16 offset here, so parse from 0 and convert the ranges.
+      const result = parseJsdoc(comment.sourceText, getJsdocParseOptions())
 
       try {
-        const ast = result.ast?.toJSON() ?? null
+        const ast = result.ast
+          ? toUtf16Ranges(result.ast.toJSON(), comment.sourceText, comment.baseOffset)
+          : null
 
         if (ast) {
           comments.push({
@@ -341,6 +343,9 @@ export function useJsdocParser({ options, source, sourceLanguage }: UseJsdocPars
 
     const concat = new Uint8Array(totalChars * 3)
     const offsets = new Uint32Array(commentCount + 1)
+    // ox-jsdoc takes UTF-8 byte offsets, and `comment.baseOffset` is a UTF-16
+    // offset, so each comment is parsed from 0 and its ranges are converted
+    // afterwards (`toUtf16Ranges`).
     const baseOffsets = new Uint32Array(commentCount)
     let position = 0
 
@@ -349,7 +354,6 @@ export function useJsdocParser({ options, source, sourceLanguage }: UseJsdocPars
 
       position += written
       offsets[index + 1] = position
-      baseOffsets[index] = comment.baseOffset
     }
 
     const handle = wasm.parse_jsdoc_batch_raw(

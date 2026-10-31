@@ -55,5 +55,7 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 4000
   },
-  plugins: [oxJsdocWasmAssets(), voidPlugin(), vue()]
+  // voidPlugin starts its own dev server, which vitest cannot share, and the
+  // unit tests do not need it.
+  plugins: [oxJsdocWasmAssets(), ...(process.env.VITEST ? [] : [voidPlugin()]), vue()]
 })

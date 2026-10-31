@@ -815,22 +815,6 @@ const groupDiagnosticsByRootIndex = diagnostics => {
 }
 
 /**
- * @param {string | {value: string, range?: [number, number]}} commentOrNode
- * @returns {number}
- */
-const getCommentBaseOffset = commentOrNode => {
-  if (
-    typeof commentOrNode === 'object' &&
-    commentOrNode !== null &&
-    Array.isArray(commentOrNode.range)
-  ) {
-    return commentOrNode.range[0] ?? 0
-  }
-
-  return 0
-}
-
-/**
  * @param {Array<{index: number, problem: import('comment-parser').Problem}>} problems
  * @param {Array<import('.').JsdocBlockWithInline | null>} blocks
  * @returns {void}
@@ -1159,10 +1143,12 @@ const parseComment = (commentOrNode, indent = '') => {
  */
 const parseCommentBatch = (comments, options = {}) => {
   const indent = options.indent ?? ''
+  // No `baseOffset`, as in `parseComment`: ox-jsdoc takes UTF-8 byte offsets,
+  // and a node's `range` is in UTF-16 code units. The blocks do not use the
+  // positions in the file.
   const items = comments.map(commentOrNode => {
     return {
-      sourceText: normalizeCommentSource(commentOrNode, indent),
-      baseOffset: getCommentBaseOffset(commentOrNode)
+      sourceText: normalizeCommentSource(commentOrNode, indent)
     }
   })
   const {
