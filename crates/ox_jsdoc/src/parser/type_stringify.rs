@@ -12,8 +12,8 @@
 //! The output follows the `stringify` of jsdoc-type-pratt-parser 9.4.0, so
 //! that parsing it again gives the same tree, except for what it does not
 //! print either (the square brackets of `...[T]`). What the tree does not
-//! keep, such as the line breaks between the fields of an object, does not
-//! come back.
+//! keep, such as the indent of the fields of an object (always two spaces
+//! here), does not come back.
 
 use super::type_data::*;
 
@@ -181,17 +181,30 @@ fn write_function(buf: &mut String, n: &TypeFunction<'_>) {
     }
 }
 
+/// As jsdoc-type-pratt-parser prints an object: with a line break separator
+/// and more than one field, each field on its own line, indented by two
+/// spaces (also in a nested object).
 fn write_object(buf: &mut String, n: &TypeObject<'_>) {
-    buf.push('{');
-    let sep = match n.separator {
-        Some(ObjectSeparator::Semicolon) | Some(ObjectSeparator::SemicolonAndLinebreak) => "; ",
-        _ => ", ",
+    let (sep, line_break) = match n.separator {
+        Some(ObjectSeparator::Semicolon) => ("; ", false),
+        Some(ObjectSeparator::Linebreak) => ("\n  ", true),
+        Some(ObjectSeparator::CommaAndLinebreak) => (",\n  ", true),
+        Some(ObjectSeparator::SemicolonAndLinebreak) => (";\n  ", true),
+        Some(ObjectSeparator::Comma) | None => (", ", false),
     };
+    let on_lines = line_break && n.elements.len() > 1;
+    buf.push('{');
+    if on_lines {
+        buf.push_str("\n  ");
+    }
     for (i, element) in n.elements.iter().enumerate() {
         if i > 0 {
             buf.push_str(sep);
         }
         write_node(buf, element);
+    }
+    if on_lines {
+        buf.push('\n');
     }
     buf.push('}');
 }
