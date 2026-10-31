@@ -687,10 +687,11 @@ fn keeps_the_brackets_of_computed_keys() {
     assert_parsed("{[someType]: string;}", Typescript, "{[someType]: string}");
     assert_parsed("{[a] (): T}", Typescript, "{[a](): T}");
     assert_parsed("{[a]() T}", Typescript, "{[a](): T}");
-    // jsdoc and closure modes take them too, as they take index signatures.
+    // jsdoc and closure modes have no computed keys, as in
+    // jsdoc-type-pratt-parser.
     for mode in [Jsdoc, Closure] {
-        assert_parsed("{[a]: T}", mode, "{[a]: T}");
-        assert_parsed("{[a](): T}", mode, "{[a](): T}");
+        assert_rejected("{[a]: T}", mode);
+        assert_rejected("{[a](): T}", mode);
     }
 }
 
