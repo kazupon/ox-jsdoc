@@ -5,7 +5,7 @@
  * Generates 2 (fixtures) × 5 (patterns) × 1 (rule set) = 10 lint configs
  * into `tasks/benchmark/.tmp/jsdoc-linter/<fixture>/<pattern>/<rule-set>/`
  * and writes `fixture-stats.json` next to them. Run before
- * `jsdoc-linter-hyperfine.sh`.
+ * `jsdoc-linter-diagnostics.mjs` and `jsdoc-linter-hyperfine.sh`.
  *
  * Fixtures:
  *   js — refers/eslint-plugin-jsdoc/src/    (.js, espree default parser)
@@ -19,45 +19,10 @@
 
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 import { parse as parseJsdoc } from 'ox-jsdoc'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const repoRoot = path.resolve(__dirname, '../../..')
-const benchRoot = path.resolve(__dirname, '..')
-const tmpRoot = path.join(benchRoot, '.tmp/jsdoc-linter')
-
-/**
- * Two fixture variants — one JS, one TS. They share the rule sets and
- * pattern matrix but differ in extension glob and (for ESLint) parser.
- */
-export const FIXTURES = {
-  js: {
-    dir: path.join(repoRoot, 'refers/eslint-plugin-jsdoc/src'),
-    glob: '**/*.js',
-    extensions: ['.js', '.cjs', '.mjs'],
-    eslintParser: null
-  },
-  ts: {
-    dir: path.join(repoRoot, 'refers/vscode/src'),
-    glob: '**/*.ts',
-    extensions: ['.ts'],
-    eslintParser: '@typescript-eslint/parser'
-  }
-}
-
-export const RULE_SETS = {
-  combined: ['empty-tags', 'require-param-description', 'require-param-type']
-}
-
-export const PATTERNS = [
-  'eslint-jsdoc-upstream',
-  'oxlint-jsdoc-native',
-  'eslint-ox-jsdoc-single',
-  'eslint-ox-jsdoc-batch',
-  'oxlint-ox-jsdoc-batch'
-]
+import { FIXTURES, PATTERNS, repoRoot, RULE_SETS, tmpRoot } from './lib/jsdoc-linter.mjs'
 
 // ---------------------------------------------------------------------------
 // Fixture stats
@@ -223,11 +188,16 @@ ${ruleEntries}
     return
   }
 
+  // Oxlint lints every file it supports (`.ts` in the JS fixture, `.js` in
+  // the TS fixture), so give the rules the same `files` as the ESLint
+  // config. Otherwise Oxlint runs them on more files than ESLint does.
   if (pattern === 'oxlint-jsdoc-native') {
     const config = {
       plugins: ['jsdoc'],
       categories: oxlintCategoriesOff,
-      rules: Object.fromEntries(rules.map(r => [`jsdoc/${r}`, 'error']))
+      overrides: [
+        { files: [fixture.glob], rules: Object.fromEntries(rules.map(r => [`jsdoc/${r}`, 'error'])) }
+      ]
     }
     writeFileSync(path.join(dir, '.oxlintrc.json'), JSON.stringify(config, null, 2))
     return
@@ -238,7 +208,9 @@ ${ruleEntries}
       jsPlugins: [{ name: 'jsdoc-js', specifier: '@ox-jsdoc/eslint-plugin-jsdoc' }],
       settings: { jsdoc: { oxParseStrategy: 'batch' } },
       categories: oxlintCategoriesOff,
-      rules: Object.fromEntries(rules.map(r => [`jsdoc-js/${r}`, 'error']))
+      overrides: [
+        { files: [fixture.glob], rules: Object.fromEntries(rules.map(r => [`jsdoc-js/${r}`, 'error'])) }
+      ]
     }
     writeFileSync(path.join(dir, '.oxlintrc.json'), JSON.stringify(config, null, 2))
     return
@@ -277,4 +249,4 @@ for (const [fixtureName, fixture] of Object.entries(FIXTURES)) {
 
 writeFileSync(path.join(tmpRoot, 'fixture-stats.json'), JSON.stringify(stats, null, 2))
 console.log(`\n→ ${path.relative(repoRoot, path.join(tmpRoot, 'fixture-stats.json'))}`)
-console.log('Done. Now run: bash tasks/benchmark/scripts/jsdoc-linter-hyperfine.sh')
+console.log('Done. Now run: node tasks/benchmark/scripts/jsdoc-linter-diagnostics.mjs')

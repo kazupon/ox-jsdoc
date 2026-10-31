@@ -22,9 +22,14 @@
 #   実用的な「JSDoc lint 一式」の代表値、per-rule の breakdown は省略
 #
 # Usage:
-#   1. node tasks/benchmark/scripts/jsdoc-linter-setup.mjs   # generate configs
-#   2. bash tasks/benchmark/scripts/jsdoc-linter-hyperfine.sh
-#   3. node tasks/benchmark/scripts/jsdoc-linter-report.mjs  # aggregate report
+#   1. node tasks/benchmark/scripts/jsdoc-linter-setup.mjs        # generate configs
+#   2. node tasks/benchmark/scripts/jsdoc-linter-diagnostics.mjs  # check that the patterns do the same work
+#   3. bash tasks/benchmark/scripts/jsdoc-linter-hyperfine.sh
+#   4. node tasks/benchmark/scripts/jsdoc-linter-report.mjs       # aggregate report
+#
+# hyperfine runs with --ignore-failure (the rules report diagnostics), so it
+# does not see whether a command did its work. Step 2 checks that before
+# anything is timed.
 
 set -euo pipefail
 

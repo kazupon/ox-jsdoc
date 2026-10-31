@@ -2,36 +2,46 @@
 /**
  * JSDoc linter benchmark — report aggregator.
  *
- * Reads `fixture-stats.json` and the 2 (fixtures) × 1 (rule set) = 2
- * hyperfine JSON exports, then writes a single combined Markdown report
- * at `tasks/benchmark/results/jsdoc-linter-hyperfine.md` (and the merged
- * JSON at `jsdoc-linter-hyperfine.json`).
+ * Reads `fixture-stats.json`, the 2 (fixtures) × 1 (rule set) = 2
+ * hyperfine JSON exports and the diagnostics of each pattern
+ * (`jsdoc-linter-diagnostics.mjs`), then writes a single combined Markdown
+ * report at `tasks/benchmark/results/jsdoc-linter-hyperfine.md` (and the
+ * merged JSON at `jsdoc-linter-hyperfine.json`).
  *
  * Run after `jsdoc-linter-hyperfine.sh` finishes.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const repoRoot = path.resolve(__dirname, '../../..')
-const benchRoot = path.resolve(__dirname, '..')
-const tmpRoot = path.join(benchRoot, '.tmp/jsdoc-linter')
-const resultsRoot = path.join(benchRoot, 'results')
+import {
+  FIXTURES as FIXTURE_CONFIGS,
+  repoRoot,
+  resultsRoot,
+  RULE_SETS as RULE_SET_CONFIGS,
+  SAME_RULES_PATTERNS,
+  tmpRoot
+} from './lib/jsdoc-linter.mjs'
 
-const FIXTURES = ['js', 'ts']
-const RULE_SETS = ['combined']
+const FIXTURES = Object.keys(FIXTURE_CONFIGS)
+const RULE_SETS = Object.keys(RULE_SET_CONFIGS)
 
 const stats = JSON.parse(readFileSync(path.join(tmpRoot, 'fixture-stats.json'), 'utf8'))
 
 /** @type {Record<string, Record<string, object>>} */
 const resultsByFixture = {}
+/** @type {Record<string, Record<string, object | null>>} */
+const diagnosticsByFixture = {}
 for (const fx of FIXTURES) {
   resultsByFixture[fx] = {}
+  diagnosticsByFixture[fx] = {}
   for (const rs of RULE_SETS) {
     const jsonPath = path.join(resultsRoot, `jsdoc-linter-hyperfine-${fx}-${rs}.json`)
     resultsByFixture[fx][rs] = JSON.parse(readFileSync(jsonPath, 'utf8'))
+    const diagnosticsPath = path.join(resultsRoot, `jsdoc-linter-diagnostics-${fx}-${rs}.json`)
+    diagnosticsByFixture[fx][rs] = existsSync(diagnosticsPath)
+      ? JSON.parse(readFileSync(diagnosticsPath, 'utf8'))
+      : null
   }
 }
 
@@ -115,20 +125,33 @@ function buildMarkdown() {
     lines.push(`## Fixture: \`${fx}\` — ${s.fixtureDir}`)
     lines.push('')
     const hf = resultsByFixture[fx].combined
+    const diagnostics = diagnosticsByFixture[fx].combined
     const baselineMean = hf.results.find(r => r.command === 'eslint-jsdoc-upstream')?.mean
-    lines.push('| # | Name | Mean | Median | p95 | Stddev | vs baseline |')
-    lines.push('|---|---|---:|---:|---:|---:|---:|')
+    lines.push('| # | Name | Mean | Median | p95 | Stddev | vs baseline | Diagnostics |')
+    lines.push('|---|---|---:|---:|---:|---:|---:|---:|')
     for (let i = 0; i < hf.results.length; i++) {
       const r = hf.results[i]
       const ratio = baselineMean ? r.mean / baselineMean : null
       const ratioCol = ratio == null ? '—' : `${ratio.toFixed(2)}x`
       const p95 = percentile(r.times ?? [], 0.95)
+      const count = diagnostics?.patterns?.[r.command]?.diagnostics
       lines.push(
         `| ${i + 1} | \`${r.command}\` | ${formatDuration(r.mean)} | ${formatDuration(
           r.median ?? r.mean
         )} | ${formatDuration(p95)} | ${formatDuration(
           r.stddev ?? 0
-        )} | ${ratioCol} |`
+        )} | ${ratioCol} | ${count == null ? '—' : count.toLocaleString()} |`
+      )
+    }
+    lines.push('')
+    if (diagnostics == null) {
+      lines.push('- Diagnostics: not checked (run `jsdoc-linter-diagnostics.mjs` before hyperfine).')
+    } else {
+      const same = SAME_RULES_PATTERNS.map(p => `\`${p}\``).join(', ')
+      lines.push(
+        diagnostics.match
+          ? `- Diagnostics of the JSDoc rules, one run of each command: ${same} report the same diagnostics (file, line, rule and message). \`oxlint-jsdoc-native\` is another implementation of the rules, so its count differs.`
+          : `- Diagnostics of the JSDoc rules: ${same} do **not** report the same diagnostics, so their times are not comparable.`
       )
     }
     lines.push('')
@@ -157,6 +180,9 @@ function buildMarkdown() {
 const mdPath = path.join(resultsRoot, 'jsdoc-linter-hyperfine.md')
 const jsonPath = path.join(resultsRoot, 'jsdoc-linter-hyperfine.json')
 writeFileSync(mdPath, buildMarkdown())
-writeFileSync(jsonPath, JSON.stringify({ stats, results: resultsByFixture }, null, 2))
+writeFileSync(
+  jsonPath,
+  JSON.stringify({ stats, results: resultsByFixture, diagnostics: diagnosticsByFixture }, null, 2)
+)
 console.log(`→ ${path.relative(repoRoot, mdPath)}`)
 console.log(`→ ${path.relative(repoRoot, jsonPath)}`)
