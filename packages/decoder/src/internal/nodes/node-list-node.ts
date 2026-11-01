@@ -52,7 +52,7 @@ export class RemoteNodeListNode implements LazyNode {
     let cursor = head
     const parent = thisNode(this._internal)
     while (cursor !== 0) {
-      const child = this._internal.sourceFile.getNode(cursor, parent, this._internal.rootIndex)
+      const child = this._internal.sourceFile.nodeAt(cursor, parent, this._internal.rootIndex)
       if (child !== null) {
         out.push(child)
       }

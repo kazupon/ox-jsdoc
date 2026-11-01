@@ -57,7 +57,8 @@ interface RemoteSourceFileLike {
   getRootSourceOffsetInData(rootIndex: number): number;
   getRootSourceText(rootIndex: number): string;
   sliceSourceText(rootIndex: number, start: number, end: number): string | null;
-  getNode(nodeIndex: number, parent: LazyNode | null, rootIndex?: number): LazyNode | null;
+  getNode(nodeIndex: number, parent?: LazyNode | null, rootIndex?: number): LazyNode | null;
+  nodeAt(nodeIndex: number, parent: LazyNode | null, rootIndex: number): LazyNode | null;
 }
 /**
  * Shared `_internal` shape held by every Remote* lazy class. All helpers
@@ -103,7 +104,11 @@ interface RemoteSourceFileOptions {
  *   `compatMode` getters
  * - `getString(idx)` — String Offsets[idx] → resolved string (cached)
  * - `getRootBaseOffset(rootIndex)`
- * - `getNode(nodeIndex, parent, rootIndex)` — lazy class instance (cached)
+ * - `getNode(nodeIndex, parent?, rootIndex?)` — lazy class instance
+ *   (cached). Without the root index or the parent, it finds them from the
+ *   node records
+ * - `nodeAt(nodeIndex, parent, rootIndex)` — the same for the node classes,
+ *   which always know the parent and the root
  * - `asts` getter — array of root Remote* instances (or `null` for failures)
  */
 export declare class RemoteSourceFile implements RemoteSourceFileLike {
@@ -112,8 +117,13 @@ export declare class RemoteSourceFile implements RemoteSourceFileLike {
    * Construct from a binary buffer (any `BufferSource`-compatible value).
    *
    * Throws when:
+   * - the host is not little-endian (the decoder reads the u32 values
+   *   through a `Uint32Array`, in the byte order of the host)
    * - the buffer is shorter than {@link HEADER_SIZE} bytes
    * - the major version disagrees with {@link SUPPORTED_MAJOR}
+   *
+   * Warns once (`console.warn`) when the minor version is newer than the
+   * decoder knows.
    *
    * `emptyStringForNull`: only effective when the buffer's `compat_mode`
    * flag is set. Switches `toJSON()` and compat-mode field accessors to
@@ -185,7 +195,7 @@ export declare class RemoteSourceFile implements RemoteSourceFileLike {
    * Slice the source text region for `rootIndex` at the given
    * `(start, end)` source-text-relative UTF-8 byte offsets. Returns
    * `null` for the `(0, 0)` sentinel, for `start > end`, or when the
-   * slice would extend past the buffer.
+   * slice would extend past String Data (as the Rust decoder does).
    *
    * Used by `descriptionRaw` getters on `RemoteJsdocBlock` /
    * `RemoteJsdocTag` (compat-mode wire field per
@@ -199,15 +209,27 @@ export declare class RemoteSourceFile implements RemoteSourceFileLike {
    * strings that their comments add (`format.md`, "String Data section"):
    * one ends where the next one starts, and the last one at the first one's
    * start plus the total length of all of them (the header's
-   * `sourceTextLength`). Returns `''` when that would go past the buffer.
+   * `sourceTextLength`). Returns `''` when that would go past String Data.
    */
   getRootSourceText(rootIndex: number): string;
   /**
    * Build (or fetch from cache) the lazy class instance for a node.
    *
    * Returns `null` for the sentinel (node index 0).
+   *
+   * The node keeps its parent and root index (its range starts at that
+   * root's base offset), and the cache gives the same instance to every
+   * later call. Without `rootIndex`, the root is the one whose nodes hold
+   * `nodeIndex`. Without `parent` (or with `null`), the parent is the node
+   * at the record's `parent_index` (`null` for a root).
    */
-  getNode(nodeIndex: number, parent: LazyNode | null, rootIndex?: number): LazyNode | null;
+  getNode(nodeIndex: number, parent?: LazyNode | null, rootIndex?: number): LazyNode | null;
+  /**
+   * {@link getNode} for the node classes, which always know the parent and
+   * the root index of the node that they build: build (or fetch from cache)
+   * the lazy class instance, with them as they are.
+   */
+  nodeAt(nodeIndex: number, parent: LazyNode | null, rootIndex: number): LazyNode | null;
   /**
    * AST root for each entry in the Root Index array. Yields `null` for
    * entries with `node_index === 0` (parse failure sentinel) and the

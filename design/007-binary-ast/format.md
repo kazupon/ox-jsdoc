@@ -12,8 +12,8 @@ The following conventions apply to all multi-byte numbers, strings, and bit repr
   - The major NAPI platforms (x86_64, ARM64) are all LE
   - JS `DataView` defaults to big-endian, but this format always passes `true` (LE) as the second argument by convention
 - When hosting on a BE platform (rare cases such as IBM z/Architecture):
-  - The Rust encoder always writes LE (a byte swap occurs if the host is BE)
-  - The JS decoder works as-is by reading `DataView` in LE mode
+  - The Rust encoder always writes LE, and the Rust decoder always reads LE (a byte swap occurs if the host is BE)
+  - The JS decoder needs a LE host: for speed it reads u32 values through a `Uint32Array`, which uses the byte order of the host, so its constructor throws on a BE host instead of reading wrong values (its `DataView` reads pass `true`)
   - Same policy as tsgo (`encoder.go:69` "All integer values are little-endian")
 
 ### Character encoding
@@ -121,7 +121,7 @@ Examples: 0x10 = Major 1, Minor 0 (initial release)
 | --- | --- | --- |
 | Different Major | - | Error (format incompatible) |
 | Same Major, buffer Minor <= decoder Minor | - | OK (decoder supports all fields) |
-| Same Major, buffer Minor > decoder Minor | - | Warning + continue (unknown fields are ignored, only known fields are processed) |
+| Same Major, buffer Minor > decoder Minor | - | Continue (unknown fields are ignored, only known fields are processed, and a node of an unknown kind throws `unknown Kind` in JS and gives `None` in Rust). The JS decoder warns once, on the first such buffer (`console.warn`); the Rust decoder has no logging and accepts it silently |
 
 **Minor-bumping changes** (backward compatible):
 
@@ -155,7 +155,6 @@ const SUPPORTED_MINOR: u8 = 0;
 fn check_version(buffer: &[u8]) -> Result<(), DecodeError> {
     let version_byte = buffer[0];
     let major = version_byte >> 4;
-    let minor = version_byte & 0x0F;
 
     if major != SUPPORTED_MAJOR {
         return Err(DecodeError::IncompatibleMajor {
@@ -163,9 +162,8 @@ fn check_version(buffer: &[u8]) -> Result<(), DecodeError> {
             decoder_major: SUPPORTED_MAJOR,
         });
     }
-    if minor > SUPPORTED_MINOR {
-        log::warn!("Buffer minor version {} > decoder minor {}", minor, SUPPORTED_MINOR);
-    }
+    // A newer minor version (`version_byte & 0x0F > SUPPORTED_MINOR`) is
+    // accepted silently: the Rust decoder has no logging.
     Ok(())
 }
 ```
@@ -176,6 +174,8 @@ fn check_version(buffer: &[u8]) -> Result<(), DecodeError> {
 const SUPPORTED_MAJOR = 1
 const SUPPORTED_MINOR = 0
 
+let warnedNewerMinor = false
+
 function checkVersion(buffer) {
   const versionByte = buffer[0]
   const major = versionByte >> 4
@@ -183,7 +183,9 @@ function checkVersion(buffer) {
   if (major !== SUPPORTED_MAJOR) {
     throw new Error(`Incompatible major: ${major} (expected ${SUPPORTED_MAJOR})`)
   }
-  if (minor > SUPPORTED_MINOR) {
+  // Warn once, on the first buffer with a newer minor version.
+  if (minor > SUPPORTED_MINOR && !warnedNewerMinor) {
+    warnedNewerMinor = true
     console.warn(`Buffer minor ${minor} > decoder ${SUPPORTED_MINOR}, unknown fields ignored`)
   }
 }

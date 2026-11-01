@@ -52,6 +52,14 @@ export const TYPE_PARAMETER_FLAGS_MINOR = 3
 export const MAJOR_SHIFT = 4
 export const MINOR_MASK = 0x0f
 
+/**
+ * `true` when the host stores numbers little-endian, as the Binary AST does.
+ * The decoder reads u32 values through a `Uint32Array` (5–10× faster than
+ * `DataView.getUint32` in V8), which uses the byte order of the host, so it
+ * needs a little-endian host.
+ */
+export const HOST_IS_LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1
+
 export const COMPAT_MODE_BIT = 0x01
 
 // ---------------------------------------------------------------------------

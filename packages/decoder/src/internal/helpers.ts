@@ -168,7 +168,7 @@ export function childNodeAtVisitorIndex(
   if (childIdx === 0) {
     return null
   }
-  return internal.sourceFile.getNode(childIdx, /* parent */ thisNode(internal), internal.rootIndex)
+  return internal.sourceFile.nodeAt(childIdx, /* parent */ thisNode(internal), internal.rootIndex)
 }
 
 /**
@@ -184,7 +184,7 @@ export function childNodeAtVisitorIndexChildren(
   if (childIdx === 0) {
     return null
   }
-  return internal.sourceFile.getNode(childIdx, thisNode(internal), internal.rootIndex)
+  return internal.sourceFile.nodeAt(childIdx, thisNode(internal), internal.rootIndex)
 }
 
 /**
@@ -249,7 +249,7 @@ export function absoluteRange(internal: RemoteInternal): [number, number] {
  * sourceFile's nodeCache to keep instances stable.
  */
 export function thisNode(internal: RemoteInternal): LazyNode | null {
-  return internal.sourceFile.getNode(internal.index, internal.parent, internal.rootIndex)
+  return internal.sourceFile.nodeAt(internal.index, internal.parent, internal.rootIndex)
 }
 
 /**

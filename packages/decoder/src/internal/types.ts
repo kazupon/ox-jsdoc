@@ -60,7 +60,8 @@ export interface RemoteSourceFileLike {
   getRootSourceOffsetInData(rootIndex: number): number
   getRootSourceText(rootIndex: number): string
   sliceSourceText(rootIndex: number, start: number, end: number): string | null
-  getNode(nodeIndex: number, parent: LazyNode | null, rootIndex?: number): LazyNode | null
+  getNode(nodeIndex: number, parent?: LazyNode | null, rootIndex?: number): LazyNode | null
+  nodeAt(nodeIndex: number, parent: LazyNode | null, rootIndex: number): LazyNode | null
 }
 
 /**
