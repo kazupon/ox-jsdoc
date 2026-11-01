@@ -18,6 +18,9 @@ WORKFLOW_FILE="release.yml"
 #
 # `ox-jsdoc-origin` and `@ox-jsdoc/wasm-origin` are `"private": true` and are
 # not published.
+#
+# npm creates a trust relationship only with a permission flag:
+# `--allow-publish` lets the release workflow run `npm publish`.
 PACKAGES=(
   # Canonical packages
   "@ox-jsdoc/decoder"
@@ -27,6 +30,8 @@ PACKAGES=(
   "@ox-jsdoc/binding-darwin-x64"
   "@ox-jsdoc/binding-linux-x64-gnu"
   "@ox-jsdoc/binding-win32-x64-msvc"
+  "@ox-jsdoc/jsdoccomment"
+  "@ox-jsdoc/eslint-plugin-jsdoc"
   # Thin alias packages (one deprecation cycle)
   "ox-jsdoc-binary"
   "@ox-jsdoc/wasm-binary"
@@ -40,11 +45,11 @@ fi
 for package in "${PACKAGES[@]}"; do
   echo "Configuring trusted publishing for ${package}"
   if [[ "${dry_run}" == true ]]; then
-    npm trust github "${package}" --repo "${REPO}" --file "${WORKFLOW_FILE}" --yes --dry-run
+    npm trust github "${package}" --repo "${REPO}" --file "${WORKFLOW_FILE}" --allow-publish --yes --dry-run
     echo "Would require 2FA and disallow token publishing for ${package}"
   else
     trust_log=$(mktemp)
-    if npm trust github "${package}" --repo "${REPO}" --file "${WORKFLOW_FILE}" --yes 2>"${trust_log}"; then
+    if npm trust github "${package}" --repo "${REPO}" --file "${WORKFLOW_FILE}" --allow-publish --yes 2>"${trust_log}"; then
       rm -f "${trust_log}"
     elif grep -q "E409" "${trust_log}"; then
       cat "${trust_log}" >&2

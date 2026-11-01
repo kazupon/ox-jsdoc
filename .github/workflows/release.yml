@@ -249,6 +249,8 @@ jobs:
           mkdir -p "${npm_dir}"
           pnpm -C "${package_path}" exec napi create-npm-dirs --package-json-path ../../${package_path}/package.json --npm-dir ../../${npm_dir}
           pnpm -C "${package_path}" exec napi artifacts --package-json-path ../../${package_path}/package.json --output-dir ../../artifacts --npm-dir ../../${npm_dir}
+          # The platform packages that napi creates have only package.json and README.md.
+          for platform_dir in "${npm_dir}"/*/; do cp "${package_path}/LICENSE" "${platform_dir}"; done
           pnpm -C "${package_path}" exec napi pre-publish --no-gh-release -t npm --package-json-path ../../${package_path}/package.json --npm-dir ../../${npm_dir}
           cp artifacts/ox-jsdoc-x86_64-unknown-linux-gnu/src-js/bindings.js "${package_path}/src-js/bindings.js"
           cp artifacts/ox-jsdoc-x86_64-unknown-linux-gnu/src-js/bindings.d.ts "${package_path}/src-js/bindings.d.ts"
@@ -282,7 +284,7 @@ jobs:
       - name: Smoke test published packages
         run: |
           version=$(node -p "require('./napi/ox-jsdoc/package.json').version")
-          for package_name in @ox-jsdoc/decoder ox-jsdoc ox-jsdoc-binary @ox-jsdoc/jsdoccomment @ox-jsdoc/eslint-plugin-jsdoc; do
+          for package_name in @ox-jsdoc/decoder ox-jsdoc ox-jsdoc-binary @ox-jsdoc/wasm @ox-jsdoc/wasm-binary @ox-jsdoc/jsdoccomment @ox-jsdoc/eslint-plugin-jsdoc; do
             for attempt in {1..12}; do
               if npm view "${package_name}@${version}" version >/dev/null 2>&1; then
                 echo "${package_name}@${version} is available on npm"
@@ -299,10 +301,14 @@ jobs:
           tmpdir=$(mktemp -d)
           cd "${tmpdir}"
           npm init -y
-          npm install --ignore-scripts "@ox-jsdoc/decoder@${version}" "ox-jsdoc@${version}" "ox-jsdoc-binary@${version}" "@ox-jsdoc/jsdoccomment@${version}" "@ox-jsdoc/eslint-plugin-jsdoc@${version}"
+          npm install --ignore-scripts "@ox-jsdoc/decoder@${version}" "ox-jsdoc@${version}" "ox-jsdoc-binary@${version}" "@ox-jsdoc/wasm@${version}" "@ox-jsdoc/wasm-binary@${version}" "@ox-jsdoc/jsdoccomment@${version}" "@ox-jsdoc/eslint-plugin-jsdoc@${version}"
           node --input-type=module -e "import('@ox-jsdoc/decoder').then(() => console.log('@ox-jsdoc/decoder smoke ok'))"
           node --input-type=module -e "import { parse } from 'ox-jsdoc'; const result = parse('/** hi */'); if (result.diagnostics.length !== 0) throw new Error('ox-jsdoc diagnostics mismatch'); console.log('ox-jsdoc smoke ok')"
           node --input-type=module -e "import { parse } from 'ox-jsdoc-binary'; const result = parse('/** hi */'); if (result.diagnostics.length !== 0) throw new Error('ox-jsdoc-binary diagnostics mismatch'); console.log('ox-jsdoc-binary smoke ok')"
+          # Node.js passes the .wasm file as bytes: fetch cannot read its default file: URL.
+          for package_name in @ox-jsdoc/wasm @ox-jsdoc/wasm-binary; do
+            node --input-type=module -e "import { readFile } from 'node:fs/promises'; import { initWasm, parse } from '${package_name}'; await initWasm(await readFile(new URL(import.meta.resolve('@ox-jsdoc/wasm/ox_jsdoc_wasm_bg.wasm')))); const result = parse('/** hi */'); if (result.diagnostics.length !== 0) throw new Error('${package_name} diagnostics mismatch'); result.free(); console.log('${package_name} smoke ok')"
+          done
           node --input-type=module -e "import { parseComment } from '@ox-jsdoc/jsdoccomment'; const block = parseComment('/** hi */'); if (!block.description.includes('hi')) throw new Error('@ox-jsdoc/jsdoccomment smoke mismatch'); console.log('@ox-jsdoc/jsdoccomment smoke ok')"
           node --input-type=module -e "import jsdoc from '@ox-jsdoc/eslint-plugin-jsdoc'; if (!jsdoc?.rules) throw new Error('@ox-jsdoc/eslint-plugin-jsdoc rules missing'); console.log('@ox-jsdoc/eslint-plugin-jsdoc smoke ok')"
           # The two jsdoc packages are ESM only; require() loads them through require(esm).
