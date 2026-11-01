@@ -11,7 +11,7 @@
 
 use ox_jsdoc::decoder::nodes::type_node::{LazyTypeNode, LazyTypeTypeParameter};
 use ox_jsdoc::decoder::source_file::LazySourceFile;
-use ox_jsdoc::format::header::{SUPPORTED_VERSION_BYTE, VERSION_OFFSET};
+use ox_jsdoc::format::header::{SUPPORTED_VERSION_BYTE, VERSION_OFFSET, minor};
 use ox_jsdoc::parser::type_data::ParseMode;
 use ox_jsdoc::parser::{ParseOptions, parse, parse_type_expression};
 use oxc_allocator::Allocator;
@@ -89,9 +89,12 @@ fn name(node: Option<LazyTypeNode<'_>>) -> String {
 }
 
 #[test]
-fn writes_minor_version_3() {
-    assert_eq!(SUPPORTED_VERSION_BYTE, 0x13);
-    assert_eq!(bytes_of("string", JSDOC)[VERSION_OFFSET], 0x13);
+fn writes_minor_version_3_or_later() {
+    assert!(minor(SUPPORTED_VERSION_BYTE) >= 3);
+    assert_eq!(
+        bytes_of("string", JSDOC)[VERSION_OFFSET],
+        SUPPORTED_VERSION_BYTE
+    );
 }
 
 #[test]

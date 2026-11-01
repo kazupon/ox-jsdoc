@@ -12,6 +12,7 @@
  * is covered separately by `parse.test.ts`.
  */
 
+import { RemoteSourceFile } from '@ox-jsdoc/decoder'
 import { describe, expect, it } from 'vite-plus/test'
 import { parse as jtpParse } from 'jsdoc-type-pratt-parser'
 
@@ -672,7 +673,10 @@ describe('Binary AST minor 3', () => {
       hasParameters: false,
       hasTypeParameters: false,
       optional: true,
-      name: 'a'
+      name: 'a',
+      parameters: null,
+      returnType: { type: 'TypeName', value: 'void' },
+      typeParameters: null
     })
     expect(firstElement('{a(): void}')).toMatchObject({ optional: false })
     expect(parseType('{"a"?<T>(x: T): void}', 'typescript')).toBe('{"a"?<T>(x: T): void}')
@@ -703,6 +707,81 @@ describe('Binary AST minor 3', () => {
     expect(typeParameter('{<T extends string>(x: T): T}')).toMatchObject({
       hasConstraint: true,
       hasDefault: false
+    })
+  })
+})
+
+// Minor 4 of the Binary AST: a method signature wraps its parameters and its
+// type parameters in lists, around its return type, as format.md says.
+describe('Binary AST minor 4', () => {
+  /** The parsed type of `@type {type}` in TypeScript mode, and its buffer. */
+  const parsed = (type: string) =>
+    parse(`/** @type {${type}} */`, { parseTypes: true, typeParseMode: 'typescript' })
+  /** The JSON of the first element of an object type, without ranges. */
+  const firstElement = (type: string): Record<string, unknown> => {
+    const tag = parsed(type).ast!.tags[0] as unknown as { parsedType: { toJSON(): unknown } }
+    const json = JSON.stringify(tag.parsedType.toJSON(), (key, value) =>
+      key === 'range' ? undefined : value
+    )
+    return (JSON.parse(json) as { elements: Record<string, unknown>[] }).elements[0]!
+  }
+
+  it('reads the parameters, the return type and the type parameters of a method', () => {
+    const name = (value: string) => ({ type: 'TypeName', value })
+    const parameter = (key: string, right: string) => ({
+      type: 'TypeKeyValue',
+      optional: false,
+      variadic: false,
+      key,
+      right: name(right)
+    })
+    expect(firstElement('{foo<T>(a: T, b: number): void}')).toEqual({
+      type: 'TypeMethodSignature',
+      quote: 0,
+      hasParameters: true,
+      hasTypeParameters: true,
+      optional: false,
+      name: 'foo',
+      parameters: {
+        type: 'TypeParameterList',
+        elements: [parameter('a', 'T'), parameter('b', 'number')]
+      },
+      returnType: name('void'),
+      typeParameters: {
+        type: 'TypeParameterList',
+        elements: [
+          {
+            type: 'TypeTypeParameter',
+            elements: [name('T')],
+            hasConstraint: false,
+            hasDefault: false
+          }
+        ]
+      }
+    })
+    expect(firstElement('{foo<T>(): T}')).toMatchObject({
+      parameters: null,
+      returnType: name('T'),
+      typeParameters: { elements: [{ elements: [name('T')] }] }
+    })
+  })
+
+  it('gives no children of a method in a buffer of minor version 3', () => {
+    const { view } = parsed('{foo<T>(a: T): T}').sourceFile
+    const bytes = new Uint8Array(
+      view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength)
+    )
+    bytes[0] = 0x13
+    const block = new RemoteSourceFile(bytes).asts[0] as unknown as {
+      tags: Array<{ parsedType: { elements: Array<Record<string, unknown>> } }>
+    }
+    expect(block.tags[0]!.parsedType.elements[0]).toMatchObject({
+      name: 'foo',
+      hasParameters: true,
+      hasTypeParameters: true,
+      parameters: null,
+      returnType: null,
+      typeParameters: null
     })
   })
 })
