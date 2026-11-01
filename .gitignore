@@ -34,6 +34,9 @@ dist-ssr
 napi/ox-jsdoc/src-js/bindings.d.ts
 napi/ox-jsdoc/src-js/bindings.js
 napi/ox-jsdoc/src-js/ox_jsdoc.*.node
+napi/ox-jsdoc-origin/src-js/bindings.d.ts
+napi/ox-jsdoc-origin/src-js/bindings.js
+napi/ox-jsdoc-origin/src-js/ox_jsdoc_origin.*.node
 napi/ox-jsdoc-binary/src-js/bindings.d.ts
 napi/ox-jsdoc-binary/src-js/bindings.js
 napi/ox-jsdoc-binary/src-js/ox_jsdoc_binary.*.node
