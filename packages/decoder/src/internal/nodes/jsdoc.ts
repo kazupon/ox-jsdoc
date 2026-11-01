@@ -27,6 +27,7 @@ import {
 import {
   absoluteRange,
   childNodeAtVisitorIndex,
+  childNodeAtVisitorIndexChildren,
   extStringField,
   extStringFieldRequired,
   extU32,
@@ -1869,7 +1870,7 @@ export class RemoteJsdocInlineTag implements LazyNode {
 // 0x09 RemoteJsdocGenericTagBody
 //
 // Extended Data layout (8 bytes):
-//   byte 0      : Children bitmask (u8)
+//   byte 0      : Children bitmask (u8): bit0 = type source, bit1 = value
 //   byte 1      : padding (u8)
 //   byte 2-7    : description (StringField, NONE if absent)
 // ===========================================================================
@@ -1907,7 +1908,19 @@ export class RemoteJsdocGenericTagBody implements LazyNode {
   get description(): string | null {
     return extStringField(this.#internal, 2)
   }
+  /** `{...}` type source of the body (`JsdocTypeSource`, visitor index 0). */
+  get typeSource(): LazyNode | null {
+    return childNodeAtVisitorIndex(this.#internal, 0)
+  }
+  /**
+   * Value of the body (visitor index 1): a `JsdocParameterName`,
+   * `JsdocNamepathSource`, `JsdocIdentifier` or `JsdocText`.
+   */
+  get value(): LazyNode | null {
+    return childNodeAtVisitorIndex(this.#internal, 1)
+  }
 
+  /** Leaves out `typeSource` and `value`: the tag's `rawType` and `name` hold them. */
   toJSON(): RemoteJsonObject {
     return {
       type: this.type,
@@ -1927,9 +1940,9 @@ export class RemoteJsdocGenericTagBody implements LazyNode {
 
 /**
  * `JsdocBorrowsTagBody` (Kind 0x0A) — Children type with `source` + `target`
- * children. The child accessors will be filled in once the parser starts
- * emitting them; for now the class exposes the standard range/parent/toJSON
- * surface.
+ * children (each a tag value, like the `value` of `JsdocGenericTagBody`).
+ * Reserved: the parser writes `@borrows` bodies as `JsdocGenericTagBody` for
+ * now.
  */
 export class RemoteJsdocBorrowsTagBody implements LazyNode {
   readonly type = 'JsdocBorrowsTagBody'
@@ -1951,6 +1964,14 @@ export class RemoteJsdocBorrowsTagBody implements LazyNode {
   }
   get parent(): LazyNode | null {
     return this.#internal.parent
+  }
+  /** `source` of `@borrows source as target` (visitor index 0). */
+  get source(): LazyNode | null {
+    return childNodeAtVisitorIndexChildren(this.#internal, 0)
+  }
+  /** `target` of `@borrows source as target` (visitor index 1). */
+  get target(): LazyNode | null {
+    return childNodeAtVisitorIndexChildren(this.#internal, 1)
   }
 
   toJSON(): RemoteJsonObject {

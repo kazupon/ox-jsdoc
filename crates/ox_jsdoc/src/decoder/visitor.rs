@@ -17,11 +17,12 @@
 //!   `visit_*` method. Override `visit_xxx` and call this from inside it to
 //!   mix custom logic with the default traversal.
 //!
-//! Two helpers dispatch sum-typed children:
+//! Three helpers dispatch sum-typed children:
 //!
 //! - [`LazyJsdocVisitor::visit_type_node`] — match on a [`LazyTypeNode`] and
 //!   forward to the variant-specific `visit_type_*` method.
 //! - [`LazyJsdocVisitor::visit_tag_body`] — match on a [`LazyJsdocTagBody`].
+//! - [`LazyJsdocVisitor::visit_tag_value`] — match on a [`LazyJsdocTagValue`].
 //!
 //! Phase 4 will replace this hand-written file with a code-generated
 //! version derived from the same schema that emits the writer/decoder.
@@ -30,7 +31,7 @@ use super::nodes::comment_ast::{
     LazyJsdocBlock, LazyJsdocBorrowsTagBody, LazyJsdocDescriptionLine, LazyJsdocGenericTagBody,
     LazyJsdocIdentifier, LazyJsdocInlineTag, LazyJsdocNamepathSource, LazyJsdocParameterName,
     LazyJsdocRawTagBody, LazyJsdocTag, LazyJsdocTagBody, LazyJsdocTagName, LazyJsdocTagNameValue,
-    LazyJsdocText, LazyJsdocTypeLine, LazyJsdocTypeSource,
+    LazyJsdocTagValue, LazyJsdocText, LazyJsdocTypeLine, LazyJsdocTypeSource,
 };
 use super::nodes::type_node::{
     LazyTypeAny, LazyTypeAsserts, LazyTypeAssertsPlain, LazyTypeBigInt, LazyTypeCallSignature,
@@ -121,6 +122,16 @@ pub trait LazyJsdocVisitor<'a> {
         }
     }
 
+    /// Dispatch a `JsdocTagValue` sum to the variant-specific method.
+    fn visit_tag_value(&mut self, value: LazyJsdocTagValue<'a>) {
+        match value {
+            LazyJsdocTagValue::Parameter(n) => self.visit_parameter_name(n),
+            LazyJsdocTagValue::Namepath(n) => self.visit_namepath_source(n),
+            LazyJsdocTagValue::Identifier(n) => self.visit_identifier(n),
+            LazyJsdocTagValue::Raw(n) => self.visit_text(n),
+        }
+    }
+
     /// Visit a `JsdocTagName` leaf.
     fn visit_tag_name(&mut self, _node: LazyJsdocTagName<'a>) {}
     /// Visit a `JsdocTagNameValue` leaf.
@@ -131,12 +142,32 @@ pub trait LazyJsdocVisitor<'a> {
     fn visit_type_line(&mut self, _node: LazyJsdocTypeLine<'a>) {}
     /// Visit a `JsdocInlineTag` leaf.
     fn visit_inline_tag(&mut self, _node: LazyJsdocInlineTag<'a>) {}
-    /// Visit a `JsdocGenericTagBody`. Currently a leaf — child accessors
-    /// (description tag-list etc.) land in Phase 1.2a.
-    fn visit_generic_tag_body(&mut self, _node: LazyJsdocGenericTagBody<'a>) {}
-    /// Visit a `JsdocBorrowsTagBody`. Currently a leaf — `source`/`target`
-    /// child accessors land in Phase 1.2a.
-    fn visit_borrows_tag_body(&mut self, _node: LazyJsdocBorrowsTagBody<'a>) {}
+    /// Visit a `JsdocGenericTagBody`. Default: walk its children.
+    fn visit_generic_tag_body(&mut self, node: LazyJsdocGenericTagBody<'a>) {
+        self.visit_generic_tag_body_default(node);
+    }
+    /// Default `JsdocGenericTagBody` traversal — typeSource → value.
+    fn visit_generic_tag_body_default(&mut self, node: LazyJsdocGenericTagBody<'a>) {
+        if let Some(source) = node.type_source() {
+            self.visit_type_source(source);
+        }
+        if let Some(value) = node.value() {
+            self.visit_tag_value(value);
+        }
+    }
+    /// Visit a `JsdocBorrowsTagBody` (reserved). Default: walk its children.
+    fn visit_borrows_tag_body(&mut self, node: LazyJsdocBorrowsTagBody<'a>) {
+        self.visit_borrows_tag_body_default(node);
+    }
+    /// Default `JsdocBorrowsTagBody` traversal — source → target.
+    fn visit_borrows_tag_body_default(&mut self, node: LazyJsdocBorrowsTagBody<'a>) {
+        if let Some(source) = node.source() {
+            self.visit_tag_value(source);
+        }
+        if let Some(target) = node.target() {
+            self.visit_tag_value(target);
+        }
+    }
     /// Visit a `JsdocRawTagBody` leaf.
     fn visit_raw_tag_body(&mut self, _node: LazyJsdocRawTagBody<'a>) {}
     /// Visit a `JsdocParameterName` leaf.

@@ -579,14 +579,22 @@ export declare class RemoteJsdocGenericTagBody implements LazyNode {
   get hasDashSeparator(): boolean;
   /** Description text after the dash separator. */
   get description(): string | null;
+  /** `{...}` type source of the body (`JsdocTypeSource`, visitor index 0). */
+  get typeSource(): LazyNode | null;
+  /**
+   * Value of the body (visitor index 1): a `JsdocParameterName`,
+   * `JsdocNamepathSource`, `JsdocIdentifier` or `JsdocText`.
+   */
+  get value(): LazyNode | null;
+  /** Leaves out `typeSource` and `value`: the tag's `rawType` and `name` hold them. */
   toJSON(): RemoteJsonObject;
   [inspectSymbol](): object;
 }
 /**
  * `JsdocBorrowsTagBody` (Kind 0x0A) — Children type with `source` + `target`
- * children. The child accessors will be filled in once the parser starts
- * emitting them; for now the class exposes the standard range/parent/toJSON
- * surface.
+ * children (each a tag value, like the `value` of `JsdocGenericTagBody`).
+ * Reserved: the parser writes `@borrows` bodies as `JsdocGenericTagBody` for
+ * now.
  */
 export declare class RemoteJsdocBorrowsTagBody implements LazyNode {
   #private;
@@ -594,6 +602,10 @@ export declare class RemoteJsdocBorrowsTagBody implements LazyNode {
   constructor(view: DataView, byteIndex: number, index: number, rootIndex: number, parent: LazyNode | null, sourceFile: RemoteSourceFileLike);
   get range(): readonly [number, number];
   get parent(): LazyNode | null;
+  /** `source` of `@borrows source as target` (visitor index 0). */
+  get source(): LazyNode | null;
+  /** `target` of `@borrows source as target` (visitor index 1). */
+  get target(): LazyNode | null;
   toJSON(): RemoteJsonObject;
   [inspectSymbol](): object;
 }
