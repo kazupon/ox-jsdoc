@@ -1,7 +1,24 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { jsdocVisitorKeys } from '../src/index.ts'
+import * as decoder from '../src/index.ts'
+import { jsdocVisitorKeys, RemoteSourceFile } from '../src/index.ts'
+import type { RemoteJsdocBorrowsTagBody } from '../src/index.ts'
+import { FixtureBuilder } from './fixture-builder.ts'
 
 const visitorKeys = jsdocVisitorKeys as Readonly<Record<string, readonly string[]>>
+
+/** Whether `name` is a getter of `prototype` or of a prototype that it inherits. */
+function hasGetter(prototype: object, name: string): boolean {
+  for (
+    let p: object | null = prototype;
+    p !== null && p !== Object.prototype;
+    p = Object.getPrototypeOf(p)
+  ) {
+    if (Object.getOwnPropertyDescriptor(p, name)?.get !== undefined) {
+      return true
+    }
+  }
+  return false
+}
 
 describe('jsdocVisitorKeys', () => {
   it('is a frozen object', () => {
@@ -123,5 +140,46 @@ describe('jsdocVisitorKeys', () => {
       'descriptionLines',
       'inlineTags'
     ])
+  })
+})
+
+describe('the classes of the visitor keys', () => {
+  it('have a getter for every key, also the reserved kinds', () => {
+    const classes = decoder as unknown as Record<string, { prototype: object } | undefined>
+    const missing: string[] = []
+    for (const [kind, keys] of Object.entries(visitorKeys)) {
+      const Class = classes[`Remote${kind}`]
+      if (Class === undefined) {
+        missing.push(`${kind} (no class)`)
+        continue
+      }
+      for (const key of keys) {
+        if (!hasGetter(Class.prototype, key)) {
+          missing.push(`${kind}.${key}`)
+        }
+      }
+    }
+    // The writer does not wrap the parameters of a method signature in lists
+    // yet, as format.md says, so the decoder cannot tell them apart.
+    expect(missing).toEqual([
+      'TypeMethodSignature.parameters',
+      'TypeMethodSignature.returnType',
+      'TypeMethodSignature.typeParameters'
+    ])
+  })
+
+  it('read the source and the target of a JsdocBorrowsTagBody', () => {
+    // `@borrows a as b`: a JsdocBorrowsTagBody (Kind 0x0A, Children type)
+    // whose two children are JsdocNamepathSource (Kind 0x0D) leaves.
+    const b = new FixtureBuilder()
+    const body = b.emitChildrenNode({ parentIndex: 0, kind: 0x0a, bitmask: 0b11 })
+    b.emitStringNode({ parentIndex: body, kind: 0x0d, value: 'a' })
+    b.emitStringNode({ parentIndex: body, kind: 0x0d, value: 'b' })
+    b.pushRoot({ nodeIndex: body })
+    const borrows = new RemoteSourceFile(b.build()).asts[0] as RemoteJsdocBorrowsTagBody
+    const leaf = (node: unknown) => node as { type: string; raw: string; parent: unknown }
+    expect(leaf(borrows.source)).toMatchObject({ type: 'JsdocNamepathSource', raw: 'a' })
+    expect(leaf(borrows.target)).toMatchObject({ type: 'JsdocNamepathSource', raw: 'b' })
+    expect(leaf(borrows.target).parent).toBe(borrows)
   })
 })
