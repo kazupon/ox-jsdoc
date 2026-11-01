@@ -65,7 +65,7 @@ function collectNodeListChildren(
   const parent = thisNode(parentInternal)
   let cursor = headIndex
   for (let i = 0; i < count && cursor !== 0; i++) {
-    const child = sourceFile.getNode(cursor, parent, rootIndex)
+    const child = sourceFile.nodeAt(cursor, parent, rootIndex)
     if (child !== null) {
       list.push(child)
     }

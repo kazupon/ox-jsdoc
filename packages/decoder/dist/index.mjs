@@ -8,6 +8,13 @@
 * @author kazuya kawaguchi (a.k.a. kazupon)
 * @license MIT
 */
+/**
+* `true` when the host stores numbers little-endian, as the Binary AST does.
+* The decoder reads u32 values through a `Uint32Array` (5–10× faster than
+* `DataView.getUint32` in V8), which uses the byte order of the host, so it
+* needs a little-endian host.
+*/
+const HOST_IS_LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
 const PAYLOAD_MASK = 1073741823;
 // src/internal/helpers.ts
 /**
@@ -127,7 +134,7 @@ function childIndexAtVisitorIndex(internal, bitmask, visitorIndex) {
 function childNodeAtVisitorIndex(internal, visitorIndex) {
 	const childIdx = childIndexAtVisitorIndex(internal, internal.view.getUint8(extOffsetOf(internal)), visitorIndex);
 	if (childIdx === 0) return null;
-	return internal.sourceFile.getNode(childIdx, thisNode(internal), internal.rootIndex);
+	return internal.sourceFile.nodeAt(childIdx, thisNode(internal), internal.rootIndex);
 }
 /**
 * Same as `childNodeAtVisitorIndex` but reads the bitmask from the 30-bit
@@ -136,7 +143,7 @@ function childNodeAtVisitorIndex(internal, visitorIndex) {
 function childNodeAtVisitorIndexChildren(internal, visitorIndex) {
 	const childIdx = childIndexAtVisitorIndex(internal, childrenBitmaskPayloadOf(internal) & 255, visitorIndex);
 	if (childIdx === 0) return null;
-	return internal.sourceFile.getNode(childIdx, thisNode(internal), internal.rootIndex);
+	return internal.sourceFile.nodeAt(childIdx, thisNode(internal), internal.rootIndex);
 }
 /**
 * Resolve an Optional `StringField` slot at `fieldOffset` inside this
@@ -195,7 +202,7 @@ function absoluteRange(internal) {
 * sourceFile's nodeCache to keep instances stable.
 */
 function thisNode(internal) {
-	return internal.sourceFile.getNode(internal.index, internal.parent, internal.rootIndex);
+	return internal.sourceFile.nodeAt(internal.index, internal.parent, internal.rootIndex);
 }
 /**
 * Population count for a u8.
@@ -297,7 +304,7 @@ function collectNodeListChildren(parentInternal, headIndex, count) {
 	const parent = thisNode(parentInternal);
 	let cursor = headIndex;
 	for (let i = 0; i < count && cursor !== 0; i++) {
-		const child = sourceFile.getNode(cursor, parent, rootIndex);
+		const child = sourceFile.nodeAt(cursor, parent, rootIndex);
 		if (child !== null) list.push(child);
 		cursor = readNextSibling(sourceFile, cursor);
 	}
@@ -1702,7 +1709,7 @@ var RemoteNodeListNode = class {
 		let cursor = firstChildIndex(this._internal.sourceFile, this._internal.index);
 		const parent = thisNode(this._internal);
 		while (cursor !== 0) {
-			const child = this._internal.sourceFile.getNode(cursor, parent, this._internal.rootIndex);
+			const child = this._internal.sourceFile.nodeAt(cursor, parent, this._internal.rootIndex);
 			if (child !== null) out.push(child);
 			cursor = readNextSibling(this._internal.sourceFile, cursor);
 		}
@@ -2127,7 +2134,7 @@ var RemoteTypeGeneric = class {
 		const internal = this._internal;
 		const childIdx = firstChildIndex(internal.sourceFile, internal.index);
 		if (childIdx === 0) return null;
-		return internal.sourceFile.getNode(childIdx, thisNode(internal), internal.rootIndex);
+		return internal.sourceFile.nodeAt(childIdx, thisNode(internal), internal.rootIndex);
 	}
 	get elements() {
 		return nodeListAtSlotExtended(this._internal, TYPE_LIST_PARENT_SLOT);
@@ -2499,7 +2506,7 @@ var RemoteTypeKeyValue = class {
 	get right() {
 		const head = firstChildIndex(this._internal.sourceFile, this._internal.index);
 		if (head === 0) return null;
-		return this._internal.sourceFile.getNode(head, thisNode(this._internal), this._internal.rootIndex);
+		return this._internal.sourceFile.nodeAt(head, thisNode(this._internal), this._internal.rootIndex);
 	}
 	toJSON() {
 		return {
@@ -2542,7 +2549,7 @@ function defineKeyAndChild(typeName) {
 		get right() {
 			const head = firstChildIndex(this._internal.sourceFile, this._internal.index);
 			if (head === 0) return null;
-			return this._internal.sourceFile.getNode(head, thisNode(this._internal), this._internal.rootIndex);
+			return this._internal.sourceFile.nodeAt(head, thisNode(this._internal), this._internal.rootIndex);
 		}
 		toJSON() {
 			return {
@@ -2659,7 +2666,7 @@ var RemoteTypeTemplateLiteral = class {
 		let remaining = this.literalCount - 1;
 		let child = firstChildIndex(internal.sourceFile, internal.index);
 		while (child !== 0 && remaining > 0) {
-			const node = internal.sourceFile.getNode(child, parent, internal.rootIndex);
+			const node = internal.sourceFile.nodeAt(child, parent, internal.rootIndex);
 			if (node !== null) out.push(node);
 			child = readNextSibling(internal.sourceFile, child);
 			remaining--;
@@ -2708,7 +2715,7 @@ var RemoteTypeSymbol = class {
 		if (!this.hasElement) return null;
 		const head = firstChildIndex(this._internal.sourceFile, this._internal.index);
 		if (head === 0) return null;
-		return this._internal.sourceFile.getNode(head, thisNode(this._internal), this._internal.rootIndex);
+		return this._internal.sourceFile.nodeAt(head, thisNode(this._internal), this._internal.rootIndex);
 	}
 	toJSON() {
 		return {
@@ -2832,6 +2839,19 @@ function decodeKindToClass(kind) {
 * @license MIT
 */
 const utf8Decoder = new TextDecoder("utf-8");
+/** Whether a buffer with a newer minor version was seen (warn only once). */
+let warnedNewerMinor = false;
+/**
+* Warn, once, about a buffer whose minor version is newer than this decoder
+* knows (`format.md`, "Compatibility rules"): the decoder reads it, but
+* ignores the fields that it does not know and throws on nodes of kinds
+* that it does not know.
+*/
+function warnNewerMinor(minor) {
+	if (warnedNewerMinor) return;
+	warnedNewerMinor = true;
+	console.warn(`@ox-jsdoc/decoder: the Binary AST buffer has minor version ${minor}, newer than this decoder (3). It ignores the fields that it does not know and throws on nodes of kinds that it does not know; update @ox-jsdoc/decoder.`);
+}
 /**
 * Key of `rangeCache` for a string read by `(offset, length)` from String
 * Data.
@@ -2855,7 +2875,11 @@ function rangeCacheKey(offset, length) {
 *   `compatMode` getters
 * - `getString(idx)` — String Offsets[idx] → resolved string (cached)
 * - `getRootBaseOffset(rootIndex)`
-* - `getNode(nodeIndex, parent, rootIndex)` — lazy class instance (cached)
+* - `getNode(nodeIndex, parent?, rootIndex?)` — lazy class instance
+*   (cached). Without the root index or the parent, it finds them from the
+*   node records
+* - `nodeAt(nodeIndex, parent, rootIndex)` — the same for the node classes,
+*   which always know the parent and the root
 * - `asts` getter — array of root Remote* instances (or `null` for failures)
 */
 var RemoteSourceFile = class {
@@ -2864,8 +2888,13 @@ var RemoteSourceFile = class {
 	* Construct from a binary buffer (any `BufferSource`-compatible value).
 	*
 	* Throws when:
+	* - the host is not little-endian (the decoder reads the u32 values
+	*   through a `Uint32Array`, in the byte order of the host)
 	* - the buffer is shorter than {@link HEADER_SIZE} bytes
 	* - the major version disagrees with {@link SUPPORTED_MAJOR}
+	*
+	* Warns once (`console.warn`) when the minor version is newer than the
+	* decoder knows.
 	*
 	* `emptyStringForNull`: only effective when the buffer's `compat_mode`
 	* flag is set. Switches `toJSON()` and compat-mode field accessors to
@@ -2874,11 +2903,14 @@ var RemoteSourceFile = class {
 	* `SerializeOptions.empty_string_for_null` for jsdoccomment parity.
 	*/
 	constructor(buffer, options) {
+		if (!HOST_IS_LITTLE_ENDIAN) throw new Error("the Binary AST decoder needs a little-endian host: it reads the little-endian u32 values of the buffer through a Uint32Array, in the byte order of the host");
 		const view = buffer instanceof ArrayBuffer ? new DataView(buffer) : new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 		if (view.byteLength < 40) throw new Error(`buffer too short: ${view.byteLength} bytes (need at least 40)`);
 		const versionByte = view.getUint8(0);
 		const major = versionByte >>> 4;
 		if (major !== 1) throw new Error(`incompatible Binary AST major version: buffer=${major}, decoder=1`);
+		const minor = versionByte & 15;
+		if (minor > 3) warnNewerMinor(minor);
 		if ((view.byteOffset & 3) !== 0) throw new Error(`Binary AST buffer must be 4-byte aligned (byteOffset=${view.byteOffset})`);
 		const uint32View = new Uint32Array(view.buffer, view.byteOffset, view.byteLength >>> 2);
 		const flags = view.getUint8(1);
@@ -2902,7 +2934,8 @@ var RemoteSourceFile = class {
 			stringCache: /* @__PURE__ */ new Map(),
 			rangeCache: /* @__PURE__ */ new Map(),
 			nodeCache: new Array(nodeCount),
-			$asts: void 0
+			$asts: void 0,
+			rootStarts: void 0
 		};
 	}
 	/** Underlying DataView. */
@@ -3021,7 +3054,7 @@ var RemoteSourceFile = class {
 	* Slice the source text region for `rootIndex` at the given
 	* `(start, end)` source-text-relative UTF-8 byte offsets. Returns
 	* `null` for the `(0, 0)` sentinel, for `start > end`, or when the
-	* slice would extend past the buffer.
+	* slice would extend past String Data (as the Rust decoder does).
 	*
 	* Used by `descriptionRaw` getters on `RemoteJsdocBlock` /
 	* `RemoteJsdocTag` (compat-mode wire field per
@@ -3033,7 +3066,7 @@ var RemoteSourceFile = class {
 		const sourceOffset = this.getRootSourceOffsetInData(rootIndex);
 		const { view, stringDataOffset } = this.#internal;
 		const absStart = stringDataOffset + sourceOffset + start;
-		if (stringDataOffset + sourceOffset + end > view.byteOffset + view.byteLength) return null;
+		if (stringDataOffset + sourceOffset + end > this.#stringDataEnd()) return null;
 		const bytes = new Uint8Array(view.buffer, view.byteOffset + absStart, end - start);
 		return utf8Decoder.decode(bytes);
 	}
@@ -3044,24 +3077,49 @@ var RemoteSourceFile = class {
 	* strings that their comments add (`format.md`, "String Data section"):
 	* one ends where the next one starts, and the last one at the first one's
 	* start plus the total length of all of them (the header's
-	* `sourceTextLength`). Returns `''` when that would go past the buffer.
+	* `sourceTextLength`). Returns `''` when that would go past String Data.
 	*/
 	getRootSourceText(rootIndex) {
 		const sourceOffset = this.getRootSourceOffsetInData(rootIndex);
 		const endOffset = rootIndex + 1 < this.#internal.rootCount ? this.getRootSourceOffsetInData(rootIndex + 1) : this.getRootSourceOffsetInData(0) + this.#internal.sourceTextLength;
 		if (endOffset < sourceOffset) return "";
 		const { view, stringDataOffset } = this.#internal;
-		const start = view.byteOffset + stringDataOffset + sourceOffset;
-		if (start + (endOffset - sourceOffset) > view.byteOffset + view.byteLength) return "";
-		const bytes = new Uint8Array(view.buffer, start, endOffset - sourceOffset);
+		if (stringDataOffset + endOffset > this.#stringDataEnd()) return "";
+		const bytes = new Uint8Array(view.buffer, view.byteOffset + stringDataOffset + sourceOffset, endOffset - sourceOffset);
 		return utf8Decoder.decode(bytes);
+	}
+	/**
+	* End of the String Data section in the view: the start of Extended Data
+	* (the padding before it is part of String Data), or the end of the view
+	* if a broken header puts that past it.
+	*/
+	#stringDataEnd() {
+		return Math.min(this.#internal.extendedDataOffset, this.#internal.view.byteLength);
 	}
 	/**
 	* Build (or fetch from cache) the lazy class instance for a node.
 	*
 	* Returns `null` for the sentinel (node index 0).
+	*
+	* The node keeps its parent and root index (its range starts at that
+	* root's base offset), and the cache gives the same instance to every
+	* later call. Without `rootIndex`, the root is the one whose nodes hold
+	* `nodeIndex`. Without `parent` (or with `null`), the parent is the node
+	* at the record's `parent_index` (`null` for a root).
 	*/
-	getNode(nodeIndex, parent, rootIndex = -1) {
+	getNode(nodeIndex, parent, rootIndex) {
+		if (nodeIndex === 0) return null;
+		const cached = this.#internal.nodeCache[nodeIndex];
+		if (cached !== void 0) return cached;
+		const root = rootIndex === void 0 || rootIndex < 0 ? this.#rootIndexOf(nodeIndex) : rootIndex;
+		return this.nodeAt(nodeIndex, parent ?? this.#parentOf(nodeIndex, root), root);
+	}
+	/**
+	* {@link getNode} for the node classes, which always know the parent and
+	* the root index of the node that they build: build (or fetch from cache)
+	* the lazy class instance, with them as they are.
+	*/
+	nodeAt(nodeIndex, parent, rootIndex) {
 		if (nodeIndex === 0) return null;
 		const cached = this.#internal.nodeCache[nodeIndex];
 		if (cached !== void 0) return cached;
@@ -3069,6 +3127,44 @@ var RemoteSourceFile = class {
 		const node = new (decodeKindToClass(this.#internal.view.getUint8(byteIndex + 0)))(this.#internal.view, byteIndex, nodeIndex, rootIndex, parent, this);
 		this.#internal.nodeCache[nodeIndex] = node;
 		return node;
+	}
+	/**
+	* The root whose nodes hold `nodeIndex`. The writer writes the nodes of
+	* each root one after the other, in root order, so it is the last root
+	* (that has a node) whose node index is at most `nodeIndex`. `-1` when
+	* there is none.
+	*/
+	#rootIndexOf(nodeIndex) {
+		let starts = this.#internal.rootStarts;
+		if (starts === void 0) {
+			const { uint32View, rootArrayOffset, rootCount } = this.#internal;
+			starts = [];
+			for (let root = 0; root < rootCount; root++) {
+				const start = uint32View[rootArrayOffset + root * 12 + 0 >>> 2];
+				if (start !== 0) starts.push(start, root);
+			}
+			this.#internal.rootStarts = starts;
+		}
+		let low = 0;
+		let high = (starts.length >>> 1) - 1;
+		let found = -1;
+		while (low <= high) {
+			const middle = low + high >>> 1;
+			if (starts[middle * 2] <= nodeIndex) {
+				found = starts[middle * 2 + 1];
+				low = middle + 1;
+			} else high = middle - 1;
+		}
+		return found;
+	}
+	/**
+	* The parent of the node at `nodeIndex`, from its record's
+	* `parent_index` (`null` for a root, whose `parent_index` is 0).
+	*/
+	#parentOf(nodeIndex, rootIndex) {
+		const { uint32View, nodesOffset } = this.#internal;
+		const parentIndex = uint32View[nodesOffset + nodeIndex * 24 + 16 >>> 2];
+		return parentIndex === 0 ? null : this.getNode(parentIndex, null, rootIndex);
 	}
 	/**
 	* AST root for each entry in the Root Index array. Yields `null` for
@@ -3081,7 +3177,7 @@ var RemoteSourceFile = class {
 		const result = new Array(rootCount);
 		for (let i = 0; i < rootCount; i++) {
 			const nodeIdx = view.getUint32(rootArrayOffset + i * 12 + 0, true);
-			result[i] = nodeIdx === 0 ? null : this.getNode(nodeIdx, null, i);
+			result[i] = nodeIdx === 0 ? null : this.nodeAt(nodeIdx, null, i);
 		}
 		this.#internal.$asts = result;
 		return result;

@@ -78,9 +78,10 @@ impl<'a> LazySourceFile<'a> {
     /// disagrees with [`crate::format::header::SUPPORTED_MAJOR`],
     /// [`DecodeError::InvalidSectionLayout`] when the sections are out of
     /// order or do not fit in `bytes`, and [`DecodeError::InvalidStringData`]
-    /// when the String Data section is not UTF-8. Decoders silently accept
-    /// buffers with a newer minor version (forward compatibility). A newer
-    /// minor version may add node kinds, which this decoder does not know.
+    /// when the String Data section is not UTF-8. This decoder silently
+    /// accepts a buffer with a newer minor version (forward compatibility;
+    /// it has no logging, while the JS decoder warns once). A newer minor
+    /// version may add node kinds, which this decoder does not know.
     ///
     /// Checking the String Data takes time in proportion to its length. For
     /// a buffer that this crate's writer wrote, [`Self::new_unchecked`]

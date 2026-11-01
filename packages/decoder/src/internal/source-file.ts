@@ -21,12 +21,15 @@ import {
   EXTENDED_DATA_OFFSET_FIELD,
   FLAGS_OFFSET,
   HEADER_SIZE,
+  HOST_IS_LITTLE_ENDIAN,
   KIND_OFFSET,
   MAJOR_SHIFT,
+  MINOR_MASK,
   NODE_COUNT_FIELD,
   NODE_INDEX_OFFSET,
   NODES_OFFSET_FIELD,
   NODE_RECORD_SIZE,
+  PARENT_INDEX_OFFSET,
   ROOT_ARRAY_OFFSET_FIELD,
   ROOT_COUNT_FIELD,
   ROOT_INDEX_ENTRY_SIZE,
@@ -38,11 +41,32 @@ import {
   STRING_OFFSETS_OFFSET_FIELD,
   STRING_PAYLOAD_NONE_SENTINEL,
   SUPPORTED_MAJOR,
+  SUPPORTED_MINOR,
   VERSION_OFFSET
 } from './constants.ts'
 import type { LazyNode, RemoteSourceFileLike } from './types.ts'
 
 const utf8Decoder = new TextDecoder('utf-8')
+
+/** Whether a buffer with a newer minor version was seen (warn only once). */
+let warnedNewerMinor = false
+
+/**
+ * Warn, once, about a buffer whose minor version is newer than this decoder
+ * knows (`format.md`, "Compatibility rules"): the decoder reads it, but
+ * ignores the fields that it does not know and throws on nodes of kinds
+ * that it does not know.
+ */
+function warnNewerMinor(minor: number): void {
+  if (warnedNewerMinor) {
+    return
+  }
+  warnedNewerMinor = true
+  console.warn(
+    `@ox-jsdoc/decoder: the Binary AST buffer has minor version ${minor}, newer than this decoder (${SUPPORTED_MINOR}). ` +
+      'It ignores the fields that it does not know and throws on nodes of kinds that it does not know; update @ox-jsdoc/decoder.'
+  )
+}
 
 /**
  * Key of `rangeCache` for a string read by `(offset, length)` from String
@@ -99,6 +123,11 @@ interface SourceFileInternal {
   rangeCache: Map<number, string>
   nodeCache: Array<LazyNode | null | undefined>
   $asts: ReadonlyArray<LazyNode | null> | undefined
+  /**
+   * `[nodeIndex, rootIndex]` pairs of the roots that have a node, in node
+   * order, flat. Built on the first `getNode` call without a root index.
+   */
+  rootStarts: number[] | undefined
 }
 
 /**
@@ -109,7 +138,11 @@ interface SourceFileInternal {
  *   `compatMode` getters
  * - `getString(idx)` — String Offsets[idx] → resolved string (cached)
  * - `getRootBaseOffset(rootIndex)`
- * - `getNode(nodeIndex, parent, rootIndex)` — lazy class instance (cached)
+ * - `getNode(nodeIndex, parent?, rootIndex?)` — lazy class instance
+ *   (cached). Without the root index or the parent, it finds them from the
+ *   node records
+ * - `nodeAt(nodeIndex, parent, rootIndex)` — the same for the node classes,
+ *   which always know the parent and the root
  * - `asts` getter — array of root Remote* instances (or `null` for failures)
  */
 export class RemoteSourceFile implements RemoteSourceFileLike {
@@ -119,8 +152,13 @@ export class RemoteSourceFile implements RemoteSourceFileLike {
    * Construct from a binary buffer (any `BufferSource`-compatible value).
    *
    * Throws when:
+   * - the host is not little-endian (the decoder reads the u32 values
+   *   through a `Uint32Array`, in the byte order of the host)
    * - the buffer is shorter than {@link HEADER_SIZE} bytes
    * - the major version disagrees with {@link SUPPORTED_MAJOR}
+   *
+   * Warns once (`console.warn`) when the minor version is newer than the
+   * decoder knows.
    *
    * `emptyStringForNull`: only effective when the buffer's `compat_mode`
    * flag is set. Switches `toJSON()` and compat-mode field accessors to
@@ -129,6 +167,11 @@ export class RemoteSourceFile implements RemoteSourceFileLike {
    * `SerializeOptions.empty_string_for_null` for jsdoccomment parity.
    */
   constructor(buffer: ArrayBuffer | ArrayBufferView, options?: RemoteSourceFileOptions) {
+    if (!HOST_IS_LITTLE_ENDIAN) {
+      throw new Error(
+        'the Binary AST decoder needs a little-endian host: it reads the little-endian u32 values of the buffer through a Uint32Array, in the byte order of the host'
+      )
+    }
     const view =
       buffer instanceof ArrayBuffer
         ? new DataView(buffer)
@@ -142,6 +185,10 @@ export class RemoteSourceFile implements RemoteSourceFileLike {
       throw new Error(
         `incompatible Binary AST major version: buffer=${major}, decoder=${SUPPORTED_MAJOR}`
       )
+    }
+    const minor = versionByte & MINOR_MASK
+    if (minor > SUPPORTED_MINOR) {
+      warnNewerMinor(minor)
     }
     // `Uint32Array[idx]` is 5–10× faster than `DataView.getUint32` in
     // V8 hot paths because the typed-array element load compiles down to
@@ -186,7 +233,8 @@ export class RemoteSourceFile implements RemoteSourceFileLike {
       // ~10% on the parseBatch headline KPI.
       // eslint-disable-next-line unicorn/no-new-array -- intentional sparse pre-allocation; see comment
       nodeCache: new Array(nodeCount),
-      $asts: undefined
+      $asts: undefined,
+      rootStarts: undefined
     }
   }
 
@@ -331,7 +379,7 @@ export class RemoteSourceFile implements RemoteSourceFileLike {
    * Slice the source text region for `rootIndex` at the given
    * `(start, end)` source-text-relative UTF-8 byte offsets. Returns
    * `null` for the `(0, 0)` sentinel, for `start > end`, or when the
-   * slice would extend past the buffer.
+   * slice would extend past String Data (as the Rust decoder does).
    *
    * Used by `descriptionRaw` getters on `RemoteJsdocBlock` /
    * `RemoteJsdocTag` (compat-mode wire field per
@@ -348,7 +396,7 @@ export class RemoteSourceFile implements RemoteSourceFileLike {
     const { view, stringDataOffset } = this.#internal
     const absStart = stringDataOffset + sourceOffset + start
     const absEnd = stringDataOffset + sourceOffset + end
-    if (absEnd > view.byteOffset + view.byteLength) {
+    if (absEnd > this.#stringDataEnd()) {
       return null
     }
     const bytes = new Uint8Array(view.buffer, view.byteOffset + absStart, end - start)
@@ -362,7 +410,7 @@ export class RemoteSourceFile implements RemoteSourceFileLike {
    * strings that their comments add (`format.md`, "String Data section"):
    * one ends where the next one starts, and the last one at the first one's
    * start plus the total length of all of them (the header's
-   * `sourceTextLength`). Returns `''` when that would go past the buffer.
+   * `sourceTextLength`). Returns `''` when that would go past String Data.
    */
   getRootSourceText(rootIndex: number): string {
     const sourceOffset = this.getRootSourceOffsetInData(rootIndex)
@@ -374,20 +422,55 @@ export class RemoteSourceFile implements RemoteSourceFileLike {
       return ''
     }
     const { view, stringDataOffset } = this.#internal
-    const start = view.byteOffset + stringDataOffset + sourceOffset
-    if (start + (endOffset - sourceOffset) > view.byteOffset + view.byteLength) {
+    if (stringDataOffset + endOffset > this.#stringDataEnd()) {
       return ''
     }
-    const bytes = new Uint8Array(view.buffer, start, endOffset - sourceOffset)
+    const bytes = new Uint8Array(
+      view.buffer,
+      view.byteOffset + stringDataOffset + sourceOffset,
+      endOffset - sourceOffset
+    )
     return utf8Decoder.decode(bytes)
+  }
+
+  /**
+   * End of the String Data section in the view: the start of Extended Data
+   * (the padding before it is part of String Data), or the end of the view
+   * if a broken header puts that past it.
+   */
+  #stringDataEnd(): number {
+    return Math.min(this.#internal.extendedDataOffset, this.#internal.view.byteLength)
   }
 
   /**
    * Build (or fetch from cache) the lazy class instance for a node.
    *
    * Returns `null` for the sentinel (node index 0).
+   *
+   * The node keeps its parent and root index (its range starts at that
+   * root's base offset), and the cache gives the same instance to every
+   * later call. Without `rootIndex`, the root is the one whose nodes hold
+   * `nodeIndex`. Without `parent` (or with `null`), the parent is the node
+   * at the record's `parent_index` (`null` for a root).
    */
-  getNode(nodeIndex: number, parent: LazyNode | null, rootIndex: number = -1): LazyNode | null {
+  getNode(nodeIndex: number, parent?: LazyNode | null, rootIndex?: number): LazyNode | null {
+    if (nodeIndex === 0) {
+      return null
+    }
+    const cached = this.#internal.nodeCache[nodeIndex]
+    if (cached !== undefined) {
+      return cached
+    }
+    const root = rootIndex === undefined || rootIndex < 0 ? this.#rootIndexOf(nodeIndex) : rootIndex
+    return this.nodeAt(nodeIndex, parent ?? this.#parentOf(nodeIndex, root), root)
+  }
+
+  /**
+   * {@link getNode} for the node classes, which always know the parent and
+   * the root index of the node that they build: build (or fetch from cache)
+   * the lazy class instance, with them as they are.
+   */
+  nodeAt(nodeIndex: number, parent: LazyNode | null, rootIndex: number): LazyNode | null {
     if (nodeIndex === 0) {
       return null
     }
@@ -401,6 +484,52 @@ export class RemoteSourceFile implements RemoteSourceFileLike {
     const node = new Class(this.#internal.view, byteIndex, nodeIndex, rootIndex, parent, this)
     this.#internal.nodeCache[nodeIndex] = node
     return node
+  }
+
+  /**
+   * The root whose nodes hold `nodeIndex`. The writer writes the nodes of
+   * each root one after the other, in root order, so it is the last root
+   * (that has a node) whose node index is at most `nodeIndex`. `-1` when
+   * there is none.
+   */
+  #rootIndexOf(nodeIndex: number): number {
+    let starts = this.#internal.rootStarts
+    if (starts === undefined) {
+      const { uint32View, rootArrayOffset, rootCount } = this.#internal
+      starts = []
+      for (let root = 0; root < rootCount; root++) {
+        const start =
+          uint32View[(rootArrayOffset + root * ROOT_INDEX_ENTRY_SIZE + NODE_INDEX_OFFSET) >>> 2]!
+        if (start !== 0) {
+          starts.push(start, root)
+        }
+      }
+      this.#internal.rootStarts = starts
+    }
+    let low = 0
+    let high = (starts.length >>> 1) - 1
+    let found = -1
+    while (low <= high) {
+      const middle = (low + high) >>> 1
+      if (starts[middle * 2]! <= nodeIndex) {
+        found = starts[middle * 2 + 1]!
+        low = middle + 1
+      } else {
+        high = middle - 1
+      }
+    }
+    return found
+  }
+
+  /**
+   * The parent of the node at `nodeIndex`, from its record's
+   * `parent_index` (`null` for a root, whose `parent_index` is 0).
+   */
+  #parentOf(nodeIndex: number, rootIndex: number): LazyNode | null {
+    const { uint32View, nodesOffset } = this.#internal
+    const parentIndex =
+      uint32View[(nodesOffset + nodeIndex * NODE_RECORD_SIZE + PARENT_INDEX_OFFSET) >>> 2]!
+    return parentIndex === 0 ? null : this.getNode(parentIndex, null, rootIndex)
   }
 
   /**
@@ -420,7 +549,7 @@ export class RemoteSourceFile implements RemoteSourceFileLike {
         rootArrayOffset + i * ROOT_INDEX_ENTRY_SIZE + NODE_INDEX_OFFSET,
         true
       )
-      result[i] = nodeIdx === 0 ? null : this.getNode(nodeIdx, null, i)
+      result[i] = nodeIdx === 0 ? null : this.nodeAt(nodeIdx, null, i)
     }
     this.#internal.$asts = result
     return result

@@ -502,7 +502,7 @@ export class RemoteTypeGeneric implements LazyNode {
     if (childIdx === 0) {
       return null
     }
-    return internal.sourceFile.getNode(childIdx, thisNode(internal), internal.rootIndex)
+    return internal.sourceFile.nodeAt(childIdx, thisNode(internal), internal.rootIndex)
   }
   get elements(): readonly LazyNode[] {
     return nodeListAtSlotExtended(this._internal, TYPE_LIST_PARENT_SLOT)
@@ -896,7 +896,7 @@ export class RemoteTypeKeyValue implements LazyNode {
     if (head === 0) {
       return null
     }
-    return this._internal.sourceFile.getNode(
+    return this._internal.sourceFile.nodeAt(
       head,
       thisNode(this._internal),
       this._internal.rootIndex
@@ -947,7 +947,7 @@ function defineKeyAndChild(typeName: string): LazyNodeConstructor {
       if (head === 0) {
         return null
       }
-      return this._internal.sourceFile.getNode(
+      return this._internal.sourceFile.nodeAt(
         head,
         thisNode(this._internal),
         this._internal.rootIndex
@@ -1076,7 +1076,7 @@ export class RemoteTypeTemplateLiteral implements LazyNode {
     let remaining = this.literalCount - 1
     let child = firstChildIndex(internal.sourceFile, internal.index)
     while (child !== 0 && remaining > 0) {
-      const node = internal.sourceFile.getNode(child, parent, internal.rootIndex)
+      const node = internal.sourceFile.nodeAt(child, parent, internal.rootIndex)
       if (node !== null) {
         out.push(node)
       }
@@ -1133,7 +1133,7 @@ export class RemoteTypeSymbol implements LazyNode {
     if (head === 0) {
       return null
     }
-    return this._internal.sourceFile.getNode(
+    return this._internal.sourceFile.nodeAt(
       head,
       thisNode(this._internal),
       this._internal.rootIndex
