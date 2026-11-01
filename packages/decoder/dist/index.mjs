@@ -1573,6 +1573,18 @@ var RemoteJsdocGenericTagBody = class {
 	get description() {
 		return extStringField(this.#internal, 2);
 	}
+	/** `{...}` type source of the body (`JsdocTypeSource`, visitor index 0). */
+	get typeSource() {
+		return childNodeAtVisitorIndex(this.#internal, 0);
+	}
+	/**
+	* Value of the body (visitor index 1): a `JsdocParameterName`,
+	* `JsdocNamepathSource`, `JsdocIdentifier` or `JsdocText`.
+	*/
+	get value() {
+		return childNodeAtVisitorIndex(this.#internal, 1);
+	}
+	/** Leaves out `typeSource` and `value`: the tag's `rawType` and `name` hold them. */
 	toJSON() {
 		return {
 			type: this.type,
@@ -1587,9 +1599,9 @@ var RemoteJsdocGenericTagBody = class {
 };
 /**
 * `JsdocBorrowsTagBody` (Kind 0x0A) — Children type with `source` + `target`
-* children. The child accessors will be filled in once the parser starts
-* emitting them; for now the class exposes the standard range/parent/toJSON
-* surface.
+* children (each a tag value, like the `value` of `JsdocGenericTagBody`).
+* Reserved: the parser writes `@borrows` bodies as `JsdocGenericTagBody` for
+* now.
 */
 var RemoteJsdocBorrowsTagBody = class {
 	type = "JsdocBorrowsTagBody";
@@ -1609,6 +1621,14 @@ var RemoteJsdocBorrowsTagBody = class {
 	}
 	get parent() {
 		return this.#internal.parent;
+	}
+	/** `source` of `@borrows source as target` (visitor index 0). */
+	get source() {
+		return childNodeAtVisitorIndexChildren(this.#internal, 0);
+	}
+	/** `target` of `@borrows source as target` (visitor index 1). */
+	get target() {
+		return childNodeAtVisitorIndexChildren(this.#internal, 1);
 	}
 	toJSON() {
 		return {

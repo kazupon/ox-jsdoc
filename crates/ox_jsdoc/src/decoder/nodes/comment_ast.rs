@@ -24,7 +24,8 @@ use crate::writer::nodes::comment_ast::{
 };
 
 use super::super::helpers::{
-    child_at_visitor_index, ext_offset, read_list_metadata, read_string_field, string_payload,
+    child_at_visitor_index, children_bitmask_payload, ext_offset, read_list_metadata,
+    read_string_field, string_payload,
 };
 use super::super::source_file::LazySourceFile;
 use super::super::text::parsed_preserving_whitespace;
@@ -547,6 +548,34 @@ impl<'a> LazyJsdocGenericTagBody<'a> {
         let ext = ext_offset(self.source_file, self.node_index) as usize;
         resolve_string_field_slot(self.source_file, ext, 2)
     }
+    /// `{...}` type source of the body (bit0 of the Children bitmask).
+    pub fn type_source(&self) -> Option<LazyJsdocTypeSource<'a>> {
+        child_at_visitor_index(
+            self.source_file,
+            self.node_index,
+            self.children_bitmask(),
+            0,
+        )
+        .map(|idx| LazyJsdocTypeSource::from_index(self.source_file, idx, self.root_index))
+    }
+    /// Value of the body (bit1 of the Children bitmask): a parameter name, a
+    /// namepath, an identifier or raw text.
+    pub fn value(&self) -> Option<LazyJsdocTagValue<'a>> {
+        let idx = child_at_visitor_index(
+            self.source_file,
+            self.node_index,
+            self.children_bitmask(),
+            1,
+        )?;
+        LazyJsdocTagValue::from_index(self.source_file, idx, self.root_index)
+    }
+
+    /// Children bitmask (byte 0 of the Extended Data).
+    #[inline]
+    fn children_bitmask(&self) -> u8 {
+        let ext = ext_offset(self.source_file, self.node_index) as usize;
+        self.source_file.bytes()[ext]
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -555,8 +584,29 @@ impl<'a> LazyJsdocGenericTagBody<'a> {
 define_lazy_comment_node!(
     LazyJsdocBorrowsTagBody,
     Kind::JsdocBorrowsTagBody,
-    "Lazy view of a `JsdocBorrowsTagBody` (Kind 0x0A)."
+    "Lazy view of a `JsdocBorrowsTagBody` (Kind 0x0A). Reserved: the parser \
+     writes `@borrows` bodies as `JsdocGenericTagBody` for now."
 );
+
+impl<'a> LazyJsdocBorrowsTagBody<'a> {
+    /// `source` of `@borrows source as target` (bit0 of the Children
+    /// bitmask in the Node Data payload).
+    pub fn source(&self) -> Option<LazyJsdocTagValue<'a>> {
+        self.value_at(0)
+    }
+    /// `target` of `@borrows source as target` (bit1).
+    pub fn target(&self) -> Option<LazyJsdocTagValue<'a>> {
+        self.value_at(1)
+    }
+
+    #[inline]
+    fn value_at(&self, visitor_index: u8) -> Option<LazyJsdocTagValue<'a>> {
+        let bitmask = children_bitmask_payload(self.source_file, self.node_index) as u8;
+        let idx =
+            child_at_visitor_index(self.source_file, self.node_index, bitmask, visitor_index)?;
+        LazyJsdocTagValue::from_index(self.source_file, idx, self.root_index)
+    }
+}
 
 // ---------------------------------------------------------------------------
 // 0x0C LazyJsdocParameterName
@@ -610,6 +660,43 @@ pub enum LazyJsdocTagValue<'a> {
     Identifier(LazyJsdocIdentifier<'a>),
     /// Raw text fallback.
     Raw(LazyJsdocText<'a>),
+}
+
+impl<'a> LazyJsdocTagValue<'a> {
+    /// The tag value at `node_index`, by its Kind. `None` when the node is
+    /// not one of the four value kinds.
+    pub fn from_index(
+        source_file: &'a LazySourceFile<'a>,
+        node_index: u32,
+        root_index: u32,
+    ) -> Option<Self> {
+        let kind_byte = source_file.bytes()[source_file.nodes_offset as usize
+            + node_index as usize * NODE_RECORD_SIZE
+            + KIND_OFFSET];
+        Some(match Kind::from_u8(kind_byte).ok()? {
+            Kind::JsdocParameterName => Self::Parameter(LazyJsdocParameterName::from_index(
+                source_file,
+                node_index,
+                root_index,
+            )),
+            Kind::JsdocNamepathSource => Self::Namepath(LazyJsdocNamepathSource::from_index(
+                source_file,
+                node_index,
+                root_index,
+            )),
+            Kind::JsdocIdentifier => Self::Identifier(LazyJsdocIdentifier::from_index(
+                source_file,
+                node_index,
+                root_index,
+            )),
+            Kind::JsdocText => Self::Raw(LazyJsdocText::from_index(
+                source_file,
+                node_index,
+                root_index,
+            )),
+            _ => return None,
+        })
+    }
 }
 
 #[cfg(test)]
