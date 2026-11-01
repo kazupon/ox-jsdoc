@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, vi } from 'vite-plus/test'
 
 import {
   RemoteJsdocBlock,
@@ -607,6 +607,133 @@ describe('RemoteJsdocInlineTag.tag', () => {
       const inline = build(version)
       expect(inline.tag).toBeNull()
       expect(inline.namepathOrURL).toBe('Foo')
+    }
+  })
+})
+
+describe('RemoteSourceFile.getNode without a root index', () => {
+  interface RangedNode {
+    readonly range: readonly [number, number]
+    readonly parent: unknown
+    readonly element?: RangedNode | null
+  }
+
+  /**
+   * Three roots: `(a)` with base offset 100, a failed one, and `(b)` with
+   * base offset 200. Each `TypeParenthesis` (Kind 0x8D) holds a `TypeName`.
+   */
+  const build = () => {
+    const b = new FixtureBuilder()
+    const root = (value: string, baseOffset: number) => {
+      const parenthesis = b.emitChildrenNode({
+        parentIndex: 0,
+        kind: 0x8d,
+        bitmask: 1,
+        posStart: 0,
+        posEnd: 3
+      })
+      const name = b.emitStringNode({
+        parentIndex: parenthesis,
+        kind: 0x80,
+        value,
+        posStart: 1,
+        posEnd: 2
+      })
+      b.pushRoot({ nodeIndex: parenthesis, baseOffset })
+      return name
+    }
+    const first = root('a', 100)
+    b.pushRoot({ nodeIndex: 0, baseOffset: 150 })
+    const last = root('b', 200)
+    return { file: new RemoteSourceFile(b.build()), first, last }
+  }
+
+  it('finds the root and the parent of the node', () => {
+    const { file, first, last } = build()
+    const name = file.getNode(last, null) as unknown as RangedNode
+    expect(name.range).toEqual([201, 202])
+    expect(name.parent).toBe(file.asts[2])
+    expect((file.getNode(first, null) as unknown as RangedNode).range).toEqual([101, 102])
+  })
+
+  it('keeps the cached nodes right for a walk from the roots', () => {
+    const { file } = build()
+    for (let index = 1; index < file.nodeCount; index++) {
+      file.getNode(index, null)
+    }
+    const roots = file.asts as ReadonlyArray<RangedNode | null>
+    expect(roots.map(root => root?.range ?? null)).toEqual([[100, 103], null, [200, 203]])
+    expect(roots[2]!.element!.range).toEqual([201, 202])
+    expect(roots[2]!.element!.parent).toBe(roots[2])
+  })
+})
+
+describe('RemoteSourceFile source text on a view inside a larger buffer', () => {
+  /**
+   * A buffer whose String Data starts with the source `/** a *\/` (and then
+   * holds `a`), at byte 64 of a larger buffer filled with `B`.
+   */
+  const build = (sourceTextLength = 8) => {
+    const b = new FixtureBuilder()
+    b.internString('/** a */')
+    const node = b.emitStringNode({
+      parentIndex: 0,
+      kind: 0x0f,
+      value: 'a',
+      posStart: 4,
+      posEnd: 5
+    })
+    b.pushRoot({ nodeIndex: node })
+    b.setSourceTextLength(sourceTextLength)
+    const bytes = b.build()
+    const outer = new Uint8Array(bytes.length + 128).fill(0x42)
+    outer.set(bytes, 64)
+    const stringDataOffset = new DataView(bytes.buffer).getUint32(12, true)
+    return {
+      file: new RemoteSourceFile(outer.subarray(64, 64 + bytes.length)),
+      bytes,
+      stringDataOffset
+    }
+  }
+
+  it('slices the source text', () => {
+    const { file } = build()
+    expect(file.sliceSourceText(0, 4, 5)).toBe('a')
+    expect(file.getRootSourceText(0)).toBe('/** a */')
+  })
+
+  it('does not slice past String Data', () => {
+    const { file, bytes, stringDataOffset } = build()
+    // Into the sections after String Data, inside the view.
+    expect(file.sliceSourceText(0, 0, 40)).toBeNull()
+    // 16 bytes past the end of the view, inside the larger buffer.
+    expect(file.sliceSourceText(0, 0, bytes.length + 16 - stringDataOffset)).toBeNull()
+  })
+
+  it('gives an empty source text when its length goes past String Data', () => {
+    expect(build(40).file.getRootSourceText(0)).toBe('')
+  })
+})
+
+describe('RemoteSourceFile minor version', () => {
+  it('warns once about a newer minor version, and reads the buffer', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const newer = new FixtureBuilder()
+      const node = newer.emitStringNode({ parentIndex: 0, kind: 0x80, value: 'Foo' })
+      newer.pushRoot({ nodeIndex: node })
+      const buffer = newer.build()
+      buffer[0] = 0x1f // major 1, minor 15
+      expect((new RemoteSourceFile(buffer).asts[0] as unknown as RemoteTypeNameNode).value).toBe(
+        'Foo'
+      )
+      new RemoteSourceFile(buffer)
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(String(warn.mock.calls[0]![0])).toMatch(/minor version 15/)
+      new RemoteSourceFile(new FixtureBuilder().build())
+      expect(warn).toHaveBeenCalledTimes(1)
+    } finally {
+      warn.mockRestore()
     }
   })
 })
