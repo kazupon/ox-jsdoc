@@ -12,7 +12,9 @@
 //! [`LazyTypeNode`] enum for callers (such as `JsdocTag.parsed_type`) that
 //! receive a TypeNode of unknown variant.
 
-use crate::format::header::{TYPE_PARAMETER_FLAGS_MINOR, VERSION_OFFSET, minor};
+use crate::format::header::{
+    METHOD_SIGNATURE_LISTS_MINOR, TYPE_PARAMETER_FLAGS_MINOR, VERSION_OFFSET, minor,
+};
 use crate::format::kind::Kind;
 use crate::format::string_field::STRING_FIELD_SIZE;
 use crate::writer::nodes::type_node::TYPE_LIST_PARENT_SLOT;
@@ -909,6 +911,42 @@ impl<'a> LazyTypeMethodSignature<'a> {
     /// Method name string.
     pub fn name(&self) -> &'a str {
         ext_string_leaf(self.source_file, self.node_index)
+    }
+    /// Parameter list (minor 4; `None` in an older buffer).
+    pub fn parameters(&self) -> Option<LazyTypeParameterList<'a>> {
+        let idx = self.child_at(0)?;
+        Some(LazyTypeParameterList::from_index(
+            self.source_file,
+            idx,
+            self.root_index,
+        ))
+    }
+    /// Return type (minor 4; `None` in an older buffer).
+    pub fn return_type(&self) -> Option<LazyTypeNode<'a>> {
+        LazyTypeNode::from_index(self.source_file, self.child_at(1)?, self.root_index)
+    }
+    /// Type-parameter list (minor 4; `None` in an older buffer).
+    pub fn type_parameters(&self) -> Option<LazyTypeParameterList<'a>> {
+        let idx = self.child_at(2)?;
+        Some(LazyTypeParameterList::from_index(
+            self.source_file,
+            idx,
+            self.root_index,
+        ))
+    }
+
+    /// The child at `visitor_index` (parameters, return type, type
+    /// parameters). The two flags tell which lists are there, and the
+    /// return type always is. A buffer older than minor 4 lists the
+    /// parameters and the type parameters without the lists, so it gives
+    /// none.
+    fn child_at(&self, visitor_index: u8) -> Option<u32> {
+        if minor(self.source_file.bytes()[VERSION_OFFSET]) < METHOD_SIGNATURE_LISTS_MINOR {
+            return None;
+        }
+        let bitmask =
+            (self.has_parameters() as u8) | 0b010 | ((self.has_type_parameters() as u8) << 2);
+        child_at_visitor_index(self.source_file, self.node_index, bitmask, visitor_index)
     }
 }
 

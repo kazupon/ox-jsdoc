@@ -21,6 +21,7 @@
 import {
   COMMON_DATA_MASK,
   COMMON_DATA_OFFSET,
+  METHOD_SIGNATURE_LISTS_MINOR,
   MINOR_MASK,
   STRING_FIELD_SIZE,
   TYPE_PARAMETER_FLAGS_MINOR,
@@ -28,6 +29,7 @@ import {
 } from '../constants.ts'
 import {
   absoluteRange,
+  childIndexAtVisitorIndex,
   childNodeAtVisitorIndexChildren,
   extOffsetOf,
   extStringLeaf,
@@ -1006,6 +1008,18 @@ export class RemoteTypeMethodSignature implements LazyNode {
   get name(): string {
     return extStringLeaf(this._internal)
   }
+  /** Parameter list (minor 4; `null` in an older buffer). */
+  get parameters(): LazyNode | null {
+    return methodSignatureChild(this._internal, 0)
+  }
+  /** Return type (minor 4; `null` in an older buffer). */
+  get returnType(): LazyNode | null {
+    return methodSignatureChild(this._internal, 1)
+  }
+  /** Type-parameter list (minor 4; `null` in an older buffer). */
+  get typeParameters(): LazyNode | null {
+    return methodSignatureChild(this._internal, 2)
+  }
   toJSON(): RemoteJsonObject {
     return {
       type: this.type,
@@ -1014,12 +1028,34 @@ export class RemoteTypeMethodSignature implements LazyNode {
       hasParameters: this.hasParameters,
       hasTypeParameters: this.hasTypeParameters,
       optional: this.optional,
-      name: this.name
+      name: this.name,
+      parameters: this.parameters?.toJSON() ?? null,
+      returnType: this.returnType?.toJSON() ?? null,
+      typeParameters: this.typeParameters?.toJSON() ?? null
     }
   }
   [inspectSymbol](): object {
     return inspectPayload(this.toJSON(), 'TypeMethodSignature')
   }
+}
+
+/**
+ * The child of a `TypeMethodSignature` at `visitorIndex` (parameters, return
+ * type, type parameters). Its two flags tell which lists are there, and the
+ * return type always is. A buffer older than minor 4 lists the parameters
+ * and the type parameters without the lists, so it gives none.
+ */
+function methodSignatureChild(internal: RemoteInternal, visitorIndex: number): LazyNode | null {
+  if ((internal.view.getUint8(VERSION_OFFSET) & MINOR_MASK) < METHOD_SIGNATURE_LISTS_MINOR) {
+    return null
+  }
+  const common = commonData(internal)
+  const bitmask = ((common >>> 2) & 0b1) | 0b010 | (((common >>> 3) & 0b1) << 2)
+  const childIdx = childIndexAtVisitorIndex(internal, bitmask, visitorIndex)
+  if (childIdx === 0) {
+    return null
+  }
+  return internal.sourceFile.nodeAt(childIdx, thisNode(internal), internal.rootIndex)
 }
 
 /** `TypeTemplateLiteral` — literal-segment array in Extended Data. */

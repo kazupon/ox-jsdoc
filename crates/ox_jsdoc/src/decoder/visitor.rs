@@ -695,10 +695,23 @@ pub trait LazyJsdocVisitor<'a> {
         }
     }
 
-    /// Visit a `TypeMethodSignature`. Currently a leaf — child accessors
-    /// (`parameters` / `return_type` / `type_parameters`) land in Phase 1.2a
-    /// alongside the parser's MethodSignature emission.
-    fn visit_type_method_signature(&mut self, _node: LazyTypeMethodSignature<'a>) {}
+    /// Visit a `TypeMethodSignature`. Default: walk
+    /// parameters → return_type → type_parameters (minor 4).
+    fn visit_type_method_signature(&mut self, node: LazyTypeMethodSignature<'a>) {
+        self.visit_type_method_signature_default(node);
+    }
+    /// Default `TypeMethodSignature` traversal.
+    fn visit_type_method_signature_default(&mut self, node: LazyTypeMethodSignature<'a>) {
+        if let Some(params) = node.parameters() {
+            self.visit_type_parameter_list(params);
+        }
+        if let Some(ret) = node.return_type() {
+            self.visit_type_node(ret);
+        }
+        if let Some(tp) = node.type_parameters() {
+            self.visit_type_parameter_list(tp);
+        }
+    }
 
     /// Visit a `TypeTemplateLiteral`. Default: walk the interpolations
     /// (the literal segments live in Extended Data, not as child nodes).

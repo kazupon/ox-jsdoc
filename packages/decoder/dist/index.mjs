@@ -2622,6 +2622,18 @@ var RemoteTypeMethodSignature = class {
 	get name() {
 		return extStringLeaf(this._internal);
 	}
+	/** Parameter list (minor 4; `null` in an older buffer). */
+	get parameters() {
+		return methodSignatureChild(this._internal, 0);
+	}
+	/** Return type (minor 4; `null` in an older buffer). */
+	get returnType() {
+		return methodSignatureChild(this._internal, 1);
+	}
+	/** Type-parameter list (minor 4; `null` in an older buffer). */
+	get typeParameters() {
+		return methodSignatureChild(this._internal, 2);
+	}
 	toJSON() {
 		return {
 			type: this.type,
@@ -2630,13 +2642,29 @@ var RemoteTypeMethodSignature = class {
 			hasParameters: this.hasParameters,
 			hasTypeParameters: this.hasTypeParameters,
 			optional: this.optional,
-			name: this.name
+			name: this.name,
+			parameters: this.parameters?.toJSON() ?? null,
+			returnType: this.returnType?.toJSON() ?? null,
+			typeParameters: this.typeParameters?.toJSON() ?? null
 		};
 	}
 	[inspectSymbol]() {
 		return inspectPayload(this.toJSON(), "TypeMethodSignature");
 	}
 };
+/**
+* The child of a `TypeMethodSignature` at `visitorIndex` (parameters, return
+* type, type parameters). Its two flags tell which lists are there, and the
+* return type always is. A buffer older than minor 4 lists the parameters
+* and the type parameters without the lists, so it gives none.
+*/
+function methodSignatureChild(internal, visitorIndex) {
+	if ((internal.view.getUint8(0) & 15) < 4) return null;
+	const common = commonData(internal);
+	const childIdx = childIndexAtVisitorIndex(internal, common >>> 2 & 1 | 2 | (common >>> 3 & 1) << 2, visitorIndex);
+	if (childIdx === 0) return null;
+	return internal.sourceFile.nodeAt(childIdx, thisNode(internal), internal.rootIndex);
+}
 /** `TypeTemplateLiteral` — literal-segment array in Extended Data. */
 var RemoteTypeTemplateLiteral = class {
 	type = "TypeTemplateLiteral";
@@ -2870,7 +2898,7 @@ let warnedNewerMinor = false;
 function warnNewerMinor(minor) {
 	if (warnedNewerMinor) return;
 	warnedNewerMinor = true;
-	console.warn(`@ox-jsdoc/decoder: the Binary AST buffer has minor version ${minor}, newer than this decoder (3). It ignores the fields that it does not know and throws on nodes of kinds that it does not know; update @ox-jsdoc/decoder.`);
+	console.warn(`@ox-jsdoc/decoder: the Binary AST buffer has minor version ${minor}, newer than this decoder (4). It ignores the fields that it does not know and throws on nodes of kinds that it does not know; update @ox-jsdoc/decoder.`);
 }
 /**
 * Key of `rangeCache` for a string read by `(offset, length)` from String
@@ -2930,7 +2958,7 @@ var RemoteSourceFile = class {
 		const major = versionByte >>> 4;
 		if (major !== 1) throw new Error(`incompatible Binary AST major version: buffer=${major}, decoder=1`);
 		const minor = versionByte & 15;
-		if (minor > 3) warnNewerMinor(minor);
+		if (minor > 4) warnNewerMinor(minor);
 		if ((view.byteOffset & 3) !== 0) throw new Error(`Binary AST buffer must be 4-byte aligned (byteOffset=${view.byteOffset})`);
 		const uint32View = new Uint32Array(view.buffer, view.byteOffset, view.byteLength >>> 2);
 		const flags = view.getUint8(1);

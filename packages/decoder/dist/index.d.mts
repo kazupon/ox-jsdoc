@@ -855,6 +855,12 @@ export declare class RemoteTypeMethodSignature implements LazyNode {
   /** `a?(): R` (bit4, minor 3). An older buffer has no optional method. */
   get optional(): boolean;
   get name(): string;
+  /** Parameter list (minor 4; `null` in an older buffer). */
+  get parameters(): LazyNode | null;
+  /** Return type (minor 4; `null` in an older buffer). */
+  get returnType(): LazyNode | null;
+  /** Type-parameter list (minor 4; `null` in an older buffer). */
+  get typeParameters(): LazyNode | null;
   toJSON(): RemoteJsonObject;
   [inspectSymbol](): object;
 }
