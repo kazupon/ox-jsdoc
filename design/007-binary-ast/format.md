@@ -155,7 +155,6 @@ const SUPPORTED_MINOR: u8 = 0;
 fn check_version(buffer: &[u8]) -> Result<(), DecodeError> {
     let version_byte = buffer[0];
     let major = version_byte >> 4;
-    let minor = version_byte & 0x0F;
 
     if major != SUPPORTED_MAJOR {
         return Err(DecodeError::IncompatibleMajor {
@@ -163,9 +162,8 @@ fn check_version(buffer: &[u8]) -> Result<(), DecodeError> {
             decoder_major: SUPPORTED_MAJOR,
         });
     }
-    if minor > SUPPORTED_MINOR {
-        log::warn!("Buffer minor version {} > decoder minor {}", minor, SUPPORTED_MINOR);
-    }
+    // A newer minor version (`version_byte & 0x0F > SUPPORTED_MINOR`) is
+    // accepted silently: the Rust decoder has no logging.
     Ok(())
 }
 ```
@@ -176,6 +174,8 @@ fn check_version(buffer: &[u8]) -> Result<(), DecodeError> {
 const SUPPORTED_MAJOR = 1
 const SUPPORTED_MINOR = 0
 
+let warnedNewerMinor = false
+
 function checkVersion(buffer) {
   const versionByte = buffer[0]
   const major = versionByte >> 4
@@ -183,7 +183,9 @@ function checkVersion(buffer) {
   if (major !== SUPPORTED_MAJOR) {
     throw new Error(`Incompatible major: ${major} (expected ${SUPPORTED_MAJOR})`)
   }
-  if (minor > SUPPORTED_MINOR) {
+  // Warn once, on the first buffer with a newer minor version.
+  if (minor > SUPPORTED_MINOR && !warnedNewerMinor) {
+    warnedNewerMinor = true
     console.warn(`Buffer minor ${minor} > decoder ${SUPPORTED_MINOR}, unknown fields ignored`)
   }
 }
