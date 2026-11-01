@@ -159,13 +159,7 @@ describe('the classes of the visitor keys', () => {
         }
       }
     }
-    // The writer does not wrap the parameters of a method signature in lists
-    // yet, as format.md says, so the decoder cannot tell them apart.
-    expect(missing).toEqual([
-      'TypeMethodSignature.parameters',
-      'TypeMethodSignature.returnType',
-      'TypeMethodSignature.typeParameters'
-    ])
+    expect(missing).toEqual([])
   })
 
   it('read the source and the target of a JsdocBorrowsTagBody', () => {

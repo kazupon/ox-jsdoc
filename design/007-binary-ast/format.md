@@ -146,6 +146,8 @@ Examples: 0x10 = Major 1, Minor 0 (initial release)
 
 **Minor 3** (`0x13`): adds the `TypeBigInt` (`0xAF`) kind (`1n`), and gives a meaning to reserved Common Data bits: bit4 of `TypeMethodSignature` is `optional` (`a?(): R`), and bit0 / bit1 of `TypeTypeParameter` tell that a constraint / a default follows the name. A decoder for Minor 2 or older does not know `TypeBigInt` (the JS decoder throws `unknown Kind`, the Rust decoder gives `None`) and does not read the bits. A decoder for Minor 3 reads the bits of `TypeTypeParameter` only in a buffer of Minor 3 or later; in an older buffer, whose bits are 0, it reads the elements by their order (a second element is the constraint, a third the default). The bit of `TypeMethodSignature` needs no such check: an older buffer has no optional method
 
+**Minor 4** (`0x14`): the writer wraps the parameters and the type parameters of a `TypeMethodSignature` in `TypeParameterList` children, around its return type, as the `TypeMethodSignature` section describes (bit2 / bit3 of its Common Data tell which lists are there). A writer for Minor 3 or older wrote them one after the other without the lists, so a decoder could not tell where the parameters end. A decoder for Minor 4 reads the children only in a buffer of Minor 4 or later (it gives none in an older buffer); an older decoder does not read them
+
 **Implementation example (Rust)**:
 
 ```rust
@@ -1117,6 +1119,10 @@ Order: parameters TypeParameterList (if any) → return_type → type_parameters
 TypeParameterList (if any). Each TypeParameterList owns an inline list
 metadata slot in its own Extended Data block (see TypeParameterList row in
 the Pattern 3 catalog).
+
+Minor 4: a writer for Minor 3 or older wrote the parameters, the return type
+and the type parameters one after the other, without the lists, so a decoder
+reads the children only in a buffer of Minor 4 or later.
 
 Note: Instead of holding a separate bitmask in Extended Data, we consolidate
 in the remaining 4 bits of Common Data. This keeps Extended Data at 6 bytes

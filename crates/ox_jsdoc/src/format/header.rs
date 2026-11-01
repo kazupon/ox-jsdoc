@@ -70,7 +70,9 @@ pub const SUPPORTED_MAJOR: u8 = 1;
 /// - `3`: adds the `TypeBigInt` (`0xAF`) kind, the `optional` bit (bit4) of
 ///   `TypeMethodSignature`, and the constraint and default bits (bit0 and
 ///   bit1) of `TypeTypeParameter`
-pub const SUPPORTED_MINOR: u8 = 3;
+/// - `4`: wraps the parameters and the type parameters of
+///   `TypeMethodSignature` in `TypeParameterList` children
+pub const SUPPORTED_MINOR: u8 = 4;
 
 /// First minor version whose `JsdocInlineTag` Extended Data has the `tag`
 /// field (bytes 18-23). Older buffers (minor 0 and 1) end the record after
@@ -82,6 +84,12 @@ pub const INLINE_TAG_NAME_MINOR: u8 = 2;
 /// buffers (minor 0 to 2) list them in that order without the bits, so a
 /// second element is read as the constraint there.
 pub const TYPE_PARAMETER_FLAGS_MINOR: u8 = 3;
+
+/// First minor version whose `TypeMethodSignature` wraps its parameters and
+/// its type parameters in `TypeParameterList` children, around its return
+/// type. Older buffers (minor 0 to 3) list them one after the other, so the
+/// children are not read there.
+pub const METHOD_SIGNATURE_LISTS_MINOR: u8 = 4;
 
 /// Bit shift for extracting the major version from byte 0.
 pub const MAJOR_SHIFT: u8 = 4;
@@ -236,9 +244,9 @@ mod tests {
 
     #[test]
     fn supported_version_byte_is_0x13() {
-        assert_eq!(SUPPORTED_VERSION_BYTE, 0x13);
+        assert_eq!(SUPPORTED_VERSION_BYTE, 0x14);
         assert_eq!(major(SUPPORTED_VERSION_BYTE), 1);
-        assert_eq!(minor(SUPPORTED_VERSION_BYTE), 3);
+        assert_eq!(minor(SUPPORTED_VERSION_BYTE), 4);
     }
 
     #[test]

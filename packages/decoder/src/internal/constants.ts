@@ -34,8 +34,10 @@ export const SUPPORTED_MAJOR = 1
  * - `3`: adds the `TypeBigInt` (`0xAF`) kind, the `optional` bit (bit4) of
  *   `TypeMethodSignature`, and the constraint and default bits (bit0 and
  *   bit1) of `TypeTypeParameter`
+ * - `4`: wraps the parameters and the type parameters of
+ *   `TypeMethodSignature` in `TypeParameterList` children
  */
-export const SUPPORTED_MINOR = 3
+export const SUPPORTED_MINOR = 4
 /**
  * First minor version whose `JsdocInlineTag` Extended Data has the `tag`
  * field (bytes 18-23). Older buffers (minor 0 and 1) end the record after
@@ -49,6 +51,13 @@ export const INLINE_TAG_NAME_MINOR = 2
  * second element is read as the constraint there.
  */
 export const TYPE_PARAMETER_FLAGS_MINOR = 3
+/**
+ * First minor version whose `TypeMethodSignature` wraps its parameters and
+ * its type parameters in `TypeParameterList` children, around its return
+ * type. Older buffers (minor 0 to 3) list them one after the other, so the
+ * children are not read there.
+ */
+export const METHOD_SIGNATURE_LISTS_MINOR = 4
 export const MAJOR_SHIFT = 4
 export const MINOR_MASK = 0x0f
 

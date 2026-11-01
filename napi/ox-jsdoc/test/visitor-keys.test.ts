@@ -48,7 +48,7 @@ function inventory(sourceFile: {
   return counts
 }
 
-/** Tags of each kind of value (parameter names, namepaths, text), inline tags and types. */
+/** Tags of each kind of value (parameter names, namepaths, text), inline tags and types (with method signatures). */
 const sources = [
   '/** A description with {@link Foo} and {@link Bar the bar}. */',
   '/**\n * @param {string} id - The id.\n * @param {number} [count=1] How many.\n * @returns {Promise<void>} Nothing.\n */',
@@ -60,6 +60,7 @@ const sources = [
   '/** @typedef {{ a: string, b?: number }} Foo */',
   '/** @type {(a: string) => void} */',
   '/** @type {Array<string | number> | null} */',
+  '/** @type {{ foo<T, U>(a: T, b: number): U, bar(): void, baz<T>(): T }} */',
   '/** @template T */',
   '/** @deprecated */',
   'not a comment'

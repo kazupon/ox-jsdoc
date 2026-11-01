@@ -439,18 +439,16 @@ pub(crate) fn emit_parsed_type_node(
                 name,
             )
             .as_u32();
-            // Currently the Rust lazy decoder treats MethodSignature as a leaf
-            // (no exposed children accessors). For round-trip parity with the
-            // typed parser we still emit the parameters/return/type-params
-            // sub-tree as siblings; this matches the design's "code generation
-            // will fill in the rest at Phase 4" note in
-            // `crates/ox_jsdoc/src/decoder/visitor.rs`.
-            for p in &n.parameters {
-                emit_parsed_type_node(writer, p, parent);
+            // As format.md says (minor 4): the parameters in a
+            // `TypeParameterList` (bit2), the return type, then the type
+            // parameters in a `TypeParameterList` (bit3), so a decoder can
+            // tell them apart.
+            if has_params {
+                emit_parameter_list(writer, n.span, parent, &n.parameters);
             }
             emit_parsed_type_node(writer, &n.return_type, parent);
-            for tp in &n.type_parameters {
-                emit_parsed_type_node(writer, tp, parent);
+            if has_tparams {
+                emit_parameter_list(writer, n.span, parent, &n.type_parameters);
             }
             parent
         }
