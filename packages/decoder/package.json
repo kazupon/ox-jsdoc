@@ -24,7 +24,7 @@
   ],
   "type": "module",
   "main": "dist/index.mjs",
-  "types": "src/index.d.mts",
+  "types": "dist/index.d.mts",
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",

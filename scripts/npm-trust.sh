@@ -27,6 +27,8 @@ PACKAGES=(
   "@ox-jsdoc/binding-darwin-x64"
   "@ox-jsdoc/binding-linux-x64-gnu"
   "@ox-jsdoc/binding-win32-x64-msvc"
+  "@ox-jsdoc/jsdoccomment"
+  "@ox-jsdoc/eslint-plugin-jsdoc"
   # Thin alias packages (one deprecation cycle)
   "ox-jsdoc-binary"
   "@ox-jsdoc/wasm-binary"
