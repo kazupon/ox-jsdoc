@@ -284,19 +284,21 @@ jobs:
       - name: Smoke test published packages
         run: |
           version=$(node -p "require('./napi/ox-jsdoc/package.json').version")
-          for package_name in @ox-jsdoc/decoder ox-jsdoc ox-jsdoc-binary @ox-jsdoc/wasm @ox-jsdoc/wasm-binary @ox-jsdoc/jsdoccomment @ox-jsdoc/eslint-plugin-jsdoc; do
-            for attempt in {1..12}; do
-              if npm view "${package_name}@${version}" version >/dev/null 2>&1; then
-                echo "${package_name}@${version} is available on npm"
-                break
-              fi
-              if [[ "${attempt}" == "12" ]]; then
+          # npm lists a new version, and serves its tarball, some minutes after the publish
+          # (4 and 9 minutes for @ox-jsdoc/decoder@0.1.1), so wait for the tarballs, 15 minutes in all.
+          # The Linux platform package is the one that ox-jsdoc loads on this runner.
+          deadline=$((SECONDS + 900))
+          for package_name in @ox-jsdoc/decoder @ox-jsdoc/binding-linux-x64-gnu ox-jsdoc ox-jsdoc-binary @ox-jsdoc/wasm @ox-jsdoc/wasm-binary @ox-jsdoc/jsdoccomment @ox-jsdoc/eslint-plugin-jsdoc; do
+            until tarball=$(npm view "${package_name}@${version}" dist.tarball 2>/dev/null) && [[ -n "${tarball}" ]] &&
+              curl --silent --fail --location --head --output /dev/null "${tarball}"; do
+              if (( SECONDS >= deadline )); then
                 echo "${package_name}@${version} is not available on npm after waiting" >&2
                 exit 1
               fi
-              echo "Waiting for ${package_name}@${version} to become available on npm (${attempt}/12)"
+              echo "Waiting for ${package_name}@${version} to become available on npm"
               sleep 10
             done
+            echo "${package_name}@${version} is available on npm"
           done
           tmpdir=$(mktemp -d)
           cd "${tmpdir}"
