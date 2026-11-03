@@ -22,7 +22,7 @@
     "@ox-jsdoc/decoder": "workspace:*",
     "@ox-jsdoc/wasm": "workspace:*",
     "monaco-editor": "^0.55.1",
-    "oxc-parser": "^0.155.0",
+    "oxc-parser": "^0.156.0",
     "vue": "^3.5.0"
   },
   "devDependencies": {
