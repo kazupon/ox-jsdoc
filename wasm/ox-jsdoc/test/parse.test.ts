@@ -15,7 +15,7 @@ beforeAll(async () => {
 })
 
 describe('parse (binary WASM binding)', () => {
-  it('parses a basic param tag through the zero-copy view', () => {
+  it('parses a basic param tag', () => {
     const result = parse('/** @param {string} id - The user ID */')
     try {
       expect(result.diagnostics).toEqual([])

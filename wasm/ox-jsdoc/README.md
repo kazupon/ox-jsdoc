@@ -4,7 +4,7 @@ High-performance JSDoc parser for the browser, powered by WebAssembly, that retu
 
 `@ox-jsdoc/wasm` parses `/** ... */` comment blocks on the Rust (WASM) side and returns a single binary buffer. Node access on the JavaScript side is lazy: the [`@ox-jsdoc/decoder`](../../packages/decoder/) library walks the buffer on demand and only allocates JS objects for nodes the caller actually inspects. This minimizes allocation churn for large batch passes and unlocks **batch parsing** so common strings (`*`, `*/`, tag names) are interned once across many comments.
 
-It exposes the same `parse` / `parseBatch` / `parseType` / `parseTypeCheck` API as the canonical native [`ox-jsdoc`](../../napi/ox-jsdoc/) NAPI binding, and runs in any browser environment via a WebAssembly binary built from the same Rust core (`crates/ox_jsdoc`). The differences: call [`initWasm()`](#initwasminput) once first, the results of `parse()` and `parseBatch()` have a `free()` method that releases the WASM-side bytes, and the `emptyStringForNull` option is not supported.
+It exposes the same `parse` / `parseBatch` / `parseType` / `parseTypeCheck` API as the canonical native [`ox-jsdoc`](../../napi/ox-jsdoc/) NAPI binding, and runs in any browser environment via a WebAssembly binary built from the same Rust core (`crates/ox_jsdoc`). The differences: call [`initWasm()`](#initwasminput) once first, the results of `parse()` and `parseBatch()` also have a `free()` method (which does nothing; see [below](#parsesourcetext-options)), and the `emptyStringForNull` option is not supported.
 
 This is the canonical Binary AST WASM binding (post-cutover, see [`design/010-main-stream-binary/README.md`](../../design/010-main-stream-binary/README.md)). The original typed AST + JSON implementation is preserved as the private reference package [`@ox-jsdoc/wasm-origin`](../ox-jsdoc-origin/).
 
@@ -78,9 +78,6 @@ console.log(result.ast.descriptionText()) // 'Look up a user by ID.'
 console.log(result.ast.tags[0].tag.value) // 'param'  (RemoteJsdocTagName.value)
 console.log(result.ast.tags[0].rawType.raw) // 'string' (RemoteJsdocTypeSource.raw)
 console.log(result.ast.tags[0].name.raw) // 'id'    (RemoteJsdocTagNameValue.raw)
-
-// Release the WASM-side bytes when you're done reading from `ast`.
-result.free()
 ```
 
 Returns:
@@ -91,17 +88,14 @@ interface ParseResult {
   ast: RemoteJsdocBlock | null
   /** Parser diagnostics. */
   diagnostics: Array<{ message: string }>
-  /** Underlying buffer wrapper — keep alive while reading from `ast`. */
+  /** Underlying buffer wrapper, which reads a copy of the Binary AST in JS memory. */
   sourceFile: RemoteSourceFile
-  /** Release the WASM-side bytes. After calling, `ast` / `sourceFile` are unsafe to read. */
+  /** Does nothing; kept so that existing calls keep working. */
   free(): void
 }
 ```
 
-<!-- prettier-ignore -->
-> [!Important]
-> 1. Hold onto `sourceFile` for as long as you read from `ast`. The `ast` getters lazily read from `sourceFile.view`, so once `sourceFile` is garbage collected the underlying buffer goes too.
-> 2. Call `free()` once you no longer need the AST. WASM linear memory is not garbage collected on the JS side, so leaving buffers around will pin memory that can only be reclaimed when the whole WASM module is discarded.
+`parse()` copies the Binary AST out of WASM memory into a JS `ArrayBuffer` and frees the WASM-side bytes before it returns, like the native binding hands over a `Buffer`. So the AST stays readable for as long as you hold it (`ast`, any node of it, or `sourceFile`), even after later calls grow WASM memory, and there is nothing to release: the JS garbage collector reclaims the copy. `free()` remains, and does nothing.
 
 ### `parseBatch(items, options?)`
 
@@ -122,9 +116,9 @@ for (const ast of result.asts) {
   if (ast === null) continue // parse failure for this item
   console.log(ast.tags[0].tag.value)
 }
-
-result.free() // release WASM-side bytes
 ```
+
+As with `parse()`, the buffer is a copy in JS memory: the ASTs stay readable for as long as you hold any of them, and `free()` does nothing.
 
 `baseOffset` is the absolute byte offset of `sourceText` in the original source file — used so that `ast.range` etc. report positions relative to the host file rather than the slice. Defaults to `0`.
 

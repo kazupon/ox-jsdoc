@@ -5,12 +5,12 @@
 //! WASM binding for the binary AST flavor of ox-jsdoc.
 //!
 //! Returns a [`ParseResult`] handle whose `buffer_ptr`/`buffer_len` getters
-//! let JS construct a `Uint8Array` view directly into `wasm.memory.buffer`
-//! — no copy, matching `design/007-binary-ast/rust-impl.md` "Sharing with
-//! NAPI/WASM" guidance.
+//! locate the bytes inside `wasm.memory.buffer`.
 //!
-//! Lifecycle: the JS-side wrapper calls `ParseResult::free()` (auto-generated
-//! by wasm-bindgen) once it is done reading, releasing the bytes.
+//! Lifecycle: the JS-side wrapper copies the bytes into a JS `ArrayBuffer`
+//! right after the call and then calls `ParseResult::free()` (auto-generated
+//! by wasm-bindgen). A view into `wasm.memory.buffer` would not outlive the
+//! handle, and growing the memory detaches it, so the decoder reads the copy.
 
 use wasm_bindgen::prelude::*;
 
@@ -20,12 +20,12 @@ use ox_jsdoc::parser::{
     type_data::ParseMode,
 };
 
-/// Owned binary-AST result. JS reads `buffer_ptr` + `buffer_len` and views
-/// the bytes via `new Uint8Array(wasm.memory.buffer, ptr, len)`. The bytes
-/// stay alive until JS calls `result.free()`.
+/// Owned binary-AST result. JS reads `buffer_ptr` + `buffer_len`, copies the
+/// bytes out of `wasm.memory.buffer`, and calls `result.free()`. The bytes
+/// stay alive until then.
 #[wasm_bindgen]
 pub struct ParseResult {
-    /// Heap-owned byte slice that backs the JS view.
+    /// Heap-owned byte slice that JS copies out.
     bytes: Box<[u8]>,
     /// Pre-rendered diagnostic messages.
     diagnostics: Vec<String>,
