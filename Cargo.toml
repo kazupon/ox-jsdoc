@@ -11,8 +11,8 @@ rust-version = "1.97.0"
 license = "MIT"
 
 [workspace.dependencies]
-oxc_allocator = "=0.155.0"
-oxc_ast = "=0.155.0"
-oxc_diagnostics = "=0.155.0"
-oxc_parser = "=0.155.0"
-oxc_span = "=0.155.0"
+oxc_allocator = "=0.157.0"
+oxc_ast = "=0.157.0"
+oxc_diagnostics = "=0.157.0"
+oxc_parser = "=0.157.0"
+oxc_span = "=0.157.0"
