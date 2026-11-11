@@ -74,7 +74,7 @@
     "espree": "^11.2.0",
     "esquery": "^1.7.0",
     "html-entities": "^2.6.0",
-    "jsdoc-type-pratt-parser": "~9.4.0",
+    "jsdoc-type-pratt-parser": "~9.5.0",
     "object-deep-merge": "^2.0.1",
     "parse-imports-exports": "^0.2.4",
     "semver": "^7.8.5",
